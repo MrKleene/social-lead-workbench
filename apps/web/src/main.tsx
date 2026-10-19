@@ -13,6 +13,7 @@ import { WorkPage } from "@/features/work/work-page";
 import { AppShell } from "@/components/app-shell";
 import { Loading } from "@/components/feedback";
 import "./styles.css";
+import "./features/work/graphite.css";
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 10000 } },
 });

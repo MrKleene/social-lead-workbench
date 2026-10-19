@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Lead, Task, User } from '@/lib/types';
+import { useStableResults } from './use-stable-results';
+import { useReplyTemplates } from '@/features/replies/use-replies';
 import { useConfigs, useNotices, useWorkspaceMutation } from '@/features/collection/use-collection';
 export function useWork(admin: boolean, view: string) {
     const leads = useQuery({ queryKey: ['leads'], queryFn: () => api<Lead[]>('/leads') });
@@ -11,7 +13,9 @@ export function useWork(admin: boolean, view: string) {
     const notices = useNotices();
     const mutation = useWorkspaceMutation();
     const [search, setSearch] = useState(''), [unassigned, setUnassigned] = useState(false), [selected, setSelected] = useState<Record<string, number>>({}), [owner, setOwner] = useState(''), [feedback, setFeedback] = useState('');
-    const all = leads.isError ? [] : leads.data || [];
+    const stable = useStableResults(leads.isError ? undefined : leads.data);
+    const templates = useReplyTemplates(admin);
+    const all = stable.all;
     const pendingTasks = (tasks.data || []).filter(t => t.status === 'PENDING');
     const pendingIds = new Set(pendingTasks.map(t => t.lead.id));
     const fresh = all.filter(l => (l.contactStage || 'MATCHED') === 'MATCHED' && l.status !== 'CLOSED');
@@ -29,5 +33,5 @@ export function useWork(admin: boolean, view: string) {
         next[lead.id] = lead.version; return next; });
     const selectVisible = () => setSelected(Object.fromEntries(rows.slice(0, 50).map(l => [l.id, l.version])));
     const assign = () => mutation.mutate({ path: '/leads/batch-owner', method: 'PATCH', body: { ownerId: owner, items: chosen.map(l => ({ id: l.id, version: selected[l.id] })) } }, { onSuccess: () => { setFeedback(`已分配 ${chosen.length} 条线索`); setSelected({}); } });
-    return { leads, tasks, users, configs, notices, mutation, rows, fresh, waiting, contacted, ignored, follow, exceptions, pendingTasks, search, setSearch: (value: string) => { setSearch(value); setSelected({}); }, unassigned, setUnassigned: (value: boolean) => { setUnassigned(value); setSelected({}); }, selected, toggle, selectVisible, chosen, owner, setOwner, assign, feedback, setFeedback, clearSelection: () => setSelected({}), sales: (users.data || []).filter(u => u.role === 'SALES') };
+    return { sourceUpdates: stable.sourceUpdates, applySources: stable.applySources, templates, leads, tasks, users, configs, notices, mutation, rows, fresh, waiting, contacted, ignored, follow, exceptions, pendingTasks, search, setSearch: (value: string) => { setSearch(value); setSelected({}); }, unassigned, setUnassigned: (value: boolean) => { setUnassigned(value); setSelected({}); }, selected, toggle, selectVisible, chosen, owner, setOwner, assign, feedback, setFeedback, clearSelection: () => setSelected({}), sales: (users.data || []).filter(u => u.role === 'SALES') };
 }

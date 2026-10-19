@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/use-auth";
+import { useWorkspaceMotion } from "@/features/work/use-workspace-motion";
 import { useEvents } from "@/lib/use-events";
 import { ErrorNotice } from "./feedback";
 const links = [
@@ -24,6 +25,7 @@ const links = [
   { to: "/platforms", label: "平台能力", icon: Layers },
 ];
 export function AppShell() {
+  const motion = useWorkspaceMotion();
   const [collapsed, setCollapsed] = useState(false);
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -77,7 +79,7 @@ export function AppShell() {
             <span className="muted">/</span>
             <strong>{title}</strong>
           </div>
-          <div className="user-menu">
+          <div className="user-menu"><button className="motion-toggle" aria-pressed={motion.reduced} onClick={motion.toggle}>{motion.reduced ? "动态已减少" : "减少动态"}</button>
             <span className="avatar admin-avatar">
               {user?.name.slice(0, 1)}
             </span>
@@ -98,7 +100,7 @@ export function AppShell() {
             </Button>
           </div>
         </header>
-        <main className="page" key={title}>
+        <main className="page" key={location.pathname.split("/")[1]}>
           <ErrorNotice error={logout.error} />
           <Outlet />
         </main>
