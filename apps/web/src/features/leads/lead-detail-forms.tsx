@@ -1,5 +1,7 @@
 import { useState, useRef, FormEvent } from "react";
 import { CheckCircle2, UserRound, CalendarClock, MessageSquare, FileText, ListChecks } from "lucide-react";
+import { LeadReplyPreview } from "@/features/replies/reply-preview";
+import { ContactActions, contactLabels } from "./contact-actions";
 import { useLead } from "./use-leads";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,10 +64,14 @@ export function DetailForms({
   };
   return (
     <div className="detail-sections">
-      <div className="detail-facts">
+      <p className="soft-tag">{contactLabels[lead.contactStage || "MATCHED"]}</p>
+      <ContactActions lead={lead}/>
+      <details className="secondary-actions"><summary>首次联系话术预览（不发送）</summary><LeadReplyPreview id={lead.id}/></details>
+      <details className="secondary-actions"><summary>当前负责人和跟进时间</summary><div className="detail-facts">
         <div><UserRound size={16} /><span>当前负责人<strong>{lead.owner?.name || "待分配"}</strong></span></div>
         <div><CalendarClock size={16} /><span>下次跟进<strong>{formatDate(lead.nextFollowUpAt)}</strong></span></div>
       </div>
+      </details>
       <ErrorNotice error={state.mutation.error} />
       {success && (
         <p role="status" key={saveCount} className="success-note">
@@ -130,7 +136,7 @@ export function DetailForms({
           </form>
         )}
       </section>
-      <section>
+      <details className="secondary-actions" open={lead.contactStage === "CONTACTED" || lead.contactStage === "INTERESTED"}><summary>交给销售 / 负责人分配</summary><section>
         <h3><UserRound size={16} />负责人分配</h3>
         {admin && <ErrorNotice error={state.usersError} />}
         {admin && !state.usersLoading && !state.usersError && state.users.length === 0 && <p className="helper-text">尚无可分配销售，请由管理员在本机创建销售账号。</p>}
@@ -182,15 +188,15 @@ export function DetailForms({
         <p className="helper-text">
           转交后，原负责人立即失去该线索与关联任务的访问权限。
         </p>
-      </section>
+      </section></details>
       </div>
-      <div className="detail-panel">
+      <details className="secondary-actions"><summary>沟通记录、跟进时间线和人工任务</summary><div className="detail-panel">
       <section>
-        <h3><MessageSquare size={16} />添加跟进</h3>
+        <h3><MessageSquare size={16} />销售沟通记录</h3>
         <form onSubmit={followup}>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="followup">跟进记录</FieldLabel>
+              <FieldLabel htmlFor="followup">沟通内容</FieldLabel>
               <Textarea
                 id="followup"
                 value={content}
@@ -205,7 +211,7 @@ export function DetailForms({
             </Field>
             <div className="form-pair">
               <Field>
-                <FieldLabel htmlFor="next">下次跟进时间</FieldLabel>
+                <FieldLabel htmlFor="next">销售下次联系时间</FieldLabel>
                 <Input
                   id="next"
                   type="datetime-local"
@@ -218,7 +224,7 @@ export function DetailForms({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="stage">线索阶段</FieldLabel>
+                <FieldLabel htmlFor="stage">销售线索阶段</FieldLabel>
                 <select
                   id="stage"
                   value={status}
@@ -236,7 +242,7 @@ export function DetailForms({
               </Field>
             </div>
             <Button disabled={state.mutation.isPending}>
-              {state.mutation.isPending ? "保存中…" : "保存跟进"}
+              {state.mutation.isPending ? "保存中…" : "保存沟通记录"}
             </Button>
           </FieldGroup>
         </form>
@@ -261,7 +267,7 @@ export function DetailForms({
               </article>
             ))
           ) : (
-            <p className="muted">尚未添加跟进记录。</p>
+            <p className="muted">尚未添加销售沟通记录。</p>
           )}
         </div>
       </section>
@@ -299,7 +305,7 @@ export function DetailForms({
               />
             </Field>
             <p className="helper-text">
-              使用上方跟进表单中的下次跟进时间作为任务到期时间。
+              使用上方销售沟通表单中的下次联系时间作为任务到期时间。
             </p>
             <Button variant="outline" disabled={state.mutation.isPending}>
               创建任务
@@ -307,7 +313,7 @@ export function DetailForms({
           </FieldGroup>
         </form>
       </section>
-      </div>
+      </div></details>
     </div>
   );
 }

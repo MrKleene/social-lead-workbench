@@ -6,6 +6,7 @@ export const configInput = z.object({
     mode: z.literal("MOCK"), keywords: z.array(word).min(1).max(8),
     excludeWords: z.array(word).max(20), batchLimit: z.number().int().min(1).max(10),
     enabled: z.boolean(),
+    defaultReplyTemplateId: z.string().min(1).max(100).nullable().optional(),
 }).strict().refine(v => new Set(v.keywords.map(normalize)).size === v.keywords.length, "关键词不能重复")
     .refine(v => !v.keywords.some(k => v.excludeWords.some(e => normalize(k).includes(normalize(e)))), "排除词不能覆盖搜索关键词");
 export type ConfigInput = z.infer<typeof configInput>;

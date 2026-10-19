@@ -75,7 +75,7 @@ export function LoginPage() {
                 placeholder="请输入密码"
               />
               <FieldDescription>
-                首次使用请由管理员在本机终端完成安全初始化。
+                隔离模拟预览：使用启动终端本次显示的 admin@fixture.invalid 和临时密码；原有账号不在隔离库。正式本机环境请由管理员初始化。
               </FieldDescription>
             </Field>
           </FieldGroup>

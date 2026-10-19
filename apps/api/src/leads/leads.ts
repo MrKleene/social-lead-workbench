@@ -47,6 +47,16 @@ class LeadsController {
             .strict(), req.body);
         return this.leads.assign(req.actor, id, b.ownerId, b.version);
     }
+    @Patch(":id/contact")
+    contact(@Req() req: AuthedRequest, @Param("id") id: string) {
+        const b = parse(z.object({
+            stage: z.enum(['MATCHED', 'TO_CONTACT', 'CONTACTED', 'INTERESTED', 'IGNORED']),
+            note: z.string().trim().max(2000).optional(),
+            confirmed: z.boolean().default(false),
+            version: z.number().int().nonnegative(),
+        }).strict(), req.body);
+        return this.leads.contact(req.actor, id, b.stage, b.note, b.confirmed, b.version);
+    }
     @Patch(":id/review")
     review(
     @Req()

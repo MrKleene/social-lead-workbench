@@ -18,6 +18,13 @@ enum LeadStatus {
   FOLLOWING
   CLOSED
 }
+enum ContactStage {
+  MATCHED
+  TO_CONTACT
+  CONTACTED
+  INTERESTED
+  IGNORED
+}
 enum TaskStatus {
   PENDING
   DONE
@@ -108,6 +115,9 @@ model Lead {
   summary String
   evidence String
   status LeadStatus @default(PENDING_REVIEW)
+  contactStage ContactStage @default(MATCHED)
+  contactNote String?
+  contactedAt DateTime?
   ownerId String?
   owner User? @relation(fields:[ownerId],references:[id])
   reviewedAt DateTime?
@@ -156,7 +166,24 @@ model AuditLog {
   @@index([entityId,createdAt])
 }
 
+enum ReplyChannel {
+  COMMENT
+  DM
+}
+model ReplyTemplate {
+  id String @id @default(cuid())
+  name String
+  channel ReplyChannel
+  body String
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  configs CollectionConfig[]
+}
 model CollectionConfig {
+  defaultReplyTemplateId String?
+  defaultReplyTemplate ReplyTemplate? @relation(fields:[defaultReplyTemplateId],references:[id],onDelete:Restrict)
+  @@index([defaultReplyTemplateId])
   id String @id @default(cuid())
   name String
   platform Platform

@@ -7,6 +7,7 @@ import { LoginPage } from "@/features/auth/login-page";
 import { LeadsPage } from "@/features/leads/leads-page";
 import { TasksPage } from "@/features/tasks/tasks-page";
 import { PlatformsPage } from "@/features/platforms/platforms-page";
+import { RepliesPage } from "@/features/replies/replies-page";
 import { CollectionPage } from "@/features/collection/collection-page";
 import { WorkPage } from "@/features/work/work-page";
 import { AppShell } from "@/components/app-shell";
@@ -28,6 +29,7 @@ function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route path="/work/:id?" element={<WorkPage />} />
+        <Route path="/templates" element={<RepliesPage />} />
         <Route path="/collection/:configId?" element={<CollectionPage />} />
         <Route path="/leads/:id?" element={<LeadsPage />} />
         <Route path="/tasks" element={<TasksPage />} />

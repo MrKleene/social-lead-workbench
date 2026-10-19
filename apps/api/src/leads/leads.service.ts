@@ -1,9 +1,9 @@
 import { ConflictException, Inject, Injectable, NotFoundException, BadRequestException, } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { ContactStage, Prisma } from "@prisma/client";
 import { Db } from "../common/db";
 import { Actor, requireAdmin, requireOwner, scope } from "../auth/security";
 const include = {
-    identity: true,
+    identity: { include: { comments: { take: 8, orderBy: { observedAt: "desc" }, include: { post: true, matches: { select: { keywords: true, classification: true, isBaseline: true } } } } } },
     owner: { select: { id: true, name: true } },
 } as const;
 @Injectable()
@@ -108,6 +108,26 @@ export class LeadsService {
                 await tx.auditLog.create({ data: { actorId: actor.id, action: "LEAD_BATCH_ASSIGNED", entityId: item.id, metadata: { from: lead.ownerId, to: ownerId, batchSize: items.length } } });
             }
             return { updated: items.length };
+        });
+    }
+    async contact(actor: Actor, id: string, stage: ContactStage, note: string | undefined, confirmed: boolean, version: number) {
+        if ((stage === 'CONTACTED' || stage === 'INTERESTED') && (!confirmed || !note || note.trim().length < 5))
+            throw new BadRequestException('请确认你已自行在平台联系，并记录实际沟通依据');
+        return this.locked(actor, id, async (tx, lead) => {
+            if (lead.version !== version) throw new ConflictException('线索已更新，请刷新');
+            const previous = await tx.lead.findUniqueOrThrow({ where: { id } });
+            if (previous.contactStage === stage) return previous;
+            if (stage === 'INTERESTED' && previous.contactStage !== 'CONTACTED')
+                throw new BadRequestException('请先记录已人工联系，再根据实际回复标记有意向');
+            const contacted = stage === 'CONTACTED' || stage === 'INTERESTED';
+            const result = await tx.lead.update({ where: { id }, data: {
+                contactStage: stage, contactNote: note?.trim() || null,
+                ...(contacted ? { contactedAt: previous.contactedAt || new Date() } : {}),
+                version: { increment: 1 },
+            } });
+            await tx.auditLog.create({ data: { actorId: actor.id, action: 'LEAD_CONTACT_STAGE_RECORDED', entityId: id,
+                metadata: { from: previous.contactStage, to: stage, selfReportedContact: contacted, platformMessageSent: false } } });
+            return result;
         });
     }
     async review(actor: Actor, id: string, note: string, version: number) {

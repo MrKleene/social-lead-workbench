@@ -7,6 +7,7 @@ export type ConfigDraft = {
     excludeWords: string[];
     batchLimit: number;
     enabled: boolean;
+    defaultReplyTemplateId?: string | null;
 };
 export type Run = {
     id: string;

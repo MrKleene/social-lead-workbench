@@ -1451,3 +1451,19 @@ button:active:not(:disabled) { transform: scale(.98) !important; }
 @media(max-width:850px){.collection-layout{grid-template-columns:1fr}.config-list{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}.work-row-main{flex-wrap:wrap}.work-next{margin-left:45px;min-width:0}.quick-followup{padding-left:20px}.work-aside{grid-template-columns:1fr}.workflow-strip small{margin-left:0}.collection-body{padding:0 16px 16px}.connection-banner{flex-wrap:wrap}.connection-banner>button{margin-left:0}}
 
 .quick-task{display:flex;align-items:center;gap:12px;padding:0 22px 15px 70px;font-size:12px;color:#75839a;flex-wrap:wrap}
+
+/* Finding leads first; collaboration remains available as a secondary action. */
+.collection-launcher { margin: 20px 0; }
+.collection-launcher select { max-width: 100%; min-width: 180px; }
+.contact-actions { margin-top: 12px; }
+.contact-form { display: grid; gap: 12px; padding: 16px; margin-top: 12px; background: var(--muted); border-radius: 12px; }
+.secondary-actions, .first-use-guide { margin-top: 14px; padding: 12px 0; }
+.secondary-actions summary, .first-use-guide summary, .collection-launcher summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+.work-controls [role="group"] { flex-wrap: wrap; }
+.work-row-content blockquote { overflow-wrap: anywhere; }
+.work-row-content blockquote strong { display: block; font-size: 12px; }
+.collection-launcher .collection-body { min-width: 0; }
+@media (max-width: 640px) { .collection-runbar { align-items: stretch; } .collection-runbar > label { min-width: 0; width: 100%; } .collection-runbar select { width: 100%; } .work-row-content .action-row { flex-wrap: wrap; } }
+
+.reply-preview { padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.reply-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }

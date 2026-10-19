@@ -6,7 +6,11 @@ export type User = {
 };
 export type Platform = "XHS" | "DOUYIN";
 export type LeadStatus = "PENDING_REVIEW" | "FOLLOWING" | "CLOSED";
+export type ContactStage = "MATCHED" | "TO_CONTACT" | "CONTACTED" | "INTERESTED" | "IGNORED";
 export type Lead = {
+  contactStage?: ContactStage;
+  contactNote?: string | null;
+  contactedAt?: string | null;
   id: string;
   summary: string;
   evidence: string;

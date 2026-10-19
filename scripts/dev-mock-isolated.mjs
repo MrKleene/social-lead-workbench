@@ -10,9 +10,9 @@ import { PrismaClient } from '@prisma/client';
 import argon2 from 'argon2';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const output = join(root, '.qa/browser-validation');
-mkdirSync(output, { recursive: true });
 const id = randomBytes(8).toString('hex');
+const output = join(root, '.qa/browser-validation', id);
+mkdirSync(output, { recursive: true });
 const password = randomBytes(24).toString('hex');
 const containers = [];
 const results = [];
@@ -99,9 +99,10 @@ try {
     await ready(pg.container, ['pg_isready', '-U', 'crmtest', '-d', 'crm_test']);
     await ready(redis.container, ['redis-cli', 'ping']);
     const apiPort = await freePort(), webPort = await freePort();
+    const previewHost = process.env.CRM_PREVIEW_HOST === 'localhost' ? 'localhost' : '127.0.0.1';
     const url = `postgresql://crmtest:${password}@127.0.0.1:${pg.port}/crm_test?schema=public`;
     const env = { ...process.env, DATABASE_URL: url, REDIS_URL: `redis://127.0.0.1:${redis.port}`, DOTENV_CONFIG_PATH: '/dev/null',
-        COLLECTION_QUEUE_NAME: `crm-browser-${id}`, PORT: String(apiPort), API_HOST: '127.0.0.1', APP_ORIGIN: `http://127.0.0.1:${webPort}`,
+        COLLECTION_QUEUE_NAME: `crm-browser-${id}`, PORT: String(apiPort), API_HOST: '127.0.0.1', APP_ORIGIN: `http://${previewHost}:${webPort}`,
         API_PROXY_TARGET: `http://127.0.0.1:${apiPort}`, COOKIE_SECURE: 'false' };
     await command('migrate', ['npm', 'exec', 'prisma', 'migrate', 'deploy'], env);
     for (const workspace of ['@crm/contracts', '@crm/api']) await command(`build-${workspace.split('/')[1]}`, ['npm', 'run', 'build', '-w', workspace], env);
@@ -118,7 +119,7 @@ try {
     } finally { await db.$disconnect(); }
     service('api', ['node', 'apps/api/dist/main.js'], env);
     service('collector', ['node', 'apps/api/dist/collection/worker.js'], env);
-    service('web', ['npm', 'run', 'dev', '-w', '@crm/web', '--', '--port', String(webPort)], env);
+    service('web', ['npm', 'run', 'dev', '-w', '@crm/web', '--', '--port', String(webPort), '--host', previewHost], env);
     report.preview = env.APP_ORIGIN;
     report.api = env.API_PROXY_TARGET;
     report.containers = [...containers];

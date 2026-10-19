@@ -36,6 +36,7 @@ async function clean() {
     await db.monitorPost.deleteMany();
     await db.collectionRun.deleteMany();
     await db.collectionConfig.deleteMany();
+  await db.replyTemplate.deleteMany();
     await db.auditLog.deleteMany();
     await db.task.deleteMany();
     await db.followUp.deleteMany();
@@ -71,6 +72,83 @@ beforeAll(async () => {
 afterAll(async () => { if (app)
     await app.close(); await clean(); await db.$disconnect(); });
 describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
+    it('评论/私信话术校验、版本、持久化和关联删除均受审计保护', async () => {
+        const draft = { name: '评论首触达', channel: 'COMMENT', body: '{{昵称}}，看到{{帖子标题}}中的{{关键词}}；{{专业}}' };
+        expect((await write('post', '/reply-templates', { ...draft, body: '{{不存在}}' })).status).toBe(400);
+        expect((await write('post', '/reply-templates', { ...draft, body: '{{昵称}' })).status).toBe(400);
+        expect((await write('post', '/reply-templates', { ...draft, channel: 'SEND' })).status).toBe(400);
+        const created = await write('post', '/reply-templates', draft); expect(created.status).toBe(201); const id = created.body.id;
+        expect((await write('patch', `/reply-templates/${id}`, { draft: { ...draft, channel: 'DM' }, version: 0 })).body.channel).toBe('DM');
+        expect((await write('patch', `/reply-templates/${id}`, { draft, version: 0 })).status).toBe(409);
+        expect((await read('/reply-templates')).body.find((t: {id:string}) => t.id === id).body).toBe(draft.body);
+        const c = await config('话术关联', { defaultReplyTemplateId: id });
+        expect((await write('delete', `/reply-templates/${id}`, { version: 1 })).status).toBe(409);
+        expect((await write('post', '/collection/configs', spec('坏话术', { defaultReplyTemplateId: 'missing' }))).status).toBe(400);
+        await run(c.id);
+        const m = await db.sourceMatch.findFirstOrThrow({ where: { configId: c.id }, include: { comment: { include: { identity: { include: { lead: true } } } } } });
+        const leadId = m.comment.identity.lead!.id;
+        const preview = await write('post', '/reply-templates/preview', { body: draft.body, leadId });
+        expect(preview.body.text).toContain('话术关联'); expect(preview.body.missing).toContain('专业'); expect(preview.body.sent).toBe(false);
+        expect((await read(`/reply-templates/for-lead/${leadId}`)).body[0].sent).toBe(false);
+        const empty = await write('post', '/reply-templates/preview', { body: '{{未知}} {{专业}}' });
+        expect(empty.body.unknown).toEqual(['未知']); expect(empty.body.missing).toEqual(['专业']);
+        expect((await write('delete', `/collection/configs/${c.id}`, { revision: 1 })).status).toBe(200);
+        expect((await db.collectionConfig.findUniqueOrThrow({ where: { id: c.id } })).defaultReplyTemplateId).toBeNull();
+        expect((await write('delete', `/reply-templates/${id}`, { version: 1 })).status).toBe(200);
+        expect(await db.replyTemplate.findUnique({ where: { id } })).toBeNull();
+        expect(await db.auditLog.count({ where: { entityId: id } })).toBe(3);
+    });
+    it('话术管理仅管理员，来源预览沿用销售范围且无发送路由', async () => {
+        const draft = { name: '权限话术', channel: 'COMMENT', body: '你好{{昵称}}' };
+        const t = await write('post', '/reply-templates', draft), id = t.body.id;
+        expect((await read('/reply-templates', a)).status).toBe(403);
+        for (const [method,path,body] of [['post','/reply-templates',draft],['patch',`/reply-templates/${id}`,{draft,version:0}],['delete',`/reply-templates/${id}`,{version:0}],['post','/reply-templates/preview',{body:draft.body}]] as const)
+            expect((await write(method,path,body,a)).status).toBe(403);
+        expect((await api().post('/api/reply-templates').set('Cookie',admin.cookie).set('Origin',origin).send(draft)).status).toBe(403);
+        const c = await config('话术销售权限', { defaultReplyTemplateId: id }); await run(c.id);
+        const m = await db.sourceMatch.findFirstOrThrow({ where: { configId: c.id }, include: { comment: { include: { identity: { include: { lead: true } } } } } });
+        const leadId = m.comment.identity.lead!.id;
+        expect((await read(`/reply-templates/for-lead/${leadId}`,a)).status).toBe(404);
+        await write('patch',`/leads/${leadId}/owner`,{ownerId:aId,version:0});
+        expect((await read(`/reply-templates/for-lead/${leadId}`,a)).status).toBe(200);
+        expect((await read(`/reply-templates/for-lead/${leadId}`,b)).status).toBe(404);
+        expect((await write('post',`/reply-templates/${id}/send`,{})).status).toBe(404);
+    });
+    it('联系阶段独立保留旧销售状态，需人工确认，支持忽略恢复和版本冲突审计', async () => {
+        const c = await config('人工联系状态'); await run(c.id);
+        const source = await db.sourceMatch.findFirstOrThrow({ where: { configId: c.id }, include: { comment: { include: { identity: { include: { lead: true } } } } } });
+        const lead = source.comment.identity.lead!;
+        expect(lead.contactStage).toBe('MATCHED');
+        const path = `/leads/${lead.id}/contact`;
+        expect((await write('patch', path, { stage: 'INTERESTED', note: '虚构实际回复依据', confirmed: true, version: 0 })).status).toBe(400);
+        expect((await write('patch', path, { stage: 'TO_CONTACT', version: 0 })).body.contactStage).toBe('TO_CONTACT');
+        expect((await write('patch', path, { stage: 'CONTACTED', note: '虚构联系情况记录', version: 1 })).status).toBe(400);
+        expect((await write('patch', path, { stage: 'CONTACTED', note: '短', confirmed: true, version: 1 })).status).toBe(400);
+        expect((await write('patch', path, { stage: 'CONTACTED', note: '测试者已自行在平台联系', confirmed: true, version: 1 })).body.contactStage).toBe('CONTACTED');
+        expect((await write('patch', path, { stage: 'INTERESTED', note: '对方实际回复愿意进一步了解', confirmed: true, version: 1 })).status).toBe(409);
+        expect((await write('patch', path, { stage: 'INTERESTED', note: '对方实际回复愿意进一步了解', confirmed: true, version: 2 })).body.contactStage).toBe('INTERESTED');
+        const saved = await db.lead.findUniqueOrThrow({ where: { id: lead.id } });
+        expect(saved.status).toBe(lead.status); expect(saved.reviewedAt).toBeNull(); expect(saved.contactedAt).not.toBeNull();
+        const audit = await db.auditLog.findFirstOrThrow({ where: { entityId: lead.id, action: 'LEAD_CONTACT_STAGE_RECORDED' }, orderBy: { createdAt: 'desc' } });
+        expect(audit.metadata).toMatchObject({ to: 'INTERESTED', selfReportedContact: true, platformMessageSent: false });
+        expect((await write('patch', path, { stage: 'IGNORED', version: 3 })).body.contactStage).toBe('IGNORED');
+        expect((await write('patch', path, { stage: 'MATCHED', version: 4 })).body.contactStage).toBe('MATCHED');
+    });
+    it('联系状态沿用负责人权限与CSRF，转交后原销售不能更改；重新采集不重置人工处理', async () => {
+        const c = await config('联系权限'); await run(c.id);
+        const source = await db.sourceMatch.findFirstOrThrow({ where: { configId: c.id }, include: { comment: { include: { identity: { include: { lead: true } } } } } });
+        const id = source.comment.identity.lead!.id, path = `/leads/${id}/contact`;
+        expect((await write('patch', path, { stage: 'TO_CONTACT', version: 0 }, a)).status).toBe(403);
+        expect((await write('patch', `/leads/${id}/owner`, { ownerId: aId, version: 0 })).status).toBe(200);
+        expect((await api().patch('/api' + path).set('Cookie', a.cookie).set('Origin', origin).send({ stage: 'TO_CONTACT', version: 1 })).status).toBe(403);
+        expect((await write('patch', path, { stage: 'IGNORED', version: 1 }, a)).status).toBe(200);
+        await run(c.id, 'NEW');
+        expect((await db.lead.findUniqueOrThrow({ where: { id } })).contactStage).toBe('IGNORED');
+        const version = (await db.lead.findUniqueOrThrow({ where: { id } })).version;
+        expect((await write('patch', `/leads/${id}/owner`, { ownerId: bId, version })).status).toBe(200);
+        expect((await write('patch', path, { stage: 'MATCHED', version: version + 1 }, a)).status).toBe(403);
+        expect((await write('patch', path, { stage: 'MATCHED', version: version + 1 }, b)).status).toBe(200);
+    });
     it('管理员新增编辑启停归档多组配置，审计和版本冲突生效', async () => {
         const r = await write('post', '/collection/configs', spec('可配置关键词'));
         expect(r.status).toBe(201);

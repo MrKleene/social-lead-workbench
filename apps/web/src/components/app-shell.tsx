@@ -16,10 +16,11 @@ import { useAuth } from "@/features/auth/use-auth";
 import { useEvents } from "@/lib/use-events";
 import { ErrorNotice } from "./feedback";
 const links = [
-  { to: "/work", label: "待处理", icon: Inbox },
+  { to: "/work", label: "找线索", icon: Inbox },
   { to: "/leads", label: "线索管理", icon: LayoutList },
   { to: "/tasks", label: "任务中心", icon: ListChecks },
-  { to: "/collection", label: "关键词与采集", icon: Settings2, adminOnly: true },
+  { to: "/collection", label: "搜索设置", icon: Settings2, adminOnly: true },
+  { to: "/templates", label: "回复话术", icon: Settings2, adminOnly: true },
   { to: "/platforms", label: "平台能力", icon: Layers },
 ];
 export function AppShell() {

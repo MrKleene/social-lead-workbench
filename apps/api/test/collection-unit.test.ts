@@ -1,3 +1,4 @@
+import { previewReply, replyDraft } from '@crm/contracts';
 import { describe, it, expect, vi } from "vitest";
 import { classify, configInput, limits, ReadAdapter, ReadFailure } from "../src/collection/contract";
 import { MockAdapter } from "../src/collection/adapters/mock";
@@ -65,4 +66,17 @@ describe("只读采集契约与预算", () => {
     });
     it.each([["未登录", "LOGIN_EXPIRED"], ["账号限制", "RESTRICTED"], ["超时", "TIMEOUT"]])("XHS错误 %s 分类", async (text, code) => { const a = new XhsMcpAdapter({ call: async () => ({ isError: true, content: [{ type: "text", text }] }) }, true); await expect(a.search("示例", undefined, new AbortController().signal)).rejects.toMatchObject({ code }); });
     it("不完整/无稳定ID数据被拒绝", async () => { const a = new MockAdapter("XHS", "BASELINE"); a.comments = async () => ({ items: [{ id: "", userId: "u", nickname: "n", text: "t", hasReplies: false }], complete: true }); expect((await collect(a, config, async () => false)).reason).toBe("INVALID_DATA"); });
+});
+
+describe('话术安全预览', () => {
+    it('只替换白名单字段，不递归执行来源中的模板或HTML', () => {
+        const p = previewReply('你好{{昵称}} {{专业}} {{未知}}', { 昵称: '<script>{{关键词}}</script>' });
+        expect(p.text).toBe('你好<script>{{关键词}}</script> 【缺少来源字段：专业】 【未知字段：未知】');
+        expect(p.missing).toEqual(['专业']); expect(p.unknown).toEqual(['未知']);
+    });
+    it('原型属性和损坏占位符不可作为合法话术保存', () => {
+        for (const body of ['{{constructor}}', '{{__proto__}}', '{{昵称}', 'x'.repeat(2001)])
+            expect(replyDraft.safeParse({ name:'测试',channel:'DM',body }).success).toBe(false);
+        expect(replyDraft.safeParse({ name:'测试',channel:'DM',body:'{{ 昵称 }}，你好' }).success).toBe(true);
+    });
 });

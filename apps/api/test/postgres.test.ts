@@ -49,6 +49,7 @@ async function clean() {
   await db.monitorPost.deleteMany();
   await db.collectionRun.deleteMany();
   await db.collectionConfig.deleteMany();
+  await db.replyTemplate.deleteMany();
   await db.auditLog.deleteMany();
   await db.task.deleteMany();
   await db.followUp.deleteMany();
