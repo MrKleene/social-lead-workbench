@@ -1,0 +1,35 @@
+import {
+  Controller,
+  Inject,
+  Module,
+  Req,
+  Sse,
+  UseGuards,
+  MessageEvent,
+} from "@nestjs/common";
+import { interval, from, mergeMap, Observable, takeWhile, map } from "rxjs";
+import { AuthModule, AuthedRequest, SessionGuard } from "../auth/auth";
+import { Db } from "./db";
+@Controller("events")
+@UseGuards(SessionGuard)
+class EventsController {
+  constructor(@Inject(Db) private db: Db) {}
+  @Sse() stream(@Req() req: AuthedRequest): Observable<MessageEvent> {
+    // No lead payload on the stream. Client refetches through current server permissions.
+    // Recheck revocation/expiry on each tick, so logout closes open streams.
+    return interval(15000).pipe(
+      mergeMap(() =>
+        from(
+          this.db.session.findUnique({
+            where: { id: req.sessionId },
+            include: { user: { select: { active: true } } },
+          }),
+        ),
+      ),
+      takeWhile((s) => !!s && s.expiresAt > new Date() && s.user.active),
+      map(() => ({ type: "refresh", data: { at: new Date().toISOString() } })),
+    );
+  }
+}
+@Module({ imports: [AuthModule], controllers: [EventsController] })
+export class EventsModule {}

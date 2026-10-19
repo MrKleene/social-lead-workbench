@@ -1,0 +1,18 @@
+{
+  "name": "@crm/agent",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run src/protocol.test.ts",
+    "check": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "zod": "^4.1.12",
+    "@crm/contracts": "*"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5"
+  }
+}

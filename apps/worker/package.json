@@ -1,0 +1,16 @@
+{
+  "name": "@crm/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "bullmq": "^5.63.0",
+    "ioredis": "^5.8.2",
+    "zod": "^4.1.12",
+    "@crm/contracts": "*"
+  }
+}

@@ -1,0 +1,265 @@
+import 'reflect-metadata';
+import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
+import { Test } from '@nestjs/testing';
+import { INestApplication } from '@nestjs/common';
+import request from 'supertest';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { AppModule } from '../src/app';
+import { Db } from '../src/common/db';
+import { configure } from '../src/bootstrap';
+import { Actor, hashPassword } from '../src/auth/security';
+import { CollectionService } from '../src/collection/service';
+import { CollectionQueue } from '../src/collection/queue';
+import { ConfigInput, Scenario } from '../src/collection/contract';
+import { MockAdapter } from '../src/collection/adapters/mock';
+import { XhsMcpAdapter } from '../src/collection/adapters/xhs-mcp';
+const url = process.env.TEST_DATABASE_URL;
+if (!url || new URL(url).pathname != '/crm_test')
+    throw Error('仅允许隔离 crm_test 数据库');
+const db = new Db({ datasources: { db: { url } } });
+const enqueue = vi.fn().mockResolvedValue(undefined);
+const password = randomBytes(24).toString('hex');
+const origin = 'http://127.0.0.1:5173';
+type Auth = {
+    cookie: string;
+    csrf: string;
+};
+let app: INestApplication, service: CollectionService, actor: Actor, aId: string, bId: string, admin: Auth, a: Auth, b: Auth;
+const api = () => request(app.getHttpServer());
+const read = (path: string, auth = admin) => api().get('/api' + path).set('Cookie', auth.cookie);
+const write = (method: 'post' | 'patch' | 'delete', path: string, body: object, auth = admin) => api()[method]('/api' + path).set('Cookie', auth.cookie).set('Origin', origin).set('x-csrf-token', auth.csrf).send(body);
+async function clean() {
+    await db.noticeRead.deleteMany();
+    await db.collectionNotice.deleteMany();
+    await db.sourceMatch.deleteMany();
+    await db.commentObservation.deleteMany();
+    await db.monitorPost.deleteMany();
+    await db.collectionRun.deleteMany();
+    await db.collectionConfig.deleteMany();
+    await db.auditLog.deleteMany();
+    await db.task.deleteMany();
+    await db.followUp.deleteMany();
+    await db.lead.deleteMany();
+    await db.sourceComment.deleteMany();
+    await db.sourcePost.deleteMany();
+    await db.platformIdentity.deleteMany();
+    await db.platformAccount.deleteMany();
+    await db.session.deleteMany();
+    await db.loginBucket.deleteMany();
+    await db.user.deleteMany();
+}
+async function login(email: string) { const r = await api().post('/api/auth/login').set('Origin', origin).send({ email, password }); expect(r.status).toBe(201); return { cookie: r.headers['set-cookie'][0].split(';')[0], csrf: r.body.csrfToken }; }
+const spec = (word: string, patch: Partial<ConfigInput> = {}): ConfigInput => ({ name: '【测试】' + word, platform: 'XHS', mode: 'MOCK', keywords: [word], excludeWords: ['广告'], batchLimit: 1, enabled: true, ...patch });
+async function config(word: string, patch: Partial<ConfigInput> = {}) { return service.create(actor, spec(word, patch)); }
+async function run(id: string, scenario: Scenario = 'BASELINE') { const r = await service.start(actor, id, scenario, randomUUID()); await service.execute(r.id); return db.collectionRun.findUniqueOrThrow({ where: { id: r.id } }); }
+beforeAll(async () => {
+    await clean();
+    const hash = await hashPassword(password);
+    const users = await Promise.all(['admin', 'a', 'b'].map((name, i) => db.user.create({ data: { email: `collection-${name}@example.invalid`, name: `虚构${name}`, role: i ? 'SALES' : 'ADMIN', passwordHash: hash } })));
+    actor = users[0];
+    aId = users[1].id;
+    bId = users[2].id;
+    const mod = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(Db).useValue(db).overrideProvider(CollectionQueue).useValue({ enqueue }).compile();
+    app = mod.createNestApplication({ bodyParser: false });
+    configure(app);
+    await app.init();
+    service = app.get(CollectionService);
+    admin = await login(users[0].email);
+    a = await login(users[1].email);
+    b = await login(users[2].email);
+}, 30000);
+afterAll(async () => { if (app)
+    await app.close(); await clean(); await db.$disconnect(); });
+describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
+    it('管理员新增编辑启停归档多组配置，审计和版本冲突生效', async () => {
+        const r = await write('post', '/collection/configs', spec('可配置关键词'));
+        expect(r.status).toBe(201);
+        const id = r.body.id;
+        expect((await write('patch', `/collection/configs/${id}`, { config: spec('更新词'), revision: 1 })).body.revision).toBe(2);
+        expect((await write('patch', `/collection/configs/${id}`, { config: spec('过期'), revision: 1 })).status).toBe(409);
+        expect((await write('patch', `/collection/configs/${id}/enabled`, { enabled: false, revision: 2 })).body.enabled).toBe(false);
+        expect((await write('post', `/collection/configs/${id}/runs`, { mode: 'MOCK', scenario: 'BASELINE', requestKey: randomUUID() })).status).toBe(409);
+        expect((await write('delete', `/collection/configs/${id}`, { revision: 2 })).status).toBe(200);
+        expect((await read('/collection/configs')).body.some((c: {
+            id: string;
+        }) => c.id === id)).toBe(false);
+        expect(await db.auditLog.count({ where: { entityId: id } })).toBe(4);
+    });
+    it('销售不能列出、详情、创建、修改、启停、归档或运行配置', async () => {
+        const c = await config('权限');
+        expect((await read('/collection/configs', a)).status).toBe(403);
+        expect((await read(`/collection/configs/${c.id}`, a)).status).toBe(403);
+        for (const [method, path, body] of [['post', '/collection/configs', spec('越权')], ['patch', `/collection/configs/${c.id}`, { config: spec('越权'), revision: 1 }], ['patch', `/collection/configs/${c.id}/enabled`, { enabled: false, revision: 1 }], ['delete', `/collection/configs/${c.id}`, { revision: 1 }], ['post', `/collection/configs/${c.id}/runs`, { mode: 'MOCK', scenario: 'BASELINE', requestKey: randomUUID() }]] as const)
+            expect((await write(method, path, body, a)).status).toBe(403);
+        const r = await service.start(actor, c.id, 'BASELINE', randomUUID());
+        expect((await write('post', `/collection/runs/${r.id}/pause`, {}, a)).status).toBe(403);
+        await service.pauseRun(actor, r.id);
+    });
+    it('空词、过大预算、真实模式及缺失CSRF被HTTP拒绝', async () => {
+        for (const patch of [{ keywords: [] }, { batchLimit: 999 }, { mode: 'XHS_MCP' }, { keywords: ['  '] }])
+            expect((await write('post', '/collection/configs', { ...spec('验证'), ...patch })).status).toBe(400);
+        expect((await api().post('/api/collection/configs').set('Cookie', admin.cookie).set('Origin', origin).send(spec('csrf'))).status).toBe(403);
+    });
+    it('基线读取包含分页楼中楼：多评论一个身份，排除广告，无首次提醒', async () => {
+        const c = await config('基线语料');
+        const r = await run(c.id);
+        expect(r).toMatchObject({ status: 'COMPLETE', observed: 4, matched: 3, added: 2, notices: 0, requests: 6 });
+        const matches = await db.sourceMatch.findMany({ where: { configId: c.id }, include: { comment: true } });
+        expect(matches).toHaveLength(3);
+        expect(matches.every(m => m.isBaseline)).toBe(true);
+        expect(new Set(matches.map(m => m.comment.identityId)).size).toBe(2);
+        expect(matches.some(m => m.comment.parentPlatformCommentId)).toBe(true);
+        expect(matches.some(m => m.classification === 'RELATED_ONLY')).toBe(true);
+        expect(matches.every(m => !m.comment.originalText.includes('广告'))).toBe(true);
+    });
+    it('后续新增只提醒一次，重复运行与请求重放均幂等', async () => {
+        const c = await config('新增语料');
+        await run(c.id);
+        const n = await run(c.id, 'NEW');
+        expect(n).toMatchObject({ added: 1, notices: 1 });
+        expect(await run(c.id, 'NEW')).toMatchObject({ added: 0, notices: 0 });
+        const before = enqueue.mock.calls.length;
+        expect((await service.start(actor, c.id, 'NEW', n.requestKey)).id).toBe(n.id);
+        expect(enqueue.mock.calls.length).toBe(before);
+    });
+    it('并发配置与队列重复投递不会重复身份、评论或提醒', async () => {
+        const c1 = await config('并发语料'), c2 = await config('并发语料');
+        await Promise.all([run(c1.id), run(c2.id)]);
+        const jobs = await Promise.all([c1, c2].map(c => service.start(actor, c.id, 'NEW', randomUUID())));
+        await Promise.all([service.execute(jobs[0].id), service.execute(jobs[0].id), service.execute(jobs[1].id)]);
+        const posts = await db.sourcePost.findMany({ where: { title: '【模拟】并发语料讨论' } });
+        expect(posts).toHaveLength(1);
+        expect(await db.sourceComment.count({ where: { postId: posts[0].id } })).toBe(4);
+        expect(await db.collectionNotice.count({ where: { comment: { postId: posts[0].id } } })).toBe(1);
+    });
+    it('同一用户的后续新评论只追加来源与提醒，不新增线索', async () => {
+        const c = await config('同用户新增');
+        await run(c.id);
+        const r = await service.start(actor, c.id, 'NEW', randomUUID());
+        const mock = new MockAdapter('XHS', 'NEW'), original = mock.comments.bind(mock);
+        mock.comments = async (p, cursor) => { const page = await original(p, cursor); return { ...page, items: page.items.map(item => item.id.endsWith('-c3') ? { ...item, userId: `${p.id}-u1`, nickname: '模拟用户1' } : item) }; };
+        await service.execute(r.id, mock);
+        expect(await db.collectionRun.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ added: 0, notices: 1 });
+    });
+    it('来源稳定ID内容冲突时回滚整轮，保留旧原文', async () => {
+        const c = await config('冲突保护');
+        await run(c.id);
+        const r = await service.start(actor, c.id, 'BASELINE', randomUUID());
+        const mock = new MockAdapter('XHS', 'BASELINE'), original = mock.comments.bind(mock);
+        mock.comments = async (p, cursor) => { const page = await original(p, cursor); return { ...page, items: page.items.map(item => ({ ...item, text: item.text + '被改动' })) }; };
+        await service.execute(r.id, mock);
+        expect(await db.collectionRun.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ status: 'FAILED', reason: 'INVALID_DATA' });
+        expect(await db.sourceComment.count({ where: { originalText: { contains: '被改动' } } })).toBe(0);
+    });
+    it('跨平台即使稳定ID和昵称相同也不合并', async () => {
+        const x = await config('跨平台'), d = await config('跨平台', { platform: 'DOUYIN' });
+        await run(x.id);
+        await run(d.id);
+        const posts = await db.sourcePost.findMany({ where: { title: '【模拟】跨平台讨论' } });
+        expect(posts).toHaveLength(2);
+        expect(posts[0].platformPostId).toBe(posts[1].platformPostId);
+        expect(await db.lead.count({ where: { identity: { comments: { some: { postId: { in: posts.map(p => p.id) } } } } } })).toBe(4);
+    });
+    it('首次局部读取不立基线；恢复完整后不补发历史提醒', async () => {
+        const c = await config('局部恢复');
+        expect((await run(c.id, 'PARTIAL')).status).toBe('PARTIAL');
+        expect((await db.monitorPost.findFirstOrThrow({ where: { configId: c.id } })).baselineAt).toBeNull();
+        expect((await run(c.id, 'NEW')).notices).toBe(0);
+        expect((await db.monitorPost.findFirstOrThrow({ where: { configId: c.id } })).baselineAt).not.toBeNull();
+        expect((await run(c.id, 'NEW')).notices).toBe(0);
+    });
+    it('暂时缺失不等于删除，重现不重复提醒；明确删除单独标记并保留原文', async () => {
+        const c = await config('缺失恢复');
+        await run(c.id);
+        await run(c.id, 'MISSING');
+        const monitor = await db.monitorPost.findFirstOrThrow({ where: { configId: c.id } });
+        expect(await db.commentObservation.count({ where: { monitorId: monitor.id, state: 'MISSING_UNCONFIRMED' } })).toBe(2);
+        expect((await run(c.id)).notices).toBe(0);
+        await run(c.id, 'DELETED');
+        expect(await db.commentObservation.count({ where: { monitorId: monitor.id, state: 'DELETED_CONFIRMED' } })).toBe(1);
+        expect(await db.sourceMatch.count({ where: { configId: c.id } })).toBe(3);
+    });
+    it('超时退避限制重试，恢复后可完成；新版本重新基线', async () => {
+        const c = await config('退避恢复');
+        expect((await run(c.id, 'TIMEOUT')).reason).toBe('TIMEOUT');
+        await expect(service.start(actor, c.id, 'BASELINE', randomUUID())).rejects.toThrow('退避');
+        await db.collectionConfig.update({ where: { id: c.id }, data: { nextAllowedAt: new Date(0) } });
+        await run(c.id);
+        expect((await db.collectionConfig.findUniqueOrThrow({ where: { id: c.id } })).failureCount).toBe(0);
+        await service.change(actor, c.id, spec('退避恢复'), 1, true);
+        expect((await run(c.id, 'NEW')).notices).toBe(0);
+    });
+    it.each(['RESTRICTED', 'LOGIN_EXPIRED'] as const)('%s 自动停用，不换账号或自动重试', async (scenario) => { const c = await config('停止' + scenario); expect((await run(c.id, scenario)).reason).toBe(scenario); expect(await db.collectionConfig.findUniqueOrThrow({ where: { id: c.id } })).toMatchObject({ enabled: false, pauseReason: scenario, activeRunId: null }); });
+    it('停用配置/手动暂停后旧队列不能入库；编辑需先暂停', async () => {
+        const c = await config('暂停');
+        const r = await service.start(actor, c.id, 'BASELINE', randomUUID());
+        await expect(service.change(actor, c.id, spec('暂停'), 1, true)).rejects.toThrow('先暂停');
+        await service.change(actor, c.id, { enabled: false }, 1, false);
+        await service.execute(r.id);
+        expect(await db.sourceMatch.count({ where: { configId: c.id } })).toBe(0);
+        expect((await db.collectionRun.findUniqueOrThrow({ where: { id: r.id } })).status).toBe('PAUSED');
+    });
+    it('失败队列释放配置且不产生平台调用或线索', async () => { const c = await config('队列失败'); enqueue.mockRejectedValueOnce(Error('offline')); await expect(service.start(actor, c.id, 'BASELINE', randomUUID())).rejects.toThrow('队列不可用'); expect((await db.collectionConfig.findUniqueOrThrow({ where: { id: c.id } })).activeRunId).toBeNull(); expect(await db.sourceMatch.count({ where: { configId: c.id } })).toBe(0); });
+    it('真实适配器强制拒绝、损坏快照安全结束、无发送路由', async () => {
+        const c = await config('真实禁用');
+        const r = await service.start(actor, c.id, 'BASELINE', randomUUID());
+        const call = vi.fn();
+        await service.execute(r.id, new XhsMcpAdapter({ call }, true));
+        expect(call).not.toHaveBeenCalled();
+        expect((await db.collectionRun.findUniqueOrThrow({ where: { id: r.id } })).reason).toBe('REAL_DISABLED');
+        const c2 = await config('坏快照');
+        const r2 = await service.start(actor, c2.id, 'BASELINE', randomUUID());
+        await db.collectionRun.update({ where: { id: r2.id }, data: { snapshot: { mode: 'XHS_MCP' } } });
+        await service.execute(r2.id);
+        expect((await db.collectionRun.findUniqueOrThrow({ where: { id: r2.id } })).status).toBe('FAILED');
+        expect((await write('post', '/collection/send', {})).status).toBe(404);
+    });
+    it('运行中暂停取消读取，事务不会提交暂停后的结果', async () => {
+        const c = await config('运行中暂停');
+        const r = await service.start(actor, c.id, 'BASELINE', randomUUID());
+        const mock = new MockAdapter('XHS', 'BASELINE');
+        const original = mock.comments.bind(mock);
+        mock.comments = async (p, cursor) => { await service.pauseRun(actor, r.id); return original(p, cursor); };
+        await service.execute(r.id, mock);
+        expect((await db.collectionRun.findUniqueOrThrow({ where: { id: r.id } })).status).toBe('PAUSED');
+        expect(await db.sourceMatch.count({ where: { configId: c.id } })).toBe(0);
+    });
+    it('批量分配仅管理员可操作，版本冲突整批回滚，每项审计', async () => {
+        const c = await config('批量分配');
+        await run(c.id);
+        const matches = await db.sourceMatch.findMany({ where: { configId: c.id }, include: { comment: { include: { identity: { include: { lead: true } } } } } });
+        const leads = [...new Map(matches.map(m => [m.comment.identity.lead!.id, m.comment.identity.lead!])).values()];
+        const items = leads.map(l => ({ id: l.id, version: l.version }));
+        expect((await write('patch', '/leads/batch-owner', { items, ownerId: aId }, a)).status).toBe(403);
+        expect((await write('patch', '/leads/batch-owner', { items: [...items, items[0]], ownerId: aId })).status).toBe(400);
+        expect((await write('patch', '/leads/batch-owner', { items, ownerId: actor.id })).status).toBe(400);
+        expect((await write('patch', '/leads/batch-owner', { items: items.map((i, n) => ({ ...i, version: n ? 99 : i.version })), ownerId: aId })).status).toBe(409);
+        expect(await db.lead.count({ where: { id: { in: items.map(i => i.id) }, ownerId: null } })).toBe(2);
+        expect((await write('patch', '/leads/batch-owner', { items, ownerId: aId })).body.updated).toBe(2);
+        expect(await db.auditLog.count({ where: { action: 'LEAD_BATCH_ASSIGNED', entityId: { in: items.map(i => i.id) } } })).toBe(2);
+        await db.lead.updateMany({ where: { id: { in: items.map(i => i.id) } }, data: { ownerId: null } });
+    });
+    it('提醒按负责人隔离、已读按用户隔离、转交后立即撤权', async () => {
+        const c = await config('提醒权限');
+        await run(c.id);
+        await run(c.id, 'NEW');
+        const notice = await db.collectionNotice.findFirstOrThrow({ where: { comment: { matches: { some: { configId: c.id } } } } });
+        await db.lead.update({ where: { id: notice.leadId }, data: { ownerId: aId } });
+        expect((await read('/notices', a)).body.map((n: {
+            id: string;
+        }) => n.id)).toEqual([notice.id]);
+        expect((await read('/notices', b)).body).toEqual([]);
+        expect((await write('post', `/notices/${notice.id}/read`, {}, b)).status).toBe(404);
+        expect((await write('post', `/notices/${notice.id}/read`, {}, a)).status).toBe(201);
+        expect((await read('/notices', admin)).body.find((n: {
+            id: string;
+        }) => n.id === notice.id).reads).toEqual([]);
+        const detail = await read(`/leads/${notice.leadId}`, a);
+        expect(detail.body.identity.comments[0].matches[0].keywords).toEqual(['提醒权限']);
+        expect(detail.body.reviewedAt).toBeNull();
+        expect((await write('patch', `/leads/${notice.leadId}/owner`, { ownerId: bId, version: 0 })).status).toBe(200);
+        expect((await read('/notices', a)).body).toEqual([]);
+        expect((await write('post', `/notices/${notice.id}/read`, {}, a)).status).toBe(404);
+        expect((await read('/notices', b)).body[0].reads).toEqual([]);
+    });
+});

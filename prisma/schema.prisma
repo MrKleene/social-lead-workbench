@@ -1,0 +1,258 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+enum Role {
+  ADMIN
+  SALES
+}
+enum Platform {
+  XHS
+  DOUYIN
+}
+enum LeadStatus {
+  PENDING_REVIEW
+  FOLLOWING
+  CLOSED
+}
+enum TaskStatus {
+  PENDING
+  DONE
+  PAUSED
+}
+enum AccountStatus {
+  UNCONNECTED
+  RESTRICTED
+  PAUSED
+}
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  name String
+  passwordHash String
+  role Role @default(SALES)
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  sessions Session[]
+  leads Lead[]
+  followups FollowUp[]
+  audits AuditLog[]
+  noticeReads NoticeRead[]
+}
+model Session {
+  id String @id
+  userId String
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  csrfToken String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([expiresAt])
+}
+model LoginBucket {
+  key String @id
+  count Int @default(1)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+model PlatformAccount {
+  id String @id @default(cuid())
+  platform Platform
+  label String
+  status AccountStatus @default(UNCONNECTED)
+  isDemo Boolean @default(true)
+  pauseReason String?
+  createdAt DateTime @default(now())
+}
+model PlatformIdentity {
+  id String @id @default(cuid())
+  platform Platform
+  platformUserId String
+  nickname String
+  isDemo Boolean @default(true)
+  lead Lead?
+  comments SourceComment[]
+  @@unique([platform, platformUserId])
+}
+model SourcePost {
+  id String @id @default(cuid())
+  platform Platform
+  platformPostId String
+  title String
+  isDemo Boolean @default(true)
+  comments SourceComment[]
+  @@unique([platform, platformPostId])
+}
+model SourceComment {
+  id String @id @default(cuid())
+  platform Platform
+  platformCommentId String
+  postId String
+  post SourcePost @relation(fields:[postId],references:[id])
+  identityId String
+  identity PlatformIdentity @relation(fields:[identityId],references:[id])
+  parentPlatformCommentId String?
+  originalText String
+  observedAt DateTime @default(now())
+  isDemo Boolean @default(true)
+  matches SourceMatch[]
+  notice CollectionNotice?
+  @@unique([platform, platformCommentId])
+}
+model Lead {
+  id String @id @default(cuid())
+  identityId String @unique
+  identity PlatformIdentity @relation(fields:[identityId],references:[id])
+  summary String
+  evidence String
+  status LeadStatus @default(PENDING_REVIEW)
+  ownerId String?
+  owner User? @relation(fields:[ownerId],references:[id])
+  reviewedAt DateTime?
+  reviewNote String?
+  nextFollowUpAt DateTime?
+  isDemo Boolean @default(true)
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  followups FollowUp[]
+  tasks Task[]
+  notices CollectionNotice[]
+  @@index([ownerId,status,nextFollowUpAt])
+}
+model FollowUp {
+  id String @id @default(cuid())
+  leadId String
+  lead Lead @relation(fields:[leadId],references:[id])
+  authorId String
+  author User @relation(fields:[authorId],references:[id])
+  content String
+  nextFollowUpAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([leadId,createdAt])
+}
+model Task {
+  id String @id @default(cuid())
+  leadId String
+  lead Lead @relation(fields:[leadId],references:[id])
+  title String
+  kind String @default("HUMAN_REVIEW")
+  status TaskStatus @default(PENDING)
+  dueAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([leadId,status])
+}
+model AuditLog {
+  id String @id @default(cuid())
+  actorId String?
+  actor User? @relation(fields:[actorId],references:[id],onDelete:SetNull)
+  action String
+  entityId String
+  metadata Json?
+  createdAt DateTime @default(now())
+  @@index([entityId,createdAt])
+}
+
+model CollectionConfig {
+  id String @id @default(cuid())
+  name String
+  platform Platform
+  mode String @default("MOCK")
+  keywords String[]
+  excludeWords String[]
+  batchLimit Int @default(3)
+  enabled Boolean @default(true)
+  revision Int @default(1)
+  activeRunId String?
+  failureCount Int @default(0)
+  nextAllowedAt DateTime?
+  pauseReason String?
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  runs CollectionRun[]
+  monitors MonitorPost[]
+  matches SourceMatch[]
+}
+model CollectionRun {
+  id String @id @default(cuid())
+  configId String
+  config CollectionConfig @relation(fields:[configId],references:[id])
+  requestKey String @unique
+  revision Int
+  snapshot Json
+  scenario String
+  status String @default("QUEUED")
+  reason String?
+  cancelRequested Boolean @default(false)
+  requests Int @default(0)
+  observed Int @default(0)
+  matched Int @default(0)
+  added Int @default(0)
+  notices Int @default(0)
+  startedAt DateTime?
+  finishedAt DateTime?
+  createdAt DateTime @default(now())
+  matches SourceMatch[]
+  @@index([configId,createdAt])
+}
+model MonitorPost {
+  id String @id @default(cuid())
+  configId String
+  config CollectionConfig @relation(fields:[configId],references:[id])
+  revision Int
+  platformPostId String
+  baselineAt DateTime?
+  coverage String @default("PARTIAL")
+  lastRunId String?
+  observations CommentObservation[]
+  @@unique([configId,revision,platformPostId])
+}
+model CommentObservation {
+  id String @id @default(cuid())
+  monitorId String
+  monitor MonitorPost @relation(fields:[monitorId],references:[id],onDelete:Cascade)
+  platformCommentId String
+  state String @default("PRESENT")
+  firstSeenAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  lastRunId String
+  @@unique([monitorId,platformCommentId])
+}
+model SourceMatch {
+  id String @id @default(cuid())
+  configId String
+  config CollectionConfig @relation(fields:[configId],references:[id])
+  revision Int
+  runId String
+  run CollectionRun @relation(fields:[runId],references:[id])
+  commentId String
+  comment SourceComment @relation(fields:[commentId],references:[id],onDelete:Cascade)
+  keywords String[]
+  classification String
+  isBaseline Boolean
+  createdAt DateTime @default(now())
+  @@unique([configId,revision,commentId])
+}
+model CollectionNotice {
+  id String @id @default(cuid())
+  commentId String @unique
+  comment SourceComment @relation(fields:[commentId],references:[id],onDelete:Cascade)
+  leadId String
+  lead Lead @relation(fields:[leadId],references:[id],onDelete:Cascade)
+  title String
+  createdAt DateTime @default(now())
+  reads NoticeRead[]
+  @@index([leadId,createdAt])
+}
+model NoticeRead {
+  noticeId String
+  notice CollectionNotice @relation(fields:[noticeId],references:[id],onDelete:Cascade)
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  readAt DateTime @default(now())
+  @@id([noticeId,userId])
+}
