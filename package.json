@@ -25,7 +25,9 @@
     "pretypecheck": "npm run build -w @crm/contracts",
     "test:worker": "npm run build -w @crm/contracts && npm run build -w @crm/worker && node scripts/test-worker.mjs",
     "agent:check": "npm run build -w @crm/contracts && npm run check -w @crm/agent",
-    "dev:collector": "DOTENV_CONFIG_PATH=.env tsx --tsconfig apps/api/tsconfig.json apps/api/src/collection/worker.ts"
+    "dev:collector": "DOTENV_CONFIG_PATH=.env tsx --tsconfig apps/api/tsconfig.json apps/api/src/collection/worker.ts",
+    "test:queue": "node scripts/test-queue-isolated.mjs",
+    "dev:mock:isolated": "node scripts/dev-mock-isolated.mjs"
   },
   "devDependencies": {
     "prisma": "6.19.0",

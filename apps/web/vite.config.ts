@@ -9,6 +9,6 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     host: "127.0.0.1",
-    proxy: { "/api": { target: "http://127.0.0.1:3100" } },
+    proxy: { "/api": { target: process.env.API_PROXY_TARGET || "http://127.0.0.1:3100" } },
   },
 });
