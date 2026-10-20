@@ -2,6 +2,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Inject,
   Module,
   Param,
@@ -14,6 +15,8 @@ import { z } from "zod";
 import { AuthModule, AuthedRequest, SessionGuard } from "../auth/auth";
 import { parse } from "../common/validation";
 import { AccountsService } from "./accounts.service";
+import { AccountLoginService } from './account-login.service';
+import { LoginRuntime } from './login-runtime';
 const version = z.number().int().nonnegative();
 const metadata = z.object({
   label: z.string().trim().min(1).max(80),
@@ -51,6 +54,16 @@ class AccountsController {
       archivedAt: new Date(),
     });
   }
+}
+@Controller("accounts")
+@UseGuards(SessionGuard)
+class AccountLoginController {
+  constructor(@Inject(AccountLoginService) private login: AccountLoginService) {}
+  @Get('login-capabilities') @Header('Cache-Control','no-store, private') capabilities(@Req() r:AuthedRequest){return this.login.capabilities(r.actor);}
+  @Post(':id/login') @Header('Cache-Control','no-store, private') start(@Req() r:AuthedRequest,@Param('id') id:string){const b=parse(z.object({requestKey:z.string().uuid(),consent:z.literal('local-session-v1')}).strict(),r.body);return this.login.start(r.actor,id,b.requestKey,b.consent);}
+  @Post(':id/login/check') @Header('Cache-Control','no-store, private') check(@Req() r:AuthedRequest,@Param('id') id:string){const b=parse(z.object({requestKey:z.string().uuid()}).strict(),r.body);return this.login.check(r.actor,id,b.requestKey);}
+  @Post(':id/login/cancel') @Header('Cache-Control','no-store, private') cancel(@Req() r:AuthedRequest,@Param('id') id:string){const b=parse(z.object({requestKey:z.string().uuid()}).strict(),r.body);return this.login.cancel(r.actor,id,b.requestKey);}
+  @Post(':id/login/offline') @Header('Cache-Control','no-store, private') offline(@Req() r:AuthedRequest,@Param('id') id:string){const b=parse(z.object({requestKey:z.string().uuid(),scenario:z.enum(['SUCCESS','MISSING_ID','ERROR','EXPIRED'])}).strict(),r.body);return this.login.simulate(r.actor,id,b.requestKey,b.scenario);}
 }
 @Controller("leads/:id/account-contact")
 @UseGuards(SessionGuard)
@@ -116,7 +129,7 @@ class AccountContactController {
 }
 @Module({
   imports: [AuthModule],
-  controllers: [AccountsController, AccountContactController],
-  providers: [AccountsService],
+  controllers: [AccountLoginController, AccountsController, AccountContactController],
+  providers: [AccountsService, AccountLoginService, LoginRuntime],
 })
 export class AccountsModule {}

@@ -12,6 +12,9 @@ import argon2 from 'argon2';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const mcpFixture = process.argv.includes('--mcp-fixture');
 const loginOnly = process.argv.includes('--real-login-check');
+const accountLogin = process.argv.includes('--account-login-workbench');
+if(accountLogin && (mcpFixture || loginOnly || !process.send))throw new Error('Use the account login workbench launcher');
+const loginConfig=accountLogin?await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Missing login configuration')),5000);process.once('message',v=>{clearTimeout(timer);if(v?.kind!=='ACCOUNT_LOGIN_WORKBENCH'||!['real','offline'].includes(v.mode))return reject(Error('Invalid login configuration'));resolve(v);});}):undefined;
 if (loginOnly && (mcpFixture || !process.send)) throw new Error('Use the explicit xhs-real launcher; real mode requires its private IPC configuration');
 const real = loginOnly ? await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Missing real login-check configuration')), 5000);
@@ -88,6 +91,7 @@ function stopGroup(child) {
 }
 
 const children = [];
+const ownedLoginGroups = new Set();
 let finish;
 const stopped = new Promise(resolve => { finish = resolve; });
 let interrupted = false;
@@ -102,7 +106,12 @@ async function freePort() {
 }
 function service(label, args, env) {
     if (interrupted) throw new Error("Interrupted");
-    const child = spawn(args[0], args.slice(1), { cwd: root, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(args[0], args.slice(1), { cwd: root, env, detached: true, stdio: accountLogin && label === 'api' ? ['ignore','pipe','pipe','ipc'] : ['ignore', 'pipe', 'pipe'] });
+    if (accountLogin && label === 'api') child.on('message', message => {
+        if (!Number.isInteger(message?.pid) || message.pid <= 1) return;
+        if (message.kind === 'OWNED_LOGIN_PROCESS_STARTED') ownedLoginGroups.add(message.pid);
+        if (message.kind === 'OWNED_LOGIN_PROCESS_STOPPED') ownedLoginGroups.delete(message.pid);
+    });
     children.push(child);
     child.stdout.on('data', () => {});
     child.stderr.on('data', data => writeFileSync(join(output, `${label}.log`), safe(data), { flag: 'a' }));
@@ -110,8 +119,8 @@ function service(label, args, env) {
     child.once('exit', () => { if (!interrupted) process.exitCode = 1; finish(); });
     return child;
 }
-if (loginOnly) process.once('disconnect', () => { interrupted = true; stopGroup(current); finish(); });
-const report = { mode: loginOnly ? 'REAL_LOGIN_CHECK' : mcpFixture ? 'XHS_FIXTURE' : 'MOCK', isolated: true, credentials_persisted: false, cleanup: [] };
+if (loginOnly || accountLogin) process.once('disconnect', () => { interrupted = true; stopGroup(current); finish(); });
+const report = { mode: accountLogin ? `ACCOUNT_LOGIN_${loginConfig.mode.toUpperCase()}` : loginOnly ? 'REAL_LOGIN_CHECK' : mcpFixture ? 'XHS_FIXTURE' : 'MOCK', isolated: true, credentials_persisted: false, cleanup: [] };
 try {
     const pg = launch('postgres', 'postgres:17', 5432, ['-e', 'POSTGRES_DB=crm_test', '-e', 'POSTGRES_USER=crmtest', '-e', 'POSTGRES_PASSWORD']);
     const redis = launch('redis', 'redis:7-alpine', 6379, []);
@@ -123,8 +132,10 @@ try {
     const env = { ...process.env, DATABASE_URL: url, REDIS_URL: `redis://127.0.0.1:${redis.port}`, DOTENV_CONFIG_PATH: '/dev/null', XHS_MCP_ENABLED: '0',
         COLLECTION_QUEUE_NAME: `crm-browser-${id}`, PORT: String(apiPort), API_HOST: '127.0.0.1', APP_ORIGIN: `http://${previewHost}:${webPort}`,
         API_PROXY_TARGET: `http://127.0.0.1:${apiPort}`, COOKIE_SECURE: 'false' };
+    if (accountLogin) Object.assign(env, { XHS_ACCOUNT_LOGIN_MODE: loginConfig.mode, CRM_PROJECT_ROOT: root.replace(/\/$/, ''), XHS_MCP_LOGIN_ONLY: '1' });
+    else env.XHS_ACCOUNT_LOGIN_MODE = '';
     if (loginOnly) Object.assign(env, { XHS_MCP_ENABLED: '1', XHS_MCP_PROFILE: 'real', XHS_MCP_ENDPOINT: real.endpoint, XHS_MCP_AUTH_TOKEN: real.token, XHS_MCP_LOGIN_ONLY: '1' });
-    else Object.assign(env, { XHS_MCP_AUTH_TOKEN: '', XHS_MCP_LOGIN_ONLY: '0' });
+    else Object.assign(env, { XHS_MCP_AUTH_TOKEN: '', XHS_MCP_LOGIN_ONLY: accountLogin ? '1' : '0' });
     if (mcpFixture) {
         const fixture = spawn(process.execPath, ['--import','tsx','scripts/mcp-fixture.ts'], { cwd: root, env: { ...env, CRM_DISPOSABLE_MCP_FIXTURE: '1' }, detached: true, stdio: ['ignore','ignore','pipe','ipc'] });
         children.push(fixture);
@@ -154,25 +165,29 @@ try {
         ] });
     } finally { await db.$disconnect(); }
     service('api', ['node', 'apps/api/dist/main.js'], env);
-    if (!loginOnly) service('collector', ['node', 'apps/api/dist/collection/worker.js'], env);
+    if (!loginOnly && !accountLogin) service('collector', ['node', 'apps/api/dist/collection/worker.js'], env);
     service('web', ['npm', 'run', 'dev', '-w', '@crm/web', '--', '--port', String(webPort), '--host', previewHost], env);
     report.preview = env.APP_ORIGIN;
     report.api = env.API_PROXY_TARGET;
     report.containers = [...containers];
     report.pids = children.map(c => c.pid);
     writeFileSync(join(output, 'running.json'), JSON.stringify(report, null, 2));
-    console.log(`${loginOnly ? 'REAL LOGIN-STATUS-ONLY (unverified)' : mcpFixture ? 'OFFLINE MCP (fictional)' : 'MOCK (fictional)'} preview: ${env.APP_ORIGIN}`);
+    console.log(`${accountLogin ? `ACCOUNT LOGIN ${loginConfig.mode.toUpperCase()} (no platform calls until UI consent)` : loginOnly ? 'REAL LOGIN-STATUS-ONLY (unverified)' : mcpFixture ? 'OFFLINE MCP (fictional)' : 'MOCK (fictional)'} preview: ${env.APP_ORIGIN}`);
     console.log('Fictional logins: admin@fixture.invalid / sales-a@fixture.invalid / sales-b@fixture.invalid');
     console.log(`One-run password (never save in browser): ${fixturePassword}`);
     if (mcpFixture) console.log('Offline MCP fixture: enter BASELINE / NEW / LOGIN_EXPIRED / RATE_LIMITED / TIMEOUT to change fictional responses.');
-    console.log(loginOnly ? 'Manual login-status check only; collection/sending disabled. Ctrl+C removes only this temporary CRM stack. Platform session is retained by the parent launcher.' : 'Stop with Ctrl+C; temporary accounts, database and queues are removed. No real platform integration.');
+    console.log(accountLogin ? 'Open Account Center, add an account and confirm local session storage. No collection/sending. Ctrl+C removes this temporary CRM; approved platform session folders remain.' : loginOnly ? 'Manual login-status check only; collection/sending disabled. Ctrl+C removes only this temporary CRM stack. Platform session is retained by the parent launcher.' : 'Stop with Ctrl+C; temporary accounts, database and queues are removed. No real platform integration.');
     await stopped;
 } catch (error) { console.error(safe(error.message)); process.exitCode = 1; }
 finally {
     process.stdin.pause();
     stopGroup(current);
+    // Only process groups registered by the API child of this exact launcher.
+    for (const pid of ownedLoginGroups) { try { process.kill(-pid,'SIGTERM'); } catch {} }
     for (const child of children) stopGroup(child);
-    await wait(500);
+    await wait(2000);
+    for (const pid of ownedLoginGroups) { try { process.kill(-pid,'SIGKILL'); } catch {} }
+    for (const child of children) { if (child.exitCode === null && child.signalCode === null && child.pid) { try { process.kill(-child.pid,'SIGKILL'); } catch {} } }
     for (const container of containers.reverse()) {
         try { docker(['rm', '--force', container]); report.cleanup.push({ container, removed: docker(['ps', '-aq', '--filter', `id=${container}`]) === '' }); }
         catch (error) { report.cleanup.push({ container, removed: false }); process.exitCode = 1; }

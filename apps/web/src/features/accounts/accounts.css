@@ -156,3 +156,5 @@
     font-size: 15px;
   }
 }
+
+.account-login-panel{display:grid;gap:12px;padding:20px;border:1px solid #a38a60;border-radius:18px;margin:16px 0;background:#17212a}.account-login-panel p{line-height:1.6}.login-storage{overflow-wrap:anywhere;font-size:12px}.login-consent{display:flex;gap:10px;align-items:flex-start}.login-consent input{margin-top:5px;flex-shrink:0}.login-qr{text-align:center}.login-qr img,.offline-qr-placeholder{width:220px;height:220px;max-width:100%;background:white;object-fit:contain;margin:0 auto;border:12px solid white;border-radius:8px}.offline-qr-placeholder{display:grid;place-content:center;color:#17212a;font-size:24px;font-weight:700;background:#e7dfc7}.account-login-panel button{white-space:normal;height:auto;min-height:40px}

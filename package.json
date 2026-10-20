@@ -37,7 +37,10 @@
     "dev:xhs:real": "node scripts/xhs-real.mjs serve",
     "dev:mcp:offline": "node scripts/dev-mock-isolated.mjs --mcp-fixture",
     "test:real:preflight": "node --test scripts/real-mcp/core.test.mjs",
-    "test:real:offline": "node --import tsx scripts/test-real-mcp-offline.mjs"
+    "test:real:offline": "node --import tsx scripts/test-real-mcp-offline.mjs",
+    "dev:xhs:login": "node scripts/xhs-login-workbench.mjs",
+    "dev:xhs:login:offline": "node scripts/xhs-login-workbench.mjs --offline",
+    "test:xhs:login:browser": "node scripts/test-account-login-browser.mjs"
   },
   "devDependencies": {
     "prisma": "6.19.0",

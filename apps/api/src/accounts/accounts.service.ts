@@ -46,14 +46,14 @@ export class AccountsService {
         day,
         occupied: usage[0]?.occupied || 0,
         available:
-          r.isDemo &&
+          r.isDemo && !r.loginSessionKey &&
           !r.archivedAt &&
           r.status === "UNCONNECTED" &&
           r.dailyLimit > (usage[0]?.occupied || 0),
-        loginStatus: "NOT_CONNECTED",
+        loginStatus: r.loginVerifiedAt ? (r.loginProvider === "real" ? "VERIFIED" : "OFFLINE_VERIFIED") : "NOT_CONNECTED",
         capabilities: {
-          simulation: true,
-          login: false,
+          simulation: !r.loginSessionKey,
+          login: !!r.loginVerifiedAt,
           read: false,
           send: false,
         },

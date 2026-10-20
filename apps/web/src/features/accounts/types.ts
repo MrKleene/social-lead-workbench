@@ -11,6 +11,11 @@ export type Account = {
   pauseReason: string | null;
   available: boolean;
   version: number;
+  loginStatus?: string;
+  loginProvider?: string | null;
+  loginNickname?: string | null;
+  loginPlatformUserId?: string | null;
+  loginVerifiedAt?: string | null;
 };
 export type AccountList = {
   accounts: Account[];

@@ -1,3 +1,7 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, send } from '@/lib/api';
+import { AccountLoginPanel, type LoginCapabilities } from './account-login-panel';
+import type { Account } from './types';
 import { useState } from "react";
 import { useConfirmWorkspaceLeave } from "@/features/work/draft-guard";
 import { useAuth } from "@/features/auth/use-auth";
@@ -14,10 +18,13 @@ export function AccountsPage() {
   const state = useAccountCenter(),
     admin = useAuth().user?.role === "ADMIN",
     a = state.account;
+  const client=useQueryClient(),capabilities=useQuery({queryKey:['account-login-capabilities'],queryFn:()=>api<LoginCapabilities>('/accounts/login-capabilities'),enabled:admin,retry:false});
+  const [adding,setAdding]=useState(false),[addError,setAddError]=useState('');
+  const addLogin=async()=>{if(adding)return;setAdding(true);setAddError('');try{const account=await send<Account>('/accounts','POST',{platform:'XHS',label:'小红书 · 待授权账号',ownerId:null,dailyLimit:10,status:'PAUSED',pauseReason:'等待本人授权'});await client.invalidateQueries({queryKey:['accounts']});state.select(account.id);}catch(e){setAddError(e instanceof Error?e.message:'创建失败');}finally{setAdding(false);}};
   return (
     <section className="account-center">
       <header>
-        <span className="account-eyebrow">ACCOUNT CENTER / 模拟管理</span>
+        <span className="account-eyebrow">ACCOUNT CENTER / 账号管理</span>
         <h2>账号中心</h2>
         <p>
           可用 {state.query.data?.summary.available ?? "—"} · 需处理{" "}
@@ -26,8 +33,9 @@ export function AccountsPage() {
         </p>
       </header>
       <p className="account-boundary">
-        登录、扫码、持久授权与真实发送均未接入。人工记录不等于平台确认成功。
+        {capabilities.data?.enabled ? '扫码仅在本人确认后启用；真实采集和发送仍禁用。人工记录不等于平台确认成功。' : '此环境未启用扫码登录。人工记录不等于平台确认成功，真实发送禁用。'}
       </p>
+      {addError&&<p role="alert">{addError}</p>}
       <ErrorNotice error={state.query.error || state.mutation.error} />
       {state.query.isPending && <p role="status">加载账号…</p>}
       {state.mutation.isSuccess && (
@@ -35,6 +43,7 @@ export function AccountsPage() {
       )}
       <div className="account-columns">
         <div className="account-list">
+          {admin && capabilities.data?.enabled && <Button disabled={adding} onClick={()=>{if(confirmLeave())void addLogin();}}>{adding?'创建中…':'添加账号并扫码'}</Button>}
           {admin && (
             <Button
               onClick={() => {
@@ -57,7 +66,7 @@ export function AccountsPage() {
               }}
             >
               <span>
-                {row.platform === "XHS" ? "小红书" : "抖音"} · 未接入登录
+                {row.platform === "XHS" ? "小红书" : "抖音"} · {row.loginStatus === "VERIFIED" ? "登录已验证" : row.loginStatus === "OFFLINE_VERIFIED" ? "离线模拟已验证" : "未验证登录"}
               </span>
               <strong>{row.label}</strong>
               <span>负责人：{row.owner?.name || "未分配"}</span>
@@ -95,9 +104,9 @@ export function AccountsPage() {
                 <h3>{a.label}</h3>
                 <dl>
                   <dt>登录状态</dt>
-                  <dd>未接入 · 没有扫码能力</dd>
+                  <dd>{a.loginStatus === "VERIFIED" ? `登录已验证 · ${a.loginNickname || a.loginPlatformUserId}` : a.loginStatus === "OFFLINE_VERIFIED" ? "离线模拟已验证 · 非真实账号" : "未验证"}</dd>
                   <dt>能力</dt>
-                  <dd>模拟管理、权限审计；读取和发送禁用</dd>
+                  <dd>元数据管理、权限审计；真实采集和发送禁用</dd>
                   <dt>今日计数</dt>
                   <dd>
                     {a.occupied} / {a.dailyLimit}（包括尝试、未知与模拟成功）
@@ -112,6 +121,7 @@ export function AccountsPage() {
                     {a.pauseReason && ` · ${a.pauseReason}`}
                   </dd>
                 </dl>
+                {admin && capabilities.data?.enabled && a.platform==='XHS' && !a.loginVerifiedAt && <AccountLoginPanel key={a.id} accountId={a.id} capabilities={capabilities.data}/>}
                 {admin && (
                   <AccountEditor
                     key={`${a.id}:${saved}`}

@@ -75,6 +75,13 @@ model PlatformAccount {
   dailyLimit Int @default(10)
   archivedAt DateTime?
   version Int @default(0)
+  loginSessionKey String? @unique
+  loginProvider String?
+  loginPlatformUserId String?
+  loginNickname String?
+  loginVerifiedAt DateTime?
+  logins AccountLogin[]
+  @@unique([platform, loginProvider, loginPlatformUserId])
   usage AccountDay[]
   contacts ContactLedger[]
   createdAt DateTime @default(now())
@@ -329,4 +336,19 @@ model ContactAttempt {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([ledgerId,createdAt])
+}
+
+model AccountLogin {
+  id String @id @default(uuid())
+  accountId String
+  account PlatformAccount @relation(fields:[accountId], references:[id], onDelete:Cascade)
+  actorId String
+  requestKey String @unique
+  runtimeId String
+  mode String
+  state String @default("STARTING")
+  reason String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([accountId, createdAt])
 }
