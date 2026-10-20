@@ -1,4 +1,4 @@
-import { useState, useRef, FormEvent } from "react";
+import { useState, useRef, FormEvent, type ReactNode } from "react";
 import { CheckCircle2, UserRound, CalendarClock, MessageSquare, FileText, ListChecks } from "lucide-react";
 import { LeadReplyPreview } from "@/features/replies/reply-preview";
 import { ContactActions, contactLabels } from "./contact-actions";
@@ -13,10 +13,12 @@ export function DetailForms({
   lead,
   state,
   admin,
+  children,
 }: {
   lead: Lead;
   state: ReturnType<typeof useLead>;
   admin: boolean;
+  children?: ReactNode;
 }) {
   const [saveCount, setSaveCount] = useState(0);
   const [ownerDraft, setOwner] = useState<string | undefined>(),
@@ -64,9 +66,9 @@ export function DetailForms({
   };
   return (
     <div className="detail-sections">
-      <p className="soft-tag">{contactLabels[lead.contactStage || "MATCHED"]}</p>
+      {children ?? <><p className="soft-tag">{contactLabels[lead.contactStage || "MATCHED"]}</p>
       <ContactActions lead={lead}/>
-      <details className="secondary-actions"><summary>首次联系话术预览（不发送）</summary><LeadReplyPreview id={lead.id}/></details>
+      <details className="secondary-actions"><summary>首次联系话术预览（不发送）</summary><LeadReplyPreview id={lead.id}/></details></>}
       <details className="secondary-actions"><summary>当前负责人和跟进时间</summary><div className="detail-facts">
         <div><UserRound size={16} /><span>当前负责人<strong>{lead.owner?.name || "待分配"}</strong></span></div>
         <div><CalendarClock size={16} /><span>下次跟进<strong>{formatDate(lead.nextFollowUpAt)}</strong></span></div>

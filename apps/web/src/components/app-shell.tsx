@@ -1,110 +1,35 @@
-import { useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
-import {
-  PanelLeftClose,
-  PanelLeftOpen,
-  LayoutList,
-  ListChecks,
-  Layers,
-  LogOut,
-  Monitor,
-  Inbox,
-  Settings2,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/features/auth/use-auth";
-import { useWorkspaceMotion } from "@/features/work/use-workspace-motion";
-import { useEvents } from "@/lib/use-events";
-import { ErrorNotice } from "./feedback";
+import { useRef, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Orbit, Menu, LogOut, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/features/auth/use-auth';
+import { useWorkspaceMotion } from '@/features/work/use-workspace-motion';
+import { useEvents } from '@/lib/use-events';
+import { ErrorNotice } from './feedback';
 const links = [
-  { to: "/work", label: "找线索", icon: Inbox },
-  { to: "/leads", label: "线索管理", icon: LayoutList },
-  { to: "/tasks", label: "任务中心", icon: ListChecks },
-  { to: "/collection", label: "搜索设置", icon: Settings2, adminOnly: true },
-  { to: "/templates", label: "回复话术", icon: Settings2, adminOnly: true },
-  { to: "/platforms", label: "平台能力", icon: Layers },
+  { to: '/work', label: '环绕总览' }, { to: '/leads', label: '全部线索' },
+  { to: '/tasks', label: '人工任务' }, { to: '/collection', label: '搜索设置', adminOnly: true },
+  { to: '/templates', label: '回复话术', adminOnly: true }, { to: '/platforms', label: '平台能力' },
 ];
 export function AppShell() {
   const motion = useWorkspaceMotion();
-  const [collapsed, setCollapsed] = useState(false);
   const { user, logout } = useAuth();
   const location = useLocation();
+  const [menu, setMenu] = useState(false);
+  const menuTrigger = useRef<HTMLButtonElement>(null);
   useEvents(!!user);
-  const title =
-    links.find((v) => location.pathname.startsWith(v.to))?.label || "线索管理";
-  return (
-    <div className={`app-shell ${collapsed ? "is-collapsed" : ""}`}>
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">L</span>
-          <div className="sidebar-text">
-            <strong>线索工作台</strong>
-            <small>LEAD WORKSPACE</small>
-          </div>
-        </div>
-        <p className="nav-caption sidebar-text">工作空间</p>
-        <nav aria-label="主导航">
-          {links.filter(link=>!link.adminOnly||user?.role==='ADMIN').map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              title={label}
-              className={({ isActive }) =>
-                isActive ? "nav-item active" : "nav-item"
-              }
-            >
-              <Icon size={20} />
-              <span className="sidebar-text">{label}</span>
-            </NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <Monitor size={18} />
-          <span className="sidebar-text">本机开发 · 演示环境</span>
-          <span className="live-dot" />
-        </div>
-      </aside>
-      <div className="workspace">
-        <header className="topbar">
-          <div className="breadcrumb">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCollapsed((v) => !v)}
-              aria-label={collapsed ? "展开侧栏" : "收起侧栏"}
-            >
-              {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
-            </Button>
-            <span>工作台</span>
-            <span className="muted">/</span>
-            <strong>{title}</strong>
-          </div>
-          <div className="user-menu"><button className="motion-toggle" aria-pressed={motion.reduced} onClick={motion.toggle}>{motion.reduced ? "动态已减少" : "减少动态"}</button>
-            <span className="avatar admin-avatar">
-              {user?.name.slice(0, 1)}
-            </span>
-            <div>
-              <strong>{user?.name}</strong>
-              <small>
-                {user?.role === "ADMIN" ? "管理员" : "销售 · 仅我的线索"}
-              </small>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="退出登录"
-              onClick={() => logout.mutate()}
-              disabled={logout.isPending}
-            >
-              <LogOut />
-            </Button>
-          </div>
-        </header>
-        <main className="page" key={location.pathname.split("/")[1]}>
-          <ErrorNotice error={logout.error} />
-          <Outlet />
-        </main>
+  const spatial = location.pathname.startsWith('/work');
+  return <div className="space-shell">
+    <header className="space-topbar" onKeyDown={e => { if(menu && e.key === "Escape") { e.stopPropagation(); setMenu(false); menuTrigger.current?.focus(); } }}>
+      <Link className="space-brand" to="/work" onClick={() => setMenu(false)}><Orbit aria-hidden="true"/><span>LEAD SPACE</span></Link>
+      <div className="space-account">
+        <button className="motion-toggle" aria-pressed={motion.reduced} onClick={motion.toggle}>{motion.reduced ? '动态已减少' : '减少动态'}</button>
+        <span className="space-role">{user?.name} · {user?.role === 'ADMIN' ? '管理员' : '销售'}</span>
+        <Button ref={menuTrigger} variant="ghost" size="icon" aria-label="打开工作空间菜单" aria-expanded={menu} onClick={() => setMenu(v => !v)}>{menu ? <X/> : <Menu/>}</Button>
+        <Button variant="ghost" size="icon" aria-label="退出登录" onClick={() => logout.mutate()} disabled={logout.isPending}><LogOut/></Button>
       </div>
-    </div>
-  );
+      {menu && <nav className="space-menu" aria-label="主导航" onKeyDown={e => { if(e.key === 'Escape') { e.stopPropagation(); setMenu(false); menuTrigger.current?.focus(); } }}>{links.filter(l => !l.adminOnly || user?.role === 'ADMIN').map(l => <NavLink key={l.to} to={l.to} onClick={() => setMenu(false)}>{l.label}</NavLink>)}</nav>}
+    </header>
+    <main className={spatial ? 'space-page' : 'page space-document'} key={location.pathname.split('/')[1]}><ErrorNotice error={logout.error}/>{!spatial && <Link className="back-to-space" to="/work">← 返回环绕总览</Link>}<Outlet/></main>
+  </div>;
 }
