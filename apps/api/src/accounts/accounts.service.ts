@@ -55,7 +55,7 @@ export class AccountsService {
         capabilities: {
           simulation: !r.loginSessionKey,
           login: sessionReference ? sessionReference.state==='VERIFIED'&&sessionReference.checkedRuntimeId===process.env.CRM_RUNTIME_ID : !!r.loginVerifiedAt&&process.env.CRM_PERSISTENT!=='1',
-          read: false,
+          read: process.env.CRM_ACCOUNT_READ_ENABLED==='1'&&!!sessionReference&&sessionReference.state==='VERIFIED'&&sessionReference.checkedRuntimeId===process.env.CRM_RUNTIME_ID&&r.status!=='RESTRICTED',
           send: false,
         },
       }));

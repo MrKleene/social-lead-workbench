@@ -1,3 +1,5 @@
+import { XhsHttpTransport, ReadOnlyMcpTransport } from '../collection/mcp/transport';
+import { AccountFixtureTransport } from '../collection/adapters/account-fixture';
 import { Injectable } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -6,7 +8,7 @@ import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 export type LoginMode = 'real' | 'offline';
-export type SessionDriver = { qr(signal: AbortSignal): Promise<{image: string; seconds: number}>; status(signal: AbortSignal): Promise<{loggedIn: boolean; userId?: string; nickname?: string}>; stop(): Promise<void>; simulate?(scenario: string): void | Promise<void> };
+export type SessionDriver = { qr(signal: AbortSignal): Promise<{image: string; seconds: number}>; status(signal: AbortSignal): Promise<{loggedIn: boolean; userId?: string; nickname?: string}>; stop(): Promise<void>; readTransport?(): ReadOnlyMcpTransport; simulate?(scenario: string): void | Promise<void> };
 export const demoImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG5EAAAAASUVORK5CYII=';
 export function parseQr(value: unknown) {
   const v = value as { img?: unknown; timeout?: unknown; is_logged_in?: unknown };
@@ -68,7 +70,7 @@ export class LoginRuntime {
         if(directory&&saved){const f=JSON.parse(await readFile(join(directory,'fixture-state.json'),'utf8'));if(f.fixture!==true)throw Error('INVALID_FIXTURE');scenario=f.status;}
         if(stopped||signal.aborted)throw Error('CANCELLED'); if(scenario==='ERROR')throw Error('PLATFORM_UNAVAILABLE');
         return {loggedIn:scenario==='SUCCESS'||scenario==='MISSING_ID',...(scenario==='SUCCESS'?{userId:`offline-${accountId}`,nickname:'离线模拟账号'}:{})};
-      },stop:async()=>{stopped=true;},simulate:async s=>{scenario=s;if(directory)await writeFile(join(directory,'fixture-state.json'),JSON.stringify({fixture:true,status:s}),{mode:0o600});}};
+      },readTransport:()=>new AccountFixtureTransport(),stop:async()=>{stopped=true;},simulate:async s=>{scenario=s;if(directory)await writeFile(join(directory,'fixture-state.json'),JSON.stringify({fixture:true,status:s}),{mode:0o600});}};
     }
     if(this.mode()!=='real')throw Error('LOGIN_DISABLED');
     const root=process.env.CRM_PROJECT_ROOT || '';
@@ -113,7 +115,7 @@ export class LoginRuntime {
     try{
       let ready=false;for(let i=0;i<40&&alive&&!signal.aborted;i++){try{ready=(await fetch(endpoint+'/health',{signal:AbortSignal.timeout(200),redirect:'error'})).ok;}catch{}if(ready)break;await new Promise(ok=>setTimeout(ok,100));}
       if(!ready||!alive||signal.aborted)throw Error('PROCESS_START_FAILED');
-      return {qr:async s=>parseQr(await request('/api/v1/login/qrcode',s)),status:async s=>parseStatus(await request('/api/v1/login/status',s)),stop};
+      return {qr:async s=>parseQr(await request('/api/v1/login/qrcode',s)),status:async s=>parseStatus(await request('/api/v1/login/status',s)),readTransport:()=>new XhsHttpTransport(new URL(endpoint+'/mcp'),'XHS_MCP',{token,callMs:40000}),stop};
     }catch(e){await stop();throw e;}
   }
 }

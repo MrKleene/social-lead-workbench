@@ -1,12 +1,13 @@
 import { Prisma, CollectionRun, CollectionConfig } from "@prisma/client";
 import { Db } from "../common/db";
 import { ReadResult } from "./collector";
-import { requireMcp } from "./mcp/policy";
+import { accountReadMode, requireMcp } from "./mcp/policy";
 import { classify, configInput, ReadFailure } from "./contract";
-export async function commitRead(db: Db, run: CollectionRun, result: ReadResult) {
+export async function commitRead(db: Db, run: CollectionRun, result: ReadResult, guard?: (tx:Prisma.TransactionClient)=>Promise<void>) {
     for (let attempt = 0; attempt < 4; attempt++)
         try {
             return await db.$transaction(async (tx) => {
+                if(guard) await guard(tx);
                 // Serialize pause/config changes against the final write, not against network work.
                 const [config] = await tx.$queryRaw<CollectionConfig[]> `SELECT * FROM "CollectionConfig" WHERE id=${run.configId} FOR UPDATE`;
                 const current = await tx.collectionRun.findUniqueOrThrow({ where: { id: run.id } });
@@ -19,7 +20,10 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult)
                 const parsed = configInput.safeParse(run.snapshot);
                 if (!parsed.success && result.posts.length) throw new ReadFailure("INVALID_DATA");
                 const spec = parsed.success ? parsed.data : { mode: "MOCK" as const, platform: "XHS" as const, keywords: [], excludeWords: [] };
-                if (spec.mode !== "MOCK" && result.posts.length) requireMcp(spec.mode);
+                if (spec.mode !== "MOCK" && result.posts.length) {
+                    if(run.execution){if(!guard||accountReadMode()!==spec.mode)throw new ReadFailure("REAL_DISABLED");}
+                    else {if(accountReadMode())throw new ReadFailure("REAL_DISABLED");requireMcp(spec.mode);}
+                }
                 const isDemo = spec.mode !== "XHS_MCP";
                 const prefix = spec.mode === "MOCK" ? "【模拟】" : spec.mode === "XHS_FIXTURE" ? "【离线MCP夹具】" : "【小红书只读】";
                 let observed = 0, matched = 0, added = 0, notices = 0;
@@ -50,7 +54,7 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult)
                         const priorLead = await tx.lead.findUnique({ where: { identityId: identity.id } });
                         if (priorLead && priorLead.isDemo !== isDemo)
                             throw new ReadFailure("INVALID_DATA");
-                        const lead = await tx.lead.upsert({ where: { identityId: identity.id }, create: { identityId: identity.id, summary: `${prefix}${hit.keywords.join("、")} · ${hit.classification === "POSSIBLE_HELP" ? "可能求助，待人工核验" : "仅专业相关"}`, evidence: c.text, isDemo }, update: {} });
+                        const lead = await tx.lead.upsert({ where: { identityId: identity.id }, create: { identityId: identity.id, summary: `${prefix}${hit.keywords.join("、")} · ${hit.classification === "POSSIBLE_HELP" ? "可能求助，待人工核验，未同意营销" : "仅专业相关"}`, evidence: c.text, isDemo }, update: {} });
                         if (!priorLead)
                             added++;
                         await tx.sourceMatch.upsert({ where: { configId_revision_commentId: { configId: config.id, revision: run.revision, commentId: source.id } }, create: { configId: config.id, revision: run.revision, runId: run.id, commentId: source.id, keywords: hit.keywords, classification: hit.classification, isBaseline: !established }, update: {} });
@@ -68,7 +72,7 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult)
                     await tx.monitorPost.update({ where: { id: monitor.id }, data: { coverage: entry.complete ? "COMPLETE" : "PARTIAL", baselineAt: monitor.baselineAt || (entry.complete ? new Date() : null), lastRunId: windowSucceeded ? run.id : monitor.lastRunId } });
                 }
                 const failed = result.status === "FAILED";
-                const restricted = ["RESTRICTED", "LOGIN_EXPIRED"].includes(result.reason || "");
+                const restricted = ["RESTRICTED", "LOGIN_EXPIRED", "RATE_LIMITED", "IDENTITY_MISMATCH"].includes(result.reason || "");
                 await tx.collectionConfig.update({ where: { id: config.id }, data: { activeRunId: null, failureCount: failed ? { increment: 1 } : 0, nextAllowedAt: failed ? new Date(Date.now() + Math.max(result.retryAfterMs || 0, Math.min(300000, 30000 * 2 ** Math.min(config.failureCount, 4)))) : null, ...(restricted ? { enabled: false, pauseReason: result.reason } : {}) } });
                 const finished = await tx.collectionRun.update({ where: { id: run.id }, data: { status: result.status, reason: result.reason || null, requests: result.requests, observed, matched, added, notices, finishedAt: new Date() } });
                 await tx.auditLog.create({ data: { action: spec.mode === "MOCK" ? "COLLECTION_FINISHED_MOCK" : "COLLECTION_FINISHED_MCP", entityId: run.id, metadata: { mode: spec.mode, status: result.status, reason: result.reason || null, observed, matched, added, notices } } });

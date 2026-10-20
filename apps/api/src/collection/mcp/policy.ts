@@ -29,4 +29,8 @@ export function requireMcp(mode: string) {
   return settings;
 }
 
+export function accountReadMode(env: NodeJS.ProcessEnv = process.env): McpMode | undefined {
+  if (env.CRM_ACCOUNT_READ_ENABLED !== '1' || env.CRM_PERSISTENT !== '1' || env.CRM_DEVICE_MANAGEMENT !== '1') return;
+  return env.XHS_ACCOUNT_LOGIN_MODE === 'real' ? 'XHS_MCP' : env.XHS_ACCOUNT_LOGIN_MODE === 'offline' ? 'XHS_FIXTURE' : undefined;
+}
 export function loginCheckOnly(env: NodeJS.ProcessEnv = process.env) { return env.XHS_MCP_LOGIN_ONLY === "1"; }

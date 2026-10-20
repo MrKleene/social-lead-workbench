@@ -108,3 +108,26 @@ describe('独立登录验证环境：仅离线验证', () => {
         } finally { spy.mockRestore(); }
     });
 });
+
+describe('owned account transport contract',()=>{
+ it('accepts only explicit owned bearer, retains read-only allowlist and hides payload tokens',async()=>{
+  const token='a'.repeat(64),fixture=await startXhsFixture({authToken:token});cleanup.push(fixture.stop);
+  vi.stubEnv('XHS_MCP_AUTH_TOKEN','');vi.stubEnv('XHS_MCP_LOGIN_ONLY','0');
+  const transport=new XhsHttpTransport(fixture.url,'XHS_MCP',{token,callMs:3000});cleanup.push(()=>transport.close());
+  const adapter=new XhsMcpAdapter(transport,true,'XHS_MCP');
+  const result=await collect(adapter,{...config,mode:'XHS_MCP'},async()=>false);
+  expect(result.status).toBe('PARTIAL');expect(result.posts[0].comments[0].userId).toBe('user-root');
+  for(const name of ['post_comment_to_feed','reply_comment_in_feed','send_message','get_login_qrcode','delete_cookies'])await expect(transport.call(name as ReadTool,{},signal())).rejects.toMatchObject({code:'UNSUPPORTED'});
+  expect(fixture.state.forbidden).toBe(0);expect(JSON.stringify(result)).not.toContain('fictional-reference');
+ });
+});
+
+describe('owned transport deadlines',()=>{
+ it('reports bounded SDK timeout without retry or exposing server text',async()=>{
+  const token='b'.repeat(64),fixture=await startXhsFixture({authToken:token});cleanup.push(fixture.stop);
+  const transport=new XhsHttpTransport(fixture.url,'XHS_MCP',{token,callMs:30});cleanup.push(()=>transport.close());
+  await transport.connect(signal());fixture.state.scenario='TIMEOUT';
+  await expect(transport.call('search_feeds',{keyword:'无偿选题'},signal())).rejects.toMatchObject({code:'TIMEOUT'});
+  expect(fixture.state.calls).toHaveLength(1);
+ });
+});

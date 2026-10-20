@@ -461,7 +461,7 @@ describe.skipIf(process.env.CRM_MOCK_ONLY === '1')('MCP默认关闭、只读就�
         const run=await execute(c.id); expect(run.reason).toBe('RATE_LIMITED');
         const saved=await db.collectionConfig.findUniqueOrThrow({where:{id:c.id}});
         expect(saved.nextAllowedAt!.getTime()-run.finishedAt!.getTime()).toBeGreaterThan(119000);
-        await expect(execute(c.id)).rejects.toThrow('退避'); expect(fixture.state.calls.length-before).toBe(1);
+        expect(saved.enabled).toBe(false); await expect(execute(c.id)).rejects.toThrow('暂停'); expect(fixture.state.calls.length-before).toBe(1);
         await expect(service.start(actor,c.id,'BASELINE',randomUUID(),'MOCK')).rejects.toThrow('模式');
         await expect(service.create(actor,spec('不一致',{mode:'XHS_MCP'}))).rejects.toThrow('PROFILE_MISMATCH');
         fixture.state.scenario='BASELINE';

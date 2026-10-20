@@ -8,11 +8,11 @@ export function AccountLoginPanel({accountId,capabilities}:{accountId:string;cap
   const [consent,setConsent]=useState(false),login=useAccountLogin(accountId);
   return <section className="account-login-panel" aria-label="账号扫码登录">
     <h3>{capabilities.mode==='offline'?'离线扫码流程演示 · 不连接平台':'小红书扫码登录'}</h3>
-    <p>{capabilities.mode==='offline'?'当前使用虚构离线状态，不打开平台、不保存真实平台会话。持久模式仅保存可恢复的离线验收文件。':'确认后会为此账号创建独立本地会话。扫码授权后，上游程序会保存可重复使用的登录会话；采集和发送仍禁用。'}</p>
+    <p>{capabilities.mode==='offline'?'当前使用虚构离线状态，不打开平台、不保存真实平台会话。持久模式仅保存可恢复的离线验收文件。':'确认后会为此账号创建独立本地会话。扫码授权后，上游程序会保存可重复使用的登录会话；只读采集另需逐次选择账号并确认用途；评论和私信发送禁用。'}</p>
     {capabilities.device&&<p>实际执行设备：{capabilities.device.name} · {capabilities.device.os} · {capabilities.device.online?"在线且已认证":"未在线，不投递"}</p>}
     <p className="login-storage">保存位置：{capabilities.mode==='offline'?capabilities.storageRoot:`${capabilities.storageRoot}/${accountId}/新尝试ID/`}</p>
     <p>取消、离开或隐藏页面会停止等待。可能已写入的本地会话会保留，但文件存在不代表登录成功。{capabilities.persistent?'正常停止后业务记录与本地引用保留；重启后需主动核验，文件存在不等于在线。':'关闭工作台后临时 CRM 记录消失，会话目录保留。'}</p>
-    {!login.busy&&login.view?.state!=='VERIFIED'&&<><label className="login-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>我同意为此账号在上述本地目录保存登录会话，仅用于本人扫码和登录状态验证</label><Button disabled={!consent} onClick={()=>void login.start()}>{login.view?'重新确认并获取新二维码':'确认并生成二维码'}</Button></>}
+    {!login.busy&&login.view?.state!=='VERIFIED'&&<><label className="login-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>我同意为此账号在上述本地目录保存登录会话，用于本人扫码和登录状态验证；只读采集须另行逐次确认</label><Button disabled={!consent} onClick={()=>void login.start()}>{login.view?'重新确认并获取新二维码':'确认并生成二维码'}</Button></>}
     {login.view&&<p role="status">{capabilities.mode==='offline'?'【离线模拟】':''}{labels[login.view.state]||login.view.state}{login.view.reason&&reasons[login.view.reason]?`：${reasons[login.view.reason]}`:''}</p>}
     {login.image&&<div className="login-qr">{capabilities.mode==='offline'?<div className="offline-qr-placeholder" role="img" aria-label="离线演示图案，不可扫码">离线演示<br/>不可扫码</div>:<img src={login.image} alt="本次小红书登录二维码" referrerPolicy="no-referrer"/>}<p>本次二维码剩余 {login.seconds} 秒；过期后需手动重新确认。</p></div>}
     {login.busy&&<Button variant="outline" onClick={()=>void login.cancel()}>取消等待</Button>}

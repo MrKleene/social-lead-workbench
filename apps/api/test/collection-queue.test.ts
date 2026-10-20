@@ -84,7 +84,7 @@ beforeAll(async () => {
         stdio: ['ignore', 'pipe', 'pipe'],
     });
     await bounded(new Promise<void>((resolve, reject) => {
-        child!.stdout!.on('data', data => { if (String(data).includes('模拟采集 worker 就绪')) resolve(); });
+        child!.stdout!.on('data', data => { if (String(data).includes('采集 worker 就绪')) resolve(); });
         child!.stderr!.on('data', () => { /* Do not emit connection strings or fixture details. */ });
         child!.once('error', reject);
         child!.once('exit', code => reject(new Error(`Worker exited before ready: ${code}`)));

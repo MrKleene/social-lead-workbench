@@ -1,6 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResultSchema, ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { ReadFailure } from '../contract';
 import { endpointUrl, loginCheckOnly, McpMode, ReadTool, toolArguments } from './policy';
 export interface ReadOnlyMcpTransport {
@@ -17,10 +17,14 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
   private connected = false;
   private requests = 0;
   private loginOnly = loginCheckOnly();
+  private callMs = 3000;
   private authToken = process.env.XHS_MCP_AUTH_TOKEN || '';
-  constructor(url: URL, private mode: McpMode) {
+  constructor(url: URL, private mode: McpMode, owned?: { token: string; callMs: number }) {
+    // Only a server-owned per-account child supplies these options. Never HTTP input.
+    if (owned) { this.authToken = owned.token; this.loginOnly = false; this.callMs = owned.callMs; }
+
     const endpoint = endpointUrl(url.href).href;
-    if (this.authToken && (!this.loginOnly || mode !== 'XHS_MCP' || !/^[a-f0-9]{64}$/.test(this.authToken))) throw new ReadFailure('UNSUPPORTED');
+    if (this.authToken && ((!this.loginOnly && !owned) || mode !== 'XHS_MCP' || !/^[a-f0-9]{64}$/.test(this.authToken))) throw new ReadFailure('UNSUPPORTED');
     this.transport = new StreamableHTTPClientTransport(new URL(endpoint), {
       requestInit: { redirect: 'error', credentials: 'omit' },
       reconnectionOptions: { maxRetries: 0, initialReconnectionDelay: 1000, maxReconnectionDelay: 1000, reconnectionDelayGrowFactor: 1 },
@@ -70,7 +74,7 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
     try { return await fn(); }
     catch (error) {
       if (error instanceof ReadFailure) throw error;
-      if (signal.aborted) throw new ReadFailure('TIMEOUT');
+      if (signal.aborted || (error instanceof McpError && error.code === ErrorCode.RequestTimeout)) throw new ReadFailure('TIMEOUT');
       // Never return SDK/server error text: it can contain URLs or response tokens.
       throw new ReadFailure('MCP_PROTOCOL');
     } finally { this.operation = undefined; }
@@ -96,7 +100,7 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
   async call(name: ReadTool, args: Record<string, unknown>, signal: AbortSignal) {
     this.validate(name, args);
     if (!this.connected) throw new ReadFailure('MCP_PROTOCOL');
-    return this.bounded(signal, () => this.client.callTool({ name, arguments: args }, CallToolResultSchema, { signal, timeout: 3000 }));
+    return this.bounded(signal, () => this.client.callTool({ name, arguments: args }, CallToolResultSchema, { signal, timeout: this.callMs }));
   }
   async close() {
     this.operation = AbortSignal.timeout(1000);

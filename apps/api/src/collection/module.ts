@@ -6,6 +6,9 @@ import { Db } from "../common/db";
 import { parse } from "../common/validation";
 import { LeadsModule } from "../leads/leads";
 import { LeadsService } from "../leads/leads.service";
+import { DevicesModule } from "../devices/devices";
+import { LoginRuntime } from "../accounts/login-runtime";
+import { AccountReadService } from "./account-read.service";
 import { CollectionService } from "./service";
 import { CollectionQueue } from "./queue";
 import { configInput, scenarioSchema } from "./contract";
@@ -56,7 +59,7 @@ class CollectionController {
     @Req()
     r: AuthedRequest, 
     @Param("id")
-    id: string) { const b = parse(z.object({ scenario: scenarioSchema, requestKey: z.string().uuid(), mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]) }).strict(), r.body); return this.service.start(r.actor, id, b.scenario, b.requestKey, b.mode); }
+    id: string) { const b = parse(z.object({ scenario: scenarioSchema, requestKey: z.string().uuid(), mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]), accountId:z.string().min(1).max(100).optional(), consent:z.literal("account-read-window-v1").optional() }).strict(), r.body); return this.service.start(r.actor, id, b.scenario, b.requestKey, b.mode, b.accountId, b.consent); }
     @Post("runs/:id/pause")
     pause(
     @Req()
@@ -84,6 +87,6 @@ class NoticesController {
     id: string) { parse(z.object({}).strict(), r.body); const notice = await this.db.collectionNotice.findFirst({ where: { id, lead: scope(r.actor) } }); if (!notice)
         throw new NotFoundException(); return this.leads.locked(r.actor, notice.leadId, tx => tx.noticeRead.upsert({ where: { noticeId_userId: { noticeId: id, userId: r.actor.id } }, create: { noticeId: id, userId: r.actor.id }, update: {} })); }
 }
-@Module({ imports: [AuthModule, LeadsModule], controllers: [CollectionController, NoticesController], providers: [CollectionService, CollectionQueue], exports: [CollectionService] })
+@Module({ imports: [AuthModule, LeadsModule, DevicesModule], controllers: [CollectionController, NoticesController], providers: [CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService] })
 export class CollectionModule {
 }

@@ -10,5 +10,5 @@ export function sourceModeLabel(platformUserId: string, isDemo: boolean) {
 export function shouldRefreshRun(config: Pick<Config, 'activeRunId' | 'runs'>, now: number) {
     const run = config.runs.find(r => r.id === config.activeRunId);
     const elapsed = now - Date.parse(run?.createdAt || '');
-    return !!run && ['QUEUED','RUNNING'].includes(run.status) && elapsed >= 0 && elapsed < 60000;
+    return !!run && ['QUEUED','RUNNING'].includes(run.status) && elapsed >= 0 && elapsed < 180000;
 }

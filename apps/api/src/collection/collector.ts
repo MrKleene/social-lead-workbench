@@ -21,7 +21,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     comments: number;
     callMs: number;
     runMs: number;
-} = limits): Promise<ReadResult> {
+} = limits, progress?: (result:ReadResult)=>Promise<void>): Promise<ReadResult> {
     if (adapter.mode !== config.mode || adapter.platform !== config.platform)
         throw new ReadFailure("REAL_DISABLED");
     const result: ReadResult = { posts: [], requests: 0, status: "COMPLETE" };
@@ -125,6 +125,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
             entry.comments = [...unique.values()];
             entry.complete = complete;
             entry.windowRead = true;
+            await progress?.(result);
             if (!complete) {
                 result.status = "PARTIAL";
                 result.reason = adapter.mode === "MOCK" ? "COMMENTS_PARTIAL" : "MCP_WINDOW_ONLY";

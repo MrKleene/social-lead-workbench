@@ -36,7 +36,7 @@ export function AccountsPage() {
         </p>
       </header>
       <p className="account-boundary">
-        {capabilities.data?.enabled ? '扫码仅在本人确认后启用；真实采集和发送仍禁用。人工记录不等于平台确认成功。' : '此环境未启用扫码登录。人工记录不等于平台确认成功，真实发送禁用。'}
+        {capabilities.data?.enabled ? '扫码仅在本人确认后启用；只读采集须另行逐次确认，发送禁用。人工记录不等于平台确认成功。' : '此环境未启用扫码登录。人工记录不等于平台确认成功，真实发送禁用。'}
       </p>
       {admin&&<DeviceSettings/>}
       {addError&&<p role="alert">{addError}</p>}
@@ -110,7 +110,7 @@ export function AccountsPage() {
                   <dt>登录状态</dt>
                   <dd>{a.loginStatus === "VERIFIED" ? `登录已验证 · ${a.loginNickname || a.loginPlatformUserId}` : a.loginStatus === "OFFLINE_VERIFIED" ? "离线模拟已验证 · 非真实账号" : loginStatusLabel[a.loginStatus || "NOT_CONNECTED"]}</dd>
                   <dt>能力</dt>
-                  <dd>元数据管理、权限审计；真实采集和发送禁用</dd>
+                  <dd>元数据管理、权限审计；只读采集需逐次确认，真实发送禁用</dd>
                   <dt>今日计数</dt>
                   <dd>
                     {a.occupied} / {a.dailyLimit}（包括尝试、未知与模拟成功）

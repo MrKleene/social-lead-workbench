@@ -228,6 +228,7 @@ model CollectionRun {
   requestKey String @unique
   revision Int
   snapshot Json
+  execution Json?
   scenario String
   status String @default("QUEUED")
   reason String?

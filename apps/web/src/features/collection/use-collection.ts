@@ -3,11 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, send } from '@/lib/api';
 import { shouldRefreshRun } from './mode';
 import type { Config, ConfigDetail, Notice, McpReadiness } from './types';
-export function useMcpReadiness(enabled = true) { return useQuery({ queryKey: ['mcp-readiness'], queryFn: () => api<McpReadiness>('/collection/mcp/readiness'), enabled, retry: false }); }
+export function useMcpReadiness(enabled = true) { return useQuery({ queryKey: ['mcp-readiness'], queryFn: () => api<McpReadiness>('/collection/mcp/readiness'), enabled, retry: false, refetchInterval: enabled ? 10000 : false, refetchIntervalInBackground:false }); }
 export function useConfigs(enabled: boolean) {
     const client = useQueryClient(), completed = useRef(new Set<string>());
     const query = useQuery({ queryKey: ['collection'], queryFn: () => api<Config[]>('/collection/configs'), enabled,
-        // Only local job status: never schedules or repeats platform collection. Stop after one minute.
+        // Only local job status: never schedules or repeats platform collection. Stop after three minutes.
         refetchInterval: q => q.state.data?.some(c => shouldRefreshRun(c, Date.now())) ? 1500 : false,
         refetchIntervalInBackground: false });
     useEffect(() => {

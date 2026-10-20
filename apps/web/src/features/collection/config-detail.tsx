@@ -14,7 +14,7 @@ export function ConfigDetailPanel({ id }: {
     if (query.isError || !c)
         return <ErrorNotice error={query.error}/>;
     return <section className="collection-detail table-panel">
-  <div className="list-heading"><div><span className="eyebrow">配置版本 {c.revision} · 规则筛选</span><h2>{c.name}</h2><p>命中关键词只代表相关性，可能求助仍需人工核验。</p></div><Button variant="ghost" onClick={() => void query.refetch()}>刷新状态</Button></div>
+  <div className="list-heading"><div><span className="eyebrow">配置版本 {c.revision} · 规则筛选</span><h2>{c.name}</h2><p>命中关键词只代表相关性，可能求助仍需人工核验，并不代表已同意营销。</p></div><Button variant="ghost" onClick={() => void query.refetch()}>刷新状态</Button></div>
   <div className="collection-body"><p className="helper-text">{c.mode === 'MOCK' ? '首次完整读取只建立基线；后续新评论才提醒。' : '首次有限读取只建立已读窗口起点；后续仅提示新观察到的评论，未验证发布时间。'}真实发送禁用。</p>
   <h3>最近运行 <span className="muted">最多 20 轮</span></h3>
   {c.runs.length ? <div className="run-list">{c.runs.map(r => <article key={r.id}><div><strong>{runLabels[r.status] || r.status}</strong><span>{scenarios[r.scenario]} · {formatDate(r.createdAt)}</span></div><p>读取 {r.observed} · 命中 {r.matched} · 新线索 {r.added} · 新提醒 {r.notices} · 请求 {r.requests}/32</p>{r.reason && <small>{reasonLabels[r.reason] || r.reason}</small>}</article>)}</div> : <p className="helper-text">尚未运行。先选择“初始评论快照”，再运行一轮。</p>}
