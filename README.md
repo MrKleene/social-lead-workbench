@@ -6,11 +6,11 @@
 
 | 文档 | 用途 |
 | --- | --- |
-| [需求主文档](docs/REQUIREMENTS.md) | 34个稳定需求ID、业务目的、验收标准、依赖、待确认项和分阶段路线图。 |
+| [需求主文档](docs/REQUIREMENTS.md) | 35个稳定需求ID、业务目的、验收标准、依赖、待确认项和分阶段路线图。 |
 | [实现状态表](docs/IMPLEMENTATION-STATUS.md) | 已实现/待真实验证/部分实现/未实现/平台能力待确认；每项代码、测试证据和下一步。 |
 | [开发维护约定](docs/DEVELOPMENT.md) | 后续每次实现与验收如何同步需求、状态、证据和使用说明。 |
 
-当前核查代码基线为`c194928`。带日期的验收文档保留历史事实，当前状态以[实现状态表](docs/IMPLEMENTATION-STATUS.md)为准；不能把mock、接口预留或UI开关当作真实功能可用。
+本轮基于`b56a58a`新增管理员一键绑定。带日期的验收文档保留历史事实，当前状态以[实现状态表](docs/IMPLEMENTATION-STATUS.md)为准；不能把mock、接口预留或UI开关当作真实功能可用。
 
 ## 当前能做什么
 
@@ -33,7 +33,7 @@ npm run dev:persistent
 
 打开终端输出的loopback地址。只有当前库没有任何CRM管理员时，终端才会提示创建账号：邮箱、显示名称、设置密码、再次确认。邮箱只是本地CRM登录标识，不发送邮件，不是小红书账号。已有管理员时不会每次重新输入这些信息；启动器只检查是否有启用的管理员，网页仍需正常登录。全部管理员停用时拒绝启动，不会自动新建或重置。按[完整操作说明](docs/ACCOUNT-READ-COLLECTION-2026-10-20.md)执行：
 
-1. 账号中心核对专用电脑及私有目录，管理员明确批准，再由本人扫码。
+1. 管理员在账号中心展开“专用电脑设置”，核对实际执行电脑并点击“一键绑定这台电脑”；OS和私有目录自动确定，再由本人扫码。
 2. 登录及稳定平台ID验证成功后，配置“小红书只读”、关键词“无偿选题”、上限3篇。
 3. 采集任务选择账号并逐次确认一轮读取，查看来源、计数、去重及部分覆盖/失败原因。
 4. 在明确安排下正常重启持久实例，验证业务保留并主动核验会话恢复。
@@ -41,6 +41,10 @@ npm run dev:persistent
 **以上真实验收尚待完成。** 没有真实证据前不改为“已验证”。平台缺少稳定ID或出现限制时停止，不回退mock、不自动换号。已有实例不能直接重启代替升级，尤其旧临时实例退出可能丢数据；不主动迁移或删除旧测试数据。
 
 持久入口会生成Prisma客户端、应用自己的迁移并启动API/前端/专用采集worker；业务卷与本地引用正常停止后保留。全局旧MCP入口仍关闭，账号绑定只读入口单独受逐次授权控制。已有旧环境文件或实例锁冲突时先核对，不擅自读取秘密或清理未知资源。
+
+### 本轮升级
+
+后端需要由用户在原启动终端按 Ctrl+C，再在同一项目运行 `npm run dev:persistent`（若原来带 `--instance`，保留同名参数）。同一实例复用保存的数据库卷与端口；不重新初始化管理员、不删除 `.local` 或卷。当前页面应继续使用63968，若地址变化先停止核对。仅前端更新时会提示加载新版后端并禁用一键绑定。完整说明见[升级与恢复](docs/ONE-CLICK-DEVICE-2026-10-20.md#升级与用户操作)。
 
 ## 数据存在哪里
 
@@ -54,6 +58,8 @@ npm run dev:persistent
 | `test:persistent` | 随机离线验收实例，`crm_persistent_test`；备份恢复另用 `crm_restore_test` | 测试结束清理该测试自有资源 |
 
 持久启动器直接管理带实例归属标签的 Docker 容器，**没有使用 Compose 项目**。卷名是 `crm-persist-<实例UUID>-pg-data` 和 `crm-persist-<实例UUID>-redis-data`，挂载到容器 `/var/lib/postgresql/data`、`/data`。macOS 上卷内容由 Docker Desktop 存储管理，不是项目目录内的数据库文件。`.local` 保存实例配置和私有凭据引用，不应删除或提交。
+
+新Mac绑定把设备私钥存入当前用户默认钥匙串，公开元数据仍在实例目录；平台会话另存于 `~/Library/Application Support/SocialLeadWorkbench/devices/<设备ID>/credential-roots/default`，使用私有目录/文件权限，未新增应用层加密。旧设备及会话不自动迁移。Windows DPAPI尚未实现。
 
 旧的手动 Compose 开发路径是另一套环境：项目名 `lead-workbench`，默认卷 `lead-workbench_crm_pg` / `lead-workbench_crm_redis`，也可能叫 `crm`。**数据库名相同不代表同一个实例**；持久入口不会自动迁移这些旧数据。
 
@@ -69,9 +75,11 @@ npm test
 npm run test:mock:isolated
 npm run test:mcp
 npm run test:persistent
+npm run test:device:vault    # Mac临时钥匙串，虚构凭据
+npm run test:xhs:entry:offline
 ```
 
-测试资源和浏览器依赖说明见[开发维护约定](docs/DEVELOPMENT.md)。最近实现轮次的离线记录为：120项单元、126项数据库、14项队列、2项worker检查及持久浏览器12组检查通过；MCP模式按设计跳过1项仅MOCK入口检查。**本次文档整理没有重跑这些测试。**
+测试资源和浏览器依赖说明见[开发维护约定](docs/DEVELOPMENT.md)。本轮131项单元、132项数据库/HTTP、14项队列（1项模式跳过）、2项worker、12组持久浏览器及12组账号UI检查通过；Mac临时钥匙串测试通过。真实扫码/采集未验收。详见[一键绑定交付](docs/ONE-CLICK-DEVICE-2026-10-20.md)。
 
 ## 项目结构
 

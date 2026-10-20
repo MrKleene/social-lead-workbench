@@ -32,3 +32,38 @@ describe('execution-device authorization / isolated Mac fake identity',()=>{
  it('revocation cancels a dispatch while its database reservation is still pending',async()=>{await approve();const a=await account(),d=(await service.status(admin)).device!;let release!:()=>void,locked!:()=>void;const holding=new Promise<void>(ok=>{locked=ok;});const blocker=db.$transaction(async tx=>{await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(31174029)`;locked();await new Promise<void>(ok=>{release=ok;});});await holding;const pending=service.acquire(admin,a.id);const revoke=service.revoke(admin,id,d.version);release();await blocker;const results=await Promise.allSettled([pending,revoke]);if(results[0].status==='fulfilled'){expect(results[0].value.signal.aborted).toBe(true);await results[0].value.release();}expect((await service.status(admin)).device?.enabled).toBe(false);});
  it('revoked or expired execution permit cannot commit; audit never contains private key material',async()=>{await approve();const a=await account(),permit=await service.acquire(admin,a.id);await db.deviceExecutionLease.update({where:{accountId:a.id},data:{expiresAt:new Date(0)}});await expect(db.$transaction(tx=>service.assertPermit(tx,permit))).rejects.toThrow();await permit.release();const audit=JSON.stringify(await db.auditLog.findMany({where:{actorId:admin.id}}));expect(audit).not.toContain('PRIVATE KEY');expect(audit).not.toContain('cookies.json');});
 });
+
+describe('one-click binding / isolated fixtures',()=>{
+ const bind=()=>service.bind(admin,{candidateId:id,consent:'bind-local-device-v1'});
+ it('admin and explicit button consent are mandatory before any key exists',async()=>{
+  await expect(service.bind(sales,{candidateId:id,consent:'bind-local-device-v1'})).rejects.toMatchObject({status:403});
+  await expect(service.bind(admin,{candidateId:id,consent:''})).rejects.toThrow();
+  await expect(service.bind(admin,{candidateId:randomUUID(),consent:'bind-local-device-v1'})).rejects.toThrow();
+  expect(await readdir(instance)).toEqual([]);
+ });
+ it('concurrent/repeated binds reuse exactly one identity and approval audit',async()=>{
+  const results=await Promise.all([bind(),bind()]);expect(results[0].device?.keyFingerprint).toBe(results[1].device?.keyFingerprint);
+  expect(await readdir(join(instance,'device-keys'))).toHaveLength(1);
+  expect(await db.auditLog.count({where:{actorId:admin.id,entityId:id,action:'DEVICE_APPROVED'}})).toBe(1);
+  expect((await db.auditLog.findFirstOrThrow({where:{actorId:admin.id,entityId:id,action:'DEVICE_APPROVED'}})).metadata).toMatchObject({consentVersion:'bind-local-device-v1'});
+  expect(results[0].device?.credentialRoot).toBe(local.defaultRoot());
+  expect(results[0].binding).toMatchObject({version:1,keyProtection:'offline-fixture'});
+ });
+ it('restart reauthenticates the original key; unavailable identity cannot be overwritten by retry',async()=>{
+  const before=(await bind()).device!;vi.stubEnv('CRM_RUNTIME_ID',randomUUID());
+  const after=(await bind()).device!;expect(after).toMatchObject({online:true,keyFingerprint:before.keyFingerprint,version:before.version});
+  vi.spyOn(local,'prove').mockRejectedValue(Error('locked'));
+  await expect(bind()).rejects.toThrow('无法认证');expect(await readdir(join(instance,'device-keys'))).toHaveLength(1);
+  vi.restoreAllMocks();expect((await bind()).device?.keyFingerprint).toBe(before.keyFingerprint);
+ });
+ it('failed creation rolls back binding and a later explicit retry can recover',async()=>{
+  const create=vi.spyOn(local,'createIdentity').mockRejectedValueOnce(Error('unavailable'));
+  await expect(bind()).rejects.toThrow();expect(await db.executionDevice.findUnique({where:{id}})).toBeNull();
+  expect((await bind()).device?.online).toBe(true);expect(create).toHaveBeenCalledTimes(2);
+ });
+ it('revoked references still prevent silent re-binding through the simplified endpoint',async()=>{
+  await bind();const a=await account(),attempt=await login.start(admin,a.id,randomUUID(),'local-session-v1');await login.simulate(admin,a.id,attempt.requestKey,'SUCCESS');
+  await service.revoke(admin,id,(await service.status(admin)).device!.version);
+  await expect(bind()).rejects.toThrow('已有会话引用');
+ });
+});

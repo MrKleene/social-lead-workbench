@@ -473,3 +473,24 @@ describe.skipIf(process.env.CRM_MOCK_ONLY === '1')('MCP默认关闭、只读就�
         expect(fixture.state.calls.length).toBe(calls); enabled();
     });
 });
+
+describe('sales cannot bind devices or manage QR sessions over HTTP',()=>{
+ it('rejects binding, re-binding, directory, revocation, QR and saved-session actions',async()=>{
+  const id=randomUUID(),requestKey=randomUUID();
+  for(const [method,path,body] of [
+   ['post','/devices/bind',{candidateId:id,consent:'bind-local-device-v1'}],
+   ['post','/devices/approve',{candidateId:id,name:'forged',credentialRoot:'/fictional',consent:'approve-local-device-v1'}],
+   ['patch',`/devices/${id}/directory`,{version:0,path:'/fictional'}],
+   ['post',`/devices/${id}/revoke`,{version:0,consent:'revoke-local-device-v1'}],
+   ['post',`/accounts/${id}/login`,{requestKey,consent:'local-session-v1'}],
+   ['post',`/accounts/${id}/login/check`,{requestKey}],
+   ['post',`/accounts/${id}/login/cancel`,{requestKey}],
+   ['post',`/accounts/${id}/session/verify`,{consent:'read-local-session-v1'}],
+  ] as const)expect((await write(method,path,body,a)).status,path).toBe(403);
+  expect((await read('/devices',a)).status).toBe(403);expect((await read('/accounts/login-capabilities',a)).status).toBe(403);
+  // Explicitly forbid client-supplied path/name even for an administrator.
+  expect((await write('post','/devices/bind',{candidateId:id,consent:'bind-local-device-v1',credentialRoot:'/fictional'})).status).toBe(400);
+  expect((await api().post('/api/devices/bind').send({candidateId:id,consent:'bind-local-device-v1'})).status).toBe(401);
+  expect((await api().post('/api/devices/bind').set('Cookie',admin.cookie).set('Origin',origin).send({candidateId:id,consent:'bind-local-device-v1'})).status).toBe(403);
+ });
+});

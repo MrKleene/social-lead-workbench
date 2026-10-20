@@ -38,6 +38,7 @@
     "test:xhs:login:browser": "node scripts/test-account-login-browser.mjs",
     "dev:persistent": "node scripts/dev-persistent.mjs",
     "dev:persistent:offline": "node scripts/dev-persistent.mjs --offline",
+    "test:device:vault": "node scripts/build-device-vault.mjs && node scripts/test-device-vault.mjs",
     "test:persistent": "node scripts/test-persistent-restart.mjs"
   },
   "devDependencies": {

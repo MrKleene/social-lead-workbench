@@ -1,6 +1,7 @@
 import { XhsHttpTransport, ReadOnlyMcpTransport } from '../collection/mcp/transport';
 import { AccountFixtureTransport } from '../collection/adapters/account-fixture';
 import { Injectable } from '@nestjs/common';
+import { LocalDeviceRuntime } from '../devices/device-runtime';
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { access, mkdir, lstat, realpath, readFile, writeFile } from 'node:fs/promises';
@@ -38,10 +39,14 @@ export class LoginRuntime {
   deviceId(){const id=process.env.CRM_DEVICE_ID;if(!id||!/^[a-f0-9-]{36}$/.test(id))throw Error('INVALID_DEVICE');return id;}
   private async directory(accountId:string,key:string,create=false,executionRoot?:string){
     const root=process.env.CRM_PROJECT_ROOT || '',base=executionRoot||this.storage();
-    if(!root.startsWith('/')||await realpath(root)!==root||!/^\w+$/.test(accountId)||!/^[a-f0-9-]{36}$/.test(key)||!base.startsWith(root+'/.local/'))throw Error('INVALID_CONFIGURATION');
+    if(!root.startsWith('/')||await realpath(root)!==root||!/^\w+$/.test(accountId)||!/^[a-f0-9-]{36}$/.test(key))throw Error('INVALID_CONFIGURATION');
     const local=join(root,'.local');const ls=await lstat(local);if(ls.isSymbolicLink()||!ls.isDirectory())throw Error('UNSAFE_SESSION_DIRECTORY');
     // Check every ancestor, including an overridden offline fixture root.
-    let p=local;for(const part of base.slice(local.length+1).split('/')){if(!part||part==='.'||part==='..')throw Error('INVALID_CONFIGURATION');p=join(p,part);await privateDir(p,create);}
+    if(!base.startsWith(local+'/')){
+      if(!executionRoot||!this.persistent()||this.mode()!=='real')throw Error('INVALID_CONFIGURATION');
+      await new LocalDeviceRuntime().validateRoot(base,create);
+    }
+    let p=local;for(const part of (base.startsWith(local+'/')?base.slice(local.length+1).split('/'):[])){if(!part||part==='.'||part==='..')throw Error('INVALID_CONFIGURATION');p=join(p,part);await privateDir(p,create);}
     const account=join(base,accountId);await privateDir(account,create);const directory=join(account,key);
     if(create){await mkdir(directory,{mode:0o700});await writeFile(join(directory,'session.json'),JSON.stringify({kind:'crm-qr-login-v2',accountId,attemptId:key,deviceId:this.persistent()?this.deviceId():null}),{flag:'wx',mode:0o600});}
     else await privateDir(directory);

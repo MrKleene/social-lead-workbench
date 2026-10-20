@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { randomBytes, randomUUID, verify } from 'node:crypto';
+import { hostname } from 'node:os';
 import { Prisma } from '@prisma/client';
 import { Db } from '../common/db';
 import { Actor, requireAdmin } from '../auth/security';
@@ -30,20 +31,31 @@ export class DeviceService implements OnModuleInit,OnModuleDestroy {
     const device=await this.db.executionDevice.findFirst({orderBy:{approvedAt:'desc'}});
     const count=device?await this.db.accountSessionReference.count({where:{deviceId:device.id}}):0;
     const online=!!device?.enabled&&!!device.lastSeenAt&&Date.now()-device.lastSeenAt.getTime()<30000&&device.runtimeId===process.env.CRM_RUNTIME_ID;
-    return {enabled:true,capability,provider:this.local.provider(),candidateId:this.local.id(),allowedBase:this.local.allowedBase(),suggestedRoot:this.local.defaultRoot(),windows:'UNSUPPORTED_UNVERIFIED',device:device?{id:device.id,name:device.name,os:device.os,enabled:device.enabled,online,credentialRoot:device.credentialRoot,keyFingerprint:this.local.fingerprint(device.publicKey),version:device.version,lastSeenAt:device.lastSeenAt,accountCount:count}:null};
+    return {enabled:true,binding:{version:1,executionHost:hostname(),keyProtection:this.local.keyProtection(),sessionProtection:'private-files-mcp-v1'},capability,provider:this.local.provider(),candidateId:this.local.id(),allowedBase:this.local.allowedBase(),suggestedRoot:this.local.defaultRoot(),windows:'UNSUPPORTED_UNVERIFIED',device:device?{id:device.id,name:device.name,os:device.os,enabled:device.enabled,online,credentialRoot:device.credentialRoot,keyFingerprint:this.local.fingerprint(device.publicKey),keyProtection:await this.local.identityProtection(device).catch(()=> 'unavailable'),version:device.version,lastSeenAt:device.lastSeenAt,accountCount:count}:null};
   }
-  async approve(actor:Actor,input:{candidateId:string;name:string;credentialRoot:string;consent:string}){
+  async bind(actor:Actor,input:{candidateId:string;consent:string}){
+    requireAdmin(actor);this.requireEnabled();
+    if(input.consent!=='bind-local-device-v1')throw new BadRequestException('点击绑定表示批准此执行机及设备密钥保存');
+    return this.approve(actor,{candidateId:input.candidateId,name:`${hostname()} · ${this.local.capability().os}`.slice(0,80),credentialRoot:this.local.defaultRoot(),consent:'approve-local-device-v1'},true);
+  }
+  async approve(actor:Actor,input:{candidateId:string;name:string;credentialRoot:string;consent:string},idempotent=false){
     requireAdmin(actor);this.requireEnabled();if(input.consent!=='approve-local-device-v1')throw new BadRequestException('需要明确批准执行机及本地设备密钥保存');
     if(input.candidateId!==this.local.id())throw new ForbiddenException('不能注册其他执行设备');
     try{await this.db.$transaction(async tx=>{
       await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(31174029)`;
-      if(await tx.executionDevice.findFirst({where:{enabled:true}}))throw new ConflictException('首版只允许一台启用的专用电脑');
+      const existing=await tx.executionDevice.findFirst({where:{enabled:true}});
+      if(existing){
+        if(!idempotent||existing.id!==this.local.id()||existing.provider!==this.local.provider())throw new ConflictException('已有启用的专用电脑；需管理员先撤销旧设备，不会自动换绑');
+        if(!await this.proof(existing))throw new ConflictException('已绑定设备无法认证；请解锁系统钥匙串或恢复原执行环境后重试，不会覆盖密钥');
+        await tx.executionDevice.update({where:{id:existing.id},data:{lastSeenAt:new Date(),runtimeId:process.env.CRM_RUNTIME_ID}});
+        return;
+      }
       if(await tx.accountSessionReference.count({where:{deviceId:input.candidateId}}))throw new ConflictException('已有会话引用，不能静默重新绑定；需要另行确认迁移或重新登录');
       const root=await this.local.validateRoot(input.credentialRoot,true,true),identity=await this.local.createIdentity();
       if(!await this.proof(identity))throw new ConflictException('设备认证证明失败，未绑定');
       await tx.executionDevice.upsert({where:{id:identity.id},create:{...identity,name:input.name,os:this.local.capability().os,credentialRoot:root,approvedBy:actor.id,lastSeenAt:new Date(),runtimeId:process.env.CRM_RUNTIME_ID},update:{...identity,name:input.name,credentialRoot:root,approvedBy:actor.id,approvedAt:new Date(),revokedAt:null,enabled:true,lastSeenAt:new Date(),runtimeId:process.env.CRM_RUNTIME_ID,version:{increment:1}}});
-      await tx.auditLog.create({data:{actorId:actor.id,entityId:identity.id,action:'DEVICE_APPROVED',metadata:{consentVersion:input.consent,keyFingerprint:this.local.fingerprint(identity.publicKey),provider:identity.provider}}});
-    });}catch(e){if(e instanceof ConflictException||e instanceof ForbiddenException)throw e;throw new BadRequestException(e instanceof Error&&e.message.startsWith('目录')?e.message:'设备或目录验证失败；未配置执行设备。不会导入或搬运现有会话');}
+      await tx.auditLog.create({data:{actorId:actor.id,entityId:identity.id,action:'DEVICE_APPROVED',metadata:{consentVersion:idempotent?'bind-local-device-v1':input.consent,keyFingerprint:this.local.fingerprint(identity.publicKey),provider:identity.provider}}});
+    });}catch(e){if(e instanceof ConflictException||e instanceof ForbiddenException)throw e;throw new BadRequestException(e instanceof Error&&e.message.startsWith('目录')?e.message:'设备绑定未完成；请确认本机钥匙串已解锁、系统存储助手已构建且默认目录可写，然后重试。不会覆盖已有绑定或降级为明文密钥');}
     return this.status(actor);
   }
   async changeDirectory(actor:Actor,id:string,version:number,path:string){
