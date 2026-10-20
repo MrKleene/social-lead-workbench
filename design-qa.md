@@ -50,3 +50,7 @@ No other known unresolved P0/P1/P2 visual or interaction blocker. Browser securi
 - Planet: new rock/filament texture, a brighter upper-right gold rim and different orbit inclination. In the desktop overview the visible face is about430px, with a560px asset box; the reference face is roughly380px within a1920px-wide concept panel.
 - Glow: real ribbon modules are thinner and less volumetric, with restrained glows and Lucide outline icons. The concept uses fuller folded light ribbons and stronger bloom. The gold core and five module hues are retained.
 - Proportion/placement: the actual1440×900 overview has more vertical space than each panel of the1920×819 board. Expanded core/arc modules/three cards/source panel follow the reference structure, but filters, pagination and editable business forms take additional room. Mobile intentionally becomes a strip and linear detail flow.
+
+## 球体及统一转场补充
+
+已修复后续反馈：球体自身静态，以及设置/话术直接跳页。新增材料层旋转/呼吸/微浮动；所有模块在同一空间展开，编辑保留与导航保护已实测。动态矩阵、标签稳定坐标、暂停与快速切换、窄屏保存、7.54秒实录见 `docs/ORB-TRANSITIONS-2026-10-20.md`。本轮62项回归通过。原生后台可见性验收限制和非逐像素视觉差异继续保留。

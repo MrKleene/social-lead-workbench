@@ -1,6 +1,5 @@
-import { Fragment, type CSSProperties } from 'react';
+import { Fragment, useLayoutEffect, type CSSProperties } from 'react';
 import { Search, Database, Network, MessagesSquare, UserRound, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { CoreParticles, FlowParticles } from './space-particles';
 import type { SpatialState } from './use-spatial-work';
 const nodes = [
@@ -12,6 +11,7 @@ const nodes = [
 ];
 export function SpaceNavigation({ state }: { state: SpatialState }) {
   const expanded = !!state.active;
+  useLayoutEffect(()=>{if(state.active&&matchMedia('(max-width:900px)').matches)document.querySelector<HTMLElement>(`.node-${state.active}`)?.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});},[state.active]);
   const counts: Record<string,number> = { settings:state.configs.length, runs:state.configs.filter(c=>c.activeRunId).length, matches:state.work.fresh.length, templates:state.work.templates.data?.length || 0, follow:state.work.follow.length };
   const activeRun = !!state.selectedConfig?.activeRunId;
   return <div className="space-map" aria-label="工作模块">
@@ -19,7 +19,7 @@ export function SpaceNavigation({ state }: { state: SpatialState }) {
       {nodes.map((n,i) => { const path=expanded ? `M 85 350 Q 180 ${n.ey*7} ${n.ex*10} ${n.ey*7}` : `M 500 336 Q ${n.x < 50 ? 300 : 720} ${n.y*7-90} ${n.x*10} ${n.y*7}`; return <Fragment key={n.id}><path className={state.active === n.id ? 'is-lit' : ''} stroke={n.color} d={path}/><FlowParticles path={path} color={n.color} phase={i}/></Fragment>; })}
     </svg>
     <div className="space-core" data-running={activeRun}>
-      <img className="planet-art" src="/space/champagne-planet.png" alt=""/>
+      <div className="planet-material space-orb-motion"><img className="planet-art" src="/space/champagne-planet.png" alt=""/><span className="planet-atmosphere"/><span className="planet-ring"/></div>
       <CoreParticles/>
       <div className="space-core-content">
         {expanded ? <button className="core-home" onClick={state.overview} aria-label="收拢并返回环绕总览">线索工作台<span>返回总览</span></button> : <>
@@ -34,11 +34,10 @@ export function SpaceNavigation({ state }: { state: SpatialState }) {
     {nodes.map(n => {
       const Icon=n.icon, restricted=!state.admin && ['settings','runs','templates'].includes(n.id);
       const style={ '--x':`${n.x}%`, '--y':`${n.y}%`, '--ex':`${n.ex}%`, '--ey':`${n.ey}%`, '--node-color':n.color } as CSSProperties;
-      const content=<><span className="node-orb"><img src="/space/ribbon-halo.png" alt=""/><Icon aria-hidden="true"/></span><span className="node-label"><strong>{n.title}</strong><small>{restricted ? '管理员配置' : expanded ? `${counts[n.id]} ${n.id==='runs'?'个运行中':'项'}` : n.subtitle}</small></span></>;
+      const content=<><span className="node-orb"><span className="node-material space-orb-motion"><img src="/space/ribbon-halo.png" alt=""/><span className="node-orbit"/></span><Icon aria-hidden="true"/></span><span className="node-label"><strong>{n.title}</strong><small>{restricted ? '管理员配置' : expanded ? `${counts[n.id]} ${n.id==='runs'?'个运行中':'项'}` : n.subtitle}</small></span></>;
       const cls=`space-node node-${n.id}${state.active===n.id?' selected':''}`;
       if(restricted) return <div key={n.id} className={`${cls} restricted`} style={style} aria-label={`${n.title}：管理员配置`}>{content}</div>;
-      if(n.id==='settings'||n.id==='templates') return <Link key={n.id} className={cls} style={style} to={n.id==='settings'?'/collection':'/templates'}>{content}</Link>;
-      return <button key={n.id} className={cls} style={style} aria-pressed={state.active===n.id} onClick={()=>state.openModule(n.id as 'runs'|'matches'|'follow')}>{content}</button>;
+      return <button key={n.id} className={cls} style={style} aria-pressed={state.active===n.id} onClick={()=>state.openModule(n.id as 'runs'|'matches'|'follow'|'settings'|'templates')}>{content}</button>;
     })}
   </div>;
 }

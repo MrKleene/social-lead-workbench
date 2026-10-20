@@ -1,3 +1,4 @@
+import { useDraftGuard } from '@/features/work/draft-guard';
 import { useState, useRef, FormEvent, type ReactNode } from "react";
 import { CheckCircle2, UserRound, CalendarClock, MessageSquare, FileText, ListChecks } from "lucide-react";
 import { LeadReplyPreview } from "@/features/replies/reply-preview";
@@ -31,6 +32,7 @@ export function DetailForms({
   const status = statusDraft ?? lead.status;
   const nextInput = useRef<HTMLInputElement>(null);
   const [draftVersion, setDraftVersion] = useState<number | null>(null);
+  useDraftGuard(draftVersion!==null || !!taskTitle, "lead");
   const beginEdit = () => setDraftVersion((v) => v ?? lead.version);
   const run = (path: string, method: string, body: unknown, message: string) =>
     state.mutation.mutate(

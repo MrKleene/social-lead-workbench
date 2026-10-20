@@ -10,7 +10,7 @@ export function SpaceLeadDetail({id,admin,onClose}:{id:string;admin:boolean;onCl
   const state=useLead(id,admin), lead=state.query.data;
   const heading=useRef<HTMLHeadingElement>(null), origin=useRef(document.activeElement);
   const closeRef=useRef(onClose); closeRef.current=onClose;
-  useEffect(()=>{heading.current?.focus();const esc=(e:KeyboardEvent)=>{if(e.key==='Escape'&&!document.querySelector('[role="dialog"]')){e.preventDefault();closeRef.current();}};document.addEventListener('keydown',esc);return()=>{document.removeEventListener('keydown',esc);if(origin.current instanceof HTMLElement&&origin.current.isConnected)origin.current.focus();else document.querySelector<HTMLElement>('[aria-label="线索队列"]')?.focus();};},[]);
+  useEffect(()=>{heading.current?.focus();const esc=(e:KeyboardEvent)=>{if(e.key==='Escape'&&!document.querySelector('[role="dialog"]')){e.preventDefault();closeRef.current();}};document.addEventListener('keydown',esc);return()=>{document.removeEventListener('keydown',esc);if(origin.current instanceof HTMLElement&&origin.current.isConnected)origin.current.focus();else (document.querySelector<HTMLElement>('.space-node.selected')||document.querySelector<HTMLElement>('.core-start'))?.focus();};},[]);
   const first=lead?.identity.comments?.find(c=>c.matches?.length)||lead?.identity.comments?.[0];
   return <section className="space-detail glass-panel" aria-label="线索来源与处理">
     <header className="space-detail-header"><span>评论来源</span>{lead&&<span className="platform-pill">{platformLabel[lead.identity.platform]}</span>}<span className="detail-post">{first?.post.title||'来源详情'}</span><button aria-label="关闭来源详情" onClick={onClose}><X size={18}/></button></header>

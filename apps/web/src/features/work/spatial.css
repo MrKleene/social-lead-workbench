@@ -45,3 +45,43 @@ html[data-crm-theme=graphite][data-crm-reduced=false] .space-dust-dot{animation:
 html[data-crm-theme=graphite][data-crm-reduced=false] :is(.space-orbit-dot,.space-flow-dot){animation:space-orbit-flow var(--duration) linear var(--delay) infinite!important}
 html[data-crm-theme=graphite][data-crm-hidden=true] .space-particle{animation-play-state:paused!important}
 @media(max-width:900px){.space-dust-dot:nth-child(n+21),.space-orbit-dot:nth-child(n+7){display:none}.space-flow-dot:nth-child(2){display:none}.space-core-particles{opacity:.7}}
+
+/* Animate material pixels independently from labels and hit targets. */
+.planet-material{position:absolute;inset:0;pointer-events:none}.planet-material .planet-art{inset:0}
+.planet-atmosphere{position:absolute;inset:15%;border-radius:50%;background:radial-gradient(ellipse at 70% 25%,#ffe1a827,transparent 60%);box-shadow:inset 0 0 26px #ebc88e35;pointer-events:none}
+.planet-ring{position:absolute;inset:24% 5%;border:1px solid #edca9355;border-left-color:transparent;border-right-color:#ffe9bcaa;border-radius:50%;transform:rotate(-24deg);box-shadow:0 0 8px #f7d39720;pointer-events:none}
+.node-material{position:absolute;inset:0;pointer-events:none}.node-material img{inset:0}.node-orbit{position:absolute;inset:12%;border-radius:50%;border:1px solid color-mix(in srgb,var(--node-color) 45%,transparent);border-top-color:transparent;transform:rotateX(58deg) rotate(-25deg);pointer-events:none}.node-orb>svg{position:relative;z-index:1}
+@keyframes material-turn{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes material-breathe{0%,100%{transform:translateY(0) scale(1);opacity:.86}50%{transform:translateY(-3px) scale(1.025);opacity:1}}
+@keyframes ring-turn{from{transform:rotate(-24deg) scaleY(.88)}to{transform:rotate(336deg) scaleY(.88)}}
+html[data-crm-theme=graphite][data-crm-reduced=false] .planet-material{animation:material-breathe 9s ease-in-out infinite!important}
+html[data-crm-theme=graphite][data-crm-reduced=false] .planet-art{animation:material-turn 100s linear infinite!important}
+html[data-crm-theme=graphite][data-crm-reduced=false] .planet-ring{animation:ring-turn 28s linear infinite reverse!important}
+html[data-crm-theme=graphite][data-crm-reduced=false] .node-material{animation:material-breathe 7s ease-in-out infinite!important}
+html[data-crm-theme=graphite][data-crm-reduced=false] .node-material img{animation:material-turn 32s linear infinite!important}
+html[data-crm-theme=graphite][data-crm-reduced=false] .node-orbit{animation:ring-turn 16s linear infinite reverse!important}
+.node-runs{--orb-delay:-2s}.node-matches{--orb-delay:-4s}.node-templates{--orb-delay:-1s}.node-follow{--orb-delay:-5s}
+html[data-crm-theme=graphite][data-crm-reduced=false] .space-node .node-material{animation-delay:var(--orb-delay,0s)!important}
+html[data-crm-theme=graphite][data-crm-hidden=true] :is(.planet-material,.planet-art,.planet-ring,.node-material,.node-material img,.node-orbit){animation-play-state:paused!important}
+/* Every module occupies the same stage; inactive drafts remain mounted and inert. */
+.space-expanded-workspace{display:block;padding:0;pointer-events:none}
+.space-panel{position:absolute;inset:65px 0 40px;display:grid;grid-template-columns:minmax(260px,.88fr) minmax(330px,1.12fr);align-items:center;gap:24px;opacity:0;visibility:hidden;transform:translateX(18px) scale(.985);transition:opacity .14s ease,transform .14s ease,visibility 0s .14s;pointer-events:none!important}
+.space-panel[data-active=true]{opacity:1;visibility:visible;transform:none;transition:opacity .3s .16s ease,transform .4s .16s ease,visibility 0s;pointer-events:auto!important}
+.space-panel>*{min-width:0;max-height:100%}.space-panel[inert] *{pointer-events:none!important}
+.space-admin-panel{grid-column:1/-1;max-height:100%;overflow:auto;padding:26px;scrollbar-width:thin;overscroll-behavior:contain}
+.space-admin-panel .page-heading{align-items:flex-start;gap:15px;margin-bottom:16px}.space-admin-panel .page-heading h1{font-size:23px}.space-admin-panel .page-heading p{font-size:12px;max-width:45ch}.space-admin-panel .collection-layout{grid-template-columns:minmax(180px,.75fr) minmax(220px,1.25fr);gap:18px}.space-admin-panel .config-card{padding:14px}.space-admin-panel .connection-banner{font-size:11px;flex-wrap:wrap}.space-admin-panel .config-form{gap:16px}.space-admin-panel .collection-body{padding:18px}.space-admin-panel textarea,.space-admin-panel input,.space-admin-panel select{max-width:100%}.space-admin-panel .form-pair{grid-template-columns:1fr}.space-admin-panel .action-row{flex-wrap:wrap}.space-inline-editor{padding:18px;background:#141b2688;border:1px solid #ffffff22;border-radius:16px}.space-inline-editor header{margin-bottom:20px}.space-inline-editor h2{font-size:18px}.space-inline-editor header p{font-size:11px;color:#a9a4af;margin-top:8px}
+.space-soft-swap{min-width:0;height:100%;opacity:1;transform:none;transition:opacity .16s ease,transform .2s ease}.space-soft-swap[data-exiting=true]{opacity:0;transform:translateY(8px);pointer-events:none}.space-soft-swap>.space-detail{height:100%}.space-soft-swap>.space-detail-placeholder{margin-top:50px}
+.space-connectors path{transition:d .75s ease,opacity .45s,stroke-width .45s}.space-back{z-index:3}.node-orb{transition:width .75s,height .75s}
+html[data-crm-reduced=true] :is(.space-panel,.space-soft-swap){transform:none!important;transition:none!important}
+@media(prefers-reduced-motion:reduce){.space-panel,.space-soft-swap{transform:none!important;transition:none!important}}
+@media(max-width:1150px) and (min-width:901px){.space-panel{gap:15px;grid-template-columns:minmax(220px,.85fr) minmax(280px,1.15fr)}.space-admin-panel{padding:18px}.space-admin-panel .collection-layout{grid-template-columns:1fr}}
+@media(max-width:900px){
+ .space-expanded-workspace{margin:0;width:100%;height:auto;padding:0;display:grid;grid-template-columns:minmax(0,1fr)}
+ .space-panel{position:relative;inset:auto;grid-area:1/1;display:block;height:0;min-height:0;overflow:hidden;padding:0;transform:none}
+ .space-panel[data-active=true]{height:auto;overflow:visible;padding:16px}
+ .space-panel .space-soft-swap{height:auto}.space-panel .space-detail{height:calc(100dvh - 260px)}
+ .space-admin-panel{max-height:calc(100dvh - 245px);padding:17px;border-radius:18px}.space-admin-panel .page-heading{flex-wrap:wrap}.space-admin-panel .collection-layout{grid-template-columns:minmax(0,1fr)}.space-admin-panel .config-list{grid-template-columns:minmax(0,1fr)}.space-admin-panel .collection-body{padding:14px}.space-admin-panel .config-form{font-size:12px}
+ .space-expanded-workspace[data-open=false]{display:none}
+}
+
+html[data-crm-theme=graphite][data-crm-reduced=false] .space-panel:not([data-active=true]) .space-particle{animation-play-state:paused!important}
