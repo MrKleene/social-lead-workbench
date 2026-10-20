@@ -3,20 +3,20 @@ import {spawn,spawnSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {mkdtemp,readFile,writeFile,unlink,rm,lstat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import {PrismaClient} from '@prisma/client';
-const root=fileURLToPath(new URL('../',import.meta.url)).replace(/\/$/,'');
+const root=resolve(fileURLToPath(new URL('../',import.meta.url)));
 const name=`acceptance-${randomUUID()}`,directory=join(root,'.local/persistent-offline',name),out=await mkdtemp(join(tmpdir(),'crm-persistent-evidence-'));
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
 const report={mode:'OFFLINE FICTIONAL ONLY',platformCalls:false,cycles:0,checks:[]};
 const mark=s=>{report.checks.push(s);console.log('PASS '+s);};
 let current,browser,context,db,manifest,password,base,csrf,credentialRoot,deviceFingerprint;
-function boot(){let output='',ended=false;const child=spawn(process.execPath,['scripts/dev-persistent.mjs','--offline','--test-fixture','--instance',name],{cwd:root,env:process.env,stdio:['ignore','pipe','pipe']});child.stdout.on('data',b=>output+=b);child.stderr.on('data',()=>{});const done=new Promise(ok=>child.once('exit',code=>{ended=true;ok(code);}));return {child,done,get output(){return output;},get ended(){return ended;}};}
+function boot(){let output='',ended=false;const child=spawn(process.execPath,['scripts/dev-persistent.mjs','--offline','--test-fixture','--instance',name],{cwd:root,env:process.env,stdio:['ignore','pipe','pipe','ipc']});child.stdout.on('data',b=>output+=b);child.stderr.on('data',()=>{});const done=new Promise(ok=>child.once('exit',code=>{ended=true;ok(code);}));return {child,done,get output(){return output;},get ended(){return ended;}};}
 async function until(fn,ms=90000){const end=Date.now()+ms;while(Date.now()<end){if(await fn())return;if(current?.ended)throw Error('Fixture launcher exited');await new Promise(ok=>setTimeout(ok,100));}throw Error('Fixture deadline');}
 async function start(){current=boot();await until(()=>current.output.includes('PERSISTENT OFFLINE workbench:'));manifest=JSON.parse(await readFile(join(directory,'instance.json'),'utf8'));assert.equal(manifest.fixture,true);assert.equal(manifest.mode,'offline');base=`http://127.0.0.1:${manifest.webPort}`;await until(async()=>{try{return(await fetch(base+'/api/health/ready')).ok;}catch{return false;}});report.cycles++;}
-async function stop(){current.child.kill('SIGTERM');let timer;try{assert.equal(await Promise.race([current.done,new Promise((_,no)=>{timer=setTimeout(()=>no(Error('Fixture stop deadline')),30000);})]),0);}finally{clearTimeout(timer);}current=undefined;}
+async function stop(){if(process.platform==='win32')current.child.send({kind:'STOP_OWNED_FIXTURE'});else current.child.kill('SIGTERM');let timer;try{assert.equal(await Promise.race([current.done,new Promise((_,no)=>{timer=setTimeout(()=>no(Error('Fixture stop deadline')),30000);})]),0);}finally{clearTimeout(timer);}current=undefined;}
 function docker(args,input){const r=spawnSync('docker',args,{input,encoding:input instanceof Buffer?undefined:'utf8',timeout:30000});if(r.status!==0)throw Error('Fixture Docker '+args[0]+' failed');return r.stdout;}
 async function login(email='admin@persistent.invalid') {context=await browser.newContext({viewport:{width:1440,height:1000}});const response=await context.request.post(base+'/api/auth/login',{headers:{Origin:base},data:{email,password}});assert.equal(response.status(),201);csrf=(await(await context.request.get(base+'/api/auth/me')).json()).csrfToken;}
 async function api(path,data,method=data?'POST':'GET',expected=method==='POST'?201:200){const r=await context.request.fetch(base+'/api'+path,{method,headers:{Origin:base,'x-csrf-token':csrf},...(data?{data}:{})});assert.equal(r.status(),expected,`${method} ${path}`);return r.json();}
@@ -40,13 +40,13 @@ try{
  await api('/devices/approve',{candidateId:initialDevice.candidateId,name:'invalid',credentialRoot:initialDevice.suggestedRoot},'POST',400);
  const devicePage=await context.newPage();await devicePage.goto(base+'/work?module=accounts');await devicePage.getByText('专用电脑设置 · 仅管理员',{exact:true}).click();
  const approval=devicePage.getByRole('button',{name:'一键绑定离线测试电脑',exact:true});await approval.waitFor();assert(await approval.isEnabled());await approval.focus();await approval.press('Enter');await devicePage.getByText('在线 · 签名已验证',{exact:true}).waitFor();
- let deviceState=await api('/devices');deviceFingerprint=deviceState.device.keyFingerprint;assert(!JSON.stringify(deviceState).includes('PRIVATE KEY'));assert.equal(deviceState.windows,'UNSUPPORTED_UNVERIFIED');
+ let deviceState=await api('/devices');deviceFingerprint=deviceState.device.keyFingerprint;assert(!JSON.stringify(deviceState).includes('PRIVATE KEY'));assert.equal(deviceState.windows,'IMPLEMENTED_PENDING_NATIVE_VALIDATION');
  await api('/devices/approve',{candidateId:initialDevice.candidateId,name:'duplicate',credentialRoot:initialDevice.suggestedRoot,consent:'approve-local-device-v1'},'POST',409);
- deviceState=await api(`/devices/${deviceState.device.id}/directory`,{version:deviceState.device.version,path:initialDevice.allowedBase+'/reviewed'},'PATCH');credentialRoot=deviceState.device.credentialRoot;assert(credentialRoot.startsWith(directory+'/credential-roots/'));
+ deviceState=await api(`/devices/${deviceState.device.id}/directory`,{version:deviceState.device.version,path:join(initialDevice.allowedBase,'reviewed')},'PATCH');credentialRoot=deviceState.device.credentialRoot;assert(credentialRoot===join(directory,'credential-roots','reviewed'));
  await devicePage.reload();await devicePage.getByText('专用电脑设置 · 仅管理员',{exact:true}).click();await devicePage.getByText('在线 · 签名已验证',{exact:true}).waitFor();await devicePage.waitForTimeout(500);await devicePage.getByText('专用电脑设置 · 仅管理员',{exact:true}).focus();await devicePage.getByText('专用电脑设置 · 仅管理员',{exact:true}).scrollIntoViewIfNeeded();await devicePage.screenshot({path:join(out,'device-desktop.png')});await devicePage.setViewportSize({width:390,height:844});await devicePage.getByText('专用电脑设置 · 仅管理员',{exact:true}).scrollIntoViewIfNeeded();await devicePage.screenshot({path:join(out,'device-narrow.png')});assert(await devicePage.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));await devicePage.close();
  mark('Explicit admin UI approval creates offline-only device key; UUID alone cannot execute; one active device; server-validated private directory and truthful Windows status');
  const attempt=await bind(a),expired=await bind(b),missing=await bind(c);await bind(d);
- await api(`/devices/${deviceState.device.id}/directory`,{version:deviceState.device.version,path:initialDevice.allowedBase+'/blocked'},'PATCH',409);
+ await api(`/devices/${deviceState.device.id}/directory`,{version:deviceState.device.version,path:join(initialDevice.allowedBase,'blocked')},'PATCH',409);
  const config=await api('/collection/configs',{name:'持久关键词',platform:'XHS',mode:'MOCK',keywords:['离线验收'],excludeWords:['无关'],batchLimit:3,enabled:true});
  const mockRun=await api(`/collection/configs/${config.id}/runs`,{requestKey:randomUUID(),scenario:'BASELINE',mode:'MOCK'});await until(async()=>!['QUEUED','RUNNING'].includes((await db.collectionRun.findUniqueOrThrow({where:{id:mockRun.id}})).status));
  const identity=await db.platformIdentity.create({data:{platform:'XHS',platformUserId:'offline-'+randomUUID(),nickname:'虚构测试联系人',isDemo:true}});

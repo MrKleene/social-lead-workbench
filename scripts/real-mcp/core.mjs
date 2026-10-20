@@ -1,3 +1,4 @@
+import platform from '../../runtime/platform.cjs';
 import { access, lstat, readFile, realpath, mkdir, writeFile, unlink, chmod } from 'node:fs/promises';
 import { constants, createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -25,15 +26,16 @@ export function options(args) {
   return result;
 }
 export function cleanEnvironment(env) {
-  const unsafe = Object.keys(env).filter(key => /^(XHS_|COOKIES_|AUTH_TOKEN$|DATABASE_URL$|REDIS_URL$|DOTENV_|CRM_|NODE_OPTIONS$|NODE_USE_ENV_PROXY$|NODE_EXTRA_CA_CERTS$|SSL_CERT_FILE$|HTTP_PROXY$|HTTPS_PROXY$|ALL_PROXY$|http_proxy$|https_proxy$|all_proxy$)/.test(key) && env[key]);
+  const unsafe = Object.keys(env).filter(key => /^(XHS_|COOKIES_|AUTH_TOKEN$|DATABASE_URL$|REDIS_URL$|DOTENV_|CRM_|NODE_OPTIONS$|NODE_USE_ENV_PROXY$|NODE_EXTRA_CA_CERTS$|SSL_CERT_FILE$|HTTP_PROXY$|HTTPS_PROXY$|ALL_PROXY$|http_proxy$|https_proxy$|all_proxy$)/i.test(key) && env[key]);
   if (unsafe.length) throw new Error(`Refusing mixed environment; unset these keys in this terminal: ${unsafe.join(', ')}`);
   // No inherited application, proxy, browser, fingerprint or credential settings.
-  return Object.fromEntries(['HOME', 'PATH', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM'].filter(key => env[key]).map(key => [key, env[key]]));
+  return platform.minimalEnvironment(env);
 }
 async function stat(path) { try { return await lstat(path); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } }
 async function plain(path, directory = false, privateMode = false) {
   const s = await stat(path);
   if (!s || s.isSymbolicLink() || (directory ? !s.isDirectory() : !s.isFile()) || (!directory && s.nlink !== 1)) throw new Error(`Missing or unsafe ${directory ? 'directory' : 'file'}: ${path}`);
+  if(process.platform==='win32'){if(directory)await platform.privateDirectory(path);else if(privateMode)await platform.privateFile(path);else await platform.executableFile(path);return s;}
   if (s.uid !== process.getuid() || (privateMode && (s.mode & 0o077))) throw new Error(`Ownership/permissions need manual review: ${path}`);
   return s;
 }
@@ -62,10 +64,10 @@ export async function inspectSession(plan, required = false) {
 export async function localDependencies(root) {
   if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('Node.js 22+ is required; no installation performed');
   for (const name of ['prisma', 'tsx', 'tsc', 'vite']) {
-    const executable = join(root, 'node_modules', '.bin', name);
+    const executable = process.platform==='win32'?join(root,'node_modules',({prisma:'prisma/build/index.js',tsx:'tsx/dist/cli.mjs',tsc:'typescript/bin/tsc',vite:'vite/bin/vite.js'})[name]):join(root, 'node_modules', '.bin', name);
     try {
       await access(executable, constants.X_OK);
-      if (!(await realpath(executable)).startsWith(`${root}/node_modules/`)) throw new Error('External executable');
+      if (!platform.isWithin(join(root,'node_modules'),await realpath(executable))) throw new Error('External executable');
     } catch { throw new Error(`Missing or external project dependency: ${name}; no installation performed`); }
   }
 }
@@ -77,6 +79,11 @@ export async function preflight({ root, home, session, port, env, checkTools = t
   const plan = { root, base, directory, session, port, cookies: join(directory, 'cookies.json'),
     login: join(home, '.local/bin/xiaohongshu-login'), mcp: join(home, '.local/bin/xiaohongshu-mcp'),
     browser: join(home, 'Library/Caches/xiaohongshu-mcp/browser', browserVersion, 'Chromium.app/Contents/MacOS/Chromium') };
+  if(process.platform==='win32'){
+    const tools=platform.toolPlan(home,'win32',platform.windowsDataRoot());Object.assign(plan,tools);
+    if(checkTools){if(!platform.platformCapability().supported)throw Error('Windows 11 x64 native Node required');await platform.inspectTools(home);await localDependencies(root);}
+    await portAvailable(port);return plan;
+  }
   await inspectSession(plan);
   if (checkTools) {
     if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('This reviewed launcher currently supports macOS arm64 only');

@@ -1,0 +1,12 @@
+{
+  "upstreamCommit": "a5c8f7799980ba1fdd501999843eb2d17e4c9a9f",
+  "release": "v2.5.5",
+  "mcpSha256": "cb55674f90c1649c875be9c4cde3af193b02fc34ffc860c40c8d711e6ca53e27",
+  "browserVersion": "148.0.7778.215",
+  "browserReview": {
+    "state": "pending",
+    "source": "https://cdn.one-world.ai/browsers/148.0.7778.215/windows-x64.zip",
+    "archiveSha256": null,
+    "files": {}
+  }
+}

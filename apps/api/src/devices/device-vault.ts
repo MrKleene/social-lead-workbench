@@ -1,3 +1,4 @@
+import {windowsCall} from '../../../../runtime/platform.cjs';
 import { spawn } from 'node:child_process';
 import { lstat, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -5,6 +6,10 @@ import { join } from 'node:path';
 // OS storage is separate from public device metadata and from platform sessions.
 // Only called on explicit approval or to prove an already approved identity.
 export async function deviceVault(operation:'put'|'get', deviceId:string, keyId:string, value?:string):Promise<string> {
+  if(process.platform==='win32'){
+    if(!value)throw Error('DEVICE_VAULT_VALUE_REQUIRED');
+    return windowsCall({operation:operation==='put'?'protect':'unprotect',deviceId,keyId,value});
+  }
   if(process.platform!=='darwin'||process.arch!=='arm64')throw Error('DEVICE_VAULT_UNSUPPORTED');
   const root=process.env.CRM_PROJECT_ROOT||'',binary=join(root,'apps/api/dist/native/device-vault');
   if(!root.startsWith('/')||await realpath(root)!==root)throw Error('DEVICE_VAULT_UNAVAILABLE');

@@ -16,4 +16,4 @@ if(process.platform==='darwin'&&process.arch==='arm64'){
   if(result.status!==0)throw Error('macOS keychain helper build failed; no software was installed');
   chmodSync(binary,0o700);writeFileSync(stamp,JSON.stringify({sourceHash,binaryHash:hash(binary)}),{mode:0o600});
  }
-}else console.log('macOS keychain helper skipped; Windows/other executors remain unsupported.');
+}else console.log('macOS keychain helper skipped; Windows uses its separate native host helper.');

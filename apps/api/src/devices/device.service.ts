@@ -27,11 +27,11 @@ export class DeviceService implements OnModuleInit,OnModuleDestroy {
   }
   async onModuleInit(){if(!this.enabled())return;await this.heartbeat();this.heartbeatTimer=setInterval(()=>{void this.heartbeat().catch(()=>{for(const p of this.permits.values())p.abort.abort();});},10000);this.heartbeatTimer.unref();}
   async onModuleDestroy(){clearInterval(this.heartbeatTimer);for(const p of this.permits.values()){p.abort.abort();clearTimeout(p.timer);}this.permits.clear();}
-  async status(actor:Actor){requireAdmin(actor);const capability=this.local.capability();if(!this.enabled())return {enabled:false,capability,device:null,windows:'UNSUPPORTED_UNVERIFIED'};
+  async status(actor:Actor){requireAdmin(actor);const capability=this.local.capability();if(!this.enabled())return {enabled:false,capability,device:null,windows:'IMPLEMENTED_PENDING_NATIVE_VALIDATION'};
     const device=await this.db.executionDevice.findFirst({orderBy:{approvedAt:'desc'}});
     const count=device?await this.db.accountSessionReference.count({where:{deviceId:device.id}}):0;
     const online=!!device?.enabled&&!!device.lastSeenAt&&Date.now()-device.lastSeenAt.getTime()<30000&&device.runtimeId===process.env.CRM_RUNTIME_ID;
-    return {enabled:true,binding:{version:1,executionHost:hostname(),keyProtection:this.local.keyProtection(),sessionProtection:'private-files-mcp-v1'},capability,provider:this.local.provider(),candidateId:this.local.id(),allowedBase:this.local.allowedBase(),suggestedRoot:this.local.defaultRoot(),windows:'UNSUPPORTED_UNVERIFIED',device:device?{id:device.id,name:device.name,os:device.os,enabled:device.enabled,online,credentialRoot:device.credentialRoot,keyFingerprint:this.local.fingerprint(device.publicKey),keyProtection:await this.local.identityProtection(device).catch(()=> 'unavailable'),version:device.version,lastSeenAt:device.lastSeenAt,accountCount:count}:null};
+    return {enabled:true,binding:{version:1,executionHost:hostname(),keyProtection:this.local.keyProtection(),sessionProtection:'private-files-mcp-v1'},capability,provider:this.local.provider(),candidateId:this.local.id(),allowedBase:this.local.allowedBase(),suggestedRoot:this.local.defaultRoot(),windows:'IMPLEMENTED_PENDING_NATIVE_VALIDATION',device:device?{id:device.id,name:device.name,os:device.os,enabled:device.enabled,online,credentialRoot:device.credentialRoot,keyFingerprint:this.local.fingerprint(device.publicKey),keyProtection:await this.local.identityProtection(device).catch(()=> 'unavailable'),version:device.version,lastSeenAt:device.lastSeenAt,accountCount:count}:null};
   }
   async bind(actor:Actor,input:{candidateId:string;consent:string}){
     requireAdmin(actor);this.requireEnabled();
@@ -46,7 +46,7 @@ export class DeviceService implements OnModuleInit,OnModuleDestroy {
       const existing=await tx.executionDevice.findFirst({where:{enabled:true}});
       if(existing){
         if(!idempotent||existing.id!==this.local.id()||existing.provider!==this.local.provider())throw new ConflictException('已有启用的专用电脑；需管理员先撤销旧设备，不会自动换绑');
-        if(!await this.proof(existing))throw new ConflictException('已绑定设备无法认证；请解锁系统钥匙串或恢复原执行环境后重试，不会覆盖密钥');
+        if(!await this.proof(existing))throw new ConflictException('已绑定设备无法认证；请恢复原系统用户的安全存储访问或原执行环境后重试，不会覆盖密钥');
         await tx.executionDevice.update({where:{id:existing.id},data:{lastSeenAt:new Date(),runtimeId:process.env.CRM_RUNTIME_ID}});
         return;
       }
@@ -55,7 +55,7 @@ export class DeviceService implements OnModuleInit,OnModuleDestroy {
       if(!await this.proof(identity))throw new ConflictException('设备认证证明失败，未绑定');
       await tx.executionDevice.upsert({where:{id:identity.id},create:{...identity,name:input.name,os:this.local.capability().os,credentialRoot:root,approvedBy:actor.id,lastSeenAt:new Date(),runtimeId:process.env.CRM_RUNTIME_ID},update:{...identity,name:input.name,credentialRoot:root,approvedBy:actor.id,approvedAt:new Date(),revokedAt:null,enabled:true,lastSeenAt:new Date(),runtimeId:process.env.CRM_RUNTIME_ID,version:{increment:1}}});
       await tx.auditLog.create({data:{actorId:actor.id,entityId:identity.id,action:'DEVICE_APPROVED',metadata:{consentVersion:idempotent?'bind-local-device-v1':input.consent,keyFingerprint:this.local.fingerprint(identity.publicKey),provider:identity.provider}}});
-    });}catch(e){if(e instanceof ConflictException||e instanceof ForbiddenException)throw e;throw new BadRequestException(e instanceof Error&&e.message.startsWith('目录')?e.message:'设备绑定未完成；请确认本机钥匙串已解锁、系统存储助手已构建且默认目录可写，然后重试。不会覆盖已有绑定或降级为明文密钥');}
+    });}catch(e){if(e instanceof ConflictException||e instanceof ForbiddenException)throw e;throw new BadRequestException(e instanceof Error&&e.message.startsWith('目录')?e.message:'设备绑定未完成；请确认本机安全存储可访问、系统存储助手已构建且默认目录可写，然后重试。不会覆盖已有绑定或降级为明文密钥');}
     return this.status(actor);
   }
   async changeDirectory(actor:Actor,id:string,version:number,path:string){

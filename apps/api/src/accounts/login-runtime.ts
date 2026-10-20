@@ -1,12 +1,13 @@
+import {privateDirectory,privateFile,isWithin,inspectTools,minimalEnvironment,spawnOwned,stopOwned,windowsDataRoot} from '../../../../runtime/platform.cjs';
 import { XhsHttpTransport, ReadOnlyMcpTransport } from '../collection/mcp/transport';
 import { AccountFixtureTransport } from '../collection/adapters/account-fixture';
 import { Injectable } from '@nestjs/common';
 import { LocalDeviceRuntime } from '../devices/device-runtime';
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { access, mkdir, lstat, realpath, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, lstat, realpath, readFile, writeFile, readdir } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { join } from 'node:path';
+import { join,isAbsolute,relative,sep } from 'node:path';
 import { createServer } from 'node:net';
 export type LoginMode = 'real' | 'offline';
 export type SessionDriver = { qr(signal: AbortSignal): Promise<{image: string; seconds: number}>; status(signal: AbortSignal): Promise<{loggedIn: boolean; userId?: string; nickname?: string}>; stop(): Promise<void>; readTransport?(): ReadOnlyMcpTransport; simulate?(scenario: string): void | Promise<void> };
@@ -28,8 +29,7 @@ export function parseStatus(value: unknown) {
   return {loggedIn:v.is_logged_in, userId:typeof v.user_id==='string' && /^[A-Za-z0-9_-]{1,128}$/.test(v.user_id)?v.user_id:undefined, nickname:typeof v.username==='string'?v.username.slice(0,80):undefined};
 }
 async function privateDir(path:string, create=false) {
-  if(create) await mkdir(path,{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});
-  const s=await lstat(path); if(!s.isDirectory()||s.isSymbolicLink()||s.uid!==process.getuid!()||(s.mode&0o077)) throw new Error('UNSAFE_SESSION_DIRECTORY');
+  await privateDirectory(path,create);
 }
 async function freePort(){const s=createServer();await new Promise<void>((ok,no)=>{s.once('error',no);s.listen(0,'127.0.0.1',ok);});const p=(s.address() as {port:number}).port;await new Promise<void>(ok=>s.close(()=>ok()));if([18060,18061].includes(p))return freePort();return p;}
 @Injectable()
@@ -39,27 +39,31 @@ export class LoginRuntime {
   deviceId(){const id=process.env.CRM_DEVICE_ID;if(!id||!/^[a-f0-9-]{36}$/.test(id))throw Error('INVALID_DEVICE');return id;}
   private async directory(accountId:string,key:string,create=false,executionRoot?:string){
     const root=process.env.CRM_PROJECT_ROOT || '',base=executionRoot||this.storage();
-    if(!root.startsWith('/')||await realpath(root)!==root||!/^\w+$/.test(accountId)||!/^[a-f0-9-]{36}$/.test(key))throw Error('INVALID_CONFIGURATION');
+    if(!isAbsolute(root)||await realpath(root)!==root||!/^\w+$/.test(accountId)||!/^[a-f0-9-]{36}$/.test(key))throw Error('INVALID_CONFIGURATION');
     const local=join(root,'.local');const ls=await lstat(local);if(ls.isSymbolicLink()||!ls.isDirectory())throw Error('UNSAFE_SESSION_DIRECTORY');
     // Check every ancestor, including an overridden offline fixture root.
-    if(!base.startsWith(local+'/')){
+    if(!isWithin(local,base)){
       if(!executionRoot||!this.persistent()||this.mode()!=='real')throw Error('INVALID_CONFIGURATION');
       await new LocalDeviceRuntime().validateRoot(base,create);
     }
-    let p=local;for(const part of (base.startsWith(local+'/')?base.slice(local.length+1).split('/'):[])){if(!part||part==='.'||part==='..')throw Error('INVALID_CONFIGURATION');p=join(p,part);await privateDir(p,create);}
+    let p=local;for(const part of (isWithin(local,base)?relative(local,base).split(sep):[])){if(!part||part==='.'||part==='..')throw Error('INVALID_CONFIGURATION');p=join(p,part);await privateDir(p,create);}
     const account=join(base,accountId);await privateDir(account,create);const directory=join(account,key);
-    if(create){await mkdir(directory,{mode:0o700});await writeFile(join(directory,'session.json'),JSON.stringify({kind:'crm-qr-login-v2',accountId,attemptId:key,deviceId:this.persistent()?this.deviceId():null}),{flag:'wx',mode:0o600});}
+    if(create){
+      const existing=await lstat(directory).catch(e=>{if(e.code==='ENOENT')return null;throw e;});
+      if(existing)throw Error('SESSION_ALREADY_EXISTS');
+      await privateDir(directory,true);if((await readdir(directory)).length)throw Error('SESSION_ALREADY_EXISTS');
+      await writeFile(join(directory,'session.json'),JSON.stringify({kind:'crm-qr-login-v2',accountId,attemptId:key,deviceId:this.persistent()?this.deviceId():null}),{flag:'wx',mode:0o600});}
     else await privateDir(directory);
     return directory;
   }
   async inspect(accountId:string,key:string,deviceId:string,provider:string,executionRoot?:string){
     if(deviceId!==this.deviceId()||provider!==this.mode())return 'DEVICE_MISMATCH';
-    try{const dir=await this.directory(accountId,key,false,executionRoot),path=join(dir,'session.json'),stat=await lstat(path);
-      if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.uid!==process.getuid!()||(stat.mode&0o077)||stat.size>4096)return 'NEEDS_REVIEW';
+    try{const dir=await this.directory(accountId,key,false,executionRoot),path=join(dir,'session.json'),stat=await privateFile(path);
+      if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.size>4096)return 'NEEDS_REVIEW';
       const m=JSON.parse(await readFile(path,'utf8'));if(m.kind!=='crm-qr-login-v2'||m.accountId!==accountId||m.attemptId!==key||m.deviceId!==deviceId)return 'NEEDS_REVIEW';
       // Existence and ownership checks only. Never read platform credential contents.
-      const f=await lstat(join(dir,provider==='offline'?'fixture-state.json':'cookies.json'));
-      return f.isFile()&&!f.isSymbolicLink()&&f.nlink===1&&f.uid===process.getuid!()&&!(f.mode&0o077)?'UNVERIFIED':'NEEDS_REVIEW';
+      const f=await privateFile(join(dir,provider==='offline'?'fixture-state.json':'cookies.json'));
+      return f.isFile()&&!f.isSymbolicLink()&&f.nlink===1?'UNVERIFIED':'NEEDS_REVIEW';
     }catch(e){return (e as NodeJS.ErrnoException).code==='ENOENT'?'MISSING':'NEEDS_REVIEW';}
   }
   async openSaved(accountId:string,key:string,signal:AbortSignal,executionRoot?:string){return this.open(accountId,key,signal,true,executionRoot);}
@@ -79,12 +83,8 @@ export class LoginRuntime {
     }
     if(this.mode()!=='real')throw Error('LOGIN_DISABLED');
     const root=process.env.CRM_PROJECT_ROOT || '';
-    if(!root.startsWith('/')||await realpath(root)!==root||!/^\w+$/.test(accountId)||!/^[a-f0-9-]{36}$/.test(attemptId))throw Error('INVALID_CONFIGURATION');
-    const home=process.env.HOME || '', bin=join(home,'.local/bin/xiaohongshu-mcp');
-    const binary=await lstat(bin); if(!binary.isFile()||binary.isSymbolicLink())throw Error('BINARY_REVIEW_REQUIRED');
-    const digest=createHash('sha256').update(await readFile(bin)).digest('hex');
-    if(digest!=='17d57acd1a4f4cad3f2525bd13de40e112cb34594231a10b54b05ced9485cf80')throw Error('BINARY_REVIEW_REQUIRED');
-    await access(join(home,'Library/Caches/xiaohongshu-mcp/browser/148.0.7778.215/Chromium.app/Contents/MacOS/Chromium'),constants.X_OK);
+    if(!isAbsolute(root)||await realpath(root)!==root||!/^\w+$/.test(accountId)||!/^[a-f0-9-]{36}$/.test(attemptId))throw Error('INVALID_CONFIGURATION');
+    const tools=await inspectTools(process.env.HOME || ''),bin=tools.mcp;
     // Saved references are validated by the service before an explicit manual check.
     const local=join(root,'.local'); await mkdir(local,{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});
     const localStat=await lstat(local);if(localStat.isSymbolicLink()||!localStat.isDirectory())throw Error('UNSAFE_SESSION_DIRECTORY');
@@ -92,19 +92,20 @@ export class LoginRuntime {
     if(signal.aborted)throw Error('CANCELLED');
     process.umask(0o077);
     const port=await freePort(),token=randomBytes(32).toString('hex');
-    const env=Object.fromEntries(['HOME','PATH','TMPDIR','LANG','LC_ALL'].filter(k=>process.env[k]).map(k=>[k,process.env[k]!]));
+    const env=minimalEnvironment();
+    if(process.platform==='win32')env.LOCALAPPDATA=windowsDataRoot(); // match Go os.UserCacheDir to the OS-known folder
     if(signal.aborted)throw Error('CANCELLED');
-    const child=spawn(bin,['-headless=true','-port',`127.0.0.1:${port}`],{cwd:directory,env:{...env,COOKIES_PATH:join(directory,'cookies.json'),AUTH_TOKEN:token},detached:true,stdio:'ignore'});
+    const child=spawnOwned(bin,['-headless=true','-port',`127.0.0.1:${port}`],{cwd:directory,env:{...env,COOKIES_PATH:join(directory,'cookies.json'),AUTH_TOKEN:token},detached:true,stdio:'ignore'});
     const notify=(kind:string)=>{if(process.connected&&child.pid)try{process.send?.({kind,pid:child.pid});}catch{}};
     notify('OWNED_LOGIN_PROCESS_STARTED');
     let alive=true,stopping:Promise<void>|undefined;const done=new Promise<void>(ok=>{child.once('error',()=>{alive=false;ok();});child.once('exit',()=>{alive=false;ok();queueMicrotask(()=>{void stop();});});});
     const stop=()=>stopping ||= (async()=>{
       if(child.pid){
-        try{process.kill(-child.pid,'SIGTERM');}catch{}
+        stopOwned(child,'SIGTERM');
         let timer:NodeJS.Timeout|undefined;await Promise.race([done,new Promise<void>(ok=>{timer=setTimeout(ok,1500);})]);clearTimeout(timer);
         // The leader may exit before its browser children. Stop the entire owned
         // group before unregistering it from the workbench supervisor.
-        try{process.kill(-child.pid,'SIGKILL');}catch{}
+        stopOwned(child,'SIGKILL');
         if(alive)await done;notify('OWNED_LOGIN_PROCESS_STOPPED');
       }
     })();

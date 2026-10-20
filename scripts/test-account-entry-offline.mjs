@@ -18,7 +18,7 @@ const caps={enabled:false,mode:'real',storageRoot:'/fixture',persistent:true,dev
 const device={enabled:true,binding:{version:1,executionHost:'fixture-mac',keyProtection:'macos-login-keychain',sessionProtection:'private-files-mcp-v1'},provider:'real',suggestedRoot:'/fixture/private',allowedBase:'/fixture',candidateId:'fixture-only',capability:{os:'macOS',supported:true,adapter:'fixture',remote:false},device:null};
 try {
  browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{})});
- for(const scenario of ['unapproved','offline-device','disabled','ready','offline','loading','error','sales','unsupported','legacy-backend']) {
+ for(const scenario of ['unapproved','offline-device','disabled','ready','offline','loading','error','sales','unsupported','legacy-backend','windows-candidate']) {
   const context=await browser.newContext({viewport:{width:1440,height:1000}});
   let failed=scenario==='error',release;const gate=new Promise(ok=>release=ok);
   await context.route('**/*',async route=>{
@@ -35,7 +35,7 @@ try {
     if(failed)return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'fictional service unavailable'})});
     data={...caps,...(scenario==='disabled'?{mode:'disabled'}:{}),...(scenario==='offline-device'?{device:{name:'虚构设备',os:'macOS',online:false}}:{}),...(['ready','offline'].includes(scenario)?{enabled:true,mode:scenario==='offline'?'offline':'real',device:{name:'虚构设备',os:'macOS',online:true}}:{})};
    }
-   else if(path==='/devices')data={...device,...(scenario==='unsupported'?{capability:{...device.capability,os:'Windows',supported:false}}:{}),...(scenario==='legacy-backend'?{binding:undefined}:{})};
+   else if(path==='/devices')data={...device,...(scenario==='unsupported'?{capability:{...device.capability,os:'Windows',supported:false}}:{}),...(scenario==='legacy-backend'?{binding:undefined}:{}),...(scenario==='windows-candidate'?{capability:{...device.capability,os:'Windows',supported:true},binding:{...device.binding,keyProtection:'windows-dpapi-current-user'}}:{})};
    else if(path==='/collection/mcp/readiness')data={enabled:false,accounts:[]};
    return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   });
@@ -48,7 +48,7 @@ try {
   await page.waitForFunction(()=>[...document.images].every(img=>img.complete&&img.naturalWidth>0));
   assert((await page.title()).length>0);
   const boundary=page.locator('.account-boundary');
-  const expected={unapproved:'请先在专用电脑设置中批准执行设备','offline-device':'专用电脑已撤销、离线或尚未认证',disabled:'此启动环境未配置扫码登录',ready:'扫码仅在本人确认后启用',offline:'当前为离线演示',loading:'正在读取扫码登录能力',error:'无法读取扫码登录能力',sales:'扫码登录与设备设置由管理员处理',unsupported:'请先在专用电脑设置中批准执行设备','legacy-backend':'请先在专用电脑设置中批准执行设备'}[scenario];
+  const expected={unapproved:'请先在专用电脑设置中批准执行设备','offline-device':'专用电脑已撤销、离线或尚未认证',disabled:'此启动环境未配置扫码登录',ready:'扫码仅在本人确认后启用',offline:'当前为离线演示',loading:'正在读取扫码登录能力',error:'无法读取扫码登录能力',sales:'扫码登录与设备设置由管理员处理',unsupported:'请先在专用电脑设置中批准执行设备','legacy-backend':'请先在专用电脑设置中批准执行设备','windows-candidate':'请先在专用电脑设置中批准执行设备'}[scenario];
   await boundary.filter({hasText:expected}).waitFor();
   if(!['ready','offline'].includes(scenario))assert.equal(await page.getByRole('button',{name:'添加账号并扫码',exact:true}).count(),0);
   if(scenario==='ready')assert(await page.getByRole('button',{name:'添加账号并扫码',exact:true}).isEnabled());
@@ -71,7 +71,14 @@ try {
   if(['unsupported','legacy-backend'].includes(scenario)){
    await page.getByRole('link',{name:'查看专用电脑设置'}).click();
    assert(await page.getByRole('button',{name:'一键绑定这台电脑',exact:true}).isDisabled());
-   await page.getByText(scenario==='unsupported'?'此执行系统尚未支持。Windows 不能绑定或执行；远程设备接入未启用。':'一键绑定需要加载新版后端。请按升级说明在原终端重启同一持久实例，保留原数据库和端口。',{exact:true}).waitFor();
+   await page.getByText(scenario==='unsupported'?'此执行系统尚未支持；需要 macOS ARM64 或 Windows 11 x64 本机环境，远程设备接入未启用。':'一键绑定需要加载新版后端。请按升级说明在原终端重启同一持久实例，保留原数据库和端口。',{exact:true}).waitFor();
+  }
+  if(scenario==='windows-candidate'){
+   await page.getByRole('link',{name:'查看专用电脑设置'}).click();
+   assert(await page.getByRole('button',{name:'一键绑定这台电脑',exact:true}).isEnabled());
+   await page.getByText('新绑定的认证私钥使用 Windows 当前用户 DPAPI 加密；换系统用户或解密失败时停止，不回退明文。',{exact:true}).waitFor();
+   await page.getByText(/Windows 11 x64 适配代码已提供，实机验收待完成/).waitFor();
+   await page.screenshot({path:join(out,'windows-candidate.png')});
   }
   if(scenario==='sales')assert.equal(await page.getByText('专用电脑设置 · 仅管理员',{exact:true}).count(),0);
   if(scenario==='error'){

@@ -1,0 +1,20 @@
+import { Stats } from 'node:fs';
+import { ChildProcess, SpawnOptions } from 'node:child_process';
+export function platformCapability(platform?:string,arch?:string,release?:string):{os:string;supported:boolean;adapter:'mac-local-v1'|'windows-local-v1'|'unsupported';remote:false;validation:string};
+export function isWithin(base:string,target:string,platform?:string):boolean;
+export function windowsPath(value:string):string;
+export function windowsCall(request:Record<string,unknown>):string;
+export function windowsDataRoot():string;
+export function privateDirectory(path:string,create?:boolean):Promise<void>;
+export function privateFile(path:string):Promise<Stats>;
+export function executableFile(path:string):Promise<Stats>;
+export function minimalEnvironment(env?:NodeJS.ProcessEnv):Record<string,string>;
+export function npmCommand(args:string[],env?:NodeJS.ProcessEnv,platform?:string):[string,string[]];
+export function spawnOwned(binary:string,args:string[],options?:SpawnOptions):ChildProcess;
+export function stopOwned(child:Pick<ChildProcess,'pid'|'kill'>,signal?:NodeJS.Signals):void;
+export function guardCurrentProcess():Promise<void>;
+export function toolPlan(home:string,platform?:string,localData?:string):{mcp:string;browser?:string;browserBase?:string;hash:string};
+export function inspectTools(home:string):Promise<{mcp:string;browser?:string;hash:string}>;
+export const browserVersion:string;
+
+export function inspectWindowsBrowser(base:string,review?:{state:string;archiveSha256:string|null;files:Record<string,string>}):Promise<string>;

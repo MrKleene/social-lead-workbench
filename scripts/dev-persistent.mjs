@@ -1,20 +1,27 @@
+import platform from '../runtime/platform.cjs';
+import {devNull} from 'node:os';
 // Persistent local business data. Never imports platform cookies or loads .env.
 import {spawn,spawnSync} from 'node:child_process';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {mkdir,readFile,writeFile,lstat,unlink} from 'node:fs/promises';
-import {join} from 'node:path';
+import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createServer} from 'node:net';
 import {PrismaClient} from '@prisma/client';
 import argon2 from 'argon2';
 import {cleanEnvironment,preflight} from './real-mcp/core.mjs';
-const root=fileURLToPath(new URL('../',import.meta.url)).replace(/\/$/,''),args=process.argv.slice(2);
+const root=resolve(fileURLToPath(new URL('../',import.meta.url))),args=process.argv.slice(2);
 let offline=false,fixture=false,name='main';
 for(let i=0;i<args.length;i++){if(args[i]==='--offline')offline=true;else if(args[i]==='--test-fixture')fixture=true;else if(args[i]==='--instance')name=args[++i];else throw Error('Use --offline or --instance NAME');}
 if(!/^[a-z][a-z0-9-]{0,50}$/.test(name)||fixture&&(!offline||!/^acceptance-[a-f0-9-]{36}$/.test(name)))throw Error('Invalid isolated instance');
 // Prisma CLI can auto-load .env. Refuse legacy env files without reading them.
 for(const path of [join(root,'.env'),join(root,'prisma/.env')]){const stat=await lstat(path).catch(e=>{if(e.code==='ENOENT')return null;throw e;});if(stat)throw Error('Legacy .env exists; persistent startup refuses to read it. Review environment separation before continuing.');}
-const envBase=cleanEnvironment(process.env),directory=join(root,'.local',offline?'persistent-offline':'persistent',name);
+const envBase=cleanEnvironment(process.env);
+if(process.platform==='win32'){
+ const result=spawnSync(process.execPath,['scripts/build-windows-host.mjs'],{cwd:root,stdio:'inherit'});if(result.status!==0)throw Error('Windows helper unavailable; nothing started');
+ await platform.guardCurrentProcess();
+}
+const directory=join(root,'.local',offline?'persistent-offline':'persistent',name);
 if(!offline)await preflight({root,home:process.env.HOME,session:'persistent-preflight',port:18162,env:process.env});
 process.umask(0o077);
 const children=[],ownedGroups=new Set(),startedContainers=[];
@@ -23,12 +30,12 @@ const stopped=new Promise(ok=>{finish=ok;});
 const safeError=()=>console.error('持久工作台操作失败；数据卷与本地配置保留。请检查依赖、端口和本次运行记录，不要删除或重建已有数据。');
 function docker(args,extra={}){const r=spawnSync('docker',args,{env:{...envBase,...extra},encoding:'utf8',timeout:20000});if(r.status!==0)throw Error(`Docker ${args[0]} failed`);return r.stdout.trim();}
 function existsDocker(type,id){return spawnSync('docker',[type==='volume'?'volume':'container','inspect',id],{stdio:'ignore',timeout:5000}).status===0;}
-async function privateDir(path){await mkdir(path,{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});const s=await lstat(path);if(!s.isDirectory()||s.isSymbolicLink()||s.uid!==process.getuid()||(s.mode&0o077))throw Error('Unsafe directory');}
-async function privateFile(path){const s=await lstat(path);if(!s.isFile()||s.isSymbolicLink()||s.nlink!==1||s.uid!==process.getuid()||(s.mode&0o077))throw Error('Unsafe local configuration');}
+async function privateDir(path){await platform.privateDirectory(path,true);}
+async function privateFile(path){await platform.privateFile(path);}
 async function json(path){await privateFile(path);return JSON.parse(await readFile(path,'utf8'));}
 async function freePort(){const s=createServer();await new Promise((ok,no)=>{s.once('error',no);s.listen(0,'127.0.0.1',ok);});const p=s.address().port;await new Promise(ok=>s.close(ok));if([18060,18061].includes(p))return freePort();return p;}
-function stopGroup(c){if(c?.pid&&c.exitCode===null&&c.signalCode===null)try{if(c.interactive)c.kill('SIGTERM');else process.kill(-c.pid,'SIGTERM');}catch{}}
-function launch(command,argv,env,{interactive=false,ipc=false}={}){if(stopping)throw Error('Stopped');const c=spawn(command,argv,{cwd:root,env,detached:!interactive,stdio:interactive?'inherit':ipc?['ignore','ignore','ignore','ipc']:['ignore','pipe','pipe']});c.interactive=interactive;children.push(c);if(!interactive&&!ipc){c.stdout.on('data',()=>{});c.stderr.on('data',()=>{});}c.done=new Promise(ok=>{c.once('exit',code=>ok(code??1));c.once('error',()=>ok(1));});if(ipc)c.on('message',m=>{if(!Number.isInteger(m?.pid)||m.pid<=1)return;if(m.kind==='OWNED_LOGIN_PROCESS_STARTED')ownedGroups.add(m.pid);if(m.kind==='OWNED_LOGIN_PROCESS_STOPPED')ownedGroups.delete(m.pid);});return c;}
+function stopGroup(c){if(c?.pid&&c.exitCode===null&&c.signalCode===null)try{if(process.platform==='win32'||c.interactive)c.kill('SIGTERM');else process.kill(-c.pid,'SIGTERM');}catch{}}
+function launch(command,argv,env,{interactive=false,ipc=false}={}){if(command==='npm')[command,argv]=platform.npmCommand(argv);if(stopping)throw Error('Stopped');const c=spawn(command,argv,{cwd:root,env,detached:process.platform!=='win32'&&!interactive,windowsHide:!interactive,stdio:interactive?'inherit':ipc?['ignore','ignore','ignore','ipc']:['ignore','pipe','pipe']});c.interactive=interactive;children.push(c);if(!interactive&&!ipc){c.stdout.on('data',()=>{});c.stderr.on('data',()=>{});}c.done=new Promise(ok=>{c.once('exit',code=>ok(code??1));c.once('error',()=>ok(1));});if(ipc)c.on('message',m=>{if(!Number.isInteger(m?.pid)||m.pid<=1)return;if(m.kind==='OWNED_LOGIN_PROCESS_STARTED')ownedGroups.add(m.pid);if(m.kind==='OWNED_LOGIN_PROCESS_STOPPED')ownedGroups.delete(m.pid);});return c;}
 async function command(argv,env,interactive=false){console.log(`本地步骤：${argv.slice(0,4).join(' ')}`);const c=launch(argv[0],argv.slice(1),env,{interactive});if(await c.done!==0)throw Error('Command failed');}
 function resourceLabels(type,id){return JSON.parse(docker(type==='volume'?['volume','inspect','--format','{{json .Labels}}',id]:['inspect','--format','{{json .Config.Labels}}',id]));}
 function verifyOwnership(type,id){if(resourceLabels(type,id)?.['crm.persistent.instance']!==manifest.id)throw Error('Resource ownership mismatch');}
@@ -41,9 +48,11 @@ async function container(kind){const spec=manifest[kind],image=kind==='postgres'
  }
 }
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{stopping=true;finish();for(const c of children)stopGroup(c);});
+// Windows ChildProcess.kill is forceful. Only the owned offline test fixture accepts this IPC stop.
+if(process.platform==='win32'&&fixture&&process.connected)process.on('message',m=>{if(m?.kind==='STOP_OWNED_FIXTURE'){stopping=true;finish();for(const c of children)stopGroup(c);}});
 try{
  // Do not adopt a symlinked .local or alter existing directory permissions.
- await mkdir(join(root,'.local'),{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});const ls=await lstat(join(root,'.local'));if(ls.isSymbolicLink()||!ls.isDirectory())throw Error('Unsafe local directory');
+ if(process.platform==='win32')await privateDir(join(root,'.local'));else await mkdir(join(root,'.local'),{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});const ls=await lstat(join(root,'.local'));if(ls.isSymbolicLink()||!ls.isDirectory())throw Error('Unsafe local directory');
  await privateDir(join(root,'.local',offline?'persistent-offline':'persistent'));await privateDir(directory);
  await writeFile(join(directory,'operation.lock'),JSON.stringify({pid:process.pid,startedAt:new Date().toISOString()}),{flag:'wx',mode:0o600});lock=true;
  for(const image of ['postgres:17','redis:7-alpine'])docker(['image','inspect',image]);
@@ -60,7 +69,7 @@ try{
  await container('postgres');await container('redis');
  for(const [kind,cmd] of [['postgres',['pg_isready','-U','crm','-d',manifest.database]],['redis',['redis-cli','ping']]]){let ready=false;for(let i=0;i<60&&!stopping;i++){if(spawnSync('docker',['exec',manifest[kind].container,...cmd],{stdio:'ignore',timeout:1000}).status===0){ready=true;break;}await new Promise(ok=>setTimeout(ok,200));}if(!ready)throw Error('Readiness timeout');}
  const base=`http://127.0.0.1:${manifest.webPort}`,url=`postgresql://crm:${secret.databasePassword}@127.0.0.1:${manifest.postgres.port}/${manifest.database}?schema=public`;
- const env={...envBase,DATABASE_URL:url,REDIS_URL:`redis://127.0.0.1:${manifest.redis.port}`,DOTENV_CONFIG_PATH:'/dev/null',XHS_MCP_ENABLED:'0',XHS_MCP_LOGIN_ONLY:'0',CRM_ACCOUNT_READ_ENABLED:'1',XHS_ACCOUNT_LOGIN_MODE:manifest.mode,CRM_PROJECT_ROOT:root,CRM_DEVICE_ID:manifest.deviceId,CRM_RUNTIME_ID:randomUUID(),CRM_PERSISTENT:'1',CRM_DEVICE_MANAGEMENT:'1',CRM_INSTANCE_DIRECTORY:directory,XHS_SESSION_ROOT:offline?join(directory,'local-sessions'):join(root,'.local/xhs-qr'),PORT:String(manifest.apiPort),API_HOST:'127.0.0.1',APP_ORIGIN:base,API_PROXY_TARGET:`http://127.0.0.1:${manifest.apiPort}`,COOKIE_SECURE:'false',COLLECTION_QUEUE_NAME:`crm-persist-${manifest.id}`};
+ const env={...envBase,DATABASE_URL:url,REDIS_URL:`redis://127.0.0.1:${manifest.redis.port}`,DOTENV_CONFIG_PATH:devNull,XHS_MCP_ENABLED:'0',XHS_MCP_LOGIN_ONLY:'0',CRM_ACCOUNT_READ_ENABLED:'1',XHS_ACCOUNT_LOGIN_MODE:manifest.mode,CRM_PROJECT_ROOT:root,CRM_DEVICE_ID:manifest.deviceId,CRM_RUNTIME_ID:randomUUID(),CRM_PERSISTENT:'1',CRM_DEVICE_MANAGEMENT:'1',CRM_INSTANCE_DIRECTORY:directory,XHS_SESSION_ROOT:offline?join(directory,'local-sessions'):join(root,'.local/xhs-qr'),PORT:String(manifest.apiPort),API_HOST:'127.0.0.1',APP_ORIGIN:base,API_PROXY_TARGET:`http://127.0.0.1:${manifest.apiPort}`,COOKIE_SECURE:'false',COLLECTION_QUEUE_NAME:`crm-persist-${manifest.id}`};
  await command(['npm','exec','--no','--','prisma','generate'],env);
  await command(['npm','exec','--no','--','prisma','migrate','deploy'],env);
  for(const workspace of ['@crm/contracts','@crm/api'])await command(['npm','run','build','-w',workspace],env);
@@ -77,13 +86,14 @@ try{
  await stopped;
 }catch(e){safeError();if(e?.code==='EEXIST')console.error('实例已被占用或锁文件存在；没有覆盖。请检查原启动终端。');process.exitCode=1;}
 finally{
- stopping=true;for(const pid of ownedGroups)try{process.kill(-pid,'SIGTERM');}catch{}
+ stopping=true;for(const pid of process.platform==='win32'?[]:ownedGroups)try{process.kill(-pid,'SIGTERM');}catch{}
  for(const c of children)stopGroup(c);await new Promise(ok=>setTimeout(ok,1800));
- for(const pid of ownedGroups)try{process.kill(-pid,'SIGKILL');}catch{}
- for(const c of children)if(c.exitCode===null&&c.signalCode===null&&c.pid)try{process.kill(-c.pid,'SIGKILL');}catch{}
+ for(const pid of process.platform==='win32'?[]:ownedGroups)try{process.kill(-pid,'SIGKILL');}catch{}
+ for(const c of children)if(process.platform!=='win32'&&c.exitCode===null&&c.signalCode===null&&c.pid)try{process.kill(-c.pid,'SIGKILL');}catch{}
  // Never rm containers or volumes. Only stop containers started by this run.
  for(const id of startedContainers.reverse())try{verifyOwnership('container',id);docker(['stop','--time','5',id]);}catch{process.exitCode=1;}
  if(lock){await writeFile(join(directory,'stopped.json'),JSON.stringify({stoppedAt:new Date().toISOString(),dataVolumesRetained:true,platformSessionsRetained:true}),{mode:0o600});await unlink(join(directory,'operation.lock'));}
  if(failed)process.exitCode=1;
  console.log('Stopped owned processes. Persistent containers/volumes, business data and local session references retained.');
+ if(process.platform==='win32')process.exit(process.exitCode||0); // guardian EOF closes the entire owned job, including orphaned grandchildren
 }
