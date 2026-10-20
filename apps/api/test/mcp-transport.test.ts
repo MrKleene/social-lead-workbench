@@ -1,3 +1,6 @@
+import { CollectionService } from '../src/collection/service';
+import { Db } from '../src/common/db';
+import { CollectionQueue } from '../src/collection/queue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startXhsFixture } from './fixtures/xhs-mcp-server';
 import { XhsHttpTransport } from '../src/collection/mcp/transport';
@@ -19,7 +22,7 @@ describe('真实协议，仅离线端点', () => {
         expect(mcpSettings({})).toEqual({ enabled: false, reason: 'REAL_DISABLED' });
         vi.stubEnv('XHS_MCP_ENABLED', '0'); expect(() => requireMcp('XHS_MCP')).toThrow('REAL_DISABLED');
     });
-    it.each(['http://localhost:22222/mcp','http://127.0.0.1:18060/mcp','http://127.0.0.1:80/mcp','http://127.0.0.1:65536/mcp','http://127.1:22222/mcp','http://2130706433:22222/mcp','http://user:pass@127.0.0.1:22222/mcp','http://127.0.0.1:22222/mcp?token=x','https://127.0.0.1:22222/mcp','http://169.254.169.254:22222/mcp','http://127.0.0.1:22222/other'])('拒绝不安全端点 %s', url => { expect(() => endpointUrl(url)).toThrow('ENDPOINT_INVALID'); });
+    it.each(['http://localhost:22222/mcp','http://127.0.0.1:18060/mcp','http://127.0.0.1:18061/mcp','http://127.0.0.1:80/mcp','http://127.0.0.1:65536/mcp','http://127.1:22222/mcp','http://2130706433:22222/mcp','http://user:pass@127.0.0.1:22222/mcp','http://127.0.0.1:22222/mcp?token=x','https://127.0.0.1:22222/mcp','http://169.254.169.254:22222/mcp','http://127.0.0.1:22222/other'])('拒绝不安全端点 %s', url => { expect(() => endpointUrl(url)).toThrow('ENDPOINT_INVALID'); });
     it.each([false,true])('初始化、工具发现、搜索、嵌套回复和释放会话（SSE=%s）', async sse => {
         const f = await setup({ sse });
         const result = await collect(f.adapter, config, async () => false);
@@ -65,5 +68,43 @@ describe('真实协议，仅离线端点', () => {
     it('预算包含建立会话，缺失完整窗口不建立起点', async () => {
         const f = await setup(); const result = await collect(f.adapter, config, async () => false, { ...limits, requests: 2 });
         expect(result.reason).toBe('BUDGET'); expect(result.posts).toHaveLength(0); expect(f.state.calls.map(c => c.name)).toEqual(['check_login_status','search_feeds']);
+    });
+});
+
+
+describe('独立登录验证环境：仅离线验证', () => {
+    it('即使入口或worker被直接调用，也在访问数据库/队列前拒绝采集', async () => {
+        vi.stubEnv('XHS_MCP_LOGIN_ONLY', '1');
+        const transaction = vi.fn(), enqueue = vi.fn();
+        const service = new CollectionService({ $transaction: transaction } as unknown as Db, { enqueue } as unknown as CollectionQueue);
+        const actor = { id: 'offline-admin', role: 'ADMIN' as const, name: '离线管理员', email: 'admin@offline.invalid' };
+        await expect(service.start(actor, 'offline-config', 'BASELINE', 'offline-request')).rejects.toThrow('采集已禁用');
+        await expect(service.create(actor, config)).rejects.toThrow('采集已禁用');
+        await expect(service.execute('offline-run')).rejects.toMatchObject({ code: 'REAL_DISABLED' });
+        expect(transaction).not.toHaveBeenCalled(); expect(enqueue).not.toHaveBeenCalled();
+    });
+    it('只允许登录状态；搜索、详情、二维码、发送全部拒绝', async () => {
+        vi.stubEnv('XHS_MCP_LOGIN_ONLY', '1');
+        const f = await setup(); await f.adapter.prepare(signal());
+        for (const name of ['search_feeds','get_feed_detail','get_login_qrcode','post_comment_to_feed']) {
+            await expect(f.transport.call(name as ReadTool, {}, signal())).rejects.toMatchObject({code:'UNSUPPORTED'});
+        }
+        expect(f.state.calls.map(c => c.name)).toEqual(['check_login_status']);
+    });
+    it('只向锁定的真实模式loopback端点加入一次性传输鉴权；不污染响应', async () => {
+        vi.stubEnv('XHS_MCP_LOGIN_ONLY', '1'); vi.stubEnv('XHS_MCP_AUTH_TOKEN', 'a'.repeat(64));
+        const f = await startXhsFixture({ authToken: 'a'.repeat(64) }); cleanup.push(f.stop);
+        const originalFetch = globalThis.fetch, observed: string[] = [];
+        const spy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+            observed.push(new Headers(init?.headers).get('authorization') || '');
+            return originalFetch(input, init);
+        });
+        try {
+            expect(() => new XhsHttpTransport(f.url,'XHS_FIXTURE')).toThrow('UNSUPPORTED');
+            const transport = new XhsHttpTransport(f.url,'XHS_MCP');
+            try { await transport.connect(signal()); const result = await transport.call('check_login_status',{},signal()); expect(JSON.stringify(result)).not.toContain('a'.repeat(64)); }
+            finally { await transport.close(); }
+            expect(observed.length).toBeGreaterThan(0); expect(observed.every(value => value === `Bearer ${'a'.repeat(64)}`)).toBe(true);
+        } finally { spy.mockRestore(); }
     });
 });

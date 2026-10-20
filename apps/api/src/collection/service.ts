@@ -7,7 +7,7 @@ import { CollectionQueue } from "./queue";
 import { MockAdapter } from "./adapters/mock";
 import { XhsMcpAdapter } from "./adapters/xhs-mcp";
 import { XhsHttpTransport } from "./mcp/transport";
-import { mcpSettings, requireMcp } from "./mcp/policy";
+import { loginCheckOnly, mcpSettings, requireMcp } from "./mcp/policy";
 import { collect } from "./collector";
 import { commitRead } from "./ingestion";
 @Injectable()
@@ -19,6 +19,7 @@ export class CollectionService {
     private queue: CollectionQueue) { }
     private probeBusy = false;
     private gate(mode: string) {
+        if (loginCheckOnly()) throw new ForbiddenException("当前为登录状态验证环境，采集已禁用");
         if (mode === "MOCK") return;
         try { requireMcp(mode); } catch (error) { const code = error instanceof ReadFailure ? error.code : "REAL_DISABLED";
             throw new ForbiddenException(`${code}：只读采集未开放或服务端模式不符，请管理员检查配置`); }
@@ -27,7 +28,7 @@ export class CollectionService {
         requireAdmin(actor);
         const settings = mcpSettings();
         const last = await this.db.auditLog.findFirst({ where: { action: { in: ["MCP_READINESS_CHECK", "MCP_READINESS_STARTED"] } }, orderBy: { createdAt: "desc" }, select: { createdAt: true, metadata: true } });
-        return { enabled: settings.enabled, mode: settings.enabled ? settings.mode : null, reason: settings.enabled ? "UNVERIFIED" : settings.reason, lastCheck: last, tools: ["check_login_status", "search_feeds", "get_feed_detail"], coverage: "WINDOW_ONLY", automaticPolling: false };
+        return { enabled: settings.enabled, mode: settings.enabled ? settings.mode : null, reason: settings.enabled ? "UNVERIFIED" : settings.reason, lastCheck: last, loginOnly: loginCheckOnly(), tools: loginCheckOnly() ? ["check_login_status"] : ["check_login_status", "search_feeds", "get_feed_detail"], coverage: "WINDOW_ONLY", automaticPolling: false };
     }
     async checkReadiness(actor: Actor) {
         requireAdmin(actor);
@@ -79,6 +80,7 @@ export class CollectionService {
     }
     async start(actor: Actor, id: string, scenario: Scenario, requestKey: string, mode: ConfigInput["mode"] = "MOCK") {
         requireAdmin(actor);
+        if (loginCheckOnly()) throw new ForbiddenException("当前为登录状态验证环境，采集已禁用");
         const run = await this.db.$transaction(async (tx) => {
             const [config] = await tx.$queryRaw<CollectionConfig[]> `SELECT * FROM "CollectionConfig" WHERE id=${id} FOR UPDATE`;
             if (!config || config.archivedAt)
@@ -132,6 +134,7 @@ export class CollectionService {
     }
     /** Queue redelivery is safe: only QUEUED claims are accepted. Stale jobs can be explicitly paused then retried. */
     async execute(id: string, adapter?: ReadAdapter) {
+        if (loginCheckOnly()) throw new ReadFailure("REAL_DISABLED");
         const claim = await this.db.collectionRun.updateMany({ where: { id, status: "QUEUED", cancelRequested: false }, data: { status: "RUNNING", startedAt: new Date() } });
         if (!claim.count)
             return;

@@ -3,12 +3,12 @@ import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 export type FixtureScenario = 'BASELINE' | 'NEW' | 'LOGIN_EXPIRED' | 'RESTRICTED' | 'RATE_LIMITED' | 'TIMEOUT' | 'MALFORMED' | 'SESSION_EXPIRED' | 'REDIRECT' | 'OVERSIZED' | 'SOURCE_UNAVAILABLE';
 /** Offline JSON-RPC/Streamable HTTP fixture. It never imports platform SDKs, credentials or network clients. */
-export async function startXhsFixture(options: { sse?: boolean; name?: string; missingTool?: boolean } = {}) {
+export async function startXhsFixture(options: { sse?: boolean; name?: string; missingTool?: boolean; authToken?: string } = {}) {
     const state = { scenario: 'BASELINE' as FixtureScenario, calls: [] as { name: string; args: Record<string, unknown> }[], methods: [] as string[], sessions: new Set<string>(), closed: 0, forbidden: 0 };
     const keywords = new Map<string, string>();
     const envelope = (value: unknown) => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
     const server = createServer(async (req, res) => {
-        if (req.url !== '/mcp' || !['POST', 'DELETE'].includes(req.method || '') || req.headers.cookie || req.headers.authorization) { state.forbidden++; res.writeHead(403).end(); return; }
+        if (req.url !== '/mcp' || !['POST', 'DELETE'].includes(req.method || '') || req.headers.cookie || (options.authToken ? req.headers.authorization !== `Bearer ${options.authToken}` : req.headers.authorization)) { state.forbidden++; res.writeHead(403).end(); return; }
         const session = String(req.headers['mcp-session-id'] || '');
         if (req.method === 'DELETE') { state.sessions.delete(session); keywords.delete(session); state.closed++; res.writeHead(200).end(); return; }
         let raw = ''; for await (const chunk of req) raw += String(chunk);

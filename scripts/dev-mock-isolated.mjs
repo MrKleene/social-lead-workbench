@@ -11,6 +11,17 @@ import argon2 from 'argon2';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const mcpFixture = process.argv.includes('--mcp-fixture');
+const loginOnly = process.argv.includes('--real-login-check');
+if (loginOnly && (mcpFixture || !process.send)) throw new Error('Use the explicit xhs-real launcher; real mode requires its private IPC configuration');
+const real = loginOnly ? await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Missing real login-check configuration')), 5000);
+    process.once('message', value => {
+        clearTimeout(timer);
+        if (value?.kind !== 'REAL_LOGIN_CHECK' || !/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}\/mcp$/.test(value.endpoint) ||
+            [18060, 18061].includes(Number(new URL(value.endpoint).port)) || !/^[a-f0-9]{64}$/.test(value.token)) return reject(new Error('Invalid login-check configuration'));
+        resolve(value);
+    });
+}) : undefined;
 const id = randomBytes(8).toString('hex');
 const output = join(root, '.qa/browser-validation', id);
 mkdirSync(output, { recursive: true });
@@ -18,7 +29,7 @@ const password = randomBytes(24).toString('hex');
 const containers = [];
 const results = [];
 let current;
-const safe = text => String(text).replaceAll(password, '[REDACTED]');
+const safe = text => String(text).replaceAll(password, '[REDACTED]').replaceAll(real?.token || 'NO-TOKEN-TO-REDACT', '[REDACTED]');
 const docker = args => {
     const result = spawnSync('docker', args, { encoding: 'utf8', env: { ...process.env, POSTGRES_PASSWORD: password }, timeout: 20000 });
     if (result.status !== 0) throw new Error(`Docker ${args[0]} failed: ${safe(result.stderr || result.error || '')}`);
@@ -26,7 +37,9 @@ const docker = args => {
 };
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function ready(container, command) {
+    if (interrupted) throw new Error("Interrupted");
     for (let attempt = 0; attempt < 40; attempt++) {
+        if (interrupted) throw new Error("Interrupted");
         const probe = spawnSync('docker', ['exec', container, ...command], { stdio: 'ignore', timeout: 2000 });
         if (probe.status === 0) return;
         await wait(500);
@@ -34,6 +47,7 @@ async function ready(container, command) {
     throw new Error('Temporary service readiness deadline exceeded');
 }
 function launch(kind, image, innerPort, args) {
+    if (interrupted) throw new Error("Interrupted");
     const container = docker(['run', '--detach', '--rm', '--pull=never', '--name', `crm-browser-${kind}-${id}`,
         '--label', `crm.acceptance=${id}`, '--tmpfs', `${kind === 'postgres' ? '/var/lib/postgresql/data' : '/data'}:rw,size=536870912`,
         '-p', `127.0.0.1::${innerPort}`, ...args, image, ...(kind === 'redis' ? ['redis-server', '--save', '', '--appendonly', 'no'] : [])]);
@@ -43,10 +57,11 @@ function launch(kind, image, innerPort, args) {
     const mapping = info.NetworkSettings.Ports[`${innerPort}/tcp`];
     assert.equal(mapping.length, 1); assert.equal(mapping[0].HostIp, '127.0.0.1');
     const port = Number(mapping[0].HostPort);
-    assert(![5432, 55432, 6379, 56379, 18060].includes(port), 'Refuse any existing service port');
+    assert(![5432, 55432, 6379, 56379, 18060, 18061].includes(port), 'Refuse any existing service port');
     return { container, port };
 }
 async function command(label, args, env = process.env) {
+    if (interrupted) throw new Error("Interrupted");
     console.log(`Running: ${args.join(' ')}`);
     const started = Date.now();
     let log = '';
@@ -82,9 +97,11 @@ async function freePort() {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const port = server.address().port;
     await new Promise(resolve => server.close(resolve));
+    if ([18060, 18061].includes(port)) return freePort();
     return port;
 }
 function service(label, args, env) {
+    if (interrupted) throw new Error("Interrupted");
     const child = spawn(args[0], args.slice(1), { cwd: root, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     children.push(child);
     child.stdout.on('data', () => {});
@@ -93,7 +110,8 @@ function service(label, args, env) {
     child.once('exit', () => { if (!interrupted) process.exitCode = 1; finish(); });
     return child;
 }
-const report = { mode: mcpFixture ? 'XHS_FIXTURE' : 'MOCK', isolated: true, credentials_persisted: false, cleanup: [] };
+if (loginOnly) process.once('disconnect', () => { interrupted = true; stopGroup(current); finish(); });
+const report = { mode: loginOnly ? 'REAL_LOGIN_CHECK' : mcpFixture ? 'XHS_FIXTURE' : 'MOCK', isolated: true, credentials_persisted: false, cleanup: [] };
 try {
     const pg = launch('postgres', 'postgres:17', 5432, ['-e', 'POSTGRES_DB=crm_test', '-e', 'POSTGRES_USER=crmtest', '-e', 'POSTGRES_PASSWORD']);
     const redis = launch('redis', 'redis:7-alpine', 6379, []);
@@ -105,6 +123,8 @@ try {
     const env = { ...process.env, DATABASE_URL: url, REDIS_URL: `redis://127.0.0.1:${redis.port}`, DOTENV_CONFIG_PATH: '/dev/null', XHS_MCP_ENABLED: '0',
         COLLECTION_QUEUE_NAME: `crm-browser-${id}`, PORT: String(apiPort), API_HOST: '127.0.0.1', APP_ORIGIN: `http://${previewHost}:${webPort}`,
         API_PROXY_TARGET: `http://127.0.0.1:${apiPort}`, COOKIE_SECURE: 'false' };
+    if (loginOnly) Object.assign(env, { XHS_MCP_ENABLED: '1', XHS_MCP_PROFILE: 'real', XHS_MCP_ENDPOINT: real.endpoint, XHS_MCP_AUTH_TOKEN: real.token, XHS_MCP_LOGIN_ONLY: '1' });
+    else Object.assign(env, { XHS_MCP_AUTH_TOKEN: '', XHS_MCP_LOGIN_ONLY: '0' });
     if (mcpFixture) {
         const fixture = spawn(process.execPath, ['--import','tsx','scripts/mcp-fixture.ts'], { cwd: root, env: { ...env, CRM_DISPOSABLE_MCP_FIXTURE: '1' }, detached: true, stdio: ['ignore','ignore','pipe','ipc'] });
         children.push(fixture);
@@ -134,18 +154,18 @@ try {
         ] });
     } finally { await db.$disconnect(); }
     service('api', ['node', 'apps/api/dist/main.js'], env);
-    service('collector', ['node', 'apps/api/dist/collection/worker.js'], env);
+    if (!loginOnly) service('collector', ['node', 'apps/api/dist/collection/worker.js'], env);
     service('web', ['npm', 'run', 'dev', '-w', '@crm/web', '--', '--port', String(webPort), '--host', previewHost], env);
     report.preview = env.APP_ORIGIN;
     report.api = env.API_PROXY_TARGET;
     report.containers = [...containers];
     report.pids = children.map(c => c.pid);
     writeFileSync(join(output, 'running.json'), JSON.stringify(report, null, 2));
-    console.log(`Disposable mock preview: ${env.APP_ORIGIN}`);
+    console.log(`${loginOnly ? 'REAL LOGIN-STATUS-ONLY (unverified)' : mcpFixture ? 'OFFLINE MCP (fictional)' : 'MOCK (fictional)'} preview: ${env.APP_ORIGIN}`);
     console.log('Fictional logins: admin@fixture.invalid / sales-a@fixture.invalid / sales-b@fixture.invalid');
     console.log(`One-run password (never save in browser): ${fixturePassword}`);
     if (mcpFixture) console.log('Offline MCP fixture: enter BASELINE / NEW / LOGIN_EXPIRED / RATE_LIMITED / TIMEOUT to change fictional responses.');
-    console.log('Stop with Ctrl+C; temporary accounts, database and queues are removed. No real platform integration.');
+    console.log(loginOnly ? 'Manual login-status check only; collection/sending disabled. Ctrl+C removes only this temporary CRM stack. Platform session is retained by the parent launcher.' : 'Stop with Ctrl+C; temporary accounts, database and queues are removed. No real platform integration.');
     await stopped;
 } catch (error) { console.error(safe(error.message)); process.exitCode = 1; }
 finally {
@@ -159,4 +179,5 @@ finally {
     }
     writeFileSync(join(output, 'cleanup.json'), JSON.stringify(report, null, 2));
     console.log(`Temporary containers removed: ${report.cleanup.filter(c => c.removed).length}/${containers.length}`);
+    if (process.connected) process.disconnect();
 }

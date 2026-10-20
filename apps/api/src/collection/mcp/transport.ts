@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { ReadFailure } from '../contract';
-import { endpointUrl, McpMode, ReadTool, toolArguments } from './policy';
+import { endpointUrl, loginCheckOnly, McpMode, ReadTool, toolArguments } from './policy';
 export interface ReadOnlyMcpTransport {
   connect?(signal: AbortSignal): Promise<void>;
   close?(): Promise<void>;
@@ -16,8 +16,11 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
   private operation?: AbortSignal;
   private connected = false;
   private requests = 0;
+  private loginOnly = loginCheckOnly();
+  private authToken = process.env.XHS_MCP_AUTH_TOKEN || '';
   constructor(url: URL, private mode: McpMode) {
     const endpoint = endpointUrl(url.href).href;
+    if (this.authToken && (!this.loginOnly || mode !== 'XHS_MCP' || !/^[a-f0-9]{64}$/.test(this.authToken))) throw new ReadFailure('UNSUPPORTED');
     this.transport = new StreamableHTTPClientTransport(new URL(endpoint), {
       requestInit: { redirect: 'error', credentials: 'omit' },
       reconnectionOptions: { maxRetries: 0, initialReconnectionDelay: 1000, maxReconnectionDelay: 1000, reconnectionDelayGrowFactor: 1 },
@@ -29,6 +32,7 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
         if (++this.requests > 40) throw new ReadFailure('BUDGET');
         const headers = new Headers(init?.headers);
         if (headers.has('cookie') || headers.has('authorization')) throw new ReadFailure('UNSUPPORTED');
+        if (this.authToken) headers.set('authorization', `Bearer ${this.authToken}`);
         if (init?.method === 'POST') {
           const body = JSON.parse(String(init.body));
           if (!['initialize', 'notifications/initialized', 'tools/list', 'tools/call', 'notifications/cancelled'].includes(body.method)) throw new ReadFailure('UNSUPPORTED');
@@ -57,6 +61,7 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
     });
   }
   private validate(name: string, args: unknown) {
+    if (this.loginOnly && name !== 'check_login_status') throw new ReadFailure('UNSUPPORTED');
     if (!Object.hasOwn(toolArguments, name)) throw new ReadFailure('UNSUPPORTED');
     if (!toolArguments[name as ReadTool].safeParse(args).success) throw new ReadFailure('INVALID_DATA');
   }
@@ -84,7 +89,7 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
         if (cursors.has(result.nextCursor) || page === 3) throw new ReadFailure('MCP_PROTOCOL');
         cursors.add(result.nextCursor); cursor = result.nextCursor;
       }
-      if (Object.keys(toolArguments).some(name => !names.has(name))) throw new ReadFailure('MCP_TOOLS_MISSING');
+      if ((this.loginOnly ? ['check_login_status'] : Object.keys(toolArguments)).some(name => !names.has(name))) throw new ReadFailure('MCP_TOOLS_MISSING');
       this.connected = true;
     });
   }

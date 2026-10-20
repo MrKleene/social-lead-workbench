@@ -40,7 +40,7 @@ async function until(fn, ms = 30000) {
 }
 try {
   await until(() => output.includes("One-run password"), 60000);
-  const base = output.match(/Disposable mock preview: (http:\/\/[^\s]+)/)[1],
+  const base = output.match(/MOCK \(fictional\) preview: (http:\/\/[^\s]+)/)[1],
     password = output.match(
       /One-run password \(never save in browser\): ([^\s]+)/,
     )[1];

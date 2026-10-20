@@ -12,7 +12,7 @@ export function endpointUrl(value: string): URL {
   // Canonical numeric loopback only: no DNS/rebinding, credentials, alternate IP encodings or proxy destinations.
   if (!/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}\/mcp$/.test(value)) throw new ReadFailure('ENDPOINT_INVALID');
   const port = Number(value.split(":")[2].split("/")[0]);
-  if (port < 1024 || port > 65535 || port === 18060) throw new ReadFailure('ENDPOINT_INVALID');
+  if (port < 1024 || port > 65535 || [18060, 18061].includes(port)) throw new ReadFailure('ENDPOINT_INVALID');
   return new URL(value);
 }
 export function mcpSettings(env: NodeJS.ProcessEnv = process.env) {
@@ -28,3 +28,5 @@ export function requireMcp(mode: string) {
   if (settings.mode !== mode) throw new ReadFailure('PROFILE_MISMATCH');
   return settings;
 }
+
+export function loginCheckOnly(env: NodeJS.ProcessEnv = process.env) { return env.XHS_MCP_LOGIN_ONLY === "1"; }

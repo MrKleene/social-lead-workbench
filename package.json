@@ -31,7 +31,13 @@
     "test:workbench": "vitest run apps/web/src/features/work/stable-results.test.ts apps/web/src/features/work/motion-policy.test.ts apps/web/src/features/work/navigation-policy.test.ts apps/web/src/features/collection/mode.test.ts",
     "test:mcp": "node scripts/test-queue-isolated.mjs --mcp",
     "test:mock:isolated": "node scripts/test-queue-isolated.mjs --mock-only",
-    "dev:mcp:isolated": "node scripts/dev-mock-isolated.mjs --mcp-fixture"
+    "dev:mcp:isolated": "node scripts/dev-mock-isolated.mjs --mcp-fixture",
+    "xhs:real:prepare": "node scripts/xhs-real.mjs prepare",
+    "xhs:real:login": "node scripts/xhs-real.mjs login",
+    "dev:xhs:real": "node scripts/xhs-real.mjs serve",
+    "dev:mcp:offline": "node scripts/dev-mock-isolated.mjs --mcp-fixture",
+    "test:real:preflight": "node --test scripts/real-mcp/core.test.mjs",
+    "test:real:offline": "node --import tsx scripts/test-real-mcp-offline.mjs"
   },
   "devDependencies": {
     "prisma": "6.19.0",
