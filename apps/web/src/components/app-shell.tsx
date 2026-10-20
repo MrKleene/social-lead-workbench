@@ -23,7 +23,7 @@ export function AppShell() {
     <header className="space-topbar" onKeyDown={e => { if(menu && e.key === "Escape") { e.stopPropagation(); setMenu(false); menuTrigger.current?.focus(); } }}>
       <Link className="space-brand" to="/work" onClick={() => setMenu(false)}><Orbit aria-hidden="true"/><span>LEAD SPACE</span></Link>
       <div className="space-account">
-        <button className="motion-toggle" aria-pressed={motion.reduced} onClick={motion.toggle}>{motion.reduced ? '动态已减少' : '减少动态'}</button>
+        <button className="motion-toggle" aria-label="粒子动效" aria-pressed={!motion.reduced} title={motion.systemReduced && motion.preference==='system' ? '已遵循系统低动态偏好。可在此仅为当前页面开启动效，不修改系统设置。' : '控制星尘、核心光点和连线粒子；后台自动暂停。'} onClick={motion.toggle}>{motion.reduced ? (motion.systemReduced && motion.preference==='system' ? '系统低动态 · 开启动效' : '粒子已暂停 · 开启') : '粒子动效 · 暂停'}</button>
         <span className="space-role">{user?.name} · {user?.role === 'ADMIN' ? '管理员' : '销售'}</span>
         <Button ref={menuTrigger} variant="ghost" size="icon" aria-label="打开工作空间菜单" aria-expanded={menu} onClick={() => setMenu(v => !v)}>{menu ? <X/> : <Menu/>}</Button>
         <Button variant="ghost" size="icon" aria-label="退出登录" onClick={() => logout.mutate()} disabled={logout.isPending}><LogOut/></Button>

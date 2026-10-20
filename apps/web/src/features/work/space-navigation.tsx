@@ -1,6 +1,7 @@
-import type { CSSProperties } from 'react';
+import { Fragment, type CSSProperties } from 'react';
 import { Search, Database, Network, MessagesSquare, UserRound, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { CoreParticles, FlowParticles } from './space-particles';
 import type { SpatialState } from './use-spatial-work';
 const nodes = [
   { id:'settings', title:'搜索设置', subtitle:'设置关键词与平台范围', icon:Search, x:27, y:20, ex:22, ey:20, color:'#9cd1ff' },
@@ -15,10 +16,11 @@ export function SpaceNavigation({ state }: { state: SpatialState }) {
   const activeRun = !!state.selectedConfig?.activeRunId;
   return <div className="space-map" aria-label="工作模块">
     <svg className="space-connectors" viewBox="0 0 1000 700" preserveAspectRatio="none" aria-hidden="true">
-      {nodes.map(n => <path key={n.id} className={state.active === n.id ? 'is-lit' : ''} stroke={n.color} d={expanded ? `M 85 350 Q 180 ${n.ey*7} ${n.ex*10} ${n.ey*7}` : `M 500 336 Q ${n.x < 50 ? 300 : 720} ${n.y*7-90} ${n.x*10} ${n.y*7}`}/>)}
+      {nodes.map((n,i) => { const path=expanded ? `M 85 350 Q 180 ${n.ey*7} ${n.ex*10} ${n.ey*7}` : `M 500 336 Q ${n.x < 50 ? 300 : 720} ${n.y*7-90} ${n.x*10} ${n.y*7}`; return <Fragment key={n.id}><path className={state.active === n.id ? 'is-lit' : ''} stroke={n.color} d={path}/><FlowParticles path={path} color={n.color} phase={i}/></Fragment>; })}
     </svg>
     <div className="space-core" data-running={activeRun}>
       <img className="planet-art" src="/space/champagne-planet.png" alt=""/>
+      <CoreParticles/>
       <div className="space-core-content">
         {expanded ? <button className="core-home" onClick={state.overview} aria-label="收拢并返回环绕总览">线索工作台<span>返回总览</span></button> : <>
           <h1>线索工作台</h1><p>查看原文，保留人的判断。</p><span className="space-mode">模拟模式 · 真实发送禁用</span>

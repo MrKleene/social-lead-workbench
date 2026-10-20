@@ -5,11 +5,13 @@ import { SpaceNavigation } from './space-navigation';
 import { SpaceResults } from './space-results';
 import { SpaceLeadDetail } from './space-lead-detail';
 import { SpaceNotices } from './space-notices';
+import { StarDust } from './space-particles';
 import { CollectionLauncher } from './collection-launcher';
 export function WorkPage() {
  const state=useSpatialWork();
  const expanded=!!state.active;
  return <div className="spatial-work" data-expanded={expanded} data-module={state.active||'overview'} data-detail={!!state.id}>
+   <StarDust/>
    <SpaceNavigation state={state}/>
    <button className="space-notice-trigger" onClick={()=>state.openModule('notices')} aria-label={`新增提醒 ${state.unread.length}，异常 ${state.work.exceptions.length}`}><Bell size={18}/>{state.unread.length+state.work.exceptions.length>0&&<span>{state.unread.length+state.work.exceptions.length}</span>}</button>
    {expanded&&<button className="space-back" onClick={state.overview}><ArrowLeft size={15}/>总览<span>/</span>{state.active==='runs'?'采集任务':state.active==='follow'?'销售跟进':state.active==='notices'?'提醒与异常':'匹配线索'}</button>}

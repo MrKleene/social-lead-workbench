@@ -201,7 +201,7 @@ html[data-crm-theme="graphite"] {
   [data-crm-theme="graphite"] .detail-sheet > [data-slot="sheet-header"] { padding: 24px 20px 18px; }
   [data-crm-theme="graphite"] .table-footer { padding: 12px; }
 }
-/* Decoration has no idle loop. Background tabs pause all motion, including existing primitives. */
+/* Background tabs pause all motion, including decorative particles and existing primitives. */
 html[data-crm-hidden="true"] *,html[data-crm-hidden="true"] *::before,html[data-crm-hidden="true"] *::after { animation-play-state: paused !important; }
 html[data-crm-reduced="true"] *,html[data-crm-reduced="true"] *::before,html[data-crm-reduced="true"] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 @media(prefers-reduced-motion:reduce) {

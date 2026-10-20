@@ -1,10 +1,11 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, RefreshCw, ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ErrorNotice, Loading } from '@/components/feedback';
 import { Button } from '@/components/ui/button';
 import { contactLabels } from '@/features/leads/contact-actions';
 import { platformLabel } from '@/lib/types';
+import { FlowParticles } from './space-particles';
 import type { SpatialState } from './use-spatial-work';
 export function SpaceResults({ state:s }: { state:SpatialState }) {
   const {work:w}=s;
@@ -47,5 +48,5 @@ function ResultConnections({state:s}:{state:SpatialState}) {
   return()=>{resize.disconnect();node.removeEventListener('transitionend',measure);window.removeEventListener('resize',measure);};
  },[rowKey,s.active]);
  const g=geometry;
- return <svg ref={svg} className="result-connectors" style={{left:-g.width,width:g.width}} viewBox={`0 0 ${g.width} ${g.height}`} preserveAspectRatio="none" aria-hidden="true">{s.rows.map((row,i)=><path key={row.id} className={s.id===row.id?'is-lit':''} d={`M 0 ${g.start} C ${g.width*.45} ${g.start} ${g.width*.55} ${g.ends[i]??g.start} ${g.width} ${g.ends[i]??g.start}`}/>)}</svg>;
+ return <svg ref={svg} className="result-connectors" style={{left:-g.width,width:g.width}} viewBox={`0 0 ${g.width} ${g.height}`} preserveAspectRatio="none" aria-hidden="true">{s.rows.map((row,i)=>{const path=`M 0 ${g.start} C ${g.width*.45} ${g.start} ${g.width*.55} ${g.ends[i]??g.start} ${g.width} ${g.ends[i]??g.start}`;return <Fragment key={row.id}><path className={s.id===row.id?'is-lit':''} d={path}/><FlowParticles path={path} color={s.id===row.id?'#e3c7ff':'#ac9ac7'} phase={i}/></Fragment>;})}</svg>;
 }

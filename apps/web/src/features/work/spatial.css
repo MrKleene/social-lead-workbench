@@ -32,3 +32,16 @@ html[data-crm-theme=graphite] .space-core select{font-size:11px;background:#1519
 html[data-crm-theme=graphite] .space-detail-scroll>h2:focus{outline:0;box-shadow:none}
 html[data-crm-theme=graphite] .loading-stack [data-slot=skeleton]{background:#343b4b}
 .space-node .node-label{text-shadow:0 2px 8px #000,0 1px 2px #000}
+/* Genuine bounded movement. These are decorative DOM/SVG points, never pointer targets. */
+.space-dust,.space-core-particles,.space-flow-particles,.space-particle{pointer-events:none!important;user-select:none}
+.space-dust{position:absolute;inset:0;overflow:hidden;z-index:-1}.space-dust-dot,.space-orbit-dot{position:absolute;display:block;width:var(--size);height:var(--size);border-radius:50%;background:#f6e4bc;box-shadow:0 0 5px 1px #f3d6a570;opacity:.7}
+.space-dust-dot:nth-child(3n){background:#c6d6ff;box-shadow:0 0 5px #a9bfff90}
+.space-core-particles{position:absolute;inset:0;transform:rotate(-18deg);z-index:1}.space-orbit-dot{left:0;top:0;offset-path:ellipse(46% 33% at 50% 50%);offset-rotate:0deg;background:#fff3d4;box-shadow:0 0 7px 2px #f7cd8790;opacity:.9}
+.space-flow-dot{offset-rotate:0deg;filter:drop-shadow(0 0 3px currentColor);opacity:.85}
+@keyframes space-stardrift{0%{transform:translate3d(0,0,0);opacity:.15}20%{opacity:.85}80%{opacity:.65}100%{transform:translate3d(var(--drift-x),var(--drift-y),0);opacity:.1}}
+@keyframes space-orbit-flow{from{offset-distance:0%}to{offset-distance:100%}}
+/* Explicit page choice can enable particles despite OS reduction; OS is never modified. */
+html[data-crm-theme=graphite][data-crm-reduced=false] .space-dust-dot{animation:space-stardrift var(--duration) linear var(--delay) infinite!important}
+html[data-crm-theme=graphite][data-crm-reduced=false] :is(.space-orbit-dot,.space-flow-dot){animation:space-orbit-flow var(--duration) linear var(--delay) infinite!important}
+html[data-crm-theme=graphite][data-crm-hidden=true] .space-particle{animation-play-state:paused!important}
+@media(max-width:900px){.space-dust-dot:nth-child(n+21),.space-orbit-dot:nth-child(n+7){display:none}.space-flow-dot:nth-child(2){display:none}.space-core-particles{opacity:.7}}

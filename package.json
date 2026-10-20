@@ -28,7 +28,7 @@
     "dev:collector": "DOTENV_CONFIG_PATH=.env tsx --tsconfig apps/api/tsconfig.json apps/api/src/collection/worker.ts",
     "test:queue": "node scripts/test-queue-isolated.mjs",
     "dev:mock:isolated": "node scripts/dev-mock-isolated.mjs",
-    "test:workbench": "vitest run apps/web/src/features/work/stable-results.test.ts"
+    "test:workbench": "vitest run apps/web/src/features/work/stable-results.test.ts apps/web/src/features/work/motion-policy.test.ts"
   },
   "devDependencies": {
     "prisma": "6.19.0",

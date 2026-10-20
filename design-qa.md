@@ -37,7 +37,16 @@ All111 existing unit/database/queue regressions pass; full typecheck/build pass.
 
 - Reference is a wide concept board; operational app retains filters, errors, source records and scrollable follow-up forms rather than hiding them for appearance.
 - Photos in the concept are replaced by text avatars for fictional fixture identities. No fabricated AI analysis, real customer data or external sending.
-- Decorative PNG assets total about5MB; first uncached load is larger than the former plain dashboard. No new animation library, Canvas renderer, physics simulation or automatic motion loop.
+- Decorative PNG assets total about5MB; first uncached load is larger than the former plain dashboard. No new animation library, Canvas renderer or physics simulation. The particle follow-up adds bounded CSS/SVG decorative motion, with reduced-motion and visibility controls.
 - This validates local simulated workflows. Real adapter authorization and live-platform behavior remain outside scope.
 
-No unresolved P0/P1/P2 visual or interaction blocker at delivery. Browser security tests cover only fixture accounts; backend regressions retain existing access control checks.
+Follow-up P1: the delivered scene originally contained static PNGs and transitions but no particle animation. Added real moving stardust, core orbit points and path-following connection particles. Actual browser positions changed in two timed samples; page pause stopped movement. See `docs/PARTICLE-MOTION-2026-10-20.md`. Native background-tab validation remains limited because this attached Chrome reports document.hidden=false even when switched/minimized; the visibility lifecycle regression passes. No claim that this native background test passed.
+
+No other known unresolved P0/P1/P2 visual or interaction blocker. Browser security tests cover only fixture accounts; backend regressions retain existing access control checks.
+
+## Explicit concept differences (not pixel-identical)
+
+- Background: the implemented original starfield is darker, with a continuous lunar horizon along the bottom; the approved board has different terrain silhouettes, edge planets and star placement.
+- Planet: new rock/filament texture, a brighter upper-right gold rim and different orbit inclination. In the desktop overview the visible face is about430px, with a560px asset box; the reference face is roughly380px within a1920px-wide concept panel.
+- Glow: real ribbon modules are thinner and less volumetric, with restrained glows and Lucide outline icons. The concept uses fuller folded light ribbons and stronger bloom. The gold core and five module hues are retained.
+- Proportion/placement: the actual1440×900 overview has more vertical space than each panel of the1920×819 board. Expanded core/arc modules/three cards/source panel follow the reference structure, but filters, pagination and editable business forms take additional room. Mobile intentionally becomes a strip and linear detail flow.
