@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { AccountsModule } from "./accounts/accounts";
 import { RepliesModule } from "./replies/replies";
 import { Controller, Get, Module, Inject, ServiceUnavailableException } from "@nestjs/common";
 import { DatabaseModule, Db } from "./common/db";
@@ -25,12 +26,13 @@ class HealthController {
     }
   }
   @Get() get() {
-    return { ok: true, milestone: 1, platformCallsEnabled: false, contactWorkflow: true, replyTemplates: true };
+    return { ok: true, milestone: 1, platformCallsEnabled: false, accountCenter: true, contactWorkflow: true, replyTemplates: true };
   }
 }
 @Module({
   imports: [
     DatabaseModule,
+    AccountsModule,
     RepliesModule,
     AuthModule,
     UsersModule,

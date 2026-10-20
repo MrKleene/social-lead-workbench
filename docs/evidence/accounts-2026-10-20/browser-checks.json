@@ -1,0 +1,17 @@
+{
+  "environment": "independent disposable mock preview; NOT user 63445",
+  "realPlatformCalls": false,
+  "preview": "http://127.0.0.1:53220",
+  "createThroughUI": true,
+  "draftProtected": true,
+  "orbRotatesAndTargetsStable": true,
+  "keyboardActivation": true,
+  "reducedMotion": "none",
+  "simulatedUnknownBlocks": true,
+  "mobileNoHorizontalOverflow": true,
+  "inactivePanelsInert": true,
+  "salesScoped": true,
+  "pageErrors": [],
+  "pass": true,
+  "temporaryContainersRemoved": true
+}

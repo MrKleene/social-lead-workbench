@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run test/unit.test.ts test/http.test.ts test/collection-unit.test.ts test/mcp-transport.test.ts",
-    "test:integration": "vitest run --no-file-parallelism test/postgres.test.ts test/collection-postgres.test.ts",
+    "test:integration": "vitest run --no-file-parallelism test/postgres.test.ts test/collection-postgres.test.ts test/accounts-postgres.test.ts",
     "test:queue": "vitest run --no-file-parallelism test/collection-queue.test.ts"
   },
   "dependencies": {

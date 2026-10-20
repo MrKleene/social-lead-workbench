@@ -1,0 +1,7 @@
+ALTER TABLE "PlatformAccount" ADD COLUMN "ownerId" TEXT, ADD COLUMN "dailyLimit" INTEGER NOT NULL DEFAULT 10 CHECK ("dailyLimit" >= 0 AND "dailyLimit" <= 1000), ADD COLUMN "archivedAt" TIMESTAMP(3), ADD COLUMN "version" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Lead" ADD COLUMN "doNotContact" BOOLEAN NOT NULL DEFAULT false;
+CREATE TABLE "AccountDay" ("accountId" TEXT NOT NULL REFERENCES "PlatformAccount"("id") ON DELETE CASCADE, "day" TEXT NOT NULL, "occupied" INTEGER NOT NULL DEFAULT 0 CHECK ("occupied" >= 0), PRIMARY KEY ("accountId", "day"));
+CREATE TABLE "ContactLedger" ("id" TEXT PRIMARY KEY, "identityId" TEXT NOT NULL UNIQUE REFERENCES "PlatformIdentity"("id") ON DELETE CASCADE, "accountId" TEXT NOT NULL REFERENCES "PlatformAccount"("id") ON DELETE RESTRICT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TYPE "ContactOutcome" AS ENUM ('ATTEMPTED','UNKNOWN','SIMULATED_SUCCESS','FAILED');
+CREATE TABLE "ContactAttempt" ("id" TEXT PRIMARY KEY, "ledgerId" TEXT NOT NULL REFERENCES "ContactLedger"("id") ON DELETE CASCADE, "requestKey" TEXT NOT NULL UNIQUE, "kind" TEXT NOT NULL CHECK ("kind" IN ('FIRST','FOLLOWUP')), "outcome" "ContactOutcome" NOT NULL DEFAULT 'ATTEMPTED', "day" TEXT NOT NULL, "actorId" TEXT NOT NULL, "resolutionNote" TEXT, "version" INTEGER NOT NULL DEFAULT 0, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL);
+CREATE INDEX "ContactAttempt_ledgerId_createdAt_idx" ON "ContactAttempt"("ledgerId","createdAt");

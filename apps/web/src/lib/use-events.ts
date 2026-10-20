@@ -6,6 +6,8 @@ export function useEvents(enabled: boolean) {
     if (!enabled) return;
     const source = new EventSource("/api/events");
     source.addEventListener("refresh", () => {
+      void client.invalidateQueries({ queryKey: ["accounts"] });
+      void client.invalidateQueries({ queryKey: ["account-contact"] });
       void client.invalidateQueries({ queryKey: ["leads"] });
       void client.invalidateQueries({ queryKey: ["collection"] });
       void client.invalidateQueries({ queryKey: ["notices"] });

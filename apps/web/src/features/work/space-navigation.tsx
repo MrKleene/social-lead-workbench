@@ -1,18 +1,19 @@
 import { Fragment, useLayoutEffect, type CSSProperties } from 'react';
-import { Search, Database, Network, MessagesSquare, UserRound, ArrowRight } from 'lucide-react';
+import { Search, Database, Network, MessagesSquare, UserRound, ContactRound, ArrowRight } from 'lucide-react';
 import { CoreParticles, FlowParticles } from './space-particles';
 import type { SpatialState } from './use-spatial-work';
 const nodes = [
-  { id:'settings', title:'搜索设置', subtitle:'设置关键词与平台范围', icon:Search, x:27, y:20, ex:22, ey:20, color:'#9cd1ff' },
-  { id:'runs', title:'采集任务', subtitle:'有限读取，记录采集进度', icon:Database, x:18, y:48, ex:23, ey:35, color:'#ebc992' },
-  { id:'matches', title:'匹配线索', subtitle:'规则筛选，保留人工判断', icon:Network, x:28, y:72, ex:23.5, ey:50, color:'#bf9bff' },
-  { id:'templates', title:'回复话术', subtitle:'管理评论与私信模板', icon:MessagesSquare, x:74, y:23, ex:23, ey:65, color:'#f6ada8' },
-  { id:'follow', title:'销售跟进', subtitle:'标记线索，记录跟进进展', icon:UserRound, x:76, y:69, ex:22, ey:80, color:'#9dd9b4' },
+  { id:'settings', title:'搜索设置', subtitle:'设置关键词与平台范围', icon:Search, x:27, y:20, ex:22, ey:16, color:'#9cd1ff' },
+  { id:'runs', title:'采集任务', subtitle:'有限读取，记录采集进度', icon:Database, x:18, y:48, ex:23, ey:29, color:'#ebc992' },
+  { id:'matches', title:'匹配线索', subtitle:'规则筛选，保留人工判断', icon:Network, x:28, y:72, ex:23.5, ey:42, color:'#bf9bff' },
+  { id:'templates', title:'回复话术', subtitle:'管理评论与私信模板', icon:MessagesSquare, x:74, y:23, ex:23, ey:55, color:'#f6ada8' },
+  { id:'accounts', title:'账号中心', subtitle:'模拟管理与权限审计', icon:ContactRound, x:82, y:46, ex:22.5, ey:68, color:'#90d8db' },
+  { id:'follow', title:'销售跟进', subtitle:'标记线索，记录跟进进展', icon:UserRound, x:76, y:69, ex:22, ey:81, color:'#9dd9b4' },
 ];
 export function SpaceNavigation({ state }: { state: SpatialState }) {
   const expanded = !!state.active;
   useLayoutEffect(()=>{if(state.active&&matchMedia('(max-width:900px)').matches)document.querySelector<HTMLElement>(`.node-${state.active}`)?.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});},[state.active]);
-  const counts: Record<string,number> = { settings:state.configs.length, runs:state.configs.filter(c=>c.activeRunId).length, matches:state.work.fresh.length, templates:state.work.templates.data?.length || 0, follow:state.work.follow.length };
+  const counts: Record<string,number> = { accounts:state.accounts.data?.accounts.length||0, settings:state.configs.length, runs:state.configs.filter(c=>c.activeRunId).length, matches:state.work.fresh.length, templates:state.work.templates.data?.length || 0, follow:state.work.follow.length };
   const activeRun = !!state.selectedConfig?.activeRunId;
   return <div className="space-map" aria-label="工作模块">
     <svg className="space-connectors" viewBox="0 0 1000 700" preserveAspectRatio="none" aria-hidden="true">
@@ -34,10 +35,10 @@ export function SpaceNavigation({ state }: { state: SpatialState }) {
     {nodes.map(n => {
       const Icon=n.icon, restricted=!state.admin && ['settings','runs','templates'].includes(n.id);
       const style={ '--x':`${n.x}%`, '--y':`${n.y}%`, '--ex':`${n.ex}%`, '--ey':`${n.ey}%`, '--node-color':n.color } as CSSProperties;
-      const content=<><span className="node-orb"><span className="node-material space-orb-motion"><img src="/space/ribbon-halo.png" alt=""/><span className="node-orbit"/></span><Icon aria-hidden="true"/></span><span className="node-label"><strong>{n.title}</strong><small>{restricted ? '管理员配置' : expanded ? `${counts[n.id]} ${n.id==='runs'?'个运行中':'项'}` : n.subtitle}</small></span></>;
+      const content=<><span className="node-orb"><span className="node-material space-orb-motion"><img src="/space/ribbon-halo.png" alt=""/><span className="node-orbit"/></span><Icon aria-hidden="true"/></span><span className="node-label"><strong>{n.title}</strong><small>{restricted ? '管理员配置' : n.id==='accounts' ? (state.accounts.data ? `可用 ${state.accounts.data.summary.available} · 需处理 ${state.accounts.data.summary.attention}` : '模拟管理 · 待加载') : expanded ? `${counts[n.id]} ${n.id==='runs'?'个运行中':'项'}` : n.subtitle}</small></span></>;
       const cls=`space-node node-${n.id}${state.active===n.id?' selected':''}`;
       if(restricted) return <div key={n.id} className={`${cls} restricted`} style={style} aria-label={`${n.title}：管理员配置`}>{content}</div>;
-      return <button key={n.id} className={cls} style={style} aria-pressed={state.active===n.id} onClick={()=>state.openModule(n.id as 'runs'|'matches'|'follow'|'settings'|'templates')}>{content}</button>;
+      return <button key={n.id} className={cls} style={style} aria-pressed={state.active===n.id} onClick={()=>state.openModule(n.id as 'runs'|'matches'|'follow'|'settings'|'templates'|'accounts')}>{content}</button>;
     })}
   </div>;
 }

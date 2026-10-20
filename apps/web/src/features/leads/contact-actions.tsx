@@ -1,3 +1,4 @@
+import { AccountContact } from '@/features/accounts/account-contact';
 import { FormEvent, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -22,5 +23,6 @@ export function ContactActions({ lead }: { lead: Lead }) {
       <div className="action-row">{stage === 'MATCHED' && <Button size="sm" disabled={!supported || mutation.isPending} onClick={() => save('TO_CONTACT')}>加入待联系</Button>}{['MATCHED', 'TO_CONTACT'].includes(stage) && <Button size="sm" variant="ghost" disabled={!supported || mutation.isPending || editing} onClick={() => save('IGNORED')}>忽略</Button>}{stage === 'IGNORED' && <Button size="sm" variant="outline" disabled={!supported || mutation.isPending} onClick={() => save('MATCHED')}>恢复到匹配评论</Button>}{['TO_CONTACT', 'CONTACTED'].includes(stage) && !editing && <Button size="sm" disabled={!supported || mutation.isPending} onClick={() => { setDraftVersion(lead.version); setEditing(true); }}>{stage === 'CONTACTED' ? '记录有意向依据' : '记录已人工联系'}</Button>}</div>
       {editing && <form className="contact-form" onSubmit={submit}><p>本系统不会发送消息。仅当你已自行在平台完成联系后，才记录此状态。规则匹配不代表确定意向。</p><label>实际沟通依据<Textarea aria-label={`实际沟通依据-${lead.id}`} value={note} onChange={e => setNote(e.target.value)} minLength={5} maxLength={2000} required placeholder={stage === 'CONTACTED' ? '记录对方实际表达意向的回复' : '记录你已自行联系的方式及实际情况'}/></label><label className="check-label"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} required/>我确认已自行在平台联系；此处只保存记录</label><div className="action-row"><Button size="sm" disabled={!confirmed || note.trim().length < 5 || mutation.isPending}>仅保存人工记录</Button><Button type="button" size="sm" variant="ghost" disabled={mutation.isPending} onClick={() => { if (discard()) { setEditing(false); setNote(''); setConfirmed(false); } }}>取消</Button></div></form>}
       {feedback && <p role="status" className="success-note">{feedback}</p>}{lead.contactNote && <p className="helper-text">人工记录：{lead.contactNote}</p>}
+      <AccountContact lead={lead}/>
     </div>;
 }

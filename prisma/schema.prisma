@@ -71,6 +71,12 @@ model PlatformAccount {
   status AccountStatus @default(UNCONNECTED)
   isDemo Boolean @default(true)
   pauseReason String?
+  ownerId String?
+  dailyLimit Int @default(10)
+  archivedAt DateTime?
+  version Int @default(0)
+  usage AccountDay[]
+  contacts ContactLedger[]
   createdAt DateTime @default(now())
 }
 model PlatformIdentity {
@@ -80,6 +86,7 @@ model PlatformIdentity {
   nickname String
   isDemo Boolean @default(true)
   lead Lead?
+  contactLedger ContactLedger?
   comments SourceComment[]
   @@unique([platform, platformUserId])
 }
@@ -116,6 +123,7 @@ model Lead {
   evidence String
   status LeadStatus @default(PENDING_REVIEW)
   contactStage ContactStage @default(MATCHED)
+  doNotContact Boolean @default(false)
   contactNote String?
   contactedAt DateTime?
   ownerId String?
@@ -282,4 +290,43 @@ model NoticeRead {
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
   readAt DateTime @default(now())
   @@id([noticeId,userId])
+}
+
+// Simulation only. No platform credentials, login sessions or outbound message bodies.
+model AccountDay {
+  accountId String
+  account PlatformAccount @relation(fields:[accountId],references:[id],onDelete:Cascade)
+  day String
+  occupied Int @default(0)
+  @@id([accountId,day])
+}
+model ContactLedger {
+  id String @id @default(cuid())
+  identityId String @unique
+  identity PlatformIdentity @relation(fields:[identityId],references:[id],onDelete:Cascade)
+  accountId String
+  account PlatformAccount @relation(fields:[accountId],references:[id],onDelete:Restrict)
+  attempts ContactAttempt[]
+  createdAt DateTime @default(now())
+}
+enum ContactOutcome {
+  ATTEMPTED
+  UNKNOWN
+  SIMULATED_SUCCESS
+  FAILED
+}
+model ContactAttempt {
+  id String @id @default(cuid())
+  ledgerId String
+  ledger ContactLedger @relation(fields:[ledgerId],references:[id],onDelete:Cascade)
+  requestKey String @unique
+  kind String
+  outcome ContactOutcome @default(ATTEMPTED)
+  day String
+  actorId String
+  resolutionNote String?
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([ledgerId,createdAt])
 }

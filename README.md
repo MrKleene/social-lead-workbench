@@ -2,7 +2,13 @@
 
 独立本机项目。中文多人 CRM，管理员和销售使用服务端会话登录。当前支持虚构种子、可配置关键词模拟采集与人工 CRM 流程；已实现默认关闭的小红书只读 MCP 传输和任务入库，并完成离线服务验收。**真实平台联调、完整评论覆盖、自动首次联系、评论、私信和内嵌聊天未开放或未验证**。没有修改或调用旧小红书 MCP（18060）、账号、凭据或浏览器会话。
 
-## 最新：默认关闭的只读 MCP（2026-10-20）
+## 最新：账号中心与模拟联系账本（2026-10-20）
+
+工作台新增第六个“账号中心”球，展开账号卡片与详情。管理员可管理别名、负责人、内部日额度、暂停和归档；销售仅可使用归属账号。全局稳定身份去重、固定原账号、未知结果占用、并发幂等与 UTC 额度账本均在服务端验证。全部联系操作仅为模拟；登录、扫码、授权保存和真实发送未接入。
+
+类型检查、全工作区构建、93 项单元测试、62 项数据库测试、12 项队列测试和 2 项健康检查通过；独立浏览器桌面/390px、动画、键盘与销售范围通过。MOCK_ONLY 跳过 12 项 MCP 集成用例，真实 MCP 保持关闭。新增迁移尚未应用到用户现有临时栈，不会自动重启该栈。设计、升级边界、截图和验收详见 [账号中心](docs/ACCOUNT-CENTER-2026-10-20.md)。
+
+## 默认关闭的只读 MCP（2026-10-20）
 
 `MOCK`、`XHS_FIXTURE`、`XHS_MCP` 来源隔离。实际 MCP 初始化、工具发现、JSON/SSE、会话释放、有限任务、递归回复、入库、窗口起点和新观察提醒已通过本地假服务测试。真实模式仍关闭，不能据此宣称真实小红书已连接。当前上游没有评论游标输入，始终报告有限窗口，不建立完整真实基线。
 
@@ -61,14 +67,14 @@ npm run dev
 ## 目录
 
 ```text
-apps/api/src/          NestJS 模块化单体：auth/users/leads/sources/followups/tasks/audit/platforms/agents/collection
+apps/api/src/          NestJS 模块化单体：auth/users/leads/sources/followups/tasks/audit/platforms/accounts/agents/collection
 apps/web/src/          React + Vite + TypeScript + Tailwind + shadcn/ui
                        React Router 路由、TanStack Query、feature 共置与独立传输层
 apps/api/src/collection/worker.ts  独立有限模拟采集 worker
 apps/worker/           原独立 BullMQ worker（仅内部健康检查）
 apps/agent/            本地 TypeScript agent 的禁用协议/地址校验/单次自检
 packages/contracts/   Zod 共享协议与版本
-prisma/               PostgreSQL schema 与两份已提交 SQL migration
+prisma/               PostgreSQL schema 与已提交 SQL migrations
 scripts/              安全本机初始化、虚构种子、隔离测试库与 worker 检查
 compose.yaml          基础服务及 full profile 中央部署定义
 ```

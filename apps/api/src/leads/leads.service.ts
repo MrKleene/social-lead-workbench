@@ -120,6 +120,7 @@ export class LeadsService {
             if (stage === 'INTERESTED' && previous.contactStage !== 'CONTACTED')
                 throw new BadRequestException('请先记录已人工联系，再根据实际回复标记有意向');
             const contacted = stage === 'CONTACTED' || stage === 'INTERESTED';
+            if(contacted && previous.doNotContact) throw new ConflictException('此线索已标为勿联系');
             const result = await tx.lead.update({ where: { id }, data: {
                 contactStage: stage, contactNote: note?.trim() || null,
                 ...(contacted ? { contactedAt: previous.contactedAt || new Date() } : {}),

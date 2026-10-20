@@ -10,7 +10,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { AuthModule, AuthedRequest, SessionGuard } from "../auth/auth";
-import { requireAdmin } from "../auth/security";
+import { requireAdmin, scope } from "../auth/security";
 import { Db } from "../common/db";
 export const capabilities = [
   {
@@ -38,10 +38,11 @@ export const capabilities = [
 @UseGuards(SessionGuard)
 class PlatformsController {
   constructor(@Inject(Db) private db: Db) {}
-  @Get() async list() {
+  @Get() async list(@Req() req: AuthedRequest) {
     return {
       capabilities,
       accounts: await this.db.platformAccount.findMany({
+        where: {...scope(req.actor), archivedAt: null},
         select: {
           id: true,
           platform: true,
@@ -65,6 +66,7 @@ class PlatformsController {
         where: { id },
         data: {
           status: "PAUSED",
+          version: { increment: 1 },
           pauseReason: "管理员暂停；本里程碑不启用采集或发送",
         },
       });

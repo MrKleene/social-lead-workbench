@@ -30,5 +30,5 @@ export function useWorkspaceMutation<T = unknown>() {
             path: string;
             method?: string;
             body?: unknown;
-        }) => send<T>(path, method, body), onSuccess: async () => { await Promise.all(['collection', 'notices', 'leads', 'lead', 'tasks', 'mcp-readiness'].map(key => client.invalidateQueries({ queryKey: [key] }))); } });
+        }) => send<T>(path, method, body), onSuccess: async () => { await Promise.all(['accounts', 'account-contact', 'collection', 'notices', 'leads', 'lead', 'tasks', 'mcp-readiness'].map(key => client.invalidateQueries({ queryKey: [key] }))); } });
 }
