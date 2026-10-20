@@ -16,6 +16,8 @@ import { AuthModule, AuthedRequest, SessionGuard } from "../auth/auth";
 import { parse } from "../common/validation";
 import { AccountsService } from "./accounts.service";
 import { AccountLoginService } from './account-login.service';
+import { DevicesModule } from '../devices/devices';
+import { DeviceService } from '../devices/device.service';
 import { LoginRuntime } from './login-runtime';
 const version = z.number().int().nonnegative();
 const metadata = z.object({
@@ -129,7 +131,7 @@ class AccountContactController {
   }
 }
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, DevicesModule],
   controllers: [AccountLoginController, AccountsController, AccountContactController],
   providers: [AccountsService, AccountLoginService, LoginRuntime],
 })

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, send } from '@/lib/api';
 import { AccountLoginPanel, type LoginCapabilities } from './account-login-panel';
+import { DeviceSettings } from './device-settings';
 import { SavedSessionPanel } from './saved-session-panel';
 import { loginStatusLabel } from './types';
 import type { Account } from './types';
@@ -20,7 +21,7 @@ export function AccountsPage() {
   const state = useAccountCenter(),
     admin = useAuth().user?.role === "ADMIN",
     a = state.account;
-  const client=useQueryClient(),capabilities=useQuery({queryKey:['account-login-capabilities'],queryFn:()=>api<LoginCapabilities>('/accounts/login-capabilities'),enabled:admin,retry:false});
+  const client=useQueryClient(),capabilities=useQuery({queryKey:['account-login-capabilities'],queryFn:()=>api<LoginCapabilities>('/accounts/login-capabilities'),enabled:admin,retry:false,refetchInterval:10000});
   const [adding,setAdding]=useState(false),[addError,setAddError]=useState('');
   const addLogin=async()=>{if(adding)return;setAdding(true);setAddError('');try{const account=await send<Account>('/accounts','POST',{platform:'XHS',label:'小红书 · 待授权账号',ownerId:null,dailyLimit:10,status:'PAUSED',pauseReason:'等待本人授权'});await client.invalidateQueries({queryKey:['accounts']});state.select(account.id);}catch(e){setAddError(e instanceof Error?e.message:'创建失败');}finally{setAdding(false);}};
   return (
@@ -37,6 +38,7 @@ export function AccountsPage() {
       <p className="account-boundary">
         {capabilities.data?.enabled ? '扫码仅在本人确认后启用；真实采集和发送仍禁用。人工记录不等于平台确认成功。' : '此环境未启用扫码登录。人工记录不等于平台确认成功，真实发送禁用。'}
       </p>
+      {admin&&<DeviceSettings/>}
       {addError&&<p role="alert">{addError}</p>}
       <ErrorNotice error={state.query.error || state.mutation.error} />
       {state.query.isPending && <p role="status">加载账号…</p>}

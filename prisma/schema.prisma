@@ -80,6 +80,7 @@ model PlatformAccount {
   loginPlatformUserId String?
   loginNickname String?
   loginVerifiedAt DateTime?
+  deviceLease DeviceExecutionLease?
   sessionReference AccountSessionReference?
   logins AccountLogin[]
   @@unique([platform, loginProvider, loginPlatformUserId])
@@ -356,6 +357,7 @@ model AccountLogin {
 
 // Opaque device/session references only. No platform credentials or local paths.
 model AccountSessionReference {
+  deviceKeyId String?
   accountId String @id
   account PlatformAccount @relation(fields:[accountId],references:[id],onDelete:Cascade)
   deviceId String
@@ -366,4 +368,30 @@ model AccountSessionReference {
   verifiedAt DateTime?
   checkingUntil DateTime?
   updatedAt DateTime @updatedAt
+}
+
+model ExecutionDevice {
+  id String @id
+  keyId String @unique
+  publicKey String
+  name String
+  os String
+  provider String
+  enabled Boolean @default(true)
+  credentialRoot String
+  approvedBy String
+  approvedAt DateTime @default(now())
+  revokedAt DateTime?
+  lastSeenAt DateTime?
+  runtimeId String?
+  version Int @default(0)
+  leases DeviceExecutionLease[]
+}
+model DeviceExecutionLease {
+  accountId String @id
+  account PlatformAccount @relation(fields:[accountId],references:[id],onDelete:Cascade)
+  deviceId String
+  device ExecutionDevice @relation(fields:[deviceId],references:[id],onDelete:Restrict)
+  token String @unique
+  expiresAt DateTime
 }

@@ -34,8 +34,8 @@ export class LoginRuntime {
   readonly runtimeId=process.env.CRM_RUNTIME_ID || randomUUID();
   persistent(){return process.env.CRM_PERSISTENT==='1';}
   deviceId(){const id=process.env.CRM_DEVICE_ID;if(!id||!/^[a-f0-9-]{36}$/.test(id))throw Error('INVALID_DEVICE');return id;}
-  private async directory(accountId:string,key:string,create=false){
-    const root=process.env.CRM_PROJECT_ROOT || '',base=this.storage();
+  private async directory(accountId:string,key:string,create=false,executionRoot?:string){
+    const root=process.env.CRM_PROJECT_ROOT || '',base=executionRoot||this.storage();
     if(!root.startsWith('/')||await realpath(root)!==root||!/^\w+$/.test(accountId)||!/^[a-f0-9-]{36}$/.test(key)||!base.startsWith(root+'/.local/'))throw Error('INVALID_CONFIGURATION');
     const local=join(root,'.local');const ls=await lstat(local);if(ls.isSymbolicLink()||!ls.isDirectory())throw Error('UNSAFE_SESSION_DIRECTORY');
     // Check every ancestor, including an overridden offline fixture root.
@@ -45,9 +45,9 @@ export class LoginRuntime {
     else await privateDir(directory);
     return directory;
   }
-  async inspect(accountId:string,key:string,deviceId:string,provider:string){
+  async inspect(accountId:string,key:string,deviceId:string,provider:string,executionRoot?:string){
     if(deviceId!==this.deviceId()||provider!==this.mode())return 'DEVICE_MISMATCH';
-    try{const dir=await this.directory(accountId,key),path=join(dir,'session.json'),stat=await lstat(path);
+    try{const dir=await this.directory(accountId,key,false,executionRoot),path=join(dir,'session.json'),stat=await lstat(path);
       if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.uid!==process.getuid!()||(stat.mode&0o077)||stat.size>4096)return 'NEEDS_REVIEW';
       const m=JSON.parse(await readFile(path,'utf8'));if(m.kind!=='crm-qr-login-v2'||m.accountId!==accountId||m.attemptId!==key||m.deviceId!==deviceId)return 'NEEDS_REVIEW';
       // Existence and ownership checks only. Never read platform credential contents.
@@ -55,14 +55,14 @@ export class LoginRuntime {
       return f.isFile()&&!f.isSymbolicLink()&&f.nlink===1&&f.uid===process.getuid!()&&!(f.mode&0o077)?'UNVERIFIED':'NEEDS_REVIEW';
     }catch(e){return (e as NodeJS.ErrnoException).code==='ENOENT'?'MISSING':'NEEDS_REVIEW';}
   }
-  async openSaved(accountId:string,key:string,signal:AbortSignal){return this.open(accountId,key,signal,true);}
+  async openSaved(accountId:string,key:string,signal:AbortSignal,executionRoot?:string){return this.open(accountId,key,signal,true,executionRoot);}
 
   mode():LoginMode|undefined { const v=process.env.XHS_ACCOUNT_LOGIN_MODE; return v==='real'||v==='offline'?v:undefined; }
   storage(){return process.env.XHS_SESSION_ROOT || (this.mode()==='real'?join(process.env.CRM_PROJECT_ROOT || '', '.local/xhs-qr'):'离线演示：不写平台会话');}
-  async open(accountId:string, attemptId:string, signal:AbortSignal,saved=false):Promise<SessionDriver> {
+  async open(accountId:string, attemptId:string, signal:AbortSignal,saved=false,executionRoot?:string):Promise<SessionDriver> {
     if(this.mode()==='offline') {
       let scenario='PENDING',stopped=false;
-      const directory=this.persistent()?await this.directory(accountId,attemptId,!saved):undefined;
+      const directory=this.persistent()?await this.directory(accountId,attemptId,!saved,executionRoot):undefined;
       if(directory&&!saved)await writeFile(join(directory,'fixture-state.json'),JSON.stringify({fixture:true,status:'PENDING'}),{flag:'wx',mode:0o600});
       return {qr:async()=>{if(stopped||signal.aborted)throw Error('CANCELLED');return {image:demoImage,seconds:240};},status:async()=>{
         if(directory&&saved){const f=JSON.parse(await readFile(join(directory,'fixture-state.json'),'utf8'));if(f.fixture!==true)throw Error('INVALID_FIXTURE');scenario=f.status;}
@@ -81,7 +81,7 @@ export class LoginRuntime {
     // Saved references are validated by the service before an explicit manual check.
     const local=join(root,'.local'); await mkdir(local,{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});
     const localStat=await lstat(local);if(localStat.isSymbolicLink()||!localStat.isDirectory())throw Error('UNSAFE_SESSION_DIRECTORY');
-    const directory=await this.directory(accountId,attemptId,!saved);
+    const directory=await this.directory(accountId,attemptId,!saved,executionRoot);
     if(signal.aborted)throw Error('CANCELLED');
     process.umask(0o077);
     const port=await freePort(),token=randomBytes(32).toString('hex');
