@@ -47,3 +47,7 @@ npm run dev:persistent
 - 跨启动恢复使用临时夹具中的不同启动UUID模拟；没有重启用户Mac，不能称真实系统重启恢复已验收。
 - `npm run test:persistent`：12组完整离线检查、两次启动通过。活跃工作台重复启动拒绝、原管理员/业务/设备引用跨重启保留、销售/CSRF限制、虚构3篇只读、备份恢复及自有测试资源清理通过。证据目录：`/var/folders/q6/b2g8k11x23g_cf3ql0ky_v140000gn/T/crm-persistent-evidence-QtKL7L`。
 - 变更JS入口语法检查通过；本轮没有修改React/API业务代码或数据库schema。原生测试首次受沙箱sysctl/端口限制失败，随后在获准的隔离测试环境重跑全部通过；没有重试被拒绝的进程列表或原生UI动作。
+
+## 后续：锁恢复成功但启动失败
+
+用户已执行系统重启并成功恢复旧锁；随后失败时本次锁也正常释放。新故障的只读证据指向Docker守护进程不可连接，见[后续诊断](PERSISTENT-STARTUP-DIAGNOSTICS-2026-10-20.md)。此状态不要重复本页的重启/准备流程，应先让Docker引擎就绪，再使用原启动命令。

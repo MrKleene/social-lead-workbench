@@ -114,3 +114,7 @@ Windows当前说明见[平台适配与验收](WINDOWS-ADAPTER-2026-10-20.md)。�
 ## Mac持久实例锁（REQ-024）
 
 锁故障按[安全恢复说明](PERSISTENT-LOCK-RECOVERY-2026-10-20.md)处理。`npm run test:persistent:lock`仅用临时文件、虚构元数据、自有进程和临时端口测试；需允许本机系统启动标识与端口访问。Mac助手由本机Swift编译，产物不提交。生产恢复准备参数`--prepare-lock-recovery`不能绕过活跃系统锁，也不会读取数据库秘密或启动业务。
+
+## 持久启动诊断
+
+`npm run test:persistent:diagnostics`以虚构Docker输出和自有临时实例验证安全失败，不需要真实Docker引擎。`scripts/persistent-diagnostics.mjs`集中维护固定代码/消息和阶段，禁止输出或持久化原始stderr、连接串或错误对象。只在明确的“资源不存在”响应下走创建分支；网络/权限/超时不能当作不存在。见[启动故障说明](PERSISTENT-STARTUP-DIAGNOSTICS-2026-10-20.md)。

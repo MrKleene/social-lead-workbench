@@ -1,5 +1,6 @@
 import platform from '../runtime/platform.cjs';
 import {acquireInstanceLock,lockMessage} from './persistent-lock.mjs';
+import {createDocker,StartupError,diagnostic,diagnosticText,saveDiagnostic} from './persistent-diagnostics.mjs';
 import {devNull} from 'node:os';
 // Persistent local business data. Never imports platform cookies or loads .env.
 import {spawn,spawnSync} from 'node:child_process';
@@ -26,18 +27,17 @@ const directory=join(root,'.local',offline?'persistent-offline':'persistent',nam
 if(!offline&&!prepareRecovery)await preflight({root,home:process.env.HOME,session:'persistent-preflight',port:18162,env:process.env});
 process.umask(0o077);
 const children=[],ownedGroups=new Set(),startedContainers=[];
-let manifest,secret,lock=false,stopping=false,finish,failed=false,newInstance=false;
+let stage='local',runtimeFailure,manifest,secret,lock=false,stopping=false,finish,failed=false,newInstance=false;
 const stopped=new Promise(ok=>{finish=ok;});
 const safeError=()=>console.error('持久工作台操作失败；数据卷与本地配置保留。请检查依赖、端口和本次运行记录，不要删除或重建已有数据。');
-function docker(args,extra={}){const r=spawnSync('docker',args,{env:{...envBase,...extra},encoding:'utf8',timeout:20000});if(r.status!==0)throw Error(`Docker ${args[0]} failed`);return r.stdout.trim();}
-function existsDocker(type,id){return spawnSync('docker',[type==='volume'?'volume':'container','inspect',id],{stdio:'ignore',timeout:5000}).status===0;}
+const dockerClient=createDocker(envBase),docker=dockerClient.execute,existsDocker=dockerClient.exists;
 async function privateDir(path){await platform.privateDirectory(path,true);}
 async function privateFile(path){await platform.privateFile(path);}
 async function json(path){await privateFile(path);return JSON.parse(await readFile(path,'utf8'));}
 async function freePort(){const s=createServer();await new Promise((ok,no)=>{s.once('error',no);s.listen(0,'127.0.0.1',ok);});const p=s.address().port;await new Promise(ok=>s.close(ok));if([18060,18061].includes(p))return freePort();return p;}
 function stopGroup(c){if(c?.pid&&c.exitCode===null&&c.signalCode===null)try{if(process.platform==='win32'||c.interactive)c.kill('SIGTERM');else process.kill(-c.pid,'SIGTERM');}catch{}}
 function launch(command,argv,env,{interactive=false,ipc=false}={}){if(command==='npm')[command,argv]=platform.npmCommand(argv);if(stopping)throw Error('Stopped');const c=spawn(command,argv,{cwd:root,env,detached:process.platform!=='win32'&&!interactive,windowsHide:!interactive,stdio:interactive?'inherit':ipc?['ignore','ignore','ignore','ipc']:['ignore','pipe','pipe']});c.interactive=interactive;children.push(c);if(!interactive&&!ipc){c.stdout.on('data',()=>{});c.stderr.on('data',()=>{});}c.done=new Promise(ok=>{c.once('exit',code=>ok(code??1));c.once('error',()=>ok(1));});if(ipc)c.on('message',m=>{if(!Number.isInteger(m?.pid)||m.pid<=1)return;if(m.kind==='OWNED_LOGIN_PROCESS_STARTED')ownedGroups.add(m.pid);if(m.kind==='OWNED_LOGIN_PROCESS_STOPPED')ownedGroups.delete(m.pid);});return c;}
-async function command(argv,env,interactive=false){console.log(`本地步骤：${argv.slice(0,4).join(' ')}`);const c=launch(argv[0],argv.slice(1),env,{interactive});if(await c.done!==0)throw Error('Command failed');}
+async function command(argv,env,interactive=false){console.log(`本地步骤：${argv.slice(0,4).join(' ')}`);const c=launch(argv[0],argv.slice(1),env,{interactive});const code=await c.done;if(code!==0)throw new StartupError('LOCAL_COMMAND_FAILED',code);}
 function resourceLabels(type,id){return JSON.parse(docker(type==='volume'?['volume','inspect','--format','{{json .Labels}}',id]:['inspect','--format','{{json .Config.Labels}}',id]));}
 function verifyOwnership(type,id){if(resourceLabels(type,id)?.['crm.persistent.instance']!==manifest.id)throw Error('Resource ownership mismatch');}
 function volume(id){if(existsDocker('volume',id)){verifyOwnership('volume',id);return;}if(!newInstance)throw Error('Existing persistent volume missing; refusing to silently create an empty database');docker(['volume','create','--label',`crm.persistent.instance=${manifest.id}`,id]);}
@@ -55,13 +55,15 @@ try{
  // Do not adopt a symlinked .local or alter existing directory permissions.
  if(process.platform==='win32')await privateDir(join(root,'.local'));else await mkdir(join(root,'.local'),{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});const ls=await lstat(join(root,'.local'));if(ls.isSymbolicLink()||!ls.isDirectory())throw Error('Unsafe local directory');
  await privateDir(join(root,'.local',offline?'persistent-offline':'persistent'));await privateDir(directory);
- const acquired=await acquireInstanceLock({root,directory,name,mode:offline?'offline':'real',prepareRecovery});
+ stage='lock';const acquired=await acquireInstanceLock({root,directory,name,mode:offline?'offline':'real',prepareRecovery});
  if(acquired.prepared){
   console.log('已记录本次 Mac 启动标识与原锁/实例配置摘要；没有删除锁、停止服务或读取凭据。请正常保存工作并重启 Mac；Docker 可用后在同一目录运行原启动命令。未重启前不会恢复。');
  }else{
  lock=acquired;if(stopping)throw Error('Stopped');lock.lost.catch(e=>{console.error(lockMessage(e.code)||'系统锁失效');failed=true;stopping=true;finish();for(const c of children)stopGroup(c);});
  if(lock.recovered)console.log('已核验系统重启与原实例，恢复原锁；继续使用原数据库及端口。');
- for(const image of ['postgres:17','redis:7-alpine'])docker(['image','inspect',image]);
+ stage='docker';dockerClient.ready();
+ stage='images';for(const image of ['postgres:17','redis:7-alpine'])dockerClient.image(image);
+ stage='instance';
  try{manifest=await json(join(directory,'instance.json'));}catch(e){if(e.code!=='ENOENT')throw e;
   newInstance=true;const id=randomUUID(),prefix=`crm-persist-${id}`;manifest={kind:'crm-persistent-v1',id,name,root,mode:offline?'offline':'real',fixture,database:fixture?'crm_persistent_test':'crm',apiPort:await freePort(),webPort:await freePort(),deviceId:randomUUID(),postgres:{container:prefix+'-pg',volume:prefix+'-pg-data',port:await freePort()},redis:{container:prefix+'-redis',volume:prefix+'-redis-data',port:await freePort()},createdAt:new Date().toISOString(),fresh:true};
   secret={databasePassword:randomBytes(32).toString('hex')};await writeFile(join(directory,'secret.json'),JSON.stringify(secret),{flag:'wx',mode:0o600});await writeFile(join(directory,'instance.json'),JSON.stringify(manifest,null,2),{flag:'wx',mode:0o600});
@@ -70,35 +72,35 @@ try{
  if(!/^[a-f0-9-]{36}$/.test(manifest.id)||!/^[a-f0-9-]{36}$/.test(manifest.deviceId)||manifest.database!==(fixture?'crm_persistent_test':'crm'))throw Error('Invalid instance metadata');
  for(const p of [manifest.apiPort,manifest.webPort,manifest.postgres?.port,manifest.redis?.port])if(!Number.isInteger(p)||p<1024||p>65535||[18060,18061].includes(p))throw Error('Invalid saved port');
  for(const [kind,suffix] of [['postgres','pg'],['redis','redis']])if(manifest[kind].container!==`crm-persist-${manifest.id}-${suffix}`||manifest[kind].volume!==`crm-persist-${manifest.id}-${suffix}-data`)throw Error('Invalid resource reference');
- secret ||=await json(join(directory,'secret.json'));if(!/^[a-f0-9]{64}$/.test(secret.databasePassword))throw Error('Invalid local database credential');
- volume(manifest.postgres.volume);volume(manifest.redis.volume);
- await container('postgres');await container('redis');
- for(const [kind,cmd] of [['postgres',['pg_isready','-U','crm','-d',manifest.database]],['redis',['redis-cli','ping']]]){let ready=false;for(let i=0;i<60&&!stopping;i++){if(spawnSync('docker',['exec',manifest[kind].container,...cmd],{stdio:'ignore',timeout:1000}).status===0){ready=true;break;}await new Promise(ok=>setTimeout(ok,200));}if(!ready)throw Error('Readiness timeout');}
+ stage='credentials';secret ||=await json(join(directory,'secret.json'));if(!/^[a-f0-9]{64}$/.test(secret.databasePassword))throw Error('Invalid local database credential');
+ stage='volumes';volume(manifest.postgres.volume);volume(manifest.redis.volume);
+ stage='containers';await container('postgres');await container('redis');
+ stage='readiness';for(const [kind,cmd] of [['postgres',['pg_isready','-U','crm','-d',manifest.database]],['redis',['redis-cli','ping']]]){let ready=false;for(let i=0;i<60&&!stopping;i++){if(spawnSync('docker',['exec',manifest[kind].container,...cmd],{stdio:'ignore',timeout:1000}).status===0){ready=true;break;}await new Promise(ok=>setTimeout(ok,200));}if(!ready)throw Error('Readiness timeout');}
  const base=`http://127.0.0.1:${manifest.webPort}`,url=`postgresql://crm:${secret.databasePassword}@127.0.0.1:${manifest.postgres.port}/${manifest.database}?schema=public`;
  const env={...envBase,DATABASE_URL:url,REDIS_URL:`redis://127.0.0.1:${manifest.redis.port}`,DOTENV_CONFIG_PATH:devNull,XHS_MCP_ENABLED:'0',XHS_MCP_LOGIN_ONLY:'0',CRM_ACCOUNT_READ_ENABLED:'1',XHS_ACCOUNT_LOGIN_MODE:manifest.mode,CRM_PROJECT_ROOT:root,CRM_DEVICE_ID:manifest.deviceId,CRM_RUNTIME_ID:randomUUID(),CRM_PERSISTENT:'1',CRM_DEVICE_MANAGEMENT:'1',CRM_INSTANCE_DIRECTORY:directory,XHS_SESSION_ROOT:offline?join(directory,'local-sessions'):join(root,'.local/xhs-qr'),PORT:String(manifest.apiPort),API_HOST:'127.0.0.1',APP_ORIGIN:base,API_PROXY_TARGET:`http://127.0.0.1:${manifest.apiPort}`,COOKIE_SECURE:'false',COLLECTION_QUEUE_NAME:`crm-persist-${manifest.id}`};
- await command(['npm','exec','--no','--','prisma','generate'],env);
- await command(['npm','exec','--no','--','prisma','migrate','deploy'],env);
- for(const workspace of ['@crm/contracts','@crm/api'])await command(['npm','run','build','-w',workspace],env);
- const db=new PrismaClient({datasources:{db:{url}}});let adminCount;try{adminCount=await db.user.count({where:{role:'ADMIN'}});if(!adminCount&&fixture){const password=randomBytes(20).toString('hex'),passwordHash=await argon2.hash(password);await db.user.createMany({data:[{email:'admin@persistent.invalid',name:'离线持久管理员',role:'ADMIN',passwordHash},{email:'sales@persistent.invalid',name:'离线持久销售',role:'SALES',passwordHash}]});console.log(`OFFLINE FIXTURE PASSWORD (memory only): ${password}`);adminCount=1;}}finally{await db.$disconnect();}
+ stage='generate';await command(['npm','exec','--no','--','prisma','generate'],env);
+ stage='migrate';await command(['npm','exec','--no','--','prisma','migrate','deploy'],env);
+ stage='build';for(const workspace of ['@crm/contracts','@crm/api'])await command(['npm','run','build','-w',workspace],env);
+ stage='admin';const db=new PrismaClient({datasources:{db:{url}}});let adminCount;try{adminCount=await db.user.count({where:{role:'ADMIN'}});if(!adminCount&&fixture){const password=randomBytes(20).toString('hex'),passwordHash=await argon2.hash(password);await db.user.createMany({data:[{email:'admin@persistent.invalid',name:'离线持久管理员',role:'ADMIN',passwordHash},{email:'sales@persistent.invalid',name:'离线持久销售',role:'SALES',passwordHash}]});console.log(`OFFLINE FIXTURE PASSWORD (memory only): ${password}`);adminCount=1;}}finally{await db.$disconnect();}
  if(!adminCount){if(!process.stdin.isTTY)throw Error('First startup requires interactive administrator initialization');console.log('此持久库尚无 CRM 管理员：现在创建本地工作台账号。邮箱只作登录标识，不发送邮件，与小红书扫码无关。');await command(['npm','exec','--no','--','tsx','scripts/init-user.ts','admin'],env,true);}
  if(adminCount&&!fixture)console.log('已存在 CRM 管理员，跳过创建；网页使用原账号登录。启动器仅检查是否存在启用的管理员，不要求再次输入密码。');
  const checkDb=new PrismaClient({datasources:{db:{url}}});try{if(!await checkDb.user.count({where:{role:'ADMIN',active:true}}))throw Error('Administrator initialization incomplete');}finally{await checkDb.$disconnect();}
  manifest.fresh=false;await writeFile(join(directory,'instance.json'),JSON.stringify(manifest,null,2),{mode:0o600});
- const collector=launch(process.execPath,['apps/api/dist/collection/worker.js'],env,{ipc:true});
+ stage='services';const collector=launch(process.execPath,['apps/api/dist/collection/worker.js'],env,{ipc:true});
  const api=launch(process.execPath,['apps/api/dist/main.js'],env,{ipc:true});const web=launch('npm',['run','dev','-w','@crm/web','--','--port',String(manifest.webPort),'--host','127.0.0.1','--strictPort'],env);
- for(const c of [api,web,collector])c.done.then(()=>{if(!stopping)failed=true;finish();});
+ for(const c of [api,web,collector])c.done.then(code=>{if(!stopping){failed=true;runtimeFailure=new StartupError('SERVICE_EXITED',code);}finish();});
  await writeFile(join(directory,'running.json'),JSON.stringify({pid:process.pid,mode:manifest.mode,preview:base,api:env.API_PROXY_TARGET,deviceId:manifest.deviceId,instanceId:manifest.id,containers:[manifest.postgres.container,manifest.redis.container]},null,2),{mode:0o600});
  console.log(`PERSISTENT ${manifest.mode.toUpperCase()} workbench: ${base}`);console.log(`Instance: ${directory}`);console.log('Business data and device references survive Ctrl+C. No automatic platform request. Existing administrators are never replaced.');
- await stopped;
+ await stopped;if(runtimeFailure)throw runtimeFailure;
  }
-}catch(e){safeError();const recoveryCommand=`npm run dev:persistent -- ${offline?'--offline ':''}${name==='main'?'':`--instance ${name} `}--prepare-lock-recovery`;const detail=lockMessage(e?.code)?.replace('npm run dev:persistent -- --prepare-lock-recovery',recoveryCommand);if(detail)console.error(detail);else if(e?.code==='EEXIST')console.error('实例已被占用或锁文件存在；没有覆盖。请检查原启动终端。');process.exitCode=1;}
+}catch(e){safeError();const report=diagnostic(e,stage);console.error(diagnosticText(report));if(lock)try{await saveDiagnostic(directory,report);}catch{console.error('未能写入脱敏失败记录；请保留上面的错误代码和阶段。');}const recoveryCommand=`npm run dev:persistent -- ${offline?'--offline ':''}${name==='main'?'':`--instance ${name} `}--prepare-lock-recovery`;const detail=lockMessage(e?.code)?.replace('npm run dev:persistent -- --prepare-lock-recovery',recoveryCommand);if(detail)console.error(detail);else if(e?.code==='EEXIST')console.error('实例已被占用或锁文件存在；没有覆盖。请检查原启动终端。');process.exitCode=1;}
 finally{
  stopping=true;for(const pid of process.platform==='win32'?[]:ownedGroups)try{process.kill(-pid,'SIGTERM');}catch{}
  for(const c of children)stopGroup(c);if(children.length)await new Promise(ok=>setTimeout(ok,1800));
  for(const pid of process.platform==='win32'?[]:ownedGroups)try{process.kill(-pid,'SIGKILL');}catch{}
  for(const c of children)if(process.platform!=='win32'&&c.exitCode===null&&c.signalCode===null&&c.pid)try{process.kill(-c.pid,'SIGKILL');}catch{}
  // Never rm containers or volumes. Only stop containers started by this run.
- for(const id of startedContainers.reverse())try{verifyOwnership('container',id);docker(['stop','--time','5',id]);}catch{process.exitCode=1;}
+ for(const id of startedContainers.reverse())try{verifyOwnership('container',id);docker(['stop','--time','5',id]);}catch(e){process.exitCode=1;console.error(diagnosticText(diagnostic(e,'cleanup')));}
  if(lock){try{await writeFile(join(directory,'stopped.json'),JSON.stringify({stoppedAt:new Date().toISOString(),dataVolumesRetained:true,platformSessionsRetained:true}),{mode:0o600});}catch{process.exitCode=1;console.error('退出记录写入失败；数据保留。');}finally{try{await lock.release();}catch{process.exitCode=1;console.error('锁释放失败；原锁/数据保留，下一次启动仍需验证。');}}}
  if(failed)process.exitCode=1;
  console.log(children.length||startedContainers.length?'Stopped owned processes. Persistent containers/volumes, business data and local session references retained.':'本次没有启动或停止业务进程/容器；原实例、数据与端口保留。');
