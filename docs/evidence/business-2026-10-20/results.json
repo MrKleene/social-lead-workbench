@@ -1,0 +1,65 @@
+{
+  "isolated": true,
+  "persistent_volumes": false,
+  "credentials_persisted": false,
+  "results": [
+    {
+      "command": "npm exec prisma migrate deploy",
+      "exit_code": 0,
+      "seconds": 1.326,
+      "log": "migrate.log"
+    },
+    {
+      "command": "npm run build -w @crm/contracts",
+      "exit_code": 0,
+      "seconds": 0.717,
+      "log": "build-contracts.log"
+    },
+    {
+      "command": "npm run build -w @crm/api",
+      "exit_code": 0,
+      "seconds": 2.281,
+      "log": "build-api.log"
+    },
+    {
+      "command": "npm run build -w @crm/worker",
+      "exit_code": 0,
+      "seconds": 0.925,
+      "log": "build-worker.log"
+    },
+    {
+      "command": "npm run test:integration -w @crm/api",
+      "exit_code": 0,
+      "seconds": 9.266,
+      "log": "postgres-tests.log"
+    },
+    {
+      "command": "npm run test:queue -w @crm/api -- --reporter=verbose",
+      "exit_code": 0,
+      "seconds": 1.892,
+      "log": "queue-tests.log"
+    },
+    {
+      "command": "node scripts/test-worker.mjs",
+      "exit_code": 0,
+      "seconds": 0.234,
+      "log": "health-queue.log"
+    }
+  ],
+  "cleanup": [
+    {
+      "container": "ffb479297852e42eefcbefa5861a4350e5b6003d7df83a198c4c150d5f779c6f",
+      "removed": true
+    },
+    {
+      "container": "34e8a1aaf252b059d44acf881cb42256b1a546b3e57315486a90d50a0e6b76eb",
+      "removed": true
+    }
+  ],
+  "ports": {
+    "postgres": 51848,
+    "redis": 51849
+  },
+  "remaining_acceptance_key_count_before_container_removal": 0,
+  "exit_code": 0
+}
