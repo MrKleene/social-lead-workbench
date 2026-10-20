@@ -80,6 +80,7 @@ model PlatformAccount {
   loginPlatformUserId String?
   loginNickname String?
   loginVerifiedAt DateTime?
+  sessionReference AccountSessionReference?
   logins AccountLogin[]
   @@unique([platform, loginProvider, loginPlatformUserId])
   usage AccountDay[]
@@ -351,4 +352,18 @@ model AccountLogin {
   expiresAt DateTime
   createdAt DateTime @default(now())
   @@index([accountId, createdAt])
+}
+
+// Opaque device/session references only. No platform credentials or local paths.
+model AccountSessionReference {
+  accountId String @id
+  account PlatformAccount @relation(fields:[accountId],references:[id],onDelete:Cascade)
+  deviceId String
+  sessionKey String @unique
+  provider String
+  state String @default("UNVERIFIED")
+  checkedRuntimeId String?
+  verifiedAt DateTime?
+  checkingUntil DateTime?
+  updatedAt DateTime @updatedAt
 }

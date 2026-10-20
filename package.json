@@ -40,7 +40,10 @@
     "test:real:offline": "node --import tsx scripts/test-real-mcp-offline.mjs",
     "dev:xhs:login": "node scripts/xhs-login-workbench.mjs",
     "dev:xhs:login:offline": "node scripts/xhs-login-workbench.mjs --offline",
-    "test:xhs:login:browser": "node scripts/test-account-login-browser.mjs"
+    "test:xhs:login:browser": "node scripts/test-account-login-browser.mjs",
+    "dev:persistent": "node scripts/dev-persistent.mjs",
+    "dev:persistent:offline": "node scripts/dev-persistent.mjs --offline",
+    "test:persistent": "node scripts/test-persistent-restart.mjs"
   },
   "devDependencies": {
     "prisma": "6.19.0",

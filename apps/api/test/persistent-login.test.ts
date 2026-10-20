@@ -1,0 +1,14 @@
+import {mkdtemp,realpath,mkdir,writeFile,readFile,unlink,symlink,link,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {beforeEach,afterEach,it,expect,vi} from 'vitest';
+import {LoginRuntime} from '../src/accounts/login-runtime';
+let root:string,device:string,key:string,runtime:LoginRuntime,dir:string;
+beforeEach(async()=>{root=await realpath(await mkdtemp(join(tmpdir(),'crm-reference-test-')));device=randomUUID();key=randomUUID();await mkdir(join(root,'.local'),{mode:0o700});vi.stubEnv('CRM_PROJECT_ROOT',root);vi.stubEnv('CRM_DEVICE_ID',device);vi.stubEnv('CRM_PERSISTENT','1');vi.stubEnv('XHS_ACCOUNT_LOGIN_MODE','offline');vi.stubEnv('XHS_SESSION_ROOT',join(root,'.local/fake'));runtime=new LoginRuntime();const driver=await runtime.open('testaccount',key,new AbortController().signal);await driver.simulate?.('SUCCESS');await driver.stop();dir=join(root,'.local/fake/testaccount',key);});
+afterEach(async()=>{vi.unstubAllEnvs();await rm(root,{recursive:true});});
+it('fake saved session can be explicitly resumed with stable ID',async()=>{expect(await runtime.inspect('testaccount',key,device,'offline')).toBe('UNVERIFIED');const driver=await runtime.openSaved('testaccount',key,new AbortController().signal);expect(await driver.status(new AbortController().signal)).toMatchObject({loggedIn:true,userId:'offline-testaccount'});await driver.stop();});
+it('restart inspection never parses credential contents or claims online',async()=>{await writeFile(join(dir,'fixture-state.json'),'not JSON');expect(await runtime.inspect('testaccount',key,device,'offline')).toBe('UNVERIFIED');});
+it('missing file, wrong provider and wrong device are distinct',async()=>{expect(await runtime.inspect('testaccount',key,randomUUID(),'offline')).toBe('DEVICE_MISMATCH');expect(await runtime.inspect('testaccount',key,device,'real')).toBe('DEVICE_MISMATCH');await unlink(join(dir,'fixture-state.json'));expect(await runtime.inspect('testaccount',key,device,'offline')).toBe('MISSING');});
+it('does not follow a credential symlink or trust a hard link',async()=>{const path=join(dir,'fixture-state.json');await unlink(path);await symlink(join(dir,'session.json'),path);expect(await runtime.inspect('testaccount',key,device,'offline')).toBe('NEEDS_REVIEW');await unlink(path);await link(join(dir,'session.json'),path);expect(await runtime.inspect('testaccount',key,device,'offline')).toBe('NEEDS_REVIEW');});
+it('tampered metadata and traversal references cannot be adopted',async()=>{const path=join(dir,'session.json'),m=JSON.parse(await readFile(path,'utf8'));await writeFile(path,JSON.stringify({...m,accountId:'someoneelse'}));expect(await runtime.inspect('testaccount',key,device,'offline')).toBe('NEEDS_REVIEW');expect(await runtime.inspect('../testaccount',key,device,'offline')).toBe('NEEDS_REVIEW');});

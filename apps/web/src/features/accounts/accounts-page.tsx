@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, send } from '@/lib/api';
 import { AccountLoginPanel, type LoginCapabilities } from './account-login-panel';
+import { SavedSessionPanel } from './saved-session-panel';
+import { loginStatusLabel } from './types';
 import type { Account } from './types';
 import { useState } from "react";
 import { useConfirmWorkspaceLeave } from "@/features/work/draft-guard";
@@ -66,7 +68,7 @@ export function AccountsPage() {
               }}
             >
               <span>
-                {row.platform === "XHS" ? "小红书" : "抖音"} · {row.loginStatus === "VERIFIED" ? "登录已验证" : row.loginStatus === "OFFLINE_VERIFIED" ? "离线模拟已验证" : "未验证登录"}
+                {row.platform === "XHS" ? "小红书" : "抖音"} · {loginStatusLabel[row.loginStatus || "NOT_CONNECTED"]}
               </span>
               <strong>{row.label}</strong>
               <span>负责人：{row.owner?.name || "未分配"}</span>
@@ -104,7 +106,7 @@ export function AccountsPage() {
                 <h3>{a.label}</h3>
                 <dl>
                   <dt>登录状态</dt>
-                  <dd>{a.loginStatus === "VERIFIED" ? `登录已验证 · ${a.loginNickname || a.loginPlatformUserId}` : a.loginStatus === "OFFLINE_VERIFIED" ? "离线模拟已验证 · 非真实账号" : "未验证"}</dd>
+                  <dd>{a.loginStatus === "VERIFIED" ? `登录已验证 · ${a.loginNickname || a.loginPlatformUserId}` : a.loginStatus === "OFFLINE_VERIFIED" ? "离线模拟已验证 · 非真实账号" : loginStatusLabel[a.loginStatus || "NOT_CONNECTED"]}</dd>
                   <dt>能力</dt>
                   <dd>元数据管理、权限审计；真实采集和发送禁用</dd>
                   <dt>今日计数</dt>
@@ -121,6 +123,7 @@ export function AccountsPage() {
                     {a.pauseReason && ` · ${a.pauseReason}`}
                   </dd>
                 </dl>
+                {admin && capabilities.data?.persistent && a.loginVerifiedAt && <SavedSessionPanel key={a.id} account={a}/>}
                 {admin && capabilities.data?.enabled && a.platform==='XHS' && !a.loginVerifiedAt && <AccountLoginPanel key={a.id} accountId={a.id} capabilities={capabilities.data}/>}
                 {admin && (
                   <AccountEditor

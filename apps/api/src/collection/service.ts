@@ -19,7 +19,7 @@ export class CollectionService {
     private queue: CollectionQueue) { }
     private probeBusy = false;
     private gate(mode: string) {
-        if (loginCheckOnly()) throw new ForbiddenException("当前为登录状态验证环境，采集已禁用");
+        if (loginCheckOnly() && !(process.env.CRM_PERSISTENT === "1" && mode === "MOCK")) throw new ForbiddenException("当前为登录状态验证环境，采集已禁用");
         if (mode === "MOCK") return;
         try { requireMcp(mode); } catch (error) { const code = error instanceof ReadFailure ? error.code : "REAL_DISABLED";
             throw new ForbiddenException(`${code}：只读采集未开放或服务端模式不符，请管理员检查配置`); }
@@ -28,7 +28,7 @@ export class CollectionService {
         requireAdmin(actor);
         const settings = mcpSettings();
         const last = await this.db.auditLog.findFirst({ where: { action: { in: ["MCP_READINESS_CHECK", "MCP_READINESS_STARTED"] } }, orderBy: { createdAt: "desc" }, select: { createdAt: true, metadata: true } });
-        return { enabled: settings.enabled, mode: settings.enabled ? settings.mode : null, reason: settings.enabled ? "UNVERIFIED" : settings.reason, lastCheck: last, loginOnly: loginCheckOnly(), tools: loginCheckOnly() ? ["check_login_status"] : ["check_login_status", "search_feeds", "get_feed_detail"], coverage: "WINDOW_ONLY", automaticPolling: false };
+        return { enabled: settings.enabled, mode: settings.enabled ? settings.mode : null, reason: settings.enabled ? "UNVERIFIED" : settings.reason, lastCheck: last, loginOnly: loginCheckOnly(), configurationOnly: process.env.CRM_PERSISTENT === "1", tools: loginCheckOnly() ? ["check_login_status"] : ["check_login_status", "search_feeds", "get_feed_detail"], coverage: "WINDOW_ONLY", automaticPolling: false };
     }
     async checkReadiness(actor: Actor) {
         requireAdmin(actor);

@@ -1,0 +1,80 @@
+// Own offline fixture only. Never scans, imports, or opens real platform sessions.
+import {spawn,spawnSync} from 'node:child_process';
+import {randomUUID} from 'node:crypto';
+import {mkdtemp,readFile,writeFile,unlink,rm,lstat} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import assert from 'node:assert/strict';
+import {PrismaClient} from '@prisma/client';
+const root=fileURLToPath(new URL('../',import.meta.url)).replace(/\/$/,'');
+const name=`acceptance-${randomUUID()}`,directory=join(root,'.local/persistent-offline',name),out=await mkdtemp(join(tmpdir(),'crm-persistent-evidence-'));
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const report={mode:'OFFLINE FICTIONAL ONLY',platformCalls:false,cycles:0,checks:[]};
+const mark=s=>{report.checks.push(s);console.log('PASS '+s);};
+let current,browser,context,db,manifest,password,base,csrf;
+function boot(){let output='',ended=false;const child=spawn(process.execPath,['scripts/dev-persistent.mjs','--offline','--test-fixture','--instance',name],{cwd:root,env:process.env,stdio:['ignore','pipe','pipe']});child.stdout.on('data',b=>output+=b);child.stderr.on('data',()=>{});const done=new Promise(ok=>child.once('exit',code=>{ended=true;ok(code);}));return {child,done,get output(){return output;},get ended(){return ended;}};}
+async function until(fn,ms=90000){const end=Date.now()+ms;while(Date.now()<end){if(await fn())return;if(current?.ended)throw Error('Fixture launcher exited');await new Promise(ok=>setTimeout(ok,100));}throw Error('Fixture deadline');}
+async function start(){current=boot();await until(()=>current.output.includes('PERSISTENT OFFLINE workbench:'));manifest=JSON.parse(await readFile(join(directory,'instance.json'),'utf8'));assert.equal(manifest.fixture,true);assert.equal(manifest.mode,'offline');base=`http://127.0.0.1:${manifest.webPort}`;await until(async()=>{try{return(await fetch(base+'/api/health/ready')).ok;}catch{return false;}});report.cycles++;}
+async function stop(){current.child.kill('SIGTERM');let timer;try{assert.equal(await Promise.race([current.done,new Promise((_,no)=>{timer=setTimeout(()=>no(Error('Fixture stop deadline')),30000);})]),0);}finally{clearTimeout(timer);}current=undefined;}
+function docker(args,input){const r=spawnSync('docker',args,{input,encoding:input instanceof Buffer?undefined:'utf8',timeout:30000});if(r.status!==0)throw Error('Fixture Docker '+args[0]+' failed');return r.stdout;}
+async function login(email='admin@persistent.invalid') {context=await browser.newContext({viewport:{width:1440,height:1000}});const response=await context.request.post(base+'/api/auth/login',{headers:{Origin:base},data:{email,password}});assert.equal(response.status(),201);csrf=(await(await context.request.get(base+'/api/auth/me')).json()).csrfToken;}
+async function api(path,data,method=data?'POST':'GET',expected=method==='POST'?201:200){const r=await context.request.fetch(base+'/api'+path,{method,headers:{Origin:base,'x-csrf-token':csrf},...(data?{data}:{})});assert.equal(r.status(),expected,`${method} ${path}`);return r.json();}
+async function rows(){return(await api('/accounts')).accounts;}
+const row=async id=>(await rows()).find(a=>a.id===id);
+async function makeAccount(label,ownerId){return api('/accounts',{platform:'XHS',label,ownerId,dailyLimit:10,status:'PAUSED',pauseReason:'离线验收'});}
+async function bind(a){const login=await api(`/accounts/${a.id}/login`,{requestKey:randomUUID(),consent:'local-session-v1'});assert.equal(login.state,'WAITING');const result=await api(`/accounts/${a.id}/login/offline`,{requestKey:login.requestKey,scenario:'SUCCESS'});assert.equal(result.state,'VERIFIED');return login;}
+console.log('Evidence: '+out);
+try{
+ await start();password=current.output.match(/OFFLINE FIXTURE PASSWORD \(memory only\): (\w+)/)[1];
+ const secret=JSON.parse(await readFile(join(directory,'secret.json'),'utf8'));db=new PrismaClient({datasources:{db:{url:`postgresql://crm:${secret.databasePassword}@127.0.0.1:${manifest.postgres.port}/crm_persistent_test?schema=public`}}});
+ browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{})});await login();
+ const admin=await db.user.findUniqueOrThrow({where:{email:'admin@persistent.invalid'}}),sales=await db.user.findUniqueOrThrow({where:{email:'sales@persistent.invalid'}});
+ const adminHash=admin.passwordHash,deviceId=manifest.deviceId;
+ const a=await makeAccount('持久化离线验收账号',sales.id),b=await makeAccount('离线失效样本',sales.id),c=await makeAccount('离线缺失样本',sales.id),d=await makeAccount('离线设备不匹配样本',sales.id),interrupted=await makeAccount('中断样本',null);
+ const attempt=await bind(a),expired=await bind(b),missing=await bind(c);await bind(d);
+ const config=await api('/collection/configs',{name:'持久关键词',platform:'XHS',mode:'MOCK',keywords:['离线验收'],excludeWords:['无关'],batchLimit:3,enabled:true});
+ await api(`/collection/configs/${config.id}/runs`,{requestKey:randomUUID(),scenario:'BASELINE',mode:'MOCK'},'POST',403);
+ const identity=await db.platformIdentity.create({data:{platform:'XHS',platformUserId:'offline-'+randomUUID(),nickname:'虚构测试联系人',isDemo:true}});
+ const lead=await db.lead.create({data:{identityId:identity.id,summary:'离线验收',evidence:'虚构本地样本',ownerId:sales.id,isDemo:true}});
+ const follow=await db.followUp.create({data:{leadId:lead.id,authorId:sales.id,content:'离线跟进必须跨重启保留'}});
+ const beforeAudit=await db.auditLog.count();mark('First boot creates isolated admin once; account bindings/owners/config/fictional follow-up persisted; collection forbidden');
+ const duplicate=boot();assert.equal(await duplicate.done,1);assert((await fetch(base+'/api/health/ready')).ok);assert.equal(await db.user.count(),2);mark('Duplicate launch refused by instance lock; original stack/admin/data untouched');
+ const interruptedId=randomUUID();await db.accountLogin.create({data:{id:interruptedId,accountId:interrupted.id,actorId:admin.id,requestKey:randomUUID(),runtimeId:'offline-crashed-runtime',mode:'offline',state:'STARTING',expiresAt:new Date(Date.now()+120000)}});
+ await writeFile(join(directory,'local-sessions',b.id,expired.id,'fixture-state.json'),JSON.stringify({fixture:true,status:'EXPIRED'}),{mode:0o600});
+ await unlink(join(directory,'local-sessions',c.id,missing.id,'fixture-state.json'));
+ await db.accountSessionReference.update({where:{accountId:d.id},data:{deviceId:randomUUID()}});
+ await context.close();await db.$disconnect();await stop();
+ for(const kind of ['postgres','redis'])assert.equal(docker(['volume','inspect','--format','{{index .Labels "crm.persistent.instance"}}',manifest[kind].volume]).trim(),manifest.id);
+ mark('Normal stop retained both named volumes and local fake-session files');
+ await start();assert(!current.output.includes('OFFLINE FIXTURE PASSWORD'));assert.equal(manifest.deviceId,deviceId);await login();
+ assert.equal((await db.user.findUniqueOrThrow({where:{id:admin.id}})).passwordHash,adminHash);
+ const restored=await row(a.id);assert.equal(restored.ownerId,sales.id);assert.equal(restored.loginPlatformUserId,'offline-'+a.id);assert.equal(restored.loginStatus,'UNVERIFIED');assert.equal(restored.available,false);
+ assert.equal((await db.accountSessionReference.findUniqueOrThrow({where:{accountId:a.id}})).checkingUntil,null);
+ assert.deepEqual((await db.collectionConfig.findUniqueOrThrow({where:{id:config.id}})).keywords,['离线验收']);assert.equal((await db.followUp.findUniqueOrThrow({where:{id:follow.id}})).content,follow.content);assert.equal((await db.lead.findUniqueOrThrow({where:{id:lead.id}})).ownerId,sales.id);
+ assert((await db.auditLog.count())>=beforeAudit);assert.equal(await db.auditLog.count({where:{action:'SAVED_SESSION_CHECK_CONSENT'}}),0);assert.equal((await row(c.id)).loginStatus,'MISSING');assert.equal((await row(d.id)).loginStatus,'DEVICE_MISMATCH');
+ assert.equal((await db.accountLogin.findUniqueOrThrow({where:{id:interruptedId}})).reason,'RUNTIME_RESTARTED');
+ mark('Second boot preserves admin/password, account mapping, owner, keywords, lead, follow-up, audit; no automatic status calls; interrupted attempt cancelled');
+ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(base+`/work?module=accounts&account=${a.id}`);await page.getByRole('button',{name:/持久化离线验收账号/}).click();const button=page.getByRole('button',{name:'验证本机已保存会话',exact:true});await button.waitFor();assert(await button.isDisabled());
+ await page.waitForFunction(()=>{const el=document.querySelector('.account-detail');return el && getComputedStyle(el.parentElement).opacity==='1';});await page.waitForTimeout(500);await page.screenshot({path:join(out,'desktop-restart-pending.png')});await page.setViewportSize({width:390,height:844});await button.scrollIntoViewIfNeeded();await page.screenshot({path:join(out,'narrow-restart-pending.png')});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
+ await api(`/accounts/${a.id}/session/verify`,{},'POST',400);await page.getByRole('checkbox',{name:/我同意使用此设备/}).check();await button.focus();assert.equal(await page.evaluate(()=>document.activeElement?.textContent),'验证本机已保存会话');await button.press('Enter');await page.getByText('离线模拟已验证 · 非真实账号',{exact:true}).waitFor();assert.equal((await row(a.id)).loginStatus,'OFFLINE_VERIFIED');
+ assert.equal((await api(`/accounts/${b.id}/session/verify`,{consent:'read-local-session-v1'})).state,'EXPIRED');assert.equal((await api(`/accounts/${c.id}/session/verify`,{consent:'read-local-session-v1'})).state,'MISSING');assert.equal((await api(`/accounts/${d.id}/session/verify`,{consent:'read-local-session-v1'})).state,'DEVICE_MISMATCH');
+ assert.equal((await api(`/accounts/${a.id}/session/verify`,{consent:'read-local-session-v1'},'POST',409)).statusCode,409);
+ mark('Manual consent + keyboard verification only; offline valid/expired/missing/device-mismatch handled; cooldown rejects duplicate check');
+ const savedContext=context,savedCsrf=csrf;await login('sales@persistent.invalid');await api(`/accounts/${a.id}/session/verify`,{consent:'read-local-session-v1'},'POST',403);await context.close();context=savedContext;csrf=savedCsrf;
+ assert.equal((await context.request.post(base+`/api/accounts/${a.id}/session/verify`,{headers:{Origin:base},data:{consent:'read-local-session-v1'}})).status(),403);assert.equal((await fetch(base+`/api/accounts/login-capabilities`)).status,401);
+ const audit=JSON.stringify(await db.auditLog.findMany());assert(!audit.includes('base64')&&!audit.includes('cookies.json')&&!audit.includes('fixture-state'));assert.deepEqual(errors,[]);mark('Sales/anonymous/CSRF restrictions intact; audit contains no session content; narrow UI has no overflow or runtime errors');
+ // Backup/restore ONLY this newly generated fictional database into a separate empty test DB.
+ const backup=spawnSync('docker',['exec',manifest.postgres.container,'pg_dump','-U','crm','-d','crm_persistent_test','-Fc'],{maxBuffer:10*1024*1024,timeout:30000});assert.equal(backup.status,0);assert(backup.stdout.length>0);docker(['exec',manifest.postgres.container,'createdb','-U','crm','crm_restore_test']);docker(['exec','-i',manifest.postgres.container,'pg_restore','-U','crm','-d','crm_restore_test','--exit-on-error','--no-owner'],backup.stdout);
+ const restoredCounts=docker(['exec',manifest.postgres.container,'psql','-U','crm','-d','crm_restore_test','-Atc','SELECT (SELECT count(*) FROM "PlatformAccount"),(SELECT count(*) FROM "AccountSessionReference"),(SELECT count(*) FROM "FollowUp");']).trim();assert.equal(restoredCounts,'5|4|1');docker(['exec',manifest.postgres.container,'dropdb','-U','crm','crm_restore_test']);mark('Custom-format business backup restores accounts/references/follow-up to separate empty fixture DB; credentials kept separate');
+ await context.close();await db.$disconnect();await stop();
+}catch(e){console.error(e.message);throw e;}
+finally{
+ await browser?.close();await db?.$disconnect();if(current&&!current.ended)await stop();
+ // Only resources enumerated by our private fixture manifest with matching UUID label.
+ if(manifest?.fixture&&manifest.name===name&&manifest.mode==='offline'){
+  for(const kind of ['postgres','redis']){const spec=manifest[kind];assert.equal(docker(['inspect','--format','{{index .Config.Labels "crm.persistent.instance"}}',spec.container]).trim(),manifest.id);docker(['rm',spec.container]);assert.equal(docker(['volume','inspect','--format','{{index .Labels "crm.persistent.instance"}}',spec.volume]).trim(),manifest.id);docker(['volume','rm',spec.volume]);}
+  const s=await lstat(directory);assert(!s.isSymbolicLink());await rm(directory,{recursive:true});mark('Only owned acceptance fixture containers/volumes/fake credentials removed');
+ }
+ await writeFile(join(out,'checks.json'),JSON.stringify(report,null,2)+'\n');
+}

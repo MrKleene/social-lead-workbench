@@ -31,7 +31,7 @@ export class AccountsService {
       const day = utcDay(await this.now(tx));
       const rows = await tx.platformAccount.findMany({
         where: { ...scope(actor), archivedAt: null },
-        include: { usage: { where: { day } } },
+        include: { sessionReference: true, usage: { where: { day } } },
         orderBy: { createdAt: "asc" },
       });
       const owners = await tx.user.findMany({
@@ -40,7 +40,7 @@ export class AccountsService {
         },
         select: { id: true, name: true, active: true },
       });
-      const accounts = rows.map(({ usage, ...r }) => ({
+      const accounts = rows.map(({ usage, sessionReference, ...r }) => ({
         ...r,
         owner: owners.find((u) => u.id === r.ownerId) || null,
         day,
@@ -50,10 +50,11 @@ export class AccountsService {
           !r.archivedAt &&
           r.status === "UNCONNECTED" &&
           r.dailyLimit > (usage[0]?.occupied || 0),
-        loginStatus: r.loginVerifiedAt ? (r.loginProvider === "real" ? "VERIFIED" : "OFFLINE_VERIFIED") : "NOT_CONNECTED",
+        sessionReference: sessionReference ? {deviceId:sessionReference.deviceId,provider:sessionReference.provider,state:sessionReference.state,verifiedAt:sessionReference.verifiedAt} : null,
+        loginStatus: sessionReference ? (sessionReference.state==='VERIFIED' && sessionReference.checkedRuntimeId===process.env.CRM_RUNTIME_ID ? (r.loginProvider==='offline'?'OFFLINE_VERIFIED':'VERIFIED') : sessionReference.state==='VERIFIED'?'UNVERIFIED':sessionReference.state) : r.loginVerifiedAt ? (process.env.CRM_PERSISTENT==='1'?'LEGACY_UNMAPPED':r.loginProvider==='real'?'VERIFIED':'OFFLINE_VERIFIED') : 'NOT_CONNECTED',
         capabilities: {
           simulation: !r.loginSessionKey,
-          login: !!r.loginVerifiedAt,
+          login: sessionReference ? sessionReference.state==='VERIFIED'&&sessionReference.checkedRuntimeId===process.env.CRM_RUNTIME_ID : !!r.loginVerifiedAt&&process.env.CRM_PERSISTENT!=='1',
           read: false,
           send: false,
         },

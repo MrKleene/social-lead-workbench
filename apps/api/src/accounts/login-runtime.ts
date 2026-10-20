@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { spawn } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { access, mkdir, lstat, realpath, readFile, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 export type LoginMode = 'real' | 'offline';
-export type SessionDriver = { qr(signal: AbortSignal): Promise<{image: string; seconds: number}>; status(signal: AbortSignal): Promise<{loggedIn: boolean; userId?: string; nickname?: string}>; stop(): Promise<void>; simulate?(scenario: string): void };
+export type SessionDriver = { qr(signal: AbortSignal): Promise<{image: string; seconds: number}>; status(signal: AbortSignal): Promise<{loggedIn: boolean; userId?: string; nickname?: string}>; stop(): Promise<void>; simulate?(scenario: string): void | Promise<void> };
 export const demoImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG5EAAAAASUVORK5CYII=';
 export function parseQr(value: unknown) {
   const v = value as { img?: unknown; timeout?: unknown; is_logged_in?: unknown };
@@ -31,15 +31,44 @@ async function privateDir(path:string, create=false) {
 async function freePort(){const s=createServer();await new Promise<void>((ok,no)=>{s.once('error',no);s.listen(0,'127.0.0.1',ok);});const p=(s.address() as {port:number}).port;await new Promise<void>(ok=>s.close(()=>ok()));if([18060,18061].includes(p))return freePort();return p;}
 @Injectable()
 export class LoginRuntime {
+  readonly runtimeId=process.env.CRM_RUNTIME_ID || randomUUID();
+  persistent(){return process.env.CRM_PERSISTENT==='1';}
+  deviceId(){const id=process.env.CRM_DEVICE_ID;if(!id||!/^[a-f0-9-]{36}$/.test(id))throw Error('INVALID_DEVICE');return id;}
+  private async directory(accountId:string,key:string,create=false){
+    const root=process.env.CRM_PROJECT_ROOT || '',base=this.storage();
+    if(!root.startsWith('/')||await realpath(root)!==root||!/^\w+$/.test(accountId)||!/^[a-f0-9-]{36}$/.test(key)||!base.startsWith(root+'/.local/'))throw Error('INVALID_CONFIGURATION');
+    const local=join(root,'.local');const ls=await lstat(local);if(ls.isSymbolicLink()||!ls.isDirectory())throw Error('UNSAFE_SESSION_DIRECTORY');
+    // Check every ancestor, including an overridden offline fixture root.
+    let p=local;for(const part of base.slice(local.length+1).split('/')){if(!part||part==='.'||part==='..')throw Error('INVALID_CONFIGURATION');p=join(p,part);await privateDir(p,create);}
+    const account=join(base,accountId);await privateDir(account,create);const directory=join(account,key);
+    if(create){await mkdir(directory,{mode:0o700});await writeFile(join(directory,'session.json'),JSON.stringify({kind:'crm-qr-login-v2',accountId,attemptId:key,deviceId:this.persistent()?this.deviceId():null}),{flag:'wx',mode:0o600});}
+    else await privateDir(directory);
+    return directory;
+  }
+  async inspect(accountId:string,key:string,deviceId:string,provider:string){
+    if(deviceId!==this.deviceId()||provider!==this.mode())return 'DEVICE_MISMATCH';
+    try{const dir=await this.directory(accountId,key),path=join(dir,'session.json'),stat=await lstat(path);
+      if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.uid!==process.getuid!()||(stat.mode&0o077)||stat.size>4096)return 'NEEDS_REVIEW';
+      const m=JSON.parse(await readFile(path,'utf8'));if(m.kind!=='crm-qr-login-v2'||m.accountId!==accountId||m.attemptId!==key||m.deviceId!==deviceId)return 'NEEDS_REVIEW';
+      // Existence and ownership checks only. Never read platform credential contents.
+      const f=await lstat(join(dir,provider==='offline'?'fixture-state.json':'cookies.json'));
+      return f.isFile()&&!f.isSymbolicLink()&&f.nlink===1&&f.uid===process.getuid!()&&!(f.mode&0o077)?'UNVERIFIED':'NEEDS_REVIEW';
+    }catch(e){return (e as NodeJS.ErrnoException).code==='ENOENT'?'MISSING':'NEEDS_REVIEW';}
+  }
+  async openSaved(accountId:string,key:string,signal:AbortSignal){return this.open(accountId,key,signal,true);}
+
   mode():LoginMode|undefined { const v=process.env.XHS_ACCOUNT_LOGIN_MODE; return v==='real'||v==='offline'?v:undefined; }
-  storage(){return this.mode()==='real'?join(process.env.CRM_PROJECT_ROOT || '', '.local/xhs-qr'):'离线演示：不写平台会话';}
-  async open(accountId:string, attemptId:string, signal:AbortSignal):Promise<SessionDriver> {
+  storage(){return process.env.XHS_SESSION_ROOT || (this.mode()==='real'?join(process.env.CRM_PROJECT_ROOT || '', '.local/xhs-qr'):'离线演示：不写平台会话');}
+  async open(accountId:string, attemptId:string, signal:AbortSignal,saved=false):Promise<SessionDriver> {
     if(this.mode()==='offline') {
       let scenario='PENDING',stopped=false;
+      const directory=this.persistent()?await this.directory(accountId,attemptId,!saved):undefined;
+      if(directory&&!saved)await writeFile(join(directory,'fixture-state.json'),JSON.stringify({fixture:true,status:'PENDING'}),{flag:'wx',mode:0o600});
       return {qr:async()=>{if(stopped||signal.aborted)throw Error('CANCELLED');return {image:demoImage,seconds:240};},status:async()=>{
+        if(directory&&saved){const f=JSON.parse(await readFile(join(directory,'fixture-state.json'),'utf8'));if(f.fixture!==true)throw Error('INVALID_FIXTURE');scenario=f.status;}
         if(stopped||signal.aborted)throw Error('CANCELLED'); if(scenario==='ERROR')throw Error('PLATFORM_UNAVAILABLE');
         return {loggedIn:scenario==='SUCCESS'||scenario==='MISSING_ID',...(scenario==='SUCCESS'?{userId:`offline-${accountId}`,nickname:'离线模拟账号'}:{})};
-      },stop:async()=>{stopped=true;},simulate:s=>{scenario=s;}};
+      },stop:async()=>{stopped=true;},simulate:async s=>{scenario=s;if(directory)await writeFile(join(directory,'fixture-state.json'),JSON.stringify({fixture:true,status:s}),{mode:0o600});}};
     }
     if(this.mode()!=='real')throw Error('LOGIN_DISABLED');
     const root=process.env.CRM_PROJECT_ROOT || '';
@@ -49,12 +78,10 @@ export class LoginRuntime {
     const digest=createHash('sha256').update(await readFile(bin)).digest('hex');
     if(digest!=='17d57acd1a4f4cad3f2525bd13de40e112cb34594231a10b54b05ced9485cf80')throw Error('BINARY_REVIEW_REQUIRED');
     await access(join(home,'Library/Caches/xiaohongshu-mcp/browser/148.0.7778.215/Chromium.app/Contents/MacOS/Chromium'),constants.X_OK);
-    // Only newly consented folders. No cookie reads, imports, deletions or overwrites.
+    // Saved references are validated by the service before an explicit manual check.
     const local=join(root,'.local'); await mkdir(local,{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});
     const localStat=await lstat(local);if(localStat.isSymbolicLink()||!localStat.isDirectory())throw Error('UNSAFE_SESSION_DIRECTORY');
-    const base=this.storage();await privateDir(base,true);const account=join(base,accountId);await privateDir(account,true);
-    const directory=join(account,attemptId);await mkdir(directory,{mode:0o700});
-    await writeFile(join(directory,'session.json'),JSON.stringify({kind:'crm-qr-login-v1',accountId,attemptId,createdAt:new Date().toISOString()}),{flag:'wx',mode:0o600});
+    const directory=await this.directory(accountId,attemptId,!saved);
     if(signal.aborted)throw Error('CANCELLED');
     process.umask(0o077);
     const port=await freePort(),token=randomBytes(32).toString('hex');

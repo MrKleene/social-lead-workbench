@@ -12,6 +12,7 @@ export type Account = {
   available: boolean;
   version: number;
   loginStatus?: string;
+  sessionReference?: {deviceId:string;provider:string;state:string;verifiedAt:string|null}|null;
   loginProvider?: string | null;
   loginNickname?: string | null;
   loginPlatformUserId?: string | null;
@@ -53,3 +54,5 @@ export const accountStatus = {
   PAUSED: "已暂停",
   RESTRICTED: "受限 · 待处理",
 };
+
+export const loginStatusLabel:Record<string,string>={VERIFIED:'登录已验证',OFFLINE_VERIFIED:'离线模拟已验证',UNVERIFIED:'本机会话待验证',MISSING:'本机会话缺失',EXPIRED:'本机会话已失效',DEVICE_MISMATCH:'需在原设备核验',NEEDS_REVIEW:'会话需人工核查',LEGACY_UNMAPPED:'历史记录 · 待人工关联',NOT_CONNECTED:'未验证登录'};
