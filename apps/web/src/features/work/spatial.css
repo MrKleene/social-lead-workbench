@@ -85,3 +85,5 @@ html[data-crm-reduced=true] :is(.space-panel,.space-soft-swap){transform:none!im
 }
 
 html[data-crm-theme=graphite][data-crm-reduced=false] .space-panel:not([data-active=true]) .space-particle{animation-play-state:paused!important}
+
+.space-tool-panel .console-links > .refresh-local-status{display:inline-flex}

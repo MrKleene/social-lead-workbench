@@ -1,0 +1,50 @@
+
+> lead-workbench@0.1.0 pretest
+> npm run build -w @crm/contracts
+
+
+> @crm/contracts@0.1.0 build
+> tsc
+
+
+> lead-workbench@0.1.0 test
+> npm run test -w @crm/api && npm run test -w @crm/agent && npm run test:workbench
+
+
+> @crm/api@0.1.0 test
+> vitest run test/unit.test.ts test/http.test.ts test/collection-unit.test.ts test/mcp-transport.test.ts
+
+
+ RUN  v5.0.5 /Users/kleene/projects/social-lead-workbench/apps/api
+
+
+ Test Files  4 passed (4)
+      Tests  71 passed (71)
+   Start at  14:43:17
+   Duration  729ms (tests 48%, import 44%, transform 7%)
+
+
+> @crm/agent@0.1.0 test
+> vitest run src/protocol.test.ts
+
+
+ RUN  v5.0.5 /Users/kleene/projects/social-lead-workbench/apps/agent
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  14:43:18
+   Duration  104ms (import 74%, transform 14%, tests 7%, worker 5%)
+
+
+> lead-workbench@0.1.0 test:workbench
+> vitest run apps/web/src/features/work/stable-results.test.ts apps/web/src/features/work/motion-policy.test.ts apps/web/src/features/work/navigation-policy.test.ts apps/web/src/features/collection/mode.test.ts
+
+
+ RUN  v5.0.5 /Users/kleene/projects/social-lead-workbench
+
+
+ Test Files  4 passed (4)
+      Tests  18 passed (18)
+   Start at  14:43:18
+   Duration  92ms (transform 37%, import 35%, worker 14%, tests 13%)

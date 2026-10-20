@@ -5,12 +5,12 @@ export const collectionQueueName = () => process.env.COLLECTION_QUEUE_NAME || "c
 @Injectable()
 export class CollectionQueue implements OnModuleDestroy {
     private queue?: Queue;
-    async enqueue(runId: string) {
+    async enqueue(runId: string, type: "MOCK_READ" | "XHS_READ" = "MOCK_READ") {
         if (!this.queue) {
             this.queue = new Queue(collectionQueueName(), { connection: redisConnection(), defaultJobOptions: { attempts: 1, removeOnComplete: 100, removeOnFail: 100 } });
             this.queue.on("error", () => { });
         }
-        await this.queue.add("MOCK_READ", { type: "MOCK_READ", runId }, { jobId: runId });
+        await this.queue.add(type, { type, runId }, { jobId: runId });
     }
     async onModuleDestroy() { await this.queue?.close(); }
 }

@@ -25,6 +25,6 @@ export function WorkPage() {
      <SpacePanel name="notices" active={state.active==='notices'}><SpaceNotices state={state}/></SpacePanel>
      {state.admin&&<><SpacePanel name="settings" active={state.active==='settings'}><section className="space-admin-panel glass-panel"><CollectionPage/></section></SpacePanel><SpacePanel name="templates" active={state.active==='templates'}><section className="space-admin-panel glass-panel"><RepliesPage/></section></SpacePanel></>}
    </div>
-   <footer className="space-footnote">规则辅助 · 人工判断 · 模拟模式 · 真实采集与发送禁用</footer>
+   <footer className="space-footnote">规则辅助 · 人工判断 · 手动有限采集 · 真实发送禁用</footer>
  </div>;
 }

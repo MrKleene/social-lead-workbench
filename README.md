@@ -1,13 +1,21 @@
 # 线索工作台 · CRM 与模拟采集
 
-独立本机项目。中文多人 CRM，管理员和销售使用服务端会话登录。当前支持虚构种子、可配置关键词模拟采集与人工 CRM 流程，**整体获客、真实平台采集、自动首次联系、评论、私信和内嵌聊天尚未实现**。没有修改或调用旧小红书 MCP（18060）、账号、凭据或浏览器会话。
+独立本机项目。中文多人 CRM，管理员和销售使用服务端会话登录。当前支持虚构种子、可配置关键词模拟采集与人工 CRM 流程；已实现默认关闭的小红书只读 MCP 传输和任务入库，并完成离线服务验收。**真实平台联调、完整评论覆盖、自动首次联系、评论、私信和内嵌聊天未开放或未验证**。没有修改或调用旧小红书 MCP（18060）、账号、凭据或浏览器会话。
+
+## 最新：默认关闭的只读 MCP（2026-10-20）
+
+`MOCK`、`XHS_FIXTURE`、`XHS_MCP` 来源隔离。实际 MCP 初始化、工具发现、JSON/SSE、会话释放、有限任务、递归回复、入库、窗口起点和新观察提醒已通过本地假服务测试。真实模式仍关闭，不能据此宣称真实小红书已连接。当前上游没有评论游标输入，始终报告有限窗口，不建立完整真实基线。
+
+- `npm run test:mcp`：启动全新 tmpfs PostgreSQL/Redis，运行 HTTP/权限/入库与独立 worker 回归，然后清理；不读 `.env`，不复用现有数据库。
+- `npm run dev:mcp:isolated`：另开独立临时预览与离线 MCP 服务。只使用终端显示的一次性虚构账号；按 Ctrl-C 清理。不会启用真实模式。
+- 最新类型检查、全工作区构建、164 项回归通过；浏览器桌面与390px窄屏闭环通过。详细契约、限制、修改清单、截图及未来最小授权见 [只读 MCP 离线验收](docs/MCP-READONLY-OFFLINE-2026-10-20.md)。
 
 ## 环境与快速启动
 
 需要 Node.js 22+（本机使用 24.20.0）、npm、已启动的 Docker 引擎。PostgreSQL 与 Redis 都使用独立容器，不使用 SQLite。
 
 ```sh
-cd /Users/kleene/Documents/Codex/2026-10-18/task-2
+cd /path/to/social-lead-workbench
 npm ci
 npm run local:env     # 仅第一次；已有 .env 时拒绝覆盖
 npm run db:generate
@@ -35,7 +43,7 @@ npm run dev
 
 默认首页为 `/work`，聚合新线索、待跟进、异常任务和新增提醒。关键词配置在 `/collection`，仅管理员可管理；模拟采集需要另开终端运行 `npm run dev:collector`。首轮基线不提醒，稳定 ID 去重，分页局部/超时/受限分别处理。详情统一展示原文与规则依据、分配、跟进和任务；支持列表内快速跟进、完成任务，以及最多 50 条的事务性批量分配。
 
-本阶段 **84 项测试 + 2 项健康 worker 检查通过**，构建和类型检查通过。真实平台与 LLM 未接入，发送禁用。运行步骤、代码清单、操作步数、浏览器闭环和截图见 [本阶段验收](docs/COLLECTION-WORKSPACE-2026-10-19.md)。
+2026-10-19 阶段 **84 项测试 + 2 项健康 worker 检查通过**，构建和类型检查通过。真实平台与 LLM 未接入，发送禁用。运行步骤、代码清单、操作步数、浏览器闭环和截图见 [本阶段验收](docs/COLLECTION-WORKSPACE-2026-10-19.md)。
 
 ## 已实现的 CRM 基础
 
@@ -71,14 +79,14 @@ compose.yaml          基础服务及 full profile 中央部署定义
 npm run typecheck
 npm run build
 npm test
-npm run test:integration
+npm run test:mcp       # 推荐：新建隔离数据库和队列，结束清理
 npm run test:worker
 npm run agent:check
 npm audit
 ```
 
-- `npm test`：38 项 API/规则/HTTP 边界测试，4 项 agent 协议测试。
-- `npm run test:integration`：创建/复用本机 `crm_test`，对它运行迁移和 42 项真实 PostgreSQL + Nest HTTP 测试。**每次清空 crm_test 内的本项目表**，不清空开发库 `crm`。数据库名/主机校验阻止误用远端或开发库。
+- `npm test`：71 项 API/规则/HTTP/MCP测试，4 项 agent 协议测试，18 项工作台测试。
+- 旧 `npm run test:integration`：创建/复用本机 `crm_test`，对它运行迁移和 PostgreSQL + Nest HTTP 测试。新验收优先使用 `npm run test:mcp`。旧命令**每次清空 crm_test 内的本项目表**，不清空开发库 `crm`。数据库名/主机校验阻止误用远端或开发库。
 - `npm run test:worker`：独立临时队列，验证健康任务完成、COMMENT 类型拒绝；结束后清理临时队列和测试 worker。
 - 构建包括 contracts、API、web、worker、agent。测试账户由随机密码在内存中创建；不作为生产默认用户。
 - 初始 npm audit 的测试工具和 Prisma CLI 传递依赖通告已修复：Vitest 5.0.5，deepmerge-ts/effect 安全版本 override；迁移、构建和测试复验兼容。
@@ -99,4 +107,4 @@ npm audit
 - 未建立跨平台“同一个人”的自动合并；未来若需统一客户实体，应人工确认关联并审计。
 - 本机截图仅证明界面和虚构数据流程。旧 MCP 的小样本读取与 22.533 秒单次检测不构成规模/延迟保证。
 
-下一里程碑建议在已有关闭的 XHS 只读骨架之上，完成 agent 短期配对、任务租约与真实接口兼容验证，用新的明确授权测试环境做有限读取验收；保留评论原文→需求判定→人工复核的证据链。主动首次联系作为独立受控环节，只在账号与能力重新验证、策略和人工确认明确后推进。抖音继续独立适配，共用 CRM 模型与权限，不复用账号会话。
+下一里程碑在已实现但默认关闭的 XHS 只读链路之上，按新的最小授权完成真实接口兼容验证；agent 短期配对与完整任务租约回收仍未实现，用新的明确授权测试环境做有限读取验收；保留评论原文→需求判定→人工复核的证据链。主动首次联系作为独立受控环节，只在账号与能力重新验证、策略和人工确认明确后推进。抖音继续独立适配，共用 CRM 模型与权限，不复用账号会话。

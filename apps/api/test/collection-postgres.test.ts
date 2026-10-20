@@ -12,6 +12,7 @@ import { CollectionService } from '../src/collection/service';
 import { CollectionQueue } from '../src/collection/queue';
 import { ConfigInput, Scenario } from '../src/collection/contract';
 import { MockAdapter } from '../src/collection/adapters/mock';
+import { startXhsFixture, FixtureScenario } from './fixtures/xhs-mcp-server';
 import { XhsMcpAdapter } from '../src/collection/adapters/xhs-mcp';
 const url = process.env.TEST_DATABASE_URL;
 if (!url || new URL(url).pathname != '/crm_test')
@@ -173,8 +174,8 @@ describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
         expect((await write('post', `/collection/runs/${r.id}/pause`, {}, a)).status).toBe(403);
         await service.pauseRun(actor, r.id);
     });
-    it('空词、过大预算、真实模式及缺失CSRF被HTTP拒绝', async () => {
-        for (const patch of [{ keywords: [] }, { batchLimit: 999 }, { mode: 'XHS_MCP' }, { keywords: ['  '] }])
+    it('空词、过大预算、未知模式及缺失CSRF被HTTP拒绝', async () => {
+        for (const patch of [{ keywords: [] }, { batchLimit: 999 }, { mode: 'UNKNOWN' }, { keywords: ['  '] }])
             expect((await write('post', '/collection/configs', { ...spec('验证'), ...patch })).status).toBe(400);
         expect((await api().post('/api/collection/configs').set('Cookie', admin.cookie).set('Origin', origin).send(spec('csrf'))).status).toBe(403);
     });
@@ -339,5 +340,91 @@ describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
         expect((await read('/notices', a)).body).toEqual([]);
         expect((await write('post', `/notices/${notice.id}/read`, {}, a)).status).toBe(404);
         expect((await read('/notices', b)).body[0].reads).toEqual([]);
+    });
+});
+
+describe('MCP默认关闭、只读就绪检查与离线真实传输入库', () => {
+    let fixture: Awaited<ReturnType<typeof startXhsFixture>>;
+    beforeAll(async () => { fixture = await startXhsFixture(); });
+    afterAll(async () => { await fixture.stop(); vi.unstubAllEnvs(); });
+    const enabled = () => { vi.stubEnv('XHS_MCP_ENABLED','1'); vi.stubEnv('XHS_MCP_PROFILE','fixture'); vi.stubEnv('XHS_MCP_ENDPOINT',fixture.url.href); };
+    const create = () => service.create(actor,spec('部署咨询',{mode:'XHS_FIXTURE'}));
+    const execute = async (id:string) => { const run = await service.start(actor,id,'READ_WINDOW',randomUUID(),'XHS_FIXTURE'); await service.execute(run.id); return db.collectionRun.findUniqueOrThrow({where:{id:run.id}}); };
+    it('默认关闭不会连接，销售无读取/检查权限、CSRF和端点注入被拒绝',async()=>{
+        vi.stubEnv('XHS_MCP_ENABLED','0');
+        expect((await read('/collection/mcp/readiness')).body).toMatchObject({enabled:false,reason:'REAL_DISABLED'});
+        expect((await write('post','/collection/mcp/check',{})).status).toBe(403);
+        expect((await write('post','/collection/configs',spec('关闭',{mode:'XHS_MCP'}))).status).toBe(403);
+        expect((await read('/collection/mcp/readiness',a)).status).toBe(403);
+        expect((await write('post','/collection/mcp/check',{},a)).status).toBe(403);
+        enabled();
+        expect((await write('post','/collection/mcp/check',{endpoint:'http://127.0.0.1:18060/mcp'})).status).toBe(400);
+        expect((await api().post('/api/collection/mcp/check').set('Cookie',admin.cookie).set('Origin',origin).send({})).status).toBe(403);
+        expect(fixture.state.calls).toHaveLength(0);
+    });
+    it('GET只读配置；手动检查仅登录状态并审计，30秒节流',async()=>{
+        const ready = await read('/collection/mcp/readiness'); expect(ready.body).toMatchObject({enabled:true,mode:'XHS_FIXTURE',reason:'UNVERIFIED'});
+        expect(fixture.state.calls).toHaveLength(0);
+        const checked = await write('post','/collection/mcp/check',{});
+        expect(checked.body.lastCheck.metadata).toMatchObject({mode:'XHS_FIXTURE',reason:'READY'});
+        expect(fixture.state.calls.map(c=>c.name)).toEqual(['check_login_status']);
+        expect(fixture.state.sessions.size).toBe(0);
+        expect((await write('post','/collection/mcp/check',{})).status).toBe(409);
+        expect(JSON.stringify(checked.body)).not.toContain(fixture.url.href);
+        expect(JSON.stringify(checked.body)).not.toContain('虚构离线账号');
+    });
+    it('检查退避持久化，换API实例也不能立即再次触发',async()=>{
+        const another = new CollectionService(db, {enqueue} as unknown as CollectionQueue);
+        await expect(another.checkReadiness(actor)).rejects.toThrow('退避');
+        expect(fixture.state.calls.map(c=>c.name)).toEqual(['check_login_status']);
+    });
+    it('首次窗口无提醒；嵌套来源、重复幂等、新观察提醒与人工处理保留',async()=>{
+        const c=await create(); const first=await execute(c.id);
+        expect(first).toMatchObject({status:'PARTIAL',reason:'MCP_WINDOW_ONLY',observed:5,matched:3,added:3,notices:0});
+        expect(await db.monitorPost.findFirst({where:{configId:c.id}})).toMatchObject({baselineAt:null,coverage:'PARTIAL',lastRunId:first.id});
+        const source=await db.sourceComment.findUniqueOrThrow({where:{platform_platformCommentId:{platform:'XHS',platformCommentId:'fixture-xhs-deep'}},include:{identity:{include:{lead:true}}}});
+        expect(source).toMatchObject({isDemo:true,parentPlatformCommentId:'fixture-xhs-reply'});
+        const lead=source.identity.lead!; expect(lead.summary).toContain('离线MCP夹具');
+        expect((await write('patch',`/leads/${lead.id}/contact`,{stage:'TO_CONTACT',version:lead.version})).status).toBe(200);
+        expect((await execute(c.id)).added).toBe(0);
+        fixture.state.scenario='NEW';
+        expect(await execute(c.id)).toMatchObject({added:1,notices:1});
+        expect(await execute(c.id)).toMatchObject({added:0,notices:0});
+        expect((await db.lead.findUniqueOrThrow({where:{id:lead.id}})).contactStage).toBe('TO_CONTACT');
+        const notice=await db.collectionNotice.findFirstOrThrow({where:{comment:{platformCommentId:'fixture-xhs-later'}}});
+        expect(notice.title).toContain('新观察到'); expect(notice.title).toContain('未验证发布时间');
+        const detail=await read(`/collection/configs/${c.id}`);
+        expect(JSON.stringify(detail.body)).not.toContain('fictional-reference');
+        expect(JSON.stringify(await db.auditLog.findMany())).not.toContain('fictional-reference');
+        fixture.state.scenario='BASELINE';
+    });
+    it('缺失与损坏窗口不会报告删除或建立新起点',async()=>{
+        const c=await create(); fixture.state.scenario='MALFORMED';
+        expect(await execute(c.id)).toMatchObject({status:'FAILED',reason:'INVALID_DATA',observed:0});
+        expect(await db.monitorPost.count({where:{configId:c.id}})).toBe(0);
+        expect(await db.commentObservation.count({where:{state:'DELETED_CONFIRMED',platformCommentId:{startsWith:'fixture-xhs-'}}})).toBe(0);
+        fixture.state.scenario='BASELINE';
+    });
+    it.each(['LOGIN_EXPIRED','RESTRICTED'] as FixtureScenario[])('%s暂停配置，保留证据且没有登录/发送工具调用',async scenario=>{
+        const c=await create(); fixture.state.scenario=scenario;
+        expect((await execute(c.id)).reason).toBe(scenario);
+        expect(await db.collectionConfig.findUnique({where:{id:c.id}})).toMatchObject({enabled:false,pauseReason:scenario,activeRunId:null});
+        fixture.state.scenario='BASELINE'; expect(fixture.state.forbidden).toBe(0);
+    });
+    it('HTTP429遵循Retry-After，不自动重试；模式不匹配拒绝',async()=>{
+        const c=await create(); fixture.state.scenario='RATE_LIMITED'; const before=fixture.state.calls.length;
+        const run=await execute(c.id); expect(run.reason).toBe('RATE_LIMITED');
+        const saved=await db.collectionConfig.findUniqueOrThrow({where:{id:c.id}});
+        expect(saved.nextAllowedAt!.getTime()-run.finishedAt!.getTime()).toBeGreaterThan(119000);
+        await expect(execute(c.id)).rejects.toThrow('退避'); expect(fixture.state.calls.length-before).toBe(1);
+        await expect(service.start(actor,c.id,'BASELINE',randomUUID(),'MOCK')).rejects.toThrow('模式');
+        await expect(service.create(actor,spec('不一致',{mode:'XHS_MCP'}))).rejects.toThrow('PROFILE_MISMATCH');
+        fixture.state.scenario='BASELINE';
+    });
+    it('排队后关闭开关，执行不会触达MCP，也不改变已有来源',async()=>{
+        const c=await create(); const r=await service.start(actor,c.id,'READ_WINDOW',randomUUID(),'XHS_FIXTURE');
+        const calls=fixture.state.calls.length; vi.stubEnv('XHS_MCP_ENABLED','0'); await service.execute(r.id);
+        expect((await db.collectionRun.findUniqueOrThrow({where:{id:r.id}})).reason).toBe('REAL_DISABLED');
+        expect(fixture.state.calls.length).toBe(calls); enabled();
     });
 });

@@ -8,8 +8,8 @@ import { parse } from "../src/common/validation";
 const config = { name: "测试", platform: "XHS" as const, mode: "MOCK" as const, keywords: ["法律咨询"], excludeWords: ["广告"], batchLimit: 1, enabled: true };
 const envelope = (v: unknown) => ({ content: [{ type: "text", text: JSON.stringify(v) }] });
 describe("只读采集契约与预算", () => {
-    it("配置严格拒绝真实模式、空词、重复、覆盖排除词和超预算", () => {
-        for (const patch of [{ mode: "XHS_MCP" }, { keywords: [] }, { keywords: [" "] }, { keywords: ["a", "A"] }, { keywords: ["ＡＩ", "ai"] }, { keywords: ["ＡＩ咨询"], excludeWords: ["ai"] }, { excludeWords: ["法律"] }, { batchLimit: 0 }, { batchLimit: 11 }, { unknown: true }])
+    it("配置严格拒绝未知模式、空词、重复、覆盖排除词和超预算", () => {
+        for (const patch of [{ mode: "UNKNOWN" }, { keywords: [] }, { keywords: [" "] }, { keywords: ["a", "A"] }, { keywords: ["ＡＩ", "ai"] }, { keywords: ["ＡＩ咨询"], excludeWords: ["ai"] }, { excludeWords: ["法律"] }, { batchLimit: 0 }, { batchLimit: 11 }, { unknown: true }])
             expect(configInput.safeParse({ ...config, ...patch }).success).toBe(false);
     });
     it("校验错误给出可操作原因，不回显输入内容", () => {

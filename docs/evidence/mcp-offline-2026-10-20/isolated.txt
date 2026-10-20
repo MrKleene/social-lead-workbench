@@ -1,0 +1,143 @@
+
+> lead-workbench@0.1.0 test:mcp
+> node scripts/test-queue-isolated.mjs --mcp
+
+Running: npm exec prisma migrate deploy
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "crm_test", schema "public" at "127.0.0.1:60297"
+
+4 migrations found in prisma/migrations
+
+Applying migration `202610180001_initial`
+Applying migration `202610190002_collection`
+Applying migration `202610200003_contact_workflow`
+Applying migration `202610200004_reply_templates`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 202610180001_initial/
+    └─ migration.sql
+  └─ 202610190002_collection/
+    └─ migration.sql
+  └─ 202610200003_contact_workflow/
+    └─ migration.sql
+  └─ 202610200004_reply_templates/
+    └─ migration.sql
+
+All migrations have been successfully applied.
+Running: npm run build -w @crm/contracts
+
+> @crm/contracts@0.1.0 build
+> tsc
+
+Running: npm run build -w @crm/api
+
+> @crm/api@0.1.0 build
+> tsc -p tsconfig.json
+
+Running: npm run build -w @crm/worker
+
+> @crm/worker@0.1.0 build
+> tsc
+
+Running: npm run test:integration -w @crm/api -- --reporter=verbose
+
+> @crm/api@0.1.0 test:integration
+> vitest run --no-file-parallelism test/postgres.test.ts test/collection-postgres.test.ts --reporter=verbose
+
+
+ RUN  v5.0.5 /Users/kleene/projects/social-lead-workbench/apps/api
+
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 评论/私信话术校验、版本、持久化和关联删除均受审计保护 154ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 话术管理仅管理员，来源预览沿用销售范围且无发送路由 83ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 联系阶段独立保留旧销售状态，需人工确认，支持忽略恢复和版本冲突审计 91ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 联系状态沿用负责人权限与CSRF，转交后原销售不能更改；重新采集不重置人工处理 127ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 管理员新增编辑启停归档多组配置，审计和版本冲突生效 33ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 销售不能列出、详情、创建、修改、启停、归档或运行配置 26ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 空词、过大预算、未知模式及缺失CSRF被HTTP拒绝 8ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 基线读取包含分页楼中楼：多评论一个身份，排除广告，无首次提醒 45ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 后续新增只提醒一次，重复运行与请求重放均幂等 139ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 并发配置与队列重复投递不会重复身份、评论或提醒 209ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 同一用户的后续新评论只追加来源与提醒，不新增线索 96ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 来源稳定ID内容冲突时回滚整轮，保留旧原文 64ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 跨平台即使稳定ID和昵称相同也不合并 90ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 首次局部读取不立基线；恢复完整后不补发历史提醒 137ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 暂时缺失不等于删除，重现不重复提醒；明确删除单独标记并保留原文 139ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 超时退避限制重试，恢复后可完成；新版本重新基线 113ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > RESTRICTED 自动停用，不换账号或自动重试 13ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > LOGIN_EXPIRED 自动停用，不换账号或自动重试 11ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 停用配置/手动暂停后旧队列不能入库；编辑需先暂停 13ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 失败队列释放配置且不产生平台调用或线索 8ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 真实适配器强制拒绝、损坏快照安全结束、无发送路由 25ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 运行中暂停取消读取，事务不会提交暂停后的结果 17ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 批量分配仅管理员可操作，版本冲突整批回滚，每项审计 84ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 提醒按负责人隔离、已读按用户隔离、转交后立即撤权 158ms
+ ✓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > 默认关闭不会连接，销售无读取/检查权限、CSRF和端点注入被拒绝 11ms
+ ✓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > GET只读配置；手动检查仅登录状态并审计，30秒节流 45ms
+ ✓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > 检查退避持久化，换API实例也不能立即再次触发 2ms
+ ✓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > 首次窗口无提醒；嵌套来源、重复幂等、新观察提醒与人工处理保留 279ms
+ ✓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > 缺失与损坏窗口不会报告删除或建立新起点 32ms
+ ✓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > LOGIN_EXPIRED暂停配置，保留证据且没有登录/发送工具调用 23ms
+ ✓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > RESTRICTED暂停配置，保留证据且没有登录/发送工具调用 26ms
+ ✓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > HTTP429遵循Retry-After，不自动重试；模式不匹配拒绝 26ms
+ ✓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > 排队后关闭开关，执行不会触达MCP，也不改变已有来源 12ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 会话 cookie HttpOnly / SameSite Strict，未返回密码摘要 117ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 管理员看全部，销售仅看自己，另一销售看不到 25ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 销售不能借 URL 越权详情、跟进、负责人 13ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 销售不能查询用户目录或审计 7ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > CSRF 缺失与跨站写入被拒绝 4ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 严格验证拒绝角色注入、错误日期 5ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 跟进与下次时间、阶段、审计原子更新 9ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 陈旧版本拒绝，事务不残留多余跟进 4ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 人工核验保留说明且不标记为同意联系 8ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 负责人必须为有效销售 4ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 转交后旧销售立即失去详情、跟进及任务权限 24ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 新负责人能完成自己的任务，不能创建他人任务 15ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 并发转交只有一个版本获胜 10ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 相同平台用户和评论重复导入保持幂等 18ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 并发重复导入保持唯一 17ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 同名跨平台绝不合并，即使平台 ID 字符串相同 7ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 重复评论 ID 内容冲突拒绝并保留原文 9ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 数据库唯一约束在直接写入时仍有效 4ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 平台发送能力全部禁用，受限账号仅可暂停 11ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 注销撤销服务器会话 122ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 过期会话与禁用用户不能访问 126ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 登录按账号限速且错误不泄露账号存在 1149ms
+
+ Test Files  2 passed (2)
+      Tests  55 passed (55)
+   Start at  14:43:23
+   Duration  6.06s (tests 89%, import 10%)
+
+Running: npm run test:queue -w @crm/api -- --reporter=verbose
+
+> @crm/api@0.1.0 test:queue
+> vitest run --no-file-parallelism test/collection-queue.test.ts --reporter=verbose
+
+
+ RUN  v5.0.5 /Users/kleene/projects/social-lead-workbench/apps/api
+
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 手动投递经独立进程完成基线，并保留来源与楼中楼 127ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 相同请求键并发重放只产生一条运行和一条完成审计 63ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 已完成运行以另一队列任务重复投递不会重复写库 70ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 新增评论经队列提醒一次，重复新场景零新增 148ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 排队期间暂停运行后即使 worker 消费也不入库 20ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 排队期间停用配置，旧任务不会产生来源 16ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 业务超时记录 FAILED，队列单次消费，无自动重试；退避拒绝立即重跑 20ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 手动失败重跑按30/60/120/240/300秒退避；模拟时间推进后可恢复 144ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 非法平台任务进入 BullMQ failed，单次尝试且不创建业务运行 5ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 多帖大批次仍受32次读取预算限制，标记部分完成 184ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 实际队列执行中暂停：延迟模拟读取返回后也不提交 34ms
+ ✓ test/collection-queue.test.ts > 离线MCP经实际BullMQ和独立worker > 协议读取→窗口起点→新观察提醒→幂等，保留离线来源 300ms
+ ✓ test/collection-queue.test.ts > 离线MCP经实际BullMQ和独立worker > HTTP限流经worker保存退避并只执行一次 31ms
+ ✓ test/collection-queue.test.ts > 离线MCP经实际BullMQ和独立worker > worker执行中暂停立即终止挂起协议读取，不写入结果 129ms
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  14:43:30
+   Duration  1.81s (tests 90%, import 9%, transform 1%)
+
+Running: node scripts/test-worker.mjs
+PASS: 2 Redis/BullMQ integration checks — health job completed; platform job rejected.
+Temporary containers removed: 2/2

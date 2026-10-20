@@ -1,3 +1,4 @@
+import { modeLabels, runRequest } from '@/features/collection/mode';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/use-auth';
@@ -36,7 +37,7 @@ export function useSpatialWork() {
   const start = () => {
     if (!admin) { navigate('/work?module=matches&view=contacted'); return; }
     if (!selectedConfig) { openModule('settings'); return; }
-    work.mutation.mutate({ path: `/collection/configs/${selectedConfig.id}/runs`, body: { mode: 'MOCK', scenario: 'BASELINE', requestKey: crypto.randomUUID() } }, { onSuccess: () => { work.setFeedback('已开始一轮有限模拟。首次完整读取建立基线。'); openModule('runs'); } });
+    work.mutation.mutate({ path: `/collection/configs/${selectedConfig.id}/runs`, body: runRequest(selectedConfig, 'BASELINE', crypto.randomUUID()) }, { onSuccess: () => { work.setFeedback(`已开始一轮${modeLabels[selectedConfig.mode]}。首次记录不提醒，覆盖范围见运行记录。`); openModule('runs'); } });
   };
   return { admin, id, view, work, active, rows, page, pages, configs, selectedConfig, start, openModule, setView, closeDetail, openLead,
     overview: () => navigate('/work'), setConfig: (config: string) => setParams(p => { p.set('config', config); return p; }),

@@ -2,7 +2,7 @@ import type { Platform } from '@/lib/types';
 export type ConfigDraft = {
     name: string;
     platform: Platform;
-    mode: 'MOCK';
+    mode: 'MOCK' | 'XHS_FIXTURE' | 'XHS_MCP';
     keywords: string[];
     excludeWords: string[];
     batchLimit: number;
@@ -54,6 +54,7 @@ export type ConfigDetail = Config & {
     monitors: {
         id: string;
         baselineAt: string | null;
+        lastRunId: string | null;
         coverage: string;
         observations: {
             id: string;
@@ -75,6 +76,8 @@ export type Notice = {
         };
     };
 };
-export const scenarios: Record<string, string> = { BASELINE: '初始评论快照', NEW: '增加一条求助评论', PARTIAL: '分页不完整', TIMEOUT: '读取超时', LOGIN_EXPIRED: '登录失效', RESTRICTED: '账号受限', MISSING: '评论暂时缺失', DELETED: '明确删除信号' };
+export const scenarios: Record<string, string> = { READ_WINDOW: '读取有限窗口', BASELINE: '初始评论快照', NEW: '增加一条求助评论', PARTIAL: '分页不完整', TIMEOUT: '读取超时', LOGIN_EXPIRED: '登录失效', RESTRICTED: '账号受限', MISSING: '评论暂时缺失', DELETED: '明确删除信号' };
 export const runLabels: Record<string, string> = { QUEUED: '排队中', RUNNING: '读取中', COMPLETE: '批次完成', PARTIAL: '部分完成', FAILED: '失败', PAUSED: '已暂停' };
-export const reasonLabels: Record<string, string> = { SEARCH_PARTIAL: '搜索覆盖不完整', COMMENTS_PARTIAL: '评论覆盖不完整', COMMENT_PARTIAL: '评论覆盖不完整', TIMEOUT: '读取超时，等待手动重试', LOGIN_EXPIRED: '登录失效，配置已暂停', RESTRICTED: '账号受限，配置已暂停', INVALID_DATA: '来源数据不完整或冲突', BUDGET: '达到本轮预算', PAUSED: '运行已暂停', MANUAL_PAUSE: '已手动暂停', CONFIG_PAUSED: '配置已暂停', QUEUE_UNAVAILABLE: '模拟队列不可用', REAL_DISABLED: '真实平台禁止运行' };
+export const reasonLabels: Record<string, string> = { SEARCH_PARTIAL: '搜索覆盖不完整', COMMENTS_PARTIAL: '评论覆盖不完整', COMMENT_PARTIAL: '评论覆盖不完整', TIMEOUT: '读取超时，等待手动重试', LOGIN_EXPIRED: '登录失效，配置已暂停', RESTRICTED: '账号受限，配置已暂停', INVALID_DATA: '来源数据不完整或冲突', BUDGET: '达到本轮预算', PAUSED: '运行已暂停', MANUAL_PAUSE: '已手动暂停', CONFIG_PAUSED: '配置已暂停', QUEUE_UNAVAILABLE: '采集队列不可用', REAL_DISABLED: 'MCP开关关闭，未发起平台读取', SOURCE_UNAVAILABLE: '来源暂不可用，保留已有证据，不推断已删除', MCP_WINDOW_ONLY: '仅已读窗口；评论分页和完整覆盖未验证', RATE_LIMITED: '服务限流，按退避时间等待手动重试', ENDPOINT_INVALID: '服务端端点配置不符合只读策略', PROFILE_MISMATCH: '服务端模式与配置不一致', MCP_PROTOCOL: 'MCP连接或协议异常，请管理员检查', MCP_TOOLS_MISSING: '服务缺少必要的只读工具', MCP_SESSION_EXPIRED: 'MCP会话已失效，请管理员检查后手动重试', CHECKING: '检查已发起，稍后手动刷新；中断后需等待退避', UNVERIFIED: '尚未检查连接', READY: '仅本次检查成功，不代表持续连接或完整覆盖' };
+
+export type McpReadiness = { enabled: boolean; mode: ConfigDraft['mode'] | null; reason: string; lastCheck: { createdAt: string; metadata: { mode: ConfigDraft['mode']; reason: string; nextAllowedAt?: string } } | null; coverage: 'WINDOW_ONLY'; automaticPolling: false };

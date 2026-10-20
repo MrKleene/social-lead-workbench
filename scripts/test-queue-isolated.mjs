@@ -7,7 +7,8 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const output = join(root, '.qa/step3-validation');
+const mcpAcceptance = process.argv.includes('--mcp');
+const output = join(root, mcpAcceptance ? '.qa/mcp-validation' : '.qa/step3-validation');
 mkdirSync(output, { recursive: true });
 const id = randomBytes(8).toString('hex');
 const password = randomBytes(24).toString('hex');
@@ -81,10 +82,11 @@ try {
     assert(!interrupted, 'Interrupted before running tests');
     const url = `postgresql://crmtest:${password}@127.0.0.1:${pg.port}/crm_test?schema=public`;
     const env = { ...process.env, DATABASE_URL: url, TEST_DATABASE_URL: url, REDIS_URL: `redis://127.0.0.1:${redis.port}`,
-        DOTENV_CONFIG_PATH: '/dev/null', COLLECTION_QUEUE_NAME: `crm-queue-acceptance-${id}`, CRM_DISPOSABLE_QUEUE_TEST: '1' };
+        DOTENV_CONFIG_PATH: '/dev/null', XHS_MCP_ENABLED: '0', COLLECTION_QUEUE_NAME: `crm-queue-acceptance-${id}`, CRM_DISPOSABLE_QUEUE_TEST: '1' };
     await command('migrate', ['npm', 'exec', 'prisma', 'migrate', 'deploy'], env);
     for (const workspace of ['@crm/contracts', '@crm/api', '@crm/worker'])
         await command(`build-${workspace.split('/')[1]}`, ['npm', 'run', 'build', '-w', workspace], env);
+    if (mcpAcceptance) await command('postgres-tests', ['npm', 'run', 'test:integration', '-w', '@crm/api', '--', '--reporter=verbose'], env);
     await command('queue-tests', ['npm', 'run', 'test:queue', '-w', '@crm/api', '--', '--reporter=verbose'], env);
     await command('health-queue', ['node', 'scripts/test-worker.mjs'], env);
     const keys = docker(['exec', redis.container, 'redis-cli', '--scan', '--pattern', `bull:crm-queue-acceptance-${id}*`]);

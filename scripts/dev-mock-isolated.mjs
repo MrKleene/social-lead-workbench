@@ -10,6 +10,7 @@ import { PrismaClient } from '@prisma/client';
 import argon2 from 'argon2';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const mcpFixture = process.argv.includes('--mcp-fixture');
 const id = randomBytes(8).toString('hex');
 const output = join(root, '.qa/browser-validation', id);
 mkdirSync(output, { recursive: true });
@@ -92,7 +93,7 @@ function service(label, args, env) {
     child.once('exit', () => { if (!interrupted) process.exitCode = 1; finish(); });
     return child;
 }
-const report = { isolated: true, credentials_persisted: false, cleanup: [] };
+const report = { mode: mcpFixture ? 'XHS_FIXTURE' : 'MOCK', isolated: true, credentials_persisted: false, cleanup: [] };
 try {
     const pg = launch('postgres', 'postgres:17', 5432, ['-e', 'POSTGRES_DB=crm_test', '-e', 'POSTGRES_USER=crmtest', '-e', 'POSTGRES_PASSWORD']);
     const redis = launch('redis', 'redis:7-alpine', 6379, []);
@@ -101,10 +102,25 @@ try {
     const apiPort = await freePort(), webPort = await freePort();
     const previewHost = process.env.CRM_PREVIEW_HOST === 'localhost' ? 'localhost' : '127.0.0.1';
     const url = `postgresql://crmtest:${password}@127.0.0.1:${pg.port}/crm_test?schema=public`;
-    const env = { ...process.env, DATABASE_URL: url, REDIS_URL: `redis://127.0.0.1:${redis.port}`, DOTENV_CONFIG_PATH: '/dev/null',
+    const env = { ...process.env, DATABASE_URL: url, REDIS_URL: `redis://127.0.0.1:${redis.port}`, DOTENV_CONFIG_PATH: '/dev/null', XHS_MCP_ENABLED: '0',
         COLLECTION_QUEUE_NAME: `crm-browser-${id}`, PORT: String(apiPort), API_HOST: '127.0.0.1', APP_ORIGIN: `http://${previewHost}:${webPort}`,
         API_PROXY_TARGET: `http://127.0.0.1:${apiPort}`, COOKIE_SECURE: 'false' };
-    await command('migrate', ['npm', 'exec', 'prisma', 'migrate', 'deploy'], env);
+    if (mcpFixture) {
+        const fixture = spawn(process.execPath, ['--import','tsx','scripts/mcp-fixture.ts'], { cwd: root, env: { ...env, CRM_DISPOSABLE_MCP_FIXTURE: '1' }, detached: true, stdio: ['ignore','ignore','pipe','ipc'] });
+        children.push(fixture);
+        const endpoint = await new Promise((resolve,reject) => {
+            const timer = setTimeout(() => reject(new Error('Offline fixture startup deadline')),5000);
+            fixture.once('message',message => {clearTimeout(timer);resolve(message.url);});
+            fixture.once('error',error => {clearTimeout(timer);reject(error);});
+            fixture.once('exit',() => {clearTimeout(timer);reject(new Error('Offline fixture exited'));});
+        });
+        assert(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}\/mcp$/.test(endpoint) && new URL(endpoint).port !== '18060');
+        Object.assign(env,{XHS_MCP_ENABLED:'1',XHS_MCP_PROFILE:'fixture',XHS_MCP_ENDPOINT:endpoint});
+        process.stdin.setEncoding('utf8');
+        process.stdin.on('data',value => { const scenario = value.trim(); if (['BASELINE','NEW','LOGIN_EXPIRED','RESTRICTED','RATE_LIMITED','TIMEOUT','MALFORMED','SESSION_EXPIRED'].includes(scenario)) { fixture.send({scenario}); console.log(`Offline fixture scenario: ${scenario}`); } });
+        fixture.once('exit',() => {if(!interrupted)process.exitCode=1;finish();});
+    }
+    await command('migrate' , ['npm', 'exec', 'prisma', 'migrate', 'deploy'], env);
     for (const workspace of ['@crm/contracts', '@crm/api']) await command(`build-${workspace.split('/')[1]}`, ['npm', 'run', 'build', '-w', workspace], env);
     assert(!interrupted, 'Interrupted before fixture creation');
     const fixturePassword = randomBytes(18).toString('base64url');
@@ -128,10 +144,12 @@ try {
     console.log(`Disposable mock preview: ${env.APP_ORIGIN}`);
     console.log('Fictional logins: admin@fixture.invalid / sales-a@fixture.invalid / sales-b@fixture.invalid');
     console.log(`One-run password (never save in browser): ${fixturePassword}`);
+    if (mcpFixture) console.log('Offline MCP fixture: enter BASELINE / NEW / LOGIN_EXPIRED / RATE_LIMITED / TIMEOUT to change fictional responses.');
     console.log('Stop with Ctrl+C; temporary accounts, database and queues are removed. No real platform integration.');
     await stopped;
 } catch (error) { console.error(safe(error.message)); process.exitCode = 1; }
 finally {
+    process.stdin.pause();
     stopGroup(current);
     for (const child of children) stopGroup(child);
     await wait(500);

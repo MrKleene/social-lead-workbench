@@ -1,0 +1,23 @@
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "crm_test", schema "public" at "127.0.0.1:60297"
+
+4 migrations found in prisma/migrations
+
+Applying migration `202610180001_initial`
+Applying migration `202610190002_collection`
+Applying migration `202610200003_contact_workflow`
+Applying migration `202610200004_reply_templates`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 202610180001_initial/
+    └─ migration.sql
+  └─ 202610190002_collection/
+    └─ migration.sql
+  └─ 202610200003_contact_workflow/
+    └─ migration.sql
+  └─ 202610200004_reply_templates/
+    └─ migration.sql
+
+All migrations have been successfully applied.

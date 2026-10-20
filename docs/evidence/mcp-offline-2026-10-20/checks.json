@@ -1,0 +1,26 @@
+[
+  {
+    "command": "npm run typecheck",
+    "exit_code": 0,
+    "seconds": 6.51,
+    "log": "typecheck.txt"
+  },
+  {
+    "command": "npm run build",
+    "exit_code": 0,
+    "seconds": 6.42,
+    "log": "build.txt"
+  },
+  {
+    "command": "npm test",
+    "exit_code": 0,
+    "seconds": 2.39,
+    "log": "unit.txt"
+  },
+  {
+    "command": "npm run test:mcp",
+    "exit_code": 0,
+    "seconds": 13.82,
+    "log": "isolated.txt"
+  }
+]

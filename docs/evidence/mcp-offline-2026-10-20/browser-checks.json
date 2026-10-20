@@ -1,0 +1,32 @@
+{
+  "desktop": {
+    "width": 1440,
+    "height": 1000
+  },
+  "mobile": {
+    "width": 390,
+    "height": 844,
+    "documentWidth": 390,
+    "horizontalOverflow": false
+  },
+  "actions": [
+    "create offline keyword config",
+    "manual readiness check",
+    "first window: observed 5 matched 3 added 3 notices 0",
+    "next window: observed 6 matched 4 added 1 notices 1",
+    "repeat window: added 0 notices 0",
+    "notice opens correct source",
+    "TO_CONTACT and human review saved",
+    "assigned fictional sales A",
+    "follow-up saved without sending",
+    "overview shortcut uses XHS_FIXTURE",
+    "LOGIN_EXPIRED pauses config and disables start",
+    "mobile source close and config editing accessible"
+  ],
+  "console": {
+    "duringHotReplacement": 7,
+    "description": "Hook layout changed during development HMR; subsequent cold load and edit/cancel cycle verified separately.",
+    "coldReloadSince": "2026-10-20T06:42:06.477Z",
+    "coldReloadErrors": []
+  }
+}

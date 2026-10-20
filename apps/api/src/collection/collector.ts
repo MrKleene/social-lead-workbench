@@ -5,12 +5,14 @@ export type PostRead = {
     comments: Comment[];
     deletedIds: string[];
     complete: boolean;
+    windowRead?: boolean;
 };
 export type ReadResult = {
     posts: PostRead[];
     requests: number;
     status: string;
     reason?: string;
+    retryAfterMs?: number;
 };
 /** No timers or polling survive this finite invocation. */
 export async function collect(adapter: ReadAdapter, config: ConfigInput, cancelled: () => Promise<boolean>, budget: {
@@ -20,7 +22,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     callMs: number;
     runMs: number;
 } = limits): Promise<ReadResult> {
-    if (adapter.mode !== "MOCK")
+    if (adapter.mode !== config.mode || adapter.platform !== config.platform)
         throw new ReadFailure("REAL_DISABLED");
     const result: ReadResult = { posts: [], requests: 0, status: "COMPLETE" };
     const started = Date.now();
@@ -33,13 +35,23 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         result.requests++;
         const controller = new AbortController();
         let timer: ReturnType<typeof setTimeout>;
+        let polling: ReturnType<typeof setInterval>;
+        let checking = false;
         try {
             return await Promise.race([fn(controller.signal), new Promise<never>((_, reject) => {
-                    timer = setTimeout(() => { controller.abort(); reject(new ReadFailure("TIMEOUT")); }, Math.min(budget.callMs, budget.runMs - (Date.now() - started)));
+                    timer = setTimeout(() => { reject(new ReadFailure("TIMEOUT")); controller.abort(); }, Math.min(budget.callMs, budget.runMs - (Date.now() - started)));
+                    polling = setInterval(async () => {
+                        if (checking) return;
+                        checking = true;
+                        try { if (await cancelled()) { reject(new ReadFailure("PAUSED")); controller.abort(); } }
+                        catch (error) { reject(error instanceof ReadFailure ? error : new ReadFailure("INVALID_DATA")); controller.abort(); }
+                        finally { checking = false; }
+                    }, 100);
                 })]);
         }
         finally {
             clearTimeout(timer!);
+            clearInterval(polling!);
         }
     }
     async function pages<T>(fn: (cursor: string | undefined, signal: AbortSignal) => Promise<Page<T>>, schema: z.ZodType<T>, consume: (items: T[], deleted: string[]) => Promise<void>): Promise<boolean> {
@@ -59,6 +71,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         return false;
     }
     try {
+        if (adapter.prepare) await call(s => adapter.prepare!(s));
         const found = new Map<string, Post>();
         for (const keyword of config.keywords) {
             const complete = await pages((c, s) => adapter.search(keyword, c, s), postSchema, async (items) => { for (const p of items)
@@ -89,10 +102,15 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
                 entry.deletedIds.push(...deleted);
             };
             let complete = await pages((c, s) => adapter.comments(post, c, s), commentSchema, async (items, deleted) => { roots.push(...items); await add(items, deleted); });
-            for (const root of roots.filter(c => c.hasReplies)) {
+            const expanded = new Set<string>();
+            for (let i = 0; i < roots.length; i++) {
+                const root = roots[i];
+                if (!root.hasReplies || expanded.has(root.id)) continue;
+                expanded.add(root.id);
                 const all = await pages((c, s) => adapter.replies(post, root.id, c, s), commentSchema, async (items, deleted) => {
                     if (items.some(c => c.parentId !== root.id))
                         throw new ReadFailure("INVALID_DATA");
+                    roots.push(...items);
                     await add(items, deleted);
                 });
                 complete = complete && all;
@@ -106,14 +124,17 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
             }
             entry.comments = [...unique.values()];
             entry.complete = complete;
+            entry.windowRead = true;
             if (!complete) {
                 result.status = "PARTIAL";
-                result.reason = "COMMENTS_PARTIAL";
+                result.reason = adapter.mode === "MOCK" ? "COMMENTS_PARTIAL" : "MCP_WINDOW_ONLY";
             }
         }
     }
     catch (error) {
         result.reason = error instanceof ReadFailure ? error.code : "INVALID_DATA";
+        if (error instanceof ReadFailure) result.retryAfterMs = error.retryAfterMs;
+        if (result.reason === "INVALID_DATA") result.posts = [];
         result.status = result.reason === "PAUSED" ? "PAUSED" : result.reason === "BUDGET" ? "PARTIAL" : "FAILED";
     }
     return result;

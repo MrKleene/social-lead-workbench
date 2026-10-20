@@ -15,6 +15,10 @@ class CollectionController {
     constructor(
     @Inject(CollectionService)
     private service: CollectionService) { }
+    @Get("mcp/readiness")
+    readiness(@Req() r: AuthedRequest) { return this.service.readiness(r.actor); }
+    @Post("mcp/check")
+    check(@Req() r: AuthedRequest) { parse(z.object({}).strict(), r.body); return this.service.checkReadiness(r.actor); }
     @Get("configs")
     list(
     @Req()
@@ -52,7 +56,7 @@ class CollectionController {
     @Req()
     r: AuthedRequest, 
     @Param("id")
-    id: string) { const b = parse(z.object({ scenario: scenarioSchema, requestKey: z.string().uuid(), mode: z.literal("MOCK") }).strict(), r.body); return this.service.start(r.actor, id, b.scenario, b.requestKey); }
+    id: string) { const b = parse(z.object({ scenario: scenarioSchema, requestKey: z.string().uuid(), mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]) }).strict(), r.body); return this.service.start(r.actor, id, b.scenario, b.requestKey, b.mode); }
     @Post("runs/:id/pause")
     pause(
     @Req()

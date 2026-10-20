@@ -1,0 +1,15 @@
+unit.log:  Test Files  4 passed (4)
+unit.log:       Tests  71 passed (71)
+unit.log:  Test Files  1 passed (1)
+unit.log:       Tests  4 passed (4)
+unit.log:  Test Files  4 passed (4)
+unit.log:       Tests  18 passed (18)
+postgres-tests.log:  Test Files  2 passed (2)
+postgres-tests.log:       Tests  55 passed (55)
+queue-tests.log:  Test Files  1 passed (1)
+queue-tests.log:       Tests  14 passed (14)
+health-queue.log: PASS: 2 Redis/BullMQ integration checks — health job completed; platform job rejected.
+build.log: dist/index.html                   0.36 kB │ gzip:   0.29 kB
+build.log: dist/assets/index-DgJbA10j.css  109.72 kB │ gzip:  23.48 kB
+build.log: dist/assets/index-e0UYQfL2.js   526.10 kB │ gzip: 166.91 kB
+build.log: (!) Some chunks are larger than 500 kB after minification. Consider:

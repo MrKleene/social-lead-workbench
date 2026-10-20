@@ -16,7 +16,7 @@ export function DemoNotice() {
     <Alert className="demo-notice">
       <Info />
       <AlertDescription>
-        演示数据 · 全部为虚构，不代表真实平台连接。
+        模拟与离线夹具数据均为虚构；请核对每条来源标记，规则命中不代表同意联系。
       </AlertDescription>
     </Alert>
   );

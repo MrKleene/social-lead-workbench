@@ -1,0 +1,31 @@
+
+> lead-workbench@0.1.0 pretypecheck
+> npm run build -w @crm/contracts
+
+
+> @crm/contracts@0.1.0 build
+> tsc
+
+
+> lead-workbench@0.1.0 typecheck
+> npm run typecheck --workspaces --if-present
+
+
+> @crm/agent@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @crm/api@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit
+
+
+> @crm/web@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @crm/worker@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @crm/contracts@0.1.0 typecheck
+> tsc --noEmit

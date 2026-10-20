@@ -23,11 +23,11 @@ export function SpaceNavigation({ state }: { state: SpatialState }) {
       <CoreParticles/>
       <div className="space-core-content">
         {expanded ? <button className="core-home" onClick={state.overview} aria-label="收拢并返回环绕总览">线索工作台<span>返回总览</span></button> : <>
-          <h1>线索工作台</h1><p>查看原文，保留人的判断。</p><span className="space-mode">模拟模式 · 真实发送禁用</span>
-          <button className="gold-action core-start" onClick={state.start} disabled={(state.admin && state.work.configs.isPending) || state.work.mutation.isPending || (state.admin && (activeRun || (state.selectedConfig ? !state.selectedConfig.enabled || (!!state.selectedConfig.nextAllowedAt && new Date(state.selectedConfig.nextAllowedAt)>new Date()) : false)))}>{activeRun ? '模拟运行中' : state.admin ? '开始找线索' : '查看我的线索'}<ArrowRight size={20}/></button>
+          <h1>线索工作台</h1><p>查看原文，保留人的判断。</p><span className="space-mode">来源模式单独标记 · 真实发送禁用</span>
+          <button className="gold-action core-start" onClick={state.start} disabled={(state.admin && state.work.configs.isPending) || state.work.mutation.isPending || (state.admin && (activeRun || (state.selectedConfig ? !state.selectedConfig.enabled || (!!state.selectedConfig.nextAllowedAt && new Date(state.selectedConfig.nextAllowedAt)>new Date()) : false)))}>{activeRun ? '有限读取中' : state.admin ? '开始找线索' : '查看我的线索'}<ArrowRight size={20}/></button>
           {state.admin && state.configs.length > 0 && <select aria-label="总览使用的搜索设置" value={state.selectedConfig?.id} onChange={e=>state.setConfig(e.target.value)}>{state.configs.map(c=><option value={c.id} key={c.id}>{c.name}{!c.enabled?'（已暂停）':''}</option>)}</select>}
           {!state.admin && <small>仅显示已分配给你的线索</small>}
-          {state.admin && !state.configs.length && !state.work.configs.isPending && <small>先设置关键词，再开始有限模拟</small>}
+          {state.admin && !state.configs.length && !state.work.configs.isPending && <small>先设置关键词，再开始有限读取</small>}
         </>}
       </div>
     </div>

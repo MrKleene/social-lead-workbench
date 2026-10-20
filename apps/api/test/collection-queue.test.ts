@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Queue, QueueEvents, Worker, Job } from 'bullmq';
 import { spawn, ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -8,6 +8,7 @@ import { CollectionService } from '../src/collection/service';
 import { CollectionQueue, redisConnection } from '../src/collection/queue';
 import { MockAdapter } from '../src/collection/adapters/mock';
 import type { Actor } from '../src/auth/security';
+import { startXhsFixture } from './fixtures/xhs-mcp-server';
 import type { Scenario } from '../src/collection/contract';
 
 // This suite must only be invoked by the disposable-container launcher.
@@ -28,6 +29,7 @@ const queue = new Queue(name, { connection });
 const events = new QueueEvents(name, { connection: { ...connection, maxRetriesPerRequest: null } });
 let actor: Actor;
 let child: ChildProcess | undefined;
+let fixture: Awaited<ReturnType<typeof startXhsFixture>>;
 
 async function bounded<T>(promise: Promise<T>, label: string): Promise<T> {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -69,6 +71,8 @@ beforeAll(async () => {
         name: '虚构队列管理员', email: 'queue-admin@example.invalid', role: 'ADMIN',
         passwordHash: 'not-a-login-hash', active: false,
     } });
+    fixture = await startXhsFixture({sse:true});
+    vi.stubEnv('XHS_MCP_ENABLED','1'); vi.stubEnv('XHS_MCP_PROFILE','fixture'); vi.stubEnv('XHS_MCP_ENDPOINT',fixture.url.href);
     child = spawn(process.execPath, ['dist/collection/worker.js'], {
         cwd: process.cwd(), env: { ...process.env, DOTENV_CONFIG_PATH: '/dev/null' },
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -83,6 +87,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
     await stopChild();
+    await fixture?.stop(); vi.unstubAllEnvs();
     await producer.onModuleDestroy();
     await queue.obliterate({ force: true });
     expect(await queue.getJobCountByTypes()).toBe(0);
@@ -226,5 +231,38 @@ describe('真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL', () => 
             expect((await db.collectionRun.findUniqueOrThrow({ where: { id: r.id } })).status).toBe('PAUSED');
             expect(await db.sourceMatch.count({ where: { configId: c.id } })).toBe(0);
         } finally { release(); await w.close(); await q.obliterate({ force: true }); await e.close(); await q.close(); }
+    });
+});
+
+describe('离线MCP经实际BullMQ和独立worker',()=>{
+    it('协议读取→窗口起点→新观察提醒→幂等，保留离线来源',async()=>{
+        const c=await config('部署咨询',{mode:'XHS_FIXTURE'});
+        const start=async()=>{const r=await service.start(actor,c.id,'READ_WINDOW',randomUUID(),'XHS_FIXTURE');return finish(r.id);};
+        const first=await start(); expect(first.job.data.type).toBe('XHS_READ');
+        expect(first.run).toMatchObject({status:'PARTIAL',observed:5,matched:3,added:3,notices:0,reason:'MCP_WINDOW_ONLY'});
+        fixture.state.scenario='NEW'; expect((await start()).run).toMatchObject({added:1,notices:1});
+        expect((await start()).run).toMatchObject({added:0,notices:0});
+        expect(await db.sourceComment.count({where:{platformCommentId:{startsWith:'fixture-xhs-'},isDemo:true}})).toBe(4);
+        expect(fixture.state.sessions.size).toBe(0);
+        expect(await queue.getJobSchedulers()).toEqual([]); expect(fixture.state.forbidden).toBe(0);
+        fixture.state.scenario='BASELINE';
+    });
+    it('HTTP限流经worker保存退避并只执行一次',async()=>{
+        const c=await config('部署咨询',{mode:'XHS_FIXTURE'}); fixture.state.scenario='RATE_LIMITED';
+        const requested=await service.start(actor,c.id,'READ_WINDOW',randomUUID(),'XHS_FIXTURE');
+        const {run:r,job}=await finish(requested.id);
+        expect(r).toMatchObject({status:'FAILED',reason:'RATE_LIMITED',observed:0});expect(job.attemptsMade).toBe(1);
+        const saved=await db.collectionConfig.findUniqueOrThrow({where:{id:c.id}});
+        expect(saved.nextAllowedAt!.getTime()-r.finishedAt!.getTime()).toBeGreaterThan(119000);
+        fixture.state.scenario='BASELINE';
+    });
+    it('worker执行中暂停立即终止挂起协议读取，不写入结果',async()=>{
+        const c=await config('部署咨询',{mode:'XHS_FIXTURE'}); fixture.state.scenario='TIMEOUT';const before=fixture.state.calls.length;
+        const r=await service.start(actor,c.id,'READ_WINDOW',randomUUID(),'XHS_FIXTURE');
+        for(let n=0;n<100 && fixture.state.calls.length===before;n++) await new Promise(resolve=>setTimeout(resolve,20));
+        expect(fixture.state.calls.length).toBeGreaterThan(before);
+        await service.pauseRun(actor,r.id); expect((await finish(r.id)).run.status).toBe('PAUSED');
+        expect(await db.sourceMatch.count({where:{configId:c.id}})).toBe(0);
+        expect(fixture.state.sessions.size).toBe(0); fixture.state.scenario='BASELINE';
     });
 });

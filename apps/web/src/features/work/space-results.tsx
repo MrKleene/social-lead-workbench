@@ -1,3 +1,4 @@
+import { sourceModeLabel } from '@/features/collection/mode';
 import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, RefreshCw, ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -20,7 +21,7 @@ export function SpaceResults({ state:s }: { state:SpatialState }) {
         const comment=lead.identity.comments?.find(c=>c.matches?.length);
         return <article data-lead-id={lead.id} className={`space-result${s.id===lead.id?' selected':''}`} key={lead.id}>
           {s.admin&&['contacted','follow'].includes(s.view)&&<input className="result-select" type="checkbox" aria-label={`选择${lead.identity.nickname}`} checked={Object.hasOwn(w.selected,lead.id)} onChange={()=>w.toggle(lead)}/>}
-          <button className="result-open" onClick={()=>s.openLead(lead.id)} aria-label={`查看${lead.identity.nickname}来源`} aria-current={s.id===lead.id?'true':undefined}><span className="result-avatar">{lead.identity.nickname.slice(-1)}</span><span className="result-copy"><span className="result-name">{lead.identity.nickname}<small>{platformLabel[lead.identity.platform]}</small></span><span className="result-text">{comment?.originalText||lead.evidence}</span><span className="result-meta">{contactLabels[lead.contactStage||'MATCHED']} · {lead.isDemo?'虚构模拟':'待人工核验'}</span></span><ChevronRight size={18}/></button>
+          <button className="result-open" onClick={()=>s.openLead(lead.id)} aria-label={`查看${lead.identity.nickname}来源`} aria-current={s.id===lead.id?'true':undefined}><span className="result-avatar">{lead.identity.nickname.slice(-1)}</span><span className="result-copy"><span className="result-name">{lead.identity.nickname}<small>{platformLabel[lead.identity.platform]}</small></span><span className="result-text">{comment?.originalText||lead.evidence}</span><span className="result-meta">{contactLabels[lead.contactStage||'MATCHED']} · {sourceModeLabel(lead.identity.platformUserId, lead.isDemo)}</span></span><ChevronRight size={18}/></button>
         </article>;
       }):<div className="space-empty"><h3>当前队列已处理完毕</h3><p>{s.admin?'调整筛选，或运行一轮有限模拟。':'调整筛选，或等待管理员分配线索。'}</p></div>}
     </div>

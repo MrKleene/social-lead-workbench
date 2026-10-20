@@ -1,0 +1,27 @@
+{
+  "mode": "XHS_FIXTURE",
+  "isolated": true,
+  "credentials_persisted": false,
+  "cleanup": [
+    {
+      "container": "07af5692c58e787be9537cb17e07dcad39c0b47e96cb051d19ce1e50aefd69f7",
+      "removed": true
+    },
+    {
+      "container": "d86d01576e74e81e90aab01797f7c09bf9561d43334546f1836c96bddaba9444",
+      "removed": true
+    }
+  ],
+  "preview": "http://127.0.0.1:58069",
+  "api": "http://127.0.0.1:58068",
+  "containers": [
+    "d86d01576e74e81e90aab01797f7c09bf9561d43334546f1836c96bddaba9444",
+    "07af5692c58e787be9537cb17e07dcad39c0b47e96cb051d19ce1e50aefd69f7"
+  ],
+  "pids": [
+    23636,
+    23805,
+    23830,
+    23855
+  ]
+}

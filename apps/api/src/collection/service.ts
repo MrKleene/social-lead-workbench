@@ -5,6 +5,9 @@ import { Actor, requireAdmin } from "../auth/security";
 import { ConfigInput, Scenario, configInput, ReadAdapter, ReadFailure } from "./contract";
 import { CollectionQueue } from "./queue";
 import { MockAdapter } from "./adapters/mock";
+import { XhsMcpAdapter } from "./adapters/xhs-mcp";
+import { XhsHttpTransport } from "./mcp/transport";
+import { mcpSettings, requireMcp } from "./mcp/policy";
 import { collect } from "./collector";
 import { commitRead } from "./ingestion";
 @Injectable()
@@ -14,10 +17,44 @@ export class CollectionService {
     private db: Db, 
     @Inject(CollectionQueue)
     private queue: CollectionQueue) { }
+    private probeBusy = false;
+    private gate(mode: string) {
+        if (mode === "MOCK") return;
+        try { requireMcp(mode); } catch (error) { const code = error instanceof ReadFailure ? error.code : "REAL_DISABLED";
+            throw new ForbiddenException(`${code}：只读采集未开放或服务端模式不符，请管理员检查配置`); }
+    }
+    async readiness(actor: Actor) {
+        requireAdmin(actor);
+        const settings = mcpSettings();
+        const last = await this.db.auditLog.findFirst({ where: { action: { in: ["MCP_READINESS_CHECK", "MCP_READINESS_STARTED"] } }, orderBy: { createdAt: "desc" }, select: { createdAt: true, metadata: true } });
+        return { enabled: settings.enabled, mode: settings.enabled ? settings.mode : null, reason: settings.enabled ? "UNVERIFIED" : settings.reason, lastCheck: last, tools: ["check_login_status", "search_feeds", "get_feed_detail"], coverage: "WINDOW_ONLY", automaticPolling: false };
+    }
+    async checkReadiness(actor: Actor) {
+        requireAdmin(actor);
+        const settings = mcpSettings();
+        if (!settings.enabled) throw new ForbiddenException(settings.reason);
+        if (this.probeBusy) throw new ConflictException("检查正在进行，请稍后查看状态");
+        const probe = await this.db.$transaction(async tx => {
+            // Serialize probes across API processes; a crashed probe's lease expires without a scheduler.
+            await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(1833724485)`;
+            const last = await tx.auditLog.findFirst({ where: { action: { in: ["MCP_READINESS_CHECK", "MCP_READINESS_STARTED"] } }, orderBy: { createdAt: "desc" } });
+            const metadata = last?.metadata as { nextAllowedAt?: string } | null;
+            if (metadata?.nextAllowedAt && new Date(metadata.nextAllowedAt) > new Date()) throw new ConflictException("检查退避中，请在允许时间后手动重试");
+            return tx.auditLog.create({ data: { actorId: actor.id, action: "MCP_READINESS_STARTED", entityId: "xhs-readonly", metadata: { mode: settings.mode, reason: "CHECKING", nextAllowedAt: new Date(Date.now() + 30000).toISOString() } } });
+        });
+        this.probeBusy = true;
+        const reader = new XhsMcpAdapter(new XhsHttpTransport(settings.url, settings.mode), true, settings.mode);
+        let reason = "READY", retryAfterMs = 30000;
+        try { await reader.prepare(AbortSignal.timeout(3000)); }
+        catch (error) { reason = error instanceof ReadFailure ? error.code : "INVALID_DATA"; if (error instanceof ReadFailure) retryAfterMs = Math.max(retryAfterMs, error.retryAfterMs || 0); }
+        finally { await reader.close(); this.probeBusy = false; }
+        await this.db.auditLog.create({ data: { actorId: actor.id, action: "MCP_READINESS_CHECK", entityId: "xhs-readonly", metadata: { probeId: probe.id, mode: settings.mode, reason, nextAllowedAt: new Date(Date.now() + retryAfterMs).toISOString() } } });
+        return this.readiness(actor);
+    }
     list(actor: Actor) { requireAdmin(actor); return this.db.collectionConfig.findMany({ where: { archivedAt: null }, include: { runs: { take: 1, orderBy: { createdAt: "desc" } } }, orderBy: { createdAt: "desc" }, take: 100 }); }
     async detail(actor: Actor, id: string) { requireAdmin(actor); const config = await this.db.collectionConfig.findUnique({ where: { id }, include: { runs: { orderBy: { createdAt: "desc" }, take: 20 }, matches: { orderBy: { createdAt: "desc" }, take: 50, include: { comment: { include: { post: true, identity: { include: { lead: { select: { id: true } } } } } } } }, monitors: { take: 10, orderBy: { id: "desc" }, include: { observations: { take: 100, orderBy: { lastSeenAt: "desc" } } } } } }); if (!config)
         throw new NotFoundException(); return config; }
-    async create(actor: Actor, input: ConfigInput) { requireAdmin(actor); return this.db.$transaction(async (tx) => { const count = await tx.collectionConfig.count({ where: { archivedAt: null } }); if (count >= 100)
+    async create(actor: Actor, input: ConfigInput) { requireAdmin(actor); input = configInput.parse(input); this.gate(input.mode); return this.db.$transaction(async (tx) => { const count = await tx.collectionConfig.count({ where: { archivedAt: null } }); if (count >= 100)
         throw new BadRequestException("最多100组配置"); if (input.defaultReplyTemplateId && !await tx.replyTemplate.findUnique({ where: { id: input.defaultReplyTemplateId } })) throw new BadRequestException("默认话术不存在，请重新选择"); const config = await tx.collectionConfig.create({ data: input }); await tx.auditLog.create({ data: { actorId: actor.id, action: "COLLECTION_CONFIG_CREATED", entityId: config.id } }); return config; }); }
     async change(actor: Actor, id: string, data: Partial<ConfigInput> & {
         archivedAt?: Date;
@@ -29,6 +66,7 @@ export class CollectionService {
                 throw new NotFoundException();
             if (current.revision !== revision)
                 throw new ConflictException("配置已变化，请刷新");
+            if (reset || data.enabled === true) this.gate(data.mode || current.mode);
             if (reset && current.activeRunId)
                 throw new ConflictException("请先暂停当前运行再编辑");
             if (data.defaultReplyTemplateId && !await tx.replyTemplate.findUnique({ where: { id: data.defaultReplyTemplateId } })) throw new BadRequestException("默认话术不存在，请重新选择");
@@ -39,14 +77,15 @@ export class CollectionService {
             return config;
         });
     }
-    async start(actor: Actor, id: string, scenario: Scenario, requestKey: string) {
+    async start(actor: Actor, id: string, scenario: Scenario, requestKey: string, mode: ConfigInput["mode"] = "MOCK") {
         requireAdmin(actor);
         const run = await this.db.$transaction(async (tx) => {
             const [config] = await tx.$queryRaw<CollectionConfig[]> `SELECT * FROM "CollectionConfig" WHERE id=${id} FOR UPDATE`;
             if (!config || config.archivedAt)
                 throw new NotFoundException();
-            if (config.mode !== "MOCK")
-                throw new ForbiddenException("真实采集尚未授权，禁止运行");
+            this.gate(config.mode);
+            if (config.mode !== mode) throw new BadRequestException("采集模式与配置不一致");
+            if ((mode === "MOCK") === (scenario === "READ_WINDOW")) throw new BadRequestException("场景与采集模式不一致");
             const old = await tx.collectionRun.findUnique({ where: { requestKey } });
             if (old) {
                 if (old.configId !== id || old.scenario !== scenario)
@@ -62,16 +101,16 @@ export class CollectionService {
             const snapshot = configInput.parse({ name: config.name, platform: config.platform, mode: config.mode, keywords: config.keywords, excludeWords: config.excludeWords, batchLimit: config.batchLimit, enabled: config.enabled });
             const created = await tx.collectionRun.create({ data: { configId: id, revision: config.revision, snapshot, scenario, requestKey } });
             await tx.collectionConfig.update({ where: { id }, data: { activeRunId: created.id } });
-            await tx.auditLog.create({ data: { actorId: actor.id, action: "COLLECTION_REQUESTED_MOCK", entityId: created.id, metadata: { configId: id, scenario } } });
+            await tx.auditLog.create({ data: { actorId: actor.id, action: config.mode === "MOCK" ? "COLLECTION_REQUESTED_MOCK" : "COLLECTION_REQUESTED_MCP", entityId: created.id, metadata: { configId: id, scenario, mode: config.mode } } });
             return { ...created, reused: false };
         });
         if (!run.reused)
             try {
-                await this.queue.enqueue(run.id);
+                await this.queue.enqueue(run.id, mode === "MOCK" ? "MOCK_READ" : "XHS_READ");
             }
             catch {
                 await this.db.$transaction([this.db.collectionRun.update({ where: { id: run.id }, data: { status: "FAILED", reason: "QUEUE_UNAVAILABLE", finishedAt: new Date() } }), this.db.collectionConfig.updateMany({ where: { id, activeRunId: run.id }, data: { activeRunId: null, nextAllowedAt: new Date(Date.now() + 30000) } })]);
-                throw new ServiceUnavailableException("模拟队列不可用，30秒后可重试");
+                throw new ServiceUnavailableException("采集队列不可用，30秒后可重试");
             }
         return run;
     }
@@ -97,16 +136,18 @@ export class CollectionService {
         if (!claim.count)
             return;
         const run = await this.db.collectionRun.findUniqueOrThrow({ where: { id } });
+        let reader: ReadAdapter | undefined;
         try {
             const spec = configInput.parse(run.snapshot);
-            if (adapter && (adapter.mode !== "MOCK" || adapter.platform !== spec.platform))
+            if (adapter && (adapter.mode !== spec.mode || adapter.platform !== spec.platform))
                 throw new ReadFailure("REAL_DISABLED");
-            const reader = adapter || new MockAdapter(spec.platform, run.scenario as Scenario);
-            const result = await collect(reader, spec, async () => { const config = await this.db.collectionConfig.findUniqueOrThrow({ where: { id: run.configId } }); const fresh = await this.db.collectionRun.findUniqueOrThrow({ where: { id } }); return !config.enabled || !!config.archivedAt || config.revision !== run.revision || fresh.cancelRequested; });
+            if (spec.mode === "MOCK") reader = adapter || new MockAdapter(spec.platform, run.scenario as Scenario);
+            else { const settings = requireMcp(spec.mode); reader = adapter || new XhsMcpAdapter(new XhsHttpTransport(settings.url, settings.mode), true, settings.mode); }
+            const result = await collect(reader, spec, async () => { if (spec.mode !== "MOCK") requireMcp(spec.mode); const config = await this.db.collectionConfig.findUniqueOrThrow({ where: { id: run.configId } }); const fresh = await this.db.collectionRun.findUniqueOrThrow({ where: { id } }); return !config.enabled || !!config.archivedAt || config.revision !== run.revision || fresh.cancelRequested; });
             return await commitRead(this.db, run, result);
         }
         catch (error) {
             return commitRead(this.db, run, { posts: [], requests: 0, status: "FAILED", reason: error instanceof ReadFailure ? error.code : "INVALID_DATA" });
-        }
+        } finally { await reader?.close?.(); }
     }
 }
