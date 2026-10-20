@@ -1,9 +1,10 @@
 import platform from '../runtime/platform.cjs';
+import {acquireInstanceLock,lockMessage} from './persistent-lock.mjs';
 import {devNull} from 'node:os';
 // Persistent local business data. Never imports platform cookies or loads .env.
 import {spawn,spawnSync} from 'node:child_process';
 import {randomUUID,randomBytes} from 'node:crypto';
-import {mkdir,readFile,writeFile,lstat,unlink} from 'node:fs/promises';
+import {mkdir,readFile,writeFile,lstat} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createServer} from 'node:net';
@@ -11,8 +12,8 @@ import {PrismaClient} from '@prisma/client';
 import argon2 from 'argon2';
 import {cleanEnvironment,preflight} from './real-mcp/core.mjs';
 const root=resolve(fileURLToPath(new URL('../',import.meta.url))),args=process.argv.slice(2);
-let offline=false,fixture=false,name='main';
-for(let i=0;i<args.length;i++){if(args[i]==='--offline')offline=true;else if(args[i]==='--test-fixture')fixture=true;else if(args[i]==='--instance')name=args[++i];else throw Error('Use --offline or --instance NAME');}
+let prepareRecovery=false,offline=false,fixture=false,name='main';
+for(let i=0;i<args.length;i++){if(args[i]==='--prepare-lock-recovery')prepareRecovery=true;else if(args[i]==='--offline')offline=true;else if(args[i]==='--test-fixture')fixture=true;else if(args[i]==='--instance')name=args[++i];else throw Error('Use --offline or --instance NAME');}
 if(!/^[a-z][a-z0-9-]{0,50}$/.test(name)||fixture&&(!offline||!/^acceptance-[a-f0-9-]{36}$/.test(name)))throw Error('Invalid isolated instance');
 // Prisma CLI can auto-load .env. Refuse legacy env files without reading them.
 for(const path of [join(root,'.env'),join(root,'prisma/.env')]){const stat=await lstat(path).catch(e=>{if(e.code==='ENOENT')return null;throw e;});if(stat)throw Error('Legacy .env exists; persistent startup refuses to read it. Review environment separation before continuing.');}
@@ -22,7 +23,7 @@ if(process.platform==='win32'){
  await platform.guardCurrentProcess();
 }
 const directory=join(root,'.local',offline?'persistent-offline':'persistent',name);
-if(!offline)await preflight({root,home:process.env.HOME,session:'persistent-preflight',port:18162,env:process.env});
+if(!offline&&!prepareRecovery)await preflight({root,home:process.env.HOME,session:'persistent-preflight',port:18162,env:process.env});
 process.umask(0o077);
 const children=[],ownedGroups=new Set(),startedContainers=[];
 let manifest,secret,lock=false,stopping=false,finish,failed=false,newInstance=false;
@@ -54,7 +55,12 @@ try{
  // Do not adopt a symlinked .local or alter existing directory permissions.
  if(process.platform==='win32')await privateDir(join(root,'.local'));else await mkdir(join(root,'.local'),{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});const ls=await lstat(join(root,'.local'));if(ls.isSymbolicLink()||!ls.isDirectory())throw Error('Unsafe local directory');
  await privateDir(join(root,'.local',offline?'persistent-offline':'persistent'));await privateDir(directory);
- await writeFile(join(directory,'operation.lock'),JSON.stringify({pid:process.pid,startedAt:new Date().toISOString()}),{flag:'wx',mode:0o600});lock=true;
+ const acquired=await acquireInstanceLock({root,directory,name,mode:offline?'offline':'real',prepareRecovery});
+ if(acquired.prepared){
+  console.log('已记录本次 Mac 启动标识与原锁/实例配置摘要；没有删除锁、停止服务或读取凭据。请正常保存工作并重启 Mac；Docker 可用后在同一目录运行原启动命令。未重启前不会恢复。');
+ }else{
+ lock=acquired;if(stopping)throw Error('Stopped');lock.lost.catch(e=>{console.error(lockMessage(e.code)||'系统锁失效');failed=true;stopping=true;finish();for(const c of children)stopGroup(c);});
+ if(lock.recovered)console.log('已核验系统重启与原实例，恢复原锁；继续使用原数据库及端口。');
  for(const image of ['postgres:17','redis:7-alpine'])docker(['image','inspect',image]);
  try{manifest=await json(join(directory,'instance.json'));}catch(e){if(e.code!=='ENOENT')throw e;
   newInstance=true;const id=randomUUID(),prefix=`crm-persist-${id}`;manifest={kind:'crm-persistent-v1',id,name,root,mode:offline?'offline':'real',fixture,database:fixture?'crm_persistent_test':'crm',apiPort:await freePort(),webPort:await freePort(),deviceId:randomUUID(),postgres:{container:prefix+'-pg',volume:prefix+'-pg-data',port:await freePort()},redis:{container:prefix+'-redis',volume:prefix+'-redis-data',port:await freePort()},createdAt:new Date().toISOString(),fresh:true};
@@ -84,16 +90,17 @@ try{
  await writeFile(join(directory,'running.json'),JSON.stringify({pid:process.pid,mode:manifest.mode,preview:base,api:env.API_PROXY_TARGET,deviceId:manifest.deviceId,instanceId:manifest.id,containers:[manifest.postgres.container,manifest.redis.container]},null,2),{mode:0o600});
  console.log(`PERSISTENT ${manifest.mode.toUpperCase()} workbench: ${base}`);console.log(`Instance: ${directory}`);console.log('Business data and device references survive Ctrl+C. No automatic platform request. Existing administrators are never replaced.');
  await stopped;
-}catch(e){safeError();if(e?.code==='EEXIST')console.error('实例已被占用或锁文件存在；没有覆盖。请检查原启动终端。');process.exitCode=1;}
+ }
+}catch(e){safeError();const recoveryCommand=`npm run dev:persistent -- ${offline?'--offline ':''}${name==='main'?'':`--instance ${name} `}--prepare-lock-recovery`;const detail=lockMessage(e?.code)?.replace('npm run dev:persistent -- --prepare-lock-recovery',recoveryCommand);if(detail)console.error(detail);else if(e?.code==='EEXIST')console.error('实例已被占用或锁文件存在；没有覆盖。请检查原启动终端。');process.exitCode=1;}
 finally{
  stopping=true;for(const pid of process.platform==='win32'?[]:ownedGroups)try{process.kill(-pid,'SIGTERM');}catch{}
- for(const c of children)stopGroup(c);await new Promise(ok=>setTimeout(ok,1800));
+ for(const c of children)stopGroup(c);if(children.length)await new Promise(ok=>setTimeout(ok,1800));
  for(const pid of process.platform==='win32'?[]:ownedGroups)try{process.kill(-pid,'SIGKILL');}catch{}
  for(const c of children)if(process.platform!=='win32'&&c.exitCode===null&&c.signalCode===null&&c.pid)try{process.kill(-c.pid,'SIGKILL');}catch{}
  // Never rm containers or volumes. Only stop containers started by this run.
  for(const id of startedContainers.reverse())try{verifyOwnership('container',id);docker(['stop','--time','5',id]);}catch{process.exitCode=1;}
- if(lock){await writeFile(join(directory,'stopped.json'),JSON.stringify({stoppedAt:new Date().toISOString(),dataVolumesRetained:true,platformSessionsRetained:true}),{mode:0o600});await unlink(join(directory,'operation.lock'));}
+ if(lock){try{await writeFile(join(directory,'stopped.json'),JSON.stringify({stoppedAt:new Date().toISOString(),dataVolumesRetained:true,platformSessionsRetained:true}),{mode:0o600});}catch{process.exitCode=1;console.error('退出记录写入失败；数据保留。');}finally{try{await lock.release();}catch{process.exitCode=1;console.error('锁释放失败；原锁/数据保留，下一次启动仍需验证。');}}}
  if(failed)process.exitCode=1;
- console.log('Stopped owned processes. Persistent containers/volumes, business data and local session references retained.');
+ console.log(children.length||startedContainers.length?'Stopped owned processes. Persistent containers/volumes, business data and local session references retained.':'本次没有启动或停止业务进程/容器；原实例、数据与端口保留。');
  if(process.platform==='win32')process.exit(process.exitCode||0); // guardian EOF closes the entire owned job, including orphaned grandchildren
 }

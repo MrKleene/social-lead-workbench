@@ -111,3 +111,5 @@ npm run test:windows:native   # 仅Windows11 x64；Mac明确跳过
 - [旧扫码协议说明](docs/XHS-QR-WORKBENCH-2026-10-20.md)、[旧分阶段登录准备](docs/XHS-REAL-LOGIN-2026-10-20.md)：仅保留协议历史；其中过时启动命令已移除，日常使用持久账号中心。
 
 不把凭据、Cookie、二维码、Webhook或真实客户信息提交到仓库。外部任务完成通知不属于工作台功能交付范围。
+
+持久实例锁报错时，请按[Mac锁安全恢复步骤](docs/PERSISTENT-LOCK-RECOVERY-2026-10-20.md)保留原数据库和端口；不要手删锁或切换新实例。

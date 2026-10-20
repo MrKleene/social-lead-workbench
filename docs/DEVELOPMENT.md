@@ -110,3 +110,7 @@ API构建在Mac ARM64调用本机已安装的 `/usr/bin/swiftc` 编译 `native/m
 [本轮安全存储和回归范围](ONE-CLICK-DEVICE-2026-10-20.md)：macOS临时钥匙串已实测；默认用户钥匙串、真实账号仍待用户主动验证。当前Security文件钥匙串API有弃用警告，后续需跟随macOS兼容性维护；Windows DPAPI分支已编码、原生验收未完成，平台会话未增加应用层加密。不要把这些边界写成全平台或硬件绑定已验收。
 
 Windows当前说明见[平台适配与验收](WINDOWS-ADAPTER-2026-10-20.md)。新增 `test:platform` 与 `test:windows:native`；后者在Mac的SKIP不能计入Windows成功。公共策略模块 `runtime/platform.cjs` 同时供启动器与API使用，发布/复制源码必须包含 `runtime/` 及 `native/`。现有历史队列测试驱动主要在Mac执行；Windows整栈以已适配路径/正常停止的 `test:persistent` 在独立机验收，原生编译失败或第三方依赖未审阅均应记录阻塞，不改系统安全策略。
+
+## Mac持久实例锁（REQ-024）
+
+锁故障按[安全恢复说明](PERSISTENT-LOCK-RECOVERY-2026-10-20.md)处理。`npm run test:persistent:lock`仅用临时文件、虚构元数据、自有进程和临时端口测试；需允许本机系统启动标识与端口访问。Mac助手由本机Swift编译，产物不提交。生产恢复准备参数`--prepare-lock-recovery`不能绕过活跃系统锁，也不会读取数据库秘密或启动业务。
