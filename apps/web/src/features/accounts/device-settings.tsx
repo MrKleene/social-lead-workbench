@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type Ref } from 'react';
 import { Button } from '@/components/ui/button';
 import { useDeviceSettings, type DeviceState } from './use-device-settings';
 type Submit=(path:string,body:unknown,method?:'POST'|'PATCH')=>void;
@@ -13,8 +13,8 @@ function Registered({device,pending,submit}:{device:NonNullable<DeviceState['dev
     {!device.enabled&&<p>设备已撤销，无法执行扫码或会话核验。已有会话不会自动迁移、重新绑定或删除。</p>}
   </>;
 }
-export function DeviceSettings(){
+export function DeviceSettings({ref}:{ref?:Ref<HTMLDetailsElement>}){
   const {query,mutation}=useDeviceSettings(),state=query.data;
   const submit:Submit=(path,body,method)=>mutation.mutate({path,body,method});
-  return <details className="device-settings"><summary>专用电脑设置 · 仅管理员</summary><p>首版只启用一台专用电脑。登录工作台不等于授权此电脑执行；批准后本机保存独立设备密钥，可随时撤销。只读采集须逐次确认，评论和私信关闭。</p><p>Windows：未支持 / 未验证。远程设备接入未启用。</p>{query.isPending&&<p>读取执行机信息…</p>}{state&&!state.enabled&&<p>此临时环境未启用设备设置，请使用持久工作台。</p>}{state?.enabled&&<><p>{state.provider==='offline'?'离线验收：虚构设备密钥，不连接平台。':'本机执行适配器：批准前不生成长期设备密钥。'}</p>{state.device?.enabled||state.device?.accountCount?<Registered key={`${state.device!.id}:${state.device!.version}`} device={state.device!} pending={mutation.isPending} submit={submit}/>:<Enrollment state={state} pending={mutation.isPending} submit={submit}/>}</>}{(query.error||mutation.error)&&<p role="alert">{(query.error||mutation.error)?.message}</p>}</details>;
+  return <details ref={ref} id="execution-device-settings" className="device-settings"><summary>专用电脑设置 · 仅管理员</summary><p>首版只启用一台专用电脑。登录工作台不等于授权此电脑执行；批准后本机保存独立设备密钥，可随时撤销。只读采集须逐次确认，评论和私信关闭。</p><p>Windows：未支持 / 未验证。远程设备接入未启用。</p>{query.isPending&&<p>读取执行机信息…</p>}{state&&!state.enabled&&<p>此临时环境未启用设备设置，请使用持久工作台。</p>}{state?.enabled&&<><p>{state.provider==='offline'?'离线验收：虚构设备密钥，不连接平台。':'本机执行适配器：批准前不生成长期设备密钥。'}</p>{state.device?.enabled||state.device?.accountCount?<Registered key={`${state.device!.id}:${state.device!.version}`} device={state.device!} pending={mutation.isPending} submit={submit}/>:<Enrollment state={state} pending={mutation.isPending} submit={submit}/>}</>}{(query.error||mutation.error)&&<p role="alert">{(query.error||mutation.error)?.message}</p>}</details>;
 }

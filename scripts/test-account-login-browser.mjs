@@ -22,7 +22,7 @@ try{
  const session=await(await context.request.get(base+'/api/auth/me')).json();
  const api=async(path,body)=>context.request.fetch(base+'/api'+path,{method:body?'POST':'GET',headers:{Origin:base,'x-csrf-token':session.csrfToken},...(body?{data:body}:{})});
  assert.equal((await(await api('/accounts/login-capabilities')).json()).mode,'offline');mark('One launcher starts offline workbench; no terminal platform login required');
- await page.goto(base+'/work?module=accounts');await page.getByRole('button',{name:'添加账号并扫码',exact:true}).click();
+ await page.goto(base+'/work?module=accounts');await page.getByRole('button',{name:'添加账号并演示扫码',exact:true}).click();
  const confirm=page.getByRole('button',{name:'确认并生成二维码',exact:true});await confirm.waitFor();assert(await confirm.isDisabled());
  let accounts=(await(await api('/accounts')).json()).accounts,account=accounts[0];
  assert.equal((await api(`/accounts/${account.id}/login`,{requestKey:crypto.randomUUID()})).status(),400);mark('Explicit UI consent required; server rejects missing consent');
