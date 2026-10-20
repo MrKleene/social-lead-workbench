@@ -9,9 +9,10 @@ async function main() {
   const role = process.argv[2] === "admin" ? "ADMIN" : "SALES";
   if (role === "ADMIN" && (await db.user.count({ where: { role: "ADMIN" } })))
     throw new Error("管理员已初始化，拒绝覆盖");
+  console.log(`创建本地 CRM ${role === "ADMIN" ? "管理员" : "销售"}账号；用于登录工作台网页，与小红书账号无关，不发送邮件。`);
   const email = (
     await input({
-      message: "登录邮箱",
+      message: "新建 CRM 账号的登录邮箱",
       validate: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || "请输入有效邮箱",
     })
   ).toLowerCase();
@@ -21,7 +22,7 @@ async function main() {
       (v.trim().length > 0 && v.length <= 80) || "请输入 1–80 字名称",
   });
   const secret = await password({
-    message: "密码（至少 12 字符，隐藏输入）",
+    message: "设置 CRM 登录密码（至少 12 字符，隐藏输入）",
     mask: true,
     validate: (v) =>
       (v.length >= 12 && v.length <= 256) || "密码需为 12–256 字符",

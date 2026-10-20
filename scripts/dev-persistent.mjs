@@ -65,7 +65,8 @@ try{
  await command(['npm','exec','--no','--','prisma','migrate','deploy'],env);
  for(const workspace of ['@crm/contracts','@crm/api'])await command(['npm','run','build','-w',workspace],env);
  const db=new PrismaClient({datasources:{db:{url}}});let adminCount;try{adminCount=await db.user.count({where:{role:'ADMIN'}});if(!adminCount&&fixture){const password=randomBytes(20).toString('hex'),passwordHash=await argon2.hash(password);await db.user.createMany({data:[{email:'admin@persistent.invalid',name:'离线持久管理员',role:'ADMIN',passwordHash},{email:'sales@persistent.invalid',name:'离线持久销售',role:'SALES',passwordHash}]});console.log(`OFFLINE FIXTURE PASSWORD (memory only): ${password}`);adminCount=1;}}finally{await db.$disconnect();}
- if(!adminCount){if(!process.stdin.isTTY)throw Error('First startup requires interactive administrator initialization');await command(['npm','exec','--no','--','tsx','scripts/init-user.ts','admin'],env,true);}
+ if(!adminCount){if(!process.stdin.isTTY)throw Error('First startup requires interactive administrator initialization');console.log('此持久库尚无 CRM 管理员：现在创建本地工作台账号。邮箱只作登录标识，不发送邮件，与小红书扫码无关。');await command(['npm','exec','--no','--','tsx','scripts/init-user.ts','admin'],env,true);}
+ if(adminCount&&!fixture)console.log('已存在 CRM 管理员，跳过创建；网页使用原账号登录。启动器仅检查是否存在启用的管理员，不要求再次输入密码。');
  const checkDb=new PrismaClient({datasources:{db:{url}}});try{if(!await checkDb.user.count({where:{role:'ADMIN',active:true}}))throw Error('Administrator initialization incomplete');}finally{await checkDb.$disconnect();}
  manifest.fresh=false;await writeFile(join(directory,'instance.json'),JSON.stringify(manifest,null,2),{mode:0o600});
  const collector=launch(process.execPath,['apps/api/dist/collection/worker.js'],env,{ipc:true});

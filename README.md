@@ -1,141 +1,99 @@
-> 最新：已加入批准账号的单次只读采集入口（首轮“无偿选题”、最多3篇），见 [联测与启动步骤](docs/ACCOUNT-READ-COLLECTION-2026-10-20.md)。离线验收与真实验证分开；实际平台仍待用户批准设备、扫码和逐次确认。评论/私信发送保持禁用。
+# 线索工作台
 
-# 线索工作台 · CRM 与模拟采集
+面向大学生选题、开题与论文帮助业务的线索发现与销售跟进工作台。先搜索公开帖子、查看评论和专业/需求线索，由人工核查后组织联系与销售交接。**评论留专业或关键词命中只表示可能有需求，不等于同意营销。**
 
-## 专用电脑设置（Mac）
+## 需求、进度与后续开发
 
-管理员在账号中心的“专用电脑设置”明确批准后，才创建独立、可撤销的设备认证密钥。仅一台启用设备；凭证目录在执行机私有区域内设置并验证，已有会话不能静默换目录。扫码显示实际执行设备和保存位置。Windows 与远程设备尚未支持，真实采集/评论/私信继续关闭。
+| 文档 | 用途 |
+| --- | --- |
+| [需求主文档](docs/REQUIREMENTS.md) | 34个稳定需求ID、业务目的、验收标准、依赖、待确认项和分阶段路线图。 |
+| [实现状态表](docs/IMPLEMENTATION-STATUS.md) | 已实现/待真实验证/部分实现/未实现/平台能力待确认；每项代码、测试证据和下一步。 |
+| [开发维护约定](docs/DEVELOPMENT.md) | 后续每次实现与验收如何同步需求、状态、证据和使用说明。 |
 
-启动仍用 `npm run dev:persistent`；首次扫码前多一步管理员批准。旧临时真实扫码入口已关闭，离线演示保留。认证机制、目录限制和旧数据边界见 [专用电脑设置说明](docs/DEVICE-SETTINGS-2026-10-20.md)。
+当前核查代码基线为`c194928`。带日期的验收文档保留历史事实，当前状态以[实现状态表](docs/IMPLEMENTATION-STATUS.md)为准；不能把mock、接口预留或UI开关当作真实功能可用。
 
-## 日常使用：持久工作台
+## 当前能做什么
 
-运行 `npm run dev:persistent`，打开终端给出的本机地址。首次交互初始化 CRM 管理员；正常停止后账号、负责人、关键词、线索、跟进、审计和本机会话引用保留，重启不覆盖管理员。账号中心仍需本人确认扫码；重启后的已保存会话显示待验证，只有手动确认才核验平台状态。真实采集和发送禁用。
+- 中文CRM：管理员/销售会话登录、归属权限、来源核查、人工联系/意向记录、客户分配、备注/跟进/任务与审计；已在本地隔离环境验证。
+- 深色太空中心球与六菜单球，搜索设置、采集任务、匹配线索、回复话术、账号中心、销售跟进保持统一切换；桌面、窄屏和键盘已有离线验收。
+- 关键词/排除词/有限帖子预算可配置，模板可管理和纯文本预览；专业结构化识别尚未实现。
+- 账号元数据、负责人、内部额度、模拟全局联系账本与勿联系约束已验证；真实消息发送未实现，模拟成功不等于平台确认。
+- Mac ARM64/APFS下的管理员单设备批准、签名认证、撤销、私有凭证目录、账号互斥和持久实例已离线验证。
+- 小红书本人扫码、指定账号的**单次只读采集入口已实现，真实联调尚未完成**。当前最多3篇、可获取评论窗口，明确partial；无定时采集、自动换号或真实评论/私信发送。
 
-本轮完成持久化代码与离线两次启动验收，未执行真实扫码或真实会话操作。数据位置、备份恢复、旧临时数据迁移限制见 [持久工作台说明](docs/PERSISTENT-WORKBENCH-2026-10-20.md)。旧 `dev:xhs:login` 仍是一次性临时入口，不能用于日常保存业务；协议说明见 [账号中心扫码说明](docs/XHS-QR-WORKBENCH-2026-10-20.md)。
+仍需实现或确认：约1分钟持续监控、约10个真实账号并用、账号采集/评论/私信用途配置与自动调度、平台回复同步/自动回复/可选聊天、服务器与专用电脑分离、销售跨电脑生产部署、Windows和抖音真实适配。内部默认10次预算不是平台安全保证，遇风控必须停止。
 
-## 小红书：模拟、离线协议、真实登录准备
+## 日常只需这个命令
 
-- 模拟工作台：`npm run dev:mock:isolated`。
-- **离线虚构 MCP**：`npm run dev:mcp:offline`（旧名 `dev:mcp:isolated` 仍是离线服务）。
-- **真实登录准备**：`npm run xhs:real:prepare`。此命令只检查，不启动登录、不读取 Cookie、不访问平台。
-- 后续本人扫码与登录状态验证分为 `xhs:real:login`、`dev:xhs:real` 两步，需要在自己的终端分别确认；本轮未执行真实步骤。登录验证环境禁用采集与发送。
-
-路径、独立端口、权限、停止/保留行为与验证范围见 [真实登录入口说明](docs/XHS-REAL-LOGIN-2026-10-20.md)。
-
-
-独立本机项目。中文多人 CRM，管理员和销售使用服务端会话登录。当前支持虚构种子、可配置关键词模拟采集与人工 CRM 流程；已实现默认关闭的小红书只读 MCP 传输和任务入库，并完成离线服务验收。**真实平台联调、完整评论覆盖、自动首次联系、评论、私信和内嵌聊天未开放或未验证**。没有修改或调用旧小红书 MCP（18060）、账号、凭据或浏览器会话。
-
-## 最新：账号中心与模拟联系账本（2026-10-20）
-
-工作台新增第六个“账号中心”球，展开账号卡片与详情。管理员可管理别名、负责人、内部日额度、暂停和归档；销售仅可使用归属账号。全局稳定身份去重、固定原账号、未知结果占用、并发幂等与 UTC 额度账本均在服务端验证。全部联系操作仅为模拟。此段记录初版验收；后续扫码与本机会话持久化入口见上文，真实发送仍禁用。
-
-类型检查、全工作区构建、93 项单元测试、62 项数据库测试、12 项队列测试和 2 项健康检查通过；独立浏览器桌面/390px、动画、键盘与销售范围通过。MOCK_ONLY 跳过 12 项 MCP 集成用例，真实 MCP 保持关闭。新增迁移尚未应用到用户现有临时栈，不会自动重启该栈。设计、升级边界、截图和验收详见 [账号中心](docs/ACCOUNT-CENTER-2026-10-20.md)。
-
-## 默认关闭的只读 MCP（2026-10-20）
-
-`MOCK`、`XHS_FIXTURE`、`XHS_MCP` 来源隔离。实际 MCP 初始化、工具发现、JSON/SSE、会话释放、有限任务、递归回复、入库、窗口起点和新观察提醒已通过本地假服务测试。真实模式仍关闭，不能据此宣称真实小红书已连接。当前上游没有评论游标输入，始终报告有限窗口，不建立完整真实基线。
-
-- `npm run test:mcp`：启动全新 tmpfs PostgreSQL/Redis，运行 HTTP/权限/入库与独立 worker 回归，然后清理；不读 `.env`，不复用现有数据库。
-- `npm run dev:mcp:isolated`：另开独立临时预览与离线 MCP 服务。只使用终端显示的一次性虚构账号；按 Ctrl-C 清理。不会启用真实模式。
-- 最新类型检查、全工作区构建、164 项回归通过；浏览器桌面与390px窄屏闭环通过。详细契约、限制、修改清单、截图及未来最小授权见 [只读 MCP 离线验收](docs/MCP-READONLY-OFFLINE-2026-10-20.md)。
-
-## 环境与快速启动
-
-需要 Node.js 22+（本机使用 24.20.0）、npm、已启动的 Docker 引擎。PostgreSQL 与 Redis 都使用独立容器，不使用 SQLite。
+在已准备好依赖的项目目录运行：
 
 ```sh
-cd /path/to/social-lead-workbench
-npm ci
-npm run local:env     # 仅第一次；已有 .env 时拒绝覆盖
-npm run db:generate
-docker compose up -d postgres redis
-npm run db:migrate
-npm run db:seed       # 6 条带【虚构】标识的线索，不创建任何登录用户
-npm run admin:init    # 本机终端交互，邮箱/名称/隐藏密码/二次确认
-npm run user:create   # 同样流程创建销售，可重复运行创建不同销售
-npm run dev
+npm run dev:persistent
 ```
 
-打开 http://127.0.0.1:5173 。API 仅监听 `127.0.0.1:3100`，PostgreSQL 仅绑定 `127.0.0.1:55432`，Redis 仅绑定 `127.0.0.1:56379`。必须用此 IP 地址访问，与 CSRF Origin 配置保持一致。不要把监听地址改为公网地址。
+打开终端输出的loopback地址。只有当前库没有任何CRM管理员时，终端才会提示创建账号：邮箱、显示名称、设置密码、再次确认。邮箱只是本地CRM登录标识，不发送邮件，不是小红书账号。已有管理员时不会每次重新输入这些信息；启动器只检查是否有启用的管理员，网页仍需正常登录。全部管理员停用时拒绝启动，不会自动新建或重置。按[完整操作说明](docs/ACCOUNT-READ-COLLECTION-2026-10-20.md)执行：
 
-当前工作区已安装依赖、初始化 `.env`、执行迁移和种子；重复启动时跳过 `local:env`。初始验收的临时 QA 用户与密码文件已清理，**没有默认管理员或默认销售密码**。当前已有用户自行初始化的管理员；新环境需执行 `admin:init`，已有管理员无需重建。
+1. 账号中心核对专用电脑及私有目录，管理员明确批准，再由本人扫码。
+2. 登录及稳定平台ID验证成功后，配置“小红书只读”、关键词“无偿选题”、上限3篇。
+3. 采集任务选择账号并逐次确认一轮读取，查看来源、计数、去重及部分覆盖/失败原因。
+4. 在明确安排下正常重启持久实例，验证业务保留并主动核验会话恢复。
 
-`.env` 由脚本生成随机数据库密码，以 0600 权限保存且不打印，已加入忽略规则。初始管理员密码只在本机终端隐藏输入，Argon2id 哈希后保存；脚本不接受密码命令行参数，不会覆盖已有管理员。默认 CRM 环境不存储平台凭据；显式启用的新登录流程仅在 Git 忽略的 `.local/xhs-real/<会话>/` 保存本人授权的会话，详见上方说明。
+**以上真实验收尚待完成。** 没有真实证据前不改为“已验证”。平台缺少稳定ID或出现限制时停止，不回退mock、不自动换号。已有实例不能直接重启代替升级，尤其旧临时实例退出可能丢数据；不主动迁移或删除旧测试数据。
 
-停止本机开发服务：在运行 `npm run dev` 的终端按 Ctrl-C。停止项目容器而保留数据：`docker compose stop`。本项目不自动删除数据库卷。
+持久入口会生成Prisma客户端、应用自己的迁移并启动API/前端/专用采集worker；业务卷与本地引用正常停止后保留。全局旧MCP入口仍关闭，账号绑定只读入口单独受逐次授权控制。已有旧环境文件或实例锁冲突时先核对，不擅自读取秘密或清理未知资源。
 
-### Docker Desktop 凭据助手等待
+## 数据存在哪里
 
-本次原有 Docker 凭据助手导致公共镜像拉取等待。未修改原 Docker 配置和凭据；使用独立临时空配置匿名拉取官方 Redis 后成功。若再次遇到，可先检查 Docker Desktop 是否解锁，或用你自己的公开镜像拉取方式。已有 `postgres:17` 和 `redis:7-alpine` 镜像时可运行 `docker compose up -d --pull never postgres redis`。
+`dev:persistent` 使用本机持久业务实例，数据库名为 `crm`；可以用于当前功能联测，但不是一次性测试库，也尚未部署到服务器。测试登录后添加的账号、配置、线索和跟进会保留，正常停止后再次启动同一实例仍可使用。
 
-## 新增：可配置关键词与低操作量工作台
+| 入口 | 数据与隔离 | 正常停止 |
+| --- | --- | --- |
+| `dev:persistent` | 默认实例 `.local/persistent/main`；独立 PostgreSQL `crm` 与 Redis 命名卷 | 保留业务数据、配置、设备与会话引用 |
+| `dev:persistent:offline` | `.local/persistent-offline/main`；另一组容器、端口与卷，库名也可为 `crm` | 保留虚构演示数据，不接平台 |
+| `dev:mock:isolated` / `dev:mcp:offline` / 队列测试 | 每次随机容器、端口，`crm_test` 在 tmpfs | 只清理本轮自有临时资源 |
+| `test:persistent` | 随机离线验收实例，`crm_persistent_test`；备份恢复另用 `crm_restore_test` | 测试结束清理该测试自有资源 |
 
-默认首页为 `/work`，聚合新线索、待跟进、异常任务和新增提醒。关键词配置在 `/collection`，仅管理员可管理；模拟采集需要另开终端运行 `npm run dev:collector`。首轮基线不提醒，稳定 ID 去重，分页局部/超时/受限分别处理。详情统一展示原文与规则依据、分配、跟进和任务；支持列表内快速跟进、完成任务，以及最多 50 条的事务性批量分配。
+持久启动器直接管理带实例归属标签的 Docker 容器，**没有使用 Compose 项目**。卷名是 `crm-persist-<实例UUID>-pg-data` 和 `crm-persist-<实例UUID>-redis-data`，挂载到容器 `/var/lib/postgresql/data`、`/data`。macOS 上卷内容由 Docker Desktop 存储管理，不是项目目录内的数据库文件。`.local` 保存实例配置和私有凭据引用，不应删除或提交。
 
-2026-10-19 阶段 **84 项测试 + 2 项健康 worker 检查通过**，构建和类型检查通过。真实平台与 LLM 未接入，发送禁用。运行步骤、代码清单、操作步数、浏览器闭环和截图见 [本阶段验收](docs/COLLECTION-WORKSPACE-2026-10-19.md)。
+旧的手动 Compose 开发路径是另一套环境：项目名 `lead-workbench`，默认卷 `lead-workbench_crm_pg` / `lead-workbench_crm_redis`，也可能叫 `crm`。**数据库名相同不代表同一个实例**；持久入口不会自动迁移这些旧数据。
 
-## 已实现的 CRM 基础
-
-- 登录 / 注销、管理员与销售角色、HttpOnly SameSite=Strict 会话 Cookie，服务端会话摘要、8 小时过期及注销撤销。
-- 数据库持久化登录限速：15 分钟固定窗口，IP 30 次 / 邮箱 10 次；缺失或不匹配 Origin 的写请求被拒绝，登录后还需 session CSRF token。
-- 管理员查看全部线索、分配/转交给有效销售；销售只读写分配给自己的线索及其跟进和任务。客户端传入的身份或角色不能改变权限。
-- 线索列表、平台/状态/文本筛选、详情抽屉、原始评论和帖子 ID、人工核验说明、跟进记录、下次跟进时间及阶段、人工任务创建和状态变更。
-- 分配、跟进、核验与审计放在事务内；行锁与版本号处理转交竞争和陈旧写入。转交后旧负责人立即无法通过 API 访问。
-- 平台身份 `platform + platformUserId` 唯一；评论 `platform + platformCommentId` 唯一；同昵称不触发任何合并。来源冲突不覆盖原文。
-- 管理员只读审计 API。界面展示平台能力、未连接状态及禁用发送控件。受限账号仅可暂停，没有换号或恢复发送入口。
-- SSE 最小通知：15 秒会话有效性检查与通用 refresh 事件，客户端经当前权限重新获取 CRM 数据；流中不含线索内容。不是平台轮询。
-- 独立 Redis/BullMQ worker，仅处理内部 `HEALTHCHECK`。协议包与 TypeScript agent 单次自检；无网络请求、定时轮询或平台调用。中心 `/api/agent/claim` 明确返回 503 禁用，尚无凭据配对。
-- 浅灰蓝工作台、轻量导航、白色卡片与柔和阴影，紧凑概览及待跟进任务摘要，统一详情侧栏与状态筛选；抽屉/分段筛选/按钮/保存反馈动画，列表不重复入场，`prefers-reduced-motion` 时停用动态效果。
-
-## 目录
-
-```text
-apps/api/src/          NestJS 模块化单体：auth/users/leads/sources/followups/tasks/audit/platforms/accounts/agents/collection
-apps/web/src/          React + Vite + TypeScript + Tailwind + shadcn/ui
-                       React Router 路由、TanStack Query、feature 共置与独立传输层
-apps/api/src/collection/worker.ts  独立有限模拟采集 worker
-apps/worker/           原独立 BullMQ worker（仅内部健康检查）
-apps/agent/            本地 TypeScript agent 的禁用协议/地址校验/单次自检
-packages/contracts/   Zod 共享协议与版本
-prisma/               PostgreSQL schema 与已提交 SQL migrations
-scripts/              安全本机初始化、虚构种子、隔离测试库与 worker 检查
-compose.yaml          基础服务及 full profile 中央部署定义
-```
-
-## 验证
+## 离线开发和验证
 
 ```sh
+npm run dev:persistent:offline # 独立持久离线演示，不连接平台
+npm run dev:mock:isolated     # 临时虚构CRM/模拟采集
+npm run dev:mcp:offline      # 临时离线MCP协议服务，不是真实平台
 npm run typecheck
 npm run build
 npm test
-npm run test:mock:isolated # 仅MOCK：临时数据库、真实队列/worker及HTTP业务回归；不启动MCP夹具或前端
-npm run test:mcp       # 离线MCP验收：新建隔离数据库和队列，结束清理
-npm run test:worker
-npm run agent:check
-npm audit
+npm run test:mock:isolated
+npm run test:mcp
+npm run test:persistent
 ```
 
-- `npm test`：71 项 API/规则/HTTP/MCP测试，4 项 agent 协议测试，18 项工作台测试。
-- 旧 `npm run test:integration`：创建/复用本机 `crm_test`，对它运行迁移和 PostgreSQL + Nest HTTP 测试。新验收优先使用 `npm run test:mcp`。旧命令**每次清空 crm_test 内的本项目表**，不清空开发库 `crm`。数据库名/主机校验阻止误用远端或开发库。
-- `npm run test:worker`：独立临时队列，验证健康任务完成、COMMENT 类型拒绝；结束后清理临时队列和测试 worker。
-- 构建包括 contracts、API、web、worker、agent。测试账户由随机密码在内存中创建；不作为生产默认用户。
-- 初始 npm audit 的测试工具和 Prisma CLI 传递依赖通告已修复：Vitest 5.0.5，deepmerge-ts/effect 安全版本 override；迁移、构建和测试复验兼容。
+测试资源和浏览器依赖说明见[开发维护约定](docs/DEVELOPMENT.md)。最近实现轮次的离线记录为：120项单元、126项数据库、14项队列、2项worker检查及持久浏览器12组检查通过；MCP模式按设计跳过1项仅MOCK入口检查。**本次文档整理没有重跑这些测试。**
 
-初始命令结果和浏览器验收见 [验收记录](docs/ACCEPTANCE.md)。2026-10-19 视觉改版、47项回归和最新截图见 [视觉改版验收](docs/UI-REFRESH-2026-10-19.md)。
+## 项目结构
 
-## Compose 中央部署定义
+| 目录 | 内容 |
+| --- | --- |
+| `apps/api/src/` | NestJS：CRM权限/来源/跟进/话术/账号/设备/采集等模块。 |
+| `apps/api/src/collection/worker.ts` | 独立有限采集worker，按模式和账号授权执行。 |
+| `apps/web/src/` | React/Vite/TypeScript工作台，功能共置与统一API层。 |
+| `apps/worker/` | 原内部健康任务worker，不能冒充平台发送执行器。 |
+| `apps/agent/` | 远程执行协议预留/自检，领取接口尚未开放。 |
+| `packages/contracts/` | 共享协议与校验。 |
+| `prisma/` | PostgreSQL模型与增量迁移。 |
+| `scripts/` | 初始化、持久启动、隔离测试和验收脚本。 |
+| `docs/` | 当前需求/状态及历史阶段验收。 |
 
-`docker compose --profile full up --build` 定义了 postgres、redis、migration、API、worker、collector、nginx 静态站点。网页仍仅绑定 `127.0.0.1:5173`；API 无宿主端口，nginx 同源转发 `/api` 并关闭 SSE 缓冲。先停止本机 `npm run dev`，避免 5173 冲突。容器模式管理员初始化可在服务起来后运行 `docker compose exec api npm run admin:init`。
+## 操作说明与历史证据
 
-此前 CRM 阶段已实际构建 full profile 的四个应用镜像，并在独立项目、数据卷与回环端口 5184 完成整栈启动验收：迁移退出码 0，五个常驻服务 healthy，页面/代理/数据库就绪/worker 检查通过。API 的 `/api/health/ready` 查询数据库，数据库不可用时返回 503；web 等待 API 健康后启动。隔离方式、命令结果及清理记录见 [Compose 验收](docs/COMPOSE-VALIDATION.md)。新增 collector 服务本阶段仅做配置校验及本机 Node 进程验收，未重新做 full profile 启动。上述仅是此前本机部署验收；未来部署前还需 HTTPS 与 Secure Cookie、可信代理设置、真实域名 Origin、备份恢复、凭据管理、监控、会话清理与容量验收。
+- [账号只读联测与启动](docs/ACCOUNT-READ-COLLECTION-2026-10-20.md)：当前P1操作入口及真实未验收边界。
+- [专用电脑说明](docs/DEVICE-SETTINGS-2026-10-20.md)、[持久化说明](docs/PERSISTENT-WORKBENCH-2026-10-20.md)：设备/目录/恢复规则；其中早期“采集关闭”描述已由账号只读入口更新。
+- [账号中心初版](docs/ACCOUNT-CENTER-2026-10-20.md)、[联系与模板](docs/CONTACT-AND-TEMPLATES-2026-10-20.md)：模拟账本与人工业务流程历史验收，不代表真实发送。
+- [只读MCP离线验收](docs/MCP-READONLY-OFFLINE-2026-10-20.md)、[菜单过渡](docs/ORB-TRANSITIONS-2026-10-20.md)：协议与UI历史证据。
+- [Compose历史验收](docs/COMPOSE-VALIDATION.md)、[原始架构](docs/ARCHITECTURE.md)、[初始验收](docs/ACCEPTANCE.md)：阶段资料，不代表当前远程/生产部署可用。
+- [旧扫码协议说明](docs/XHS-QR-WORKBENCH-2026-10-20.md)、[旧分阶段登录准备](docs/XHS-REAL-LOGIN-2026-10-20.md)：仅保留协议历史；其中过时启动命令已移除，日常使用持久账号中心。
 
-## 已知边界与下一里程碑
-
-- 列表最多 500 条，筛选在已授权的返回集合上进行；下一步增加服务端分页、排序和规模测试。
-- 用户创建是本机管理员 CLI；尚无网页用户管理、密码重置、MFA、团队/租户管理。当前一个工作台共享一个管理员范围。
-- 已有人工 CRM 任务与手动有限模拟采集任务。没有真实平台调度、agent 配对/租约、真实分页游标与平台限额验证；模拟采集使用独立 collector，不冒充真实采集。
-- 未建立跨平台“同一个人”的自动合并；未来若需统一客户实体，应人工确认关联并审计。
-- 本机截图仅证明界面和虚构数据流程。旧 MCP 的小样本读取与 22.533 秒单次检测不构成规模/延迟保证。
-
-下一里程碑在已实现但默认关闭的 XHS 只读链路之上，按新的最小授权完成真实接口兼容验证；agent 短期配对与完整任务租约回收仍未实现，用新的明确授权测试环境做有限读取验收；保留评论原文→需求判定→人工复核的证据链。主动首次联系作为独立受控环节，只在账号与能力重新验证、策略和人工确认明确后推进。抖音继续独立适配，共用 CRM 模型与权限，不复用账号会话。
+不把凭据、Cookie、二维码、Webhook或真实客户信息提交到仓库。外部任务完成通知不属于工作台功能交付范围。

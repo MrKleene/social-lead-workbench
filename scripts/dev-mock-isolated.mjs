@@ -15,7 +15,7 @@ const loginOnly = process.argv.includes('--real-login-check');
 const accountLogin = process.argv.includes('--account-login-workbench');
 if(accountLogin && (mcpFixture || loginOnly || !process.send))throw new Error('Use the account login workbench launcher');
 const loginConfig=accountLogin?await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Missing login configuration')),5000);process.once('message',v=>{clearTimeout(timer);if(v?.kind!=='ACCOUNT_LOGIN_WORKBENCH'||!['real','offline'].includes(v.mode))return reject(Error('Invalid login configuration'));resolve(v);});}):undefined;
-if (loginOnly && (mcpFixture || !process.send)) throw new Error('Use the explicit xhs-real launcher; real mode requires its private IPC configuration');
+if (loginOnly && (mcpFixture || !process.send)) throw new Error('Legacy login-status regression requires private IPC configuration');
 const real = loginOnly ? await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Missing real login-check configuration')), 5000);
     process.once('message', value => {

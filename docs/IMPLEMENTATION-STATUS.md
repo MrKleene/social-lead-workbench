@@ -1,0 +1,133 @@
+# 实现状态与交付进度
+
+更新日期：2026-10-20。代码核查基线：[`c194928`](https://github.com/MrKleene/social-lead-workbench/commit/c19492845a8176c8fb1a89382cedc5b5b76d61c7)。本次只核查代码、测试和已有验收记录，没有重新运行平台或业务测试。
+
+需求目的与验收标准见[需求主文档](REQUIREMENTS.md)。状态表是当前交付事实的唯一入口；历史文档中的“本轮”“最新”只指该历史阶段。代码存在、接口骨架、UI开关或mock成功均不能作为真实平台可用的证据。
+
+## 状态口径
+
+| 状态 | 允许表达的含义 |
+| --- | --- |
+| 已实现已验证（离线） | 标注范围内的代码与本地/隔离测试通过；不证明真实平台调用、真实发送或生产部署。 |
+| 已实现已验证（真实） | 必须有获准真实环境验收的日期、版本、范围和脱敏证据；当前没有这一状态的条目。 |
+| 已实现待真实验证 | 对应实现和离线验证存在，关键真实平台/会话验收尚未完成。 |
+| 部分实现 | 只交付需求的一部分，必须同时保留已做与缺口说明。 |
+| 未实现 | 没有可用实现；模型枚举、接口预留或占位提示不计交付。 |
+| 待确认/平台能力受限 | 实施前还缺业务决定、官方接口/账号资格或授权能力确认；不是已经能用。 |
+
+## 当前结论
+
+- 已离线验证：初筛/销售分离、搜索设置、来源展示、模板预览、账号元数据、CRM归属权限、模拟联系账本、Mac本机设备认证/撤销与太空UI。
+- 已实现待真实验证：小红书本人扫码、指定账号的单次只读采集、真实会话跨重启恢复。下一步严格按P1完成，不扩大到自动发送或持续监控。
+- 仍缺：专业结构化识别、约1分钟自动监控、十个真实账号并用、完整用途配置与自动分配、远程执行和生产多电脑部署、Windows、抖音真实适配。
+- 评论/私信首次触达、后续消息同步、自动回复和内置聊天没有可用真实实现；模板和模拟结果不能替代它们。
+
+## 逐项进度
+
+证据编号链接到下方代码/测试目录。未实现项引用的是现有能力边界，不是声称该功能有通过的测试。
+
+| 需求 | 状态 | 已实现与未完成边界 | 证据 | 依赖 / 下一步 |
+| --- | --- | --- | --- | --- |
+| <a id="req-001"></a>[REQ-001 初筛与销售流程分离](REQUIREMENTS.md#req-001) | **已实现已验证（离线）** | 工作台、联系阶段和次级销售操作已落地；人工记录明确不代表平台发送。 | [E01](#ev-e01) | 无。真实来源联测后复核操作路径；保持现有布局。 |
+| <a id="req-002"></a>[REQ-002 可配置搜索与筛选](REQUIREMENTS.md#req-002) | **已实现已验证（离线）** | 关键词/排除词可配；基础分类是固定规则，非通用规则编辑器或智能专业识别。 | [E02](#ev-e02) | REQ-001。按REQ-007真实验证关键词与可获得结果，不因零命中伪造结果。 |
+| <a id="req-003"></a>[REQ-003 来源证据与人工核查](REQUIREMENTS.md#req-003) | **已实现已验证（离线）** | 来源模型、卡片和详情已验证；真实来源内容仍待REQ-007。 | [E01](#ev-e01)、[E02](#ev-e02) | REQ-002。实测真实返回字段与来源可核查性，不保证平台外链永远可访问。 |
+| <a id="req-004"></a>[REQ-004 专业与需求判断](REQUIREMENTS.md#req-004) | **部分实现** | 仅关键词、排除词和求助语句规则；没有专业结构化提取/筛选，话术中的专业明确缺失。 | [E02](#ev-e02)、[E03](#ev-e03) | REQ-003；Q01。先确定专业分类、人工修正规则和样本，再实施结构化字段与筛选。 |
+| <a id="req-005"></a>[REQ-005 新鲜度与精准度评估](REQUIREMENTS.md#req-005) | **部分实现** | 有新观察记录与相关/可能求助分类；未验证真实发布时间、精确排序或准确率。 | [E02](#ev-e02) | REQ-003、REQ-004；Q01。确认样本与指标，不先承诺固定准确率或“最新”全覆盖。 |
+| <a id="req-006"></a>[REQ-006 小红书本人扫码与稳定身份](REQUIREMENTS.md#req-006) | **已实现待真实验证** | 真实驱动、QR状态机和离线闭环已实现；尚未真实扫码或证明上游必返稳定ID。 | [E04](#ev-e04) | REQ-026、REQ-027。P1：用户在当前UI批准设备并扫码，记录真实接口兼容与失败原因。 |
+| <a id="req-007"></a>[REQ-007 小红书单次限量只读采集](REQUIREMENTS.md#req-007) | **已实现待真实验证** | 账号绑定只读入口、独立worker和离线协议已通过；并非真实平台已接通。 | [E05](#ev-e05) | REQ-006、REQ-003、REQ-026。P1：本人授权后限量真实读取，核对partial、零命中和失败，不回退mock。 |
+| <a id="req-008"></a>[REQ-008 关注帖子新评论与楼中楼提醒](REQUIREMENTS.md#req-008) | **部分实现** | 手动重复读取可比较已读窗口并产生本地提醒；没有关注帖子管理、平台定时调度或一分钟保证。 | [E02](#ev-e02)、[E06](#ev-e06) | REQ-007；Q02。先确认受支持读取能力、频率和范围，再设计可停止的监控；当前不得后台持续采集。 |
+| <a id="req-009"></a>[REQ-009 有限覆盖与失败诚实呈现](REQUIREMENTS.md#req-009) | **已实现已验证（离线）** | 返回窗口、预算、ID冲突及异常处理已验证；上游真实完整覆盖未证实。 | [E02](#ev-e02)、[E05](#ev-e05) | REQ-007。真实验收继续标partial；未验证前不增加全量分页承诺。 |
+| <a id="req-010"></a>[REQ-010 可配置快捷话术与建议](REQUIREMENTS.md#req-010) | **已实现已验证（离线）** | 模板CRUD、占位符、来源预览和权限已实现；没有自动选优或生成式回复。 | [E03](#ev-e03) | REQ-003、REQ-022。先以人工预览使用；实际发送须独立满足REQ-011。 |
+| <a id="req-011"></a>[REQ-011 营销初触达（评论/私信）](REQUIREMENTS.md#req-011) | **待确认/平台能力受限** | 原始期望已记录；当前无真实评论/私信发送实现，UI控件与模拟记录不代表可发送。 | [E03](#ev-e03)、[E07](#ev-e07) | REQ-010、REQ-015、REQ-016、REQ-017、REQ-020；Q03。先核验平台允许的接口与授权方式，再单列发送设计；不可为绕限制换号。 |
+| <a id="req-012"></a>[REQ-012 后续回复同步与提醒](REQUIREMENTS.md#req-012) | **待确认/平台能力受限** | 没有平台收件箱/会话同步；当前新观察评论提醒不是对方回复消息通知。 | [E06](#ev-e06)、[E08](#ev-e08) | REQ-011、REQ-015、REQ-022；Q03。验证回复读取/事件能力；不支持时销售在平台App查看并人工记录。 |
+| <a id="req-013"></a>[REQ-013 自动回复](REQUIREMENTS.md#req-013) | **未实现** | 没有自动回复执行器；模板预览不触发任何发送。 | [E03](#ev-e03)、[E08](#ev-e08) | REQ-010、REQ-011、REQ-012、REQ-017；Q03。依赖发送及回复能力验收后另行设计；当前不启用。 |
+| <a id="req-014"></a>[REQ-014 内置聊天（可选）](REQUIREMENTS.md#req-014) | **待确认/平台能力受限** | 平台能力表embeddedChat=false；没有聊天实现。 | [E08](#ev-e08) | REQ-012、REQ-022；Q03。先确认必要性与官方能力，优先保留App沟通方案。 |
+| <a id="req-015"></a>[REQ-015 全局身份去重与固定联系账号](REQUIREMENTS.md#req-015) | **部分实现** | 身份/评论数据库唯一约束、模拟全局联系账本和人工已联系阻断已验证；尚未与真实发送回执闭环。 | [E07](#ev-e07) | REQ-003、REQ-018。真实发送实现必须复用事务账本，不能绕到新入口；保留模拟/人工/真实来源区别。 |
+| <a id="req-016"></a>[REQ-016 结果状态、幂等与额度事务](REQUIREMENTS.md#req-016) | **部分实现** | ATTEMPTED/UNKNOWN/FAILED/SIMULATED_SUCCESS与UTC额度已在服务端验证；没有平台确认成功状态闭环或真实投递器。 | [E07](#ev-e07) | REQ-015、REQ-021。设计真实回执/故障恢复；人工记录和SIMULATED_SUCCESS永不冒充平台确认。 |
+| <a id="req-017"></a>[REQ-017 人工审核、勿联系与退订](REQUIREMENTS.md#req-017) | **部分实现** | 人工审核和勿联系字段/拦截已验证；没有平台退订消息自动识别与同步。 | [E01](#ev-e01)、[E07](#ev-e07) | REQ-015。保留人工标记；回复接入后再验证退订事件处理。 |
+| <a id="req-018"></a>[REQ-018 账号中心元数据与归属](REQUIREMENTS.md#req-018) | **已实现已验证（离线）** | 管理、版本冲突、归档与权限已验证；可用摘要当前主要指模拟任务，不等于真实在线账号总数。 | [E07](#ev-e07)、[E09](#ev-e09) | REQ-022。结合REQ-019验收真实账号状态语义及约10账号的可用性。 |
+| <a id="req-019"></a>[REQ-019 约10个账号的独立登录态](REQUIREMENTS.md#req-019) | **部分实现** | 多账号目录和引用隔离已实现且离线验证；最多3个活跃扫码尝试，约10个真实账号同时登录/运行未验证。 | [E04](#ev-e04)、[E09](#ev-e09) | REQ-006、REQ-018、REQ-024。先单账号真实闭环，再在明确范围下逐账号扩展，不能一次当作十账号可用。 |
+| <a id="req-020"></a>[REQ-020 按账号配置采集/评论/私信用途](REQUIREMENTS.md#req-020) | **部分实现** | 有只读逐次确认、能力显示和发送禁用；没有完整的持久化三用途配置/权限矩阵。 | [E05](#ev-e05)、[E08](#ev-e08)、[E09](#ev-e09) | REQ-018、REQ-006、REQ-011。设计独立用途字段及服务端校验；平台未支持的用途保持不可选。 |
+| <a id="req-021"></a>[REQ-021 内部额度与任务分配](REQUIREMENTS.md#req-021) | **部分实现** | 模拟日额度预留/释放、并发上限和手动选账号已验证；没有真实自动调度或分配建议引擎。 | [E07](#ev-e07)、[E05](#ev-e05) | REQ-015、REQ-016、REQ-020。确认各用途计数口径及可用能力，再做可审核的调度；当前只手动有限读取。 |
+| <a id="req-022"></a>[REQ-022 管理员/销售独立登录与权限](REQUIREMENTS.md#req-022) | **部分实现** | 会话、角色、归属、转交、Origin/CSRF本地已验证；跨电脑生产访问尚未部署验收。 | [E10](#ev-e10) | 无；REQ-025用于跨电脑部署。保留已验证RBAC，待REQ-025落实HTTPS/域名/会话策略后验收销售各自电脑。 |
+| <a id="req-023"></a>[REQ-023 有意向客户交接与跟进](REQUIREMENTS.md#req-023) | **已实现已验证（离线）** | 人工联系/意向、分配与跟进闭环已验证；分配API是通用管理员操作，不会自动判断真实意向。 | [E01](#ev-e01)、[E10](#ev-e10) | REQ-001、REQ-022。真实数据试用时核查业务操作；无平台聊天同步时销售去App聊并自行记结果。 |
+| <a id="req-024"></a>[REQ-024 业务持久化与重启恢复](REQUIREMENTS.md#req-024) | **已实现待真实验证** | dev:persistent两次启动、虚构会话恢复与业务备份恢复已验证；真实会话跨重启未验证。 | [E11](#ev-e11) | REQ-026、REQ-027。P1：单账号真实读取后正常重启，核查业务保留，再主动验证同账号会话；不主动迁移或删除旧测试数据。 |
+| <a id="req-025"></a>[REQ-025 服务器业务库+专用电脑执行](REQUIREMENTS.md#req-025) | **部分实现** | 有本机持久CRM、Compose部署定义及本地执行适配器；当前API与Mac同机，独立远程设备领取接口关闭。 | [E11](#ev-e11)、[E12](#ev-e12) | REQ-024、REQ-026；Q04。P4：先设计受认证远程任务协议、部署域名/HTTPS/备份监控，再跨机验收；不能把接口骨架算远程能力。 |
+| <a id="req-026"></a>[REQ-026 管理员批准单设备、签名与撤销](REQUIREMENTS.md#req-026) | **已实现已验证（离线）** | Mac同机Ed25519挑战证明、单设备唯一约束、租约/撤销已验证；非硬件证明，无生产设备批准记录。 | [E09](#ev-e09) | REQ-022的本地RBAC。保持用户UI批准边界，P1再验证真实会话绑定；远程认证另属REQ-025。 |
+| <a id="req-027"></a>[REQ-027 私有凭证目录与隔离](REQUIREMENTS.md#req-027) | **已实现已验证（离线）** | Mac ARM64/APFS、实例允许区一级目录、安全检查和归属标记已验证；非任意磁盘选择器，未知同步软件不能保证检测。 | [E09](#ev-e09) | REQ-026。P1核对实际执行机路径；若需扩大位置范围必须单独设计验证，不能搬旧Cookie。 |
+| <a id="req-028"></a>[REQ-028 换设备重新授权](REQUIREMENTS.md#req-028) | **部分实现** | 撤销和拒绝旧UUID-only/跨设备引用已验证；已有引用会阻止静默重新注册，完整换机恢复流程未实现。 | [E09](#ev-e09) | REQ-026、REQ-027、REQ-024。设计可审计换机/重新登录流程；当前遇旧引用先停下确认，不手改keyId。 |
+| <a id="req-029"></a>[REQ-029 Windows适配](REQUIREMENTS.md#req-029) | **未实现** | 仅能力接口及“不支持/未验证”提示，没有Windows执行器或安装器。 | [E09](#ev-e09) | REQ-026、REQ-027。Mac真实闭环后单独规划Windows适配与验收。 |
+| <a id="req-030"></a>[REQ-030 抖音独立适配](REQUIREMENTS.md#req-030) | **未实现** | 仅DOUYIN枚举、模拟适配与规划提示；无真实抖音登录/采集/发送实现。 | [E02](#ev-e02)、[E08](#ev-e08) | REQ-003、REQ-022；平台能力确认。XHS单账号验证后评估独立官方能力与授权，再设计适配器。 |
+| <a id="req-031"></a>[REQ-031 保持认可的太空工作台](REQUIREMENTS.md#req-031) | **已实现已验证（离线）** | 现有布局、动画策略、草稿保护、390px与键盘已验证；不因新增功能重做风格。 | [E13](#ev-e13) | REQ-001。后续功能沿用卡片/详情与统一切换；参考项目只借鉴思路，素材/代码须核对许可。 |
+| <a id="req-032"></a>[REQ-032 最小数据、明确授权与不可信内容](REQUIREMENTS.md#req-032) | **部分实现** | 只读白名单、字段校验、纯文本模板、日志脱敏与本地凭据边界已实现并离线验证；业务保留期限/删除流程未确定。 | [E03](#ev-e03)、[E05](#ev-e05)、[E09](#ev-e09) | 贯穿所有需求；Q05。确认数据保留期限与删除/导出策略；继续禁止秘密进入Git及把真实失败换为mock。 |
+| <a id="req-033"></a>[REQ-033 状态、异常与能力说明一致](REQUIREMENTS.md#req-033) | **部分实现** | 新账号只读入口有明确说明；旧/platforms静态文案、账号中心模拟可用摘要与新链路尚需统一。 | [E05](#ev-e05)、[E08](#ev-e08)、[E09](#ev-e09) | REQ-007、REQ-018、REQ-026。后续单独修正文案与能力推导并测试；本轮仅文档记录，不改业务代码。 |
+
+## 证据目录
+
+下面链接可直接在仓库查看；测试文件表示可重现的验收覆盖，历史报告说明已经跑过的环境与结果。最新原始运行日志/截图保留在本机验收目录，未假装它们是仓库内永久下载链接；后续真实验收只提交脱敏汇总。
+
+| 编号 | 代码 | 测试 / 已有验收记录 |
+| --- | --- | --- |
+| <a id="ev-e01"></a>E01 初筛、人工联系与销售分离 | [联系状态服务](../apps/api/src/leads/leads.service.ts)、[工作台](../apps/web/src/features/work/)、[联系表单](../apps/web/src/features/leads/contact-actions.tsx) | [CRM集成测试](../apps/api/test/postgres.test.ts)、[联系/模板阶段记录](CONTACT-AND-TEMPLATES-2026-10-20.md) |
+| <a id="ev-e02"></a>E02 搜索、来源与规则 | [配置/分类契约](../apps/api/src/collection/contract.ts)、[有限采集器](../apps/api/src/collection/collector.ts)、[入库](../apps/api/src/collection/ingestion.ts)、[配置编辑器](../apps/web/src/features/collection/config-editor.tsx) | [规则测试](../apps/api/test/collection-unit.test.ts)、[数据库集成](../apps/api/test/collection-postgres.test.ts)、[只读MCP离线记录](MCP-READONLY-OFFLINE-2026-10-20.md) |
+| <a id="ev-e03"></a>E03 话术 | [模板服务](../apps/api/src/replies/replies.ts)、[共享模板协议](../packages/contracts/src/index.ts)、[话术界面](../apps/web/src/features/replies/) | [单元测试](../apps/api/test/unit.test.ts)、[CRM集成](../apps/api/test/postgres.test.ts)、[模板验收记录](CONTACT-AND-TEMPLATES-2026-10-20.md) |
+| <a id="ev-e04"></a>E04 账号扫码与会话 | [登录服务](../apps/api/src/accounts/account-login.service.ts)、[本机驱动](../apps/api/src/accounts/login-runtime.ts) | [登录状态机](../apps/api/test/account-login-postgres.test.ts)、[协议解析](../apps/api/test/login-protocol.test.ts)、[持久会话](../apps/api/test/persistent-login.test.ts)、[历史扫码协议说明](XHS-QR-WORKBENCH-2026-10-20.md) |
+| <a id="ev-e05"></a>E05 账号绑定只读 | [账号授权与执行](../apps/api/src/collection/account-read.service.ts)、[任务服务](../apps/api/src/collection/service.ts)、[XHS适配器](../apps/api/src/collection/adapters/xhs-mcp.ts)、[白名单](../apps/api/src/collection/mcp/policy.ts) | [账号只读数据库测试](../apps/api/test/account-read-postgres.test.ts)、[鉴权传输契约](../apps/api/test/mcp-transport.test.ts)、[最新联测说明](ACCOUNT-READ-COLLECTION-2026-10-20.md) |
+| <a id="ev-e06"></a>E06 窗口比较、本地提醒与队列 | [观察/提醒入库](../apps/api/src/collection/ingestion.ts)、[本地提醒API](../apps/api/src/collection/module.ts)、[有限worker](../apps/api/src/collection/worker.ts)、[界面本地状态刷新](../apps/web/src/features/collection/use-collection.ts) | [真实Redis/BullMQ离线队列测试](../apps/api/test/collection-queue.test.ts)；没有定时平台监控或消息收件箱验收 |
+| <a id="ev-e07"></a>E07 账号元数据、去重、联系账本 | [账号服务](../apps/api/src/accounts/accounts.service.ts)、[API输入范围](../apps/api/src/accounts/accounts.ts)、[数据模型](../prisma/schema.prisma) | [账号权限/并发/未知/额度/UTC测试](../apps/api/test/accounts-postgres.test.ts)、[模拟账号中心验收](ACCOUNT-CENTER-2026-10-20.md) |
+| <a id="ev-e08"></a>E08 未开放平台能力边界 | [平台静态能力表](../apps/api/src/platforms/platforms.ts)、[远程领取关闭](../apps/api/src/agents/agents.ts)、[只读工具白名单](../apps/api/src/collection/mcp/policy.ts) | [平台发送拒绝测试](../apps/api/test/postgres.test.ts)、[写工具拒绝测试](../apps/api/test/mcp-transport.test.ts)；这些拒绝测试不是发送/聊天成功测试 |
+| <a id="ev-e09"></a>E09 设备、目录与账号界面 | [设备认证/路径](../apps/api/src/devices/device-runtime.ts)、[设备服务](../apps/api/src/devices/device.service.ts)、[账号中心](../apps/web/src/features/accounts/) | [设备单元](../apps/api/test/device-runtime.test.ts)、[设备并发/撤销集成](../apps/api/test/devices-postgres.test.ts)、[设备说明](DEVICE-SETTINGS-2026-10-20.md)、[账号浏览器脚本](../scripts/test-accounts-browser.mjs) |
+| <a id="ev-e10"></a>E10 CRM身份、归属与跟进 | [服务端权限](../apps/api/src/auth/security.ts)、[认证](../apps/api/src/auth/auth.ts)、[跟进](../apps/api/src/followups/followups.ts)、[线索/分配](../apps/api/src/leads/leads.service.ts) | [HTTP与数据库权限测试](../apps/api/test/postgres.test.ts)、[HTTP单元](../apps/api/test/http.test.ts) |
+| <a id="ev-e11"></a>E11 持久化、恢复与备份 | [持久启动器](../scripts/dev-persistent.mjs)、[会话引用模型](../prisma/schema.prisma)、[持久运行说明](PERSISTENT-WORKBENCH-2026-10-20.md) | [离线两次启动/浏览器/备份恢复脚本](../scripts/test-persistent-restart.mjs)、[最新通过结果记录](ACCOUNT-READ-COLLECTION-2026-10-20.md) |
+| <a id="ev-e12"></a>E12 部署与远程边界 | [Compose定义](../compose.yaml)、[远程领取关闭接口](../apps/api/src/agents/agents.ts)、[协议自检](../apps/agent/src/) | [历史本机Compose验收](COMPOSE-VALIDATION.md)、[协议测试](../apps/agent/src/protocol.test.ts)；并非当前账号链路远程部署验收 |
+| <a id="ev-e13"></a>E13 太空UI与可达性 | [菜单球布局](../apps/web/src/features/work/space-navigation.tsx)、[运动策略](../apps/web/src/features/work/motion-policy.ts)、[导航/草稿策略](../apps/web/src/features/work/navigation-policy.ts) | [运动测试](../apps/web/src/features/work/motion-policy.test.ts)、[导航测试](../apps/web/src/features/work/navigation-policy.test.ts)、[菜单过渡验收](ORB-TRANSITIONS-2026-10-20.md)、[账号截图及验收](evidence/accounts-2026-10-20/)、[持久浏览器脚本](../scripts/test-persistent-restart.mjs) |
+
+## 启动命令整理（REQ-034）
+
+| 需求ID | 状态 | 范围与证据 | 下一步 |
+| --- | --- | --- | --- |
+| <a id="req-034"></a>[REQ-034 日常单入口与环境边界](REQUIREMENTS.md#req-034) | **已实现已验证（离线）** | 已审计根/工作区package、脚本调用、Docker定义与文档；已移除6个旧入口并更新首次CRM初始化说明。见[命令分类](DEVELOPMENT.md)、[数据边界](../README.md)。 | 源码已应用，工作区无输出类型检查、脚本语法/引用、离线模式拒绝检查和230个链接/锚点检查通过。没有重启用户实例，没有新的真实平台验收；新启动提示下次运行生效。 |
+
+2026-10-20：用户要求清理无用启动命令并确认登录/采集入口、数据库用途；新增REQ-034，不扩大平台操作范围。本次仅运行静态/入口拒绝检查及 `npm run typecheck --workspaces --if-present`；未重跑构建、数据库或浏览器回归，未启动服务。
+
+## 最新验证快照（非本次重跑）
+
+基线`c194928`前的实现轮次已完成以下检查；本次文档整理核对了已有记录，不重新申请二维码、启动采集或变更数据库。
+
+| 范围 | 结果及限制 |
+| --- | --- |
+| 类型检查/构建 | 全工作区通过；保留既有大于500kB的JS包提示。 |
+| 单元 | 120项：API98、agent4、web18。 |
+| 数据库/HTTP | 隔离PostgreSQL 126项通过，包括新账号只读、设备及旧CRM回归。 |
+| 队列/worker | 14项队列及2项worker检查通过；MCP离线模式按设计跳过1项仅MOCK入口测试。 |
+| 浏览器/持久化 | 独立离线环境12组检查、两次启动；1440×1000与390×844、键盘/控制台/权限通过；3篇虚构帖子、3条匹配、1条稳定ID线索，明确第二轮新增0。 |
+| 真实平台/部署 | 尚无本项目当前链路的真实登录、真实限量读取、真实会话重启恢复、多真实账号、生产多电脑或远程设备验收。 |
+
+## 已知差异与待处理事项
+
+| 编号 | 当前事实 | 后续处理 |
+| --- | --- | --- |
+| GAP-01 | 旧`/platforms`静态“未接入”及暂停文案未随账号只读入口更新；账号中心可用摘要仍主要统计模拟任务。 | REQ-033：未来业务改动中统一状态推导和文案；本次不改代码。 |
+| GAP-02 | “专业”占位符可预览缺失，但没有专业提取、存储或筛选能力。 | REQ-004：先确认标签与来源证据，不将模板占位符算识别实现。 |
+| GAP-03 | 新观察提醒来自手动重复读取的窗口比较；首次窗口不提醒；没有定时平台轮询。 | REQ-008：单独设计关注范围和可验证的提醒延迟，不将本地UI刷新当持续采集。 |
+| GAP-04 | 远程`agent/claim`关闭，当前Mac与API同机；旧Compose验收不覆盖当前跨机执行。 | REQ-025：独立设计和真实跨机验收。 |
+| GAP-05 | 原有UUID-only引用不会信任或导入；撤销后已有引用阻止静默重新注册。 | REQ-028：明确重新授权/恢复方案；不主动删旧数据或手改身份字段。 |
+| GAP-06 | CRM列表最多500条、卡片最近8条来源，用户创建为CLI；生产分页、网页用户管理/密码恢复、多电脑容量未验收。 | 作为REQ-022/025规模部署前的待设计项，不在本次文档整理中开发。 |
+
+## 下一次验收记录模板
+
+只在真正发生后填写，不以计划替代结果：
+
+```text
+日期 / 代码提交：
+需求ID / 实际范围：
+模式：MOCK / XHS_FIXTURE / 真实XHS / 其他已批准环境
+授权与前置门槛：仅写已确认的类型，不存凭据或原始会话
+步骤、计数、覆盖（complete/partial/failed）与观察结果：
+成功 / 失败 / 未执行的步骤：
+脱敏代码、测试或结果记录链接：
+状态变更与剩余缺口：
+迁移、重启及恢复影响：
+```
+
+没有对应证据就保留原状态。维护步骤见[开发维护约定](DEVELOPMENT.md)。
