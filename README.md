@@ -79,7 +79,8 @@ compose.yaml          基础服务及 full profile 中央部署定义
 npm run typecheck
 npm run build
 npm test
-npm run test:mcp       # 推荐：新建隔离数据库和队列，结束清理
+npm run test:mock:isolated # 仅MOCK：临时数据库、真实队列/worker及HTTP业务回归；不启动MCP夹具或前端
+npm run test:mcp       # 离线MCP验收：新建隔离数据库和队列，结束清理
 npm run test:worker
 npm run agent:check
 npm audit

@@ -8,7 +8,9 @@ import assert from 'node:assert/strict';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const mcpAcceptance = process.argv.includes('--mcp');
-const output = join(root, mcpAcceptance ? '.qa/mcp-validation' : '.qa/step3-validation');
+const mockOnly = process.argv.includes('--mock-only');
+assert(!(mcpAcceptance && mockOnly), 'Choose either --mcp or --mock-only');
+const output = join(root, mockOnly ? '.qa/mock-only-validation' : mcpAcceptance ? '.qa/mcp-validation' : '.qa/step3-validation');
 mkdirSync(output, { recursive: true });
 const id = randomBytes(8).toString('hex');
 const password = randomBytes(24).toString('hex');
@@ -70,7 +72,7 @@ function stopGroup(child) {
 }
 let interrupted = false;
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { interrupted = true; stopGroup(current); });
-const report = { isolated: true, persistent_volumes: false, credentials_persisted: false, results, cleanup: [] };
+const report = { mode: mockOnly ? 'MOCK_ONLY' : mcpAcceptance ? 'MCP_OFFLINE' : 'QUEUE_MIXED', isolated: true, persistent_volumes: false, credentials_persisted: false, results, cleanup: [] };
 try {
     // Reuse installed official images only. No daemon settings, persistent credentials, or external platforms.
     docker(['image', 'inspect', 'postgres:17']); docker(['image', 'inspect', 'redis:7-alpine']);
@@ -82,11 +84,11 @@ try {
     assert(!interrupted, 'Interrupted before running tests');
     const url = `postgresql://crmtest:${password}@127.0.0.1:${pg.port}/crm_test?schema=public`;
     const env = { ...process.env, DATABASE_URL: url, TEST_DATABASE_URL: url, REDIS_URL: `redis://127.0.0.1:${redis.port}`,
-        DOTENV_CONFIG_PATH: '/dev/null', XHS_MCP_ENABLED: '0', COLLECTION_QUEUE_NAME: `crm-queue-acceptance-${id}`, CRM_DISPOSABLE_QUEUE_TEST: '1' };
+        DOTENV_CONFIG_PATH: '/dev/null', XHS_MCP_ENABLED: '0', XHS_MCP_PROFILE: '', XHS_MCP_ENDPOINT: '', CRM_MOCK_ONLY: mockOnly ? '1' : '0', COLLECTION_QUEUE_NAME: `crm-queue-acceptance-${id}`, CRM_DISPOSABLE_QUEUE_TEST: '1' };
     await command('migrate', ['npm', 'exec', 'prisma', 'migrate', 'deploy'], env);
     for (const workspace of ['@crm/contracts', '@crm/api', '@crm/worker'])
         await command(`build-${workspace.split('/')[1]}`, ['npm', 'run', 'build', '-w', workspace], env);
-    if (mcpAcceptance) await command('postgres-tests', ['npm', 'run', 'test:integration', '-w', '@crm/api', '--', '--reporter=verbose'], env);
+    if (mcpAcceptance || mockOnly) await command('postgres-tests', ['npm', 'run', 'test:integration', '-w', '@crm/api', '--', '--reporter=verbose'], env);
     await command('queue-tests', ['npm', 'run', 'test:queue', '-w', '@crm/api', '--', '--reporter=verbose'], env);
     await command('health-queue', ['node', 'scripts/test-worker.mjs'], env);
     const keys = docker(['exec', redis.container, 'redis-cli', '--scan', '--pattern', `bull:crm-queue-acceptance-${id}*`]);

@@ -1,0 +1,69 @@
+
+> @crm/api@0.1.0 test:integration
+> vitest run --no-file-parallelism test/postgres.test.ts test/collection-postgres.test.ts --reporter=verbose
+
+
+ RUN  v5.0.5 /Users/kleene/projects/social-lead-workbench/apps/api
+
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 评论/私信话术校验、版本、持久化和关联删除均受审计保护 162ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 话术管理仅管理员，来源预览沿用销售范围且无发送路由 88ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 联系阶段独立保留旧销售状态，需人工确认，支持忽略恢复和版本冲突审计 83ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 联系状态沿用负责人权限与CSRF，转交后原销售不能更改；重新采集不重置人工处理 124ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 管理员新增编辑启停归档多组配置，审计和版本冲突生效 31ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 销售不能列出、详情、创建、修改、启停、归档或运行配置 27ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 空词、过大预算、未知模式及缺失CSRF被HTTP拒绝 7ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 基线读取包含分页楼中楼：多评论一个身份，排除广告，无首次提醒 55ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 后续新增只提醒一次，重复运行与请求重放均幂等 142ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 并发配置与队列重复投递不会重复身份、评论或提醒 181ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 同一用户的后续新评论只追加来源与提醒，不新增线索 89ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 来源稳定ID内容冲突时回滚整轮，保留旧原文 65ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 跨平台即使稳定ID和昵称相同也不合并 93ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 首次局部读取不立基线；恢复完整后不补发历史提醒 182ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 暂时缺失不等于删除，重现不重复提醒；明确删除单独标记并保留原文 127ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 超时退避限制重试，恢复后可完成；新版本重新基线 98ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > RESTRICTED 自动停用，不换账号或自动重试 13ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > LOGIN_EXPIRED 自动停用，不换账号或自动重试 12ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 停用配置/手动暂停后旧队列不能入库；编辑需先暂停 9ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 失败队列释放配置且不产生平台调用或线索 11ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 真实适配器强制拒绝、损坏快照安全结束、无发送路由 24ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 运行中暂停取消读取，事务不会提交暂停后的结果 22ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 批量分配仅管理员可操作，版本冲突整批回滚，每项审计 70ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 提醒按负责人隔离、已读按用户隔离、转交后立即撤权 137ms
+ ✓ test/collection-postgres.test.ts > 关键词采集：PostgreSQL 与 HTTP 权限闭环 > 模拟采集提醒到人工核验、联系阶段、销售交接和重新读取均持久化 257ms
+ ↓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > 默认关闭不会连接，销售无读取/检查权限、CSRF和端点注入被拒绝
+ ↓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > GET只读配置；手动检查仅登录状态并审计，30秒节流
+ ↓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > 检查退避持久化，换API实例也不能立即再次触发
+ ↓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > 首次窗口无提醒；嵌套来源、重复幂等、新观察提醒与人工处理保留
+ ↓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > 缺失与损坏窗口不会报告删除或建立新起点
+ ↓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > LOGIN_EXPIRED暂停配置，保留证据且没有登录/发送工具调用
+ ↓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > RESTRICTED暂停配置，保留证据且没有登录/发送工具调用
+ ↓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > HTTP429遵循Retry-After，不自动重试；模式不匹配拒绝
+ ↓ test/collection-postgres.test.ts > MCP默认关闭、只读就绪检查与离线真实传输入库 > 排队后关闭开关，执行不会触达MCP，也不改变已有来源
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 会话 cookie HttpOnly / SameSite Strict，未返回密码摘要 118ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 管理员看全部，销售仅看自己，另一销售看不到 32ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 销售不能借 URL 越权详情、跟进、负责人 9ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 销售不能查询用户目录或审计 8ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > CSRF 缺失与跨站写入被拒绝 6ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 严格验证拒绝角色注入、错误日期 20ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 跟进与下次时间、阶段、审计原子更新 10ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 陈旧版本拒绝，事务不残留多余跟进 4ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 人工核验保留说明且不标记为同意联系 9ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 负责人必须为有效销售 4ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 转交后旧销售立即失去详情、跟进及任务权限 26ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 新负责人能完成自己的任务，不能创建他人任务 12ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 并发转交只有一个版本获胜 10ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 相同平台用户和评论重复导入保持幂等 17ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 并发重复导入保持唯一 16ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 同名跨平台绝不合并，即使平台 ID 字符串相同 7ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 重复评论 ID 内容冲突拒绝并保留原文 8ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 数据库唯一约束在直接写入时仍有效 4ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 平台发送能力全部禁用，受限账号仅可暂停 12ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 注销撤销服务器会话 121ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 过期会话与禁用用户不能访问 119ms
+ ✓ test/postgres.test.ts > 真实 PostgreSQL + Nest HTTP 集成 > 登录按账号限速且错误不泄露账号存在 1102ms
+
+ Test Files  2 passed (2)
+      Tests  47 passed | 9 skipped (56)
+   Start at  15:29:17
+   Duration  5.97s (tests 86%, import 12%, transform 1%)
+

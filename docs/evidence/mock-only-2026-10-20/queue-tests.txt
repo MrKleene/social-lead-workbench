@@ -1,0 +1,28 @@
+
+> @crm/api@0.1.0 test:queue
+> vitest run --no-file-parallelism test/collection-queue.test.ts --reporter=verbose
+
+
+ RUN  v5.0.5 /Users/kleene/projects/social-lead-workbench/apps/api
+
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 仅MOCK入口关闭MCP且拒绝真实/夹具配置，不产生协议检查审计 10ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 手动投递经独立进程完成基线，并保留来源与楼中楼 130ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 相同请求键并发重放只产生一条运行和一条完成审计 57ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 已完成运行以另一队列任务重复投递不会重复写库 60ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 新增评论经队列提醒一次，重复新场景零新增 150ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 排队期间暂停运行后即使 worker 消费也不入库 21ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 排队期间停用配置，旧任务不会产生来源 14ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 业务超时记录 FAILED，队列单次消费，无自动重试；退避拒绝立即重跑 24ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 手动失败重跑按30/60/120/240/300秒退避；模拟时间推进后可恢复 153ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 非法平台任务进入 BullMQ failed，单次尝试且不创建业务运行 4ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 多帖大批次仍受32次读取预算限制，标记部分完成 195ms
+ ✓ test/collection-queue.test.ts > 真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL > 实际队列执行中暂停：延迟模拟读取返回后也不提交 31ms
+ ↓ test/collection-queue.test.ts > 离线MCP经实际BullMQ和独立worker > 协议读取→窗口起点→新观察提醒→幂等，保留离线来源
+ ↓ test/collection-queue.test.ts > 离线MCP经实际BullMQ和独立worker > HTTP限流经worker保存退避并只执行一次
+ ↓ test/collection-queue.test.ts > 离线MCP经实际BullMQ和独立worker > worker执行中暂停立即终止挂起协议读取，不写入结果
+
+ Test Files  1 passed (1)
+      Tests  12 passed | 3 skipped (15)
+   Start at  15:29:23
+   Duration  1.37s (tests 84%, import 12%, transform 3%)
+

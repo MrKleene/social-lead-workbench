@@ -15,6 +15,7 @@ import type { Scenario } from '../src/collection/contract';
 const database = new URL(process.env.TEST_DATABASE_URL || 'http://invalid');
 const redis = new URL(process.env.REDIS_URL || 'http://invalid');
 const name = process.env.COLLECTION_QUEUE_NAME || '';
+const mockOnly = process.env.CRM_MOCK_ONLY === '1';
 if (process.env.CRM_DISPOSABLE_QUEUE_TEST !== '1' || database.hostname !== '127.0.0.1' ||
     database.pathname !== '/crm_test' || redis.hostname !== '127.0.0.1' ||
     !database.port || !redis.port || !/^crm-queue-acceptance-[a-f0-9]+$/.test(name) ||
@@ -71,8 +72,13 @@ beforeAll(async () => {
         name: '虚构队列管理员', email: 'queue-admin@example.invalid', role: 'ADMIN',
         passwordHash: 'not-a-login-hash', active: false,
     } });
-    fixture = await startXhsFixture({sse:true});
-    vi.stubEnv('XHS_MCP_ENABLED','1'); vi.stubEnv('XHS_MCP_PROFILE','fixture'); vi.stubEnv('XHS_MCP_ENDPOINT',fixture.url.href);
+    if (mockOnly) {
+        expect(process.env.XHS_MCP_ENABLED).toBe('0');
+        expect(process.env.XHS_MCP_ENDPOINT).toBe('');
+    } else {
+        fixture = await startXhsFixture({sse:true});
+        vi.stubEnv('XHS_MCP_ENABLED','1'); vi.stubEnv('XHS_MCP_PROFILE','fixture'); vi.stubEnv('XHS_MCP_ENDPOINT',fixture.url.href);
+    }
     child = spawn(process.execPath, ['dist/collection/worker.js'], {
         cwd: process.cwd(), env: { ...process.env, DOTENV_CONFIG_PATH: '/dev/null' },
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -98,6 +104,14 @@ afterAll(async () => {
 }, 20000);
 
 describe('真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL', () => {
+    it.runIf(mockOnly)('仅MOCK入口关闭MCP且拒绝真实/夹具配置，不产生协议检查审计', async () => {
+        expect(await service.readiness(actor)).toMatchObject({ enabled: false, mode: null, reason: 'REAL_DISABLED', automaticPolling: false });
+        await expect(service.checkReadiness(actor)).rejects.toThrow('REAL_DISABLED');
+        for (const mode of ['XHS_MCP', 'XHS_FIXTURE'])
+            await expect(config('禁用模式拒绝', { mode })).rejects.toThrow('REAL_DISABLED');
+        expect(await db.collectionConfig.count({ where: { mode: { not: 'MOCK' } } })).toBe(0);
+        expect(await db.auditLog.count({ where: { action: { startsWith: 'MCP_' } } })).toBe(0);
+    });
     it('手动投递经独立进程完成基线，并保留来源与楼中楼', async () => {
         const c = await config('真实队列基线');
         const { job, run: r } = await run(c.id);
@@ -234,7 +248,7 @@ describe('真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL', () => 
     });
 });
 
-describe('离线MCP经实际BullMQ和独立worker',()=>{
+describe.skipIf(mockOnly)('离线MCP经实际BullMQ和独立worker',()=>{
     it('协议读取→窗口起点→新观察提醒→幂等，保留离线来源',async()=>{
         const c=await config('部署咨询',{mode:'XHS_FIXTURE'});
         const start=async()=>{const r=await service.start(actor,c.id,'READ_WINDOW',randomUUID(),'XHS_FIXTURE');return finish(r.id);};

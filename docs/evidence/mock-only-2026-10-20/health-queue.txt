@@ -1,0 +1,1 @@
+PASS: 2 Redis/BullMQ integration checks — health job completed; platform job rejected.

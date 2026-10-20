@@ -341,9 +341,54 @@ describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
         expect((await write('post', `/notices/${notice.id}/read`, {}, a)).status).toBe(404);
         expect((await read('/notices', b)).body[0].reads).toEqual([]);
     });
+    it('模拟采集提醒到人工核验、联系阶段、销售交接和重新读取均持久化', async () => {
+        expect(process.env.XHS_MCP_ENABLED).not.toBe('1');
+        expect((await read('/collection/mcp/readiness')).body).toMatchObject({ enabled: false, reason: 'REAL_DISABLED' });
+        const c = await config('【验收】模拟闭环持久化');
+        expect(await run(c.id)).toMatchObject({ added: 2, notices: 0 });
+        expect(await run(c.id, 'NEW')).toMatchObject({ added: 1, notices: 1 });
+        expect(await run(c.id, 'NEW')).toMatchObject({ added: 0, notices: 0 });
+        const notices = await read('/notices');
+        expect(notices.status).toBe(200);
+        const storedNotice = await db.collectionNotice.findFirstOrThrow({ where: { comment: { matches: { some: { configId: c.id } } } } });
+        const notice = notices.body.find((n: { id: string }) => n.id === storedNotice.id);
+        expect(notice).toBeDefined();
+        const id = notice.leadId;
+        const initial = await read(`/leads/${id}`);
+        expect(initial.status).toBe(200);
+        expect(initial.body.isDemo).toBe(true);
+        expect(initial.body.identity.comments.some((v: { matches: { keywords: string[] }[] }) =>
+            v.matches.some(m => m.keywords.includes('【验收】模拟闭环持久化')))).toBe(true);
+        const note = '【验收虚构】已核对模拟原文，仅为潜在需求，未联系且未取得同意';
+        expect((await write('patch', `/leads/${id}/review`, { note, version: 0 })).status).toBe(200);
+        expect((await write('patch', `/leads/${id}/contact`, { stage: 'TO_CONTACT', note, version: 1 })).status).toBe(200);
+        expect((await write('patch', `/leads/${id}/owner`, { ownerId: aId, version: 2 })).status).toBe(200);
+        expect((await read(`/leads/${id}`, a)).status).toBe(200);
+        expect((await read(`/leads/${id}`, b)).status).toBe(404);
+        expect((await write('post', `/notices/${notice.id}/read`, {}, a)).status).toBe(201);
+        const content = '【验收虚构】销售甲接收并核查来源；尚未联系平台用户';
+        expect((await write('post', `/leads/${id}/followups`, { content, nextFollowUpAt: null, status: 'FOLLOWING', version: 3 }, a)).status).toBe(201);
+        const saved = await read(`/leads/${id}`, a);
+        expect(saved.body).toMatchObject({ ownerId: aId, status: 'FOLLOWING', contactStage: 'TO_CONTACT', reviewNote: note, version: 4 });
+        expect(saved.body.followups).toHaveLength(1);
+        expect(saved.body.followups[0].content).toBe(content);
+        expect(await run(c.id, 'NEW')).toMatchObject({ added: 0, notices: 0 });
+        const refreshed = await read(`/leads/${id}`, a);
+        expect(refreshed.body).toEqual(saved.body);
+        expect((await write('patch', `/leads/${id}/owner`, { ownerId: bId, version: 4 })).status).toBe(200);
+        expect((await read(`/leads/${id}`, a)).status).toBe(404);
+        const handedOff = await read(`/leads/${id}`, b);
+        expect(handedOff.status).toBe(200);
+        expect(handedOff.body).toMatchObject({ ownerId: bId, contactStage: 'TO_CONTACT', status: 'FOLLOWING', version: 5 });
+        expect(handedOff.body.followups[0].content).toBe(content);
+        const persisted = await db.lead.findUniqueOrThrow({ where: { id }, include: { followups: true } });
+        expect(persisted.ownerId).toBe(bId); expect(persisted.followups).toHaveLength(1);
+        expect(await db.auditLog.count({ where: { entityId: id, action: 'FOLLOWUP_CREATED' } })).toBe(1);
+        expect(await db.collectionNotice.count({ where: { leadId: id } })).toBe(1);
+    });
 });
 
-describe('MCP默认关闭、只读就绪检查与离线真实传输入库', () => {
+describe.skipIf(process.env.CRM_MOCK_ONLY === '1')('MCP默认关闭、只读就绪检查与离线真实传输入库', () => {
     let fixture: Awaited<ReturnType<typeof startXhsFixture>>;
     beforeAll(async () => { fixture = await startXhsFixture(); });
     afterAll(async () => { await fixture.stop(); vi.unstubAllEnvs(); });

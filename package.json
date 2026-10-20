@@ -30,6 +30,7 @@
     "dev:mock:isolated": "node scripts/dev-mock-isolated.mjs",
     "test:workbench": "vitest run apps/web/src/features/work/stable-results.test.ts apps/web/src/features/work/motion-policy.test.ts apps/web/src/features/work/navigation-policy.test.ts apps/web/src/features/collection/mode.test.ts",
     "test:mcp": "node scripts/test-queue-isolated.mjs --mcp",
+    "test:mock:isolated": "node scripts/test-queue-isolated.mjs --mock-only",
     "dev:mcp:isolated": "node scripts/dev-mock-isolated.mjs --mcp-fixture"
   },
   "devDependencies": {
