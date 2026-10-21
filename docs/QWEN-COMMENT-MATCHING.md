@@ -2,14 +2,26 @@
 
 本轮只实现评论匹配，不生成回复、不发送评论或私信。默认关闭；保存自然语言目标、打开队列或恢复服务都不会调用模型。用户已同意将需求、评论和必要帖子/父评论文本在去除身份、链接、联系方式后交由北京地域处理；本轮没有配置密钥、批准费用或发起真实 API 请求。离线 HTTP 模拟通过不代表真实模型质量验收。
 
-## 固定接口
+## 受控型号与固定北京接口
 
-- 模型 `qwen3.7-flash-2026-07-15`，`enable_thinking=false`，固定快照，最多 2500 输出 token。
+- 默认仍是 `qwen3.7-flash-2026-07-15`；后端 `QWEN_MATCH_MODEL` 可选下表三个已核实固定版本。业务分类Schema独立于型号，均固定 `enable_thinking=false`，最多2500输出token。没有改当前默认或自动选择更便宜的模型。
 - 北京业务空间接口 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions`，不接受自定义代理或重定向。
 - 严格 JSON Schema：符合 / 不符合 / 待确认、排序分数、理由、上下文程度和原文引用。服务端再次检查结构、每条引用与脱敏文本完全一致，并要求评论证据。缺少父评论、帖子或截断上下文强制待确认。
 - 模型分数不是概率、不是发送授权。未配置、超时、限流、结构或证据失败均保持待审核、评分为空；不冒充低匹配。
 
 依据：[官方思考模式文档](https://help.aliyun.com/zh/model-studio/deep-thinking)、[官方结构化输出文档](https://help.aliyun.com/zh/model-studio/qwen-structured-output)。模型可用性和实际费用最终需在用户自己的北京空间确认，费用以[官方价格页](https://help.aliyun.com/zh/model-studio/model-pricing)及账单为准。
+
+### 效果优先的型号选择边界（2026-10-21 补充）
+
+用户最终型号尚未选定。本轮仅增加配置能力，不代替用户选型、不启用思考、不调用外部模型。官方文档明确列出Qwen3.7-Plus、Qwen3.8-Max支持JSON Schema及混合思考模式，可传false关闭；“文档支持”不等于已在用户空间验证连通性或真实评论效果。未支持的型号/别名不会回退Flash。
+
+| QWEN_MATCH_MODEL | 北京非思考原价：输入 / 输出（元/百万token） |
+| --- | --- |
+| qwen3.7-flash-2026-07-15（原默认） | 输入≤32K：0.2 / 0.8；32K–256K：0.6 / 2.4；256K–1M：1.2 / 4.8 |
+| qwen3.7-plus-2026-05-26 | 输入≤256K：2 / 8；256K–1M：6 / 24 |
+| qwen3.8-max-0902 | 输入≤1M：12 / 36 |
+
+上述价格来自同日官方北京价格表，不推定免费额度、折扣或缓存优惠；同一请求所有token使用所属输入区间单价，最终以账单为准。程序仅限制每日请求次数，不把次数冒充人民币精确预算。未知型号/价格禁止执行。每次型号变更必须重新设置与型号绑定的 `QWEN_MATCH_PRICE_ACK=<精确型号>:beijing-2026-10-21`；旧Flash价格确认不能用于Plus/Max。型号/价格版本也绑定预览哈希，更换后旧预览不能提交。已知价格是有日期的本地核验记录，不是实时价格查询，后续调价须更新并重新核对预算。
 
 ## 用户自行配置（不要把密钥发到聊天）
 
@@ -21,18 +33,20 @@
 cd /Users/kleene/projects/social-lead-workbench
 export QWEN_MATCH_ENABLED=1
 export QWEN_MATCH_CONSENT=beijing-redacted-comments-v1
+read 'QWEN_MATCH_MODEL?填写上表中你已确认的精确型号: '
+read 'QWEN_MATCH_PRICE_ACK?核对该型号价格后输入 型号:beijing-2026-10-21 确认: '
 read 'QWEN_WORKSPACE_ID?北京业务空间ID: '
 read 'QWEN_MATCH_DAILY_LIMIT?每日最多请求数（1-100，自行选择费用预算）: '
 read -rs 'QWEN_API_KEY?北京空间 API Key（隐藏输入）: '
 printf '\n'
-export QWEN_WORKSPACE_ID QWEN_MATCH_DAILY_LIMIT QWEN_API_KEY
+export QWEN_MATCH_MODEL QWEN_MATCH_PRICE_ACK QWEN_WORKSPACE_ID QWEN_MATCH_DAILY_LIMIT QWEN_API_KEY
 npm run dev:persistent:background -- --backend
 unset QWEN_API_KEY
 ```
 
 上面是供用户自行执行的说明，本轮没有执行。密钥不进入命令历史字面值或文件，启动后从当前 shell 清除；运行中的 API 必须保留密钥才能调用。不要粘贴 `env`、进程环境、密钥或含密钥截图到聊天。工作台没有接收密钥的网页接口。持久启动器明确传递这些变量，仅 API 获得密钥，worker、前端、迁移和构建命令不获得。持久入口不加载 `.env`，不要把密钥放到仓库或前端变量里。后续后台重启需由用户重新提供环境变量；没有安装自动启动代理。
 
-`QWEN_MATCH_ENABLED` 缺失/不是1时完全关闭；缺少地域同意记录、有效每日上限、业务空间或密钥时分别显示未授权、预算未设置或未配置。页面“配置就绪”只代表本地参数齐全，未做联网密钥验证；配置本身不会产生 API 调用。
+`QWEN_MATCH_ENABLED` 缺失/不是1时完全关闭；缺少地域同意记录、有效每日上限、当前型号价格确认、业务空间或密钥时分别显示未授权、预算未设置或未配置。页面“配置就绪”只代表本地参数齐全，未做联网密钥验证；配置本身不会产生 API 调用。
 
 ## 使用路径和隐私边界
 
@@ -66,3 +80,7 @@ unset QWEN_API_KEY
 - API63967与网页63968代理健康且 `platformCallsEnabled=false`。用户Chrome现有登录会话实测Qwen未配置/不调用、0请求预算、空队列、按钮禁用、设置未启用、打开/取消/返回；没有保存改动，浏览器错误/警告为空。服务保持运行。
 
 当前入口：http://127.0.0.1:63968/ 。用户仍需自行提供北京业务空间ID、在本地输入API Key、选择每日请求预算；本轮不代填、不获取已有秘密。真实连通性、模型质量和费用验收尚未进行。
+
+补充验收：型号配置/价格确认只使用虚构key和HTTP mock；三个型号逐一验证同一严格Schema与非思考请求，未知型号和跨型号价格确认均阻断，原默认和真实调用数不变。此补充不代表Plus/Max质量已验收。
+
+型号配置补充实际验证：`npm test` 188项（API156、agent4、web28），隔离PostgreSQL144项、队列14项（1项按模式跳过）及2项Redis检查通过；临时容器2/2清理。类型检查通过。覆盖三个固定型号的模拟请求、未知型号/价格阻断、跨型号价格确认和预览失效。无新增迁移；未修改原默认、原规则或凭据，未进行真实调用。

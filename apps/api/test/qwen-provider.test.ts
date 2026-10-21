@@ -3,7 +3,8 @@ import { qwenSettings, QWEN_MODEL, requestQwen, QwenError } from '../src/collect
 import { prepareOutbound, validateQwenEvidence, redactText, previewHash } from '../src/collection/semantic-redaction';
 import type { SemanticInput } from '../src/collection/semantic-evaluator';
 import { qwenEnvironment } from '../../../runtime/qwen-env.cjs';
-const env={QWEN_MATCH_ENABLED:'1',QWEN_MATCH_CONSENT:'beijing-redacted-comments-v1',QWEN_MATCH_DAILY_LIMIT:'3',QWEN_WORKSPACE_ID:'fictional-space',QWEN_API_KEY:'fictional-key-not-real'};
+import { qwenModel } from '../../../runtime/qwen-models.cjs';
+const env={QWEN_MATCH_PRICE_ACK:QWEN_MODEL+':beijing-2026-10-21',QWEN_MATCH_ENABLED:'1',QWEN_MATCH_CONSENT:'beijing-redacted-comments-v1',QWEN_MATCH_DAILY_LIMIT:'3',QWEN_WORKSPACE_ID:'fictional-space',QWEN_API_KEY:'fictional-key-not-real'};
 const input:SemanticInput={id:'fictional-row',rules:{version:1,target:'寻找正在毕业论文选题中寻求指导的学生',reviewThreshold:70},snapshot:{postId:'fictional-post',commentId:'fictional-comment',userId:'fictional-user',title:'虚构论文选题讨论',body:'留下专业后讨论选题',comment:'护理专业如何选题',parent:null,parentId:null,coverage:'PARTIAL',isDemo:true}};
 const payload=prepareOutbound([input]);
 const result={items:[{id:'item1',score:88,decision:'MATCH',reason:'评论明确询问护理选题',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:'护理专业如何选题'}]}]};
@@ -11,13 +12,26 @@ const response=(body:unknown={choices:[{finish_reason:'stop',message:{content:JS
 afterEach(()=>vi.useRealTimers());
 describe('Qwen only mocked HTTP, fictional local samples',()=>{
  it('does not read a key before enabled, consent and finite budget; states expose no secrets',()=>{
-  for(const patch of [{QWEN_MATCH_ENABLED:'0'},{QWEN_MATCH_CONSENT:''},{QWEN_MATCH_DAILY_LIMIT:''}]){
+  for(const patch of [{QWEN_MATCH_ENABLED:'0'},{QWEN_MATCH_CONSENT:''},{QWEN_MATCH_DAILY_LIMIT:''},{QWEN_MATCH_PRICE_ACK:''},{QWEN_MATCH_MODEL:'unknown-model'}]){
    const source={...env,...patch};Object.defineProperty(source,'QWEN_API_KEY',{get(){throw Error('must not read');}});
    expect(()=>qwenSettings(source)).not.toThrow();expect(()=>qwenEnvironment(source)).not.toThrow();expect(qwenEnvironment(source).QWEN_API_KEY).toBeUndefined();
   }
   expect(qwenSettings({...env,QWEN_WORKSPACE_ID:'evil.com/path'}).status.state).toBe('INVALID_CONFIG');
   expect(qwenSettings({...env,QWEN_API_KEY:''}).status.state).toBe('UNCONFIGURED');
   expect(JSON.stringify(qwenSettings(env).status)).not.toContain(env.QWEN_API_KEY);
+ });
+ it.each(['qwen3.7-flash-2026-07-15','qwen3.7-plus-2026-05-26','qwen3.8-max-0902'])('controlled model %s retains business schema, non-thinking and model-specific price consent',async model=>{
+  const settings=qwenSettings({...env,QWEN_MATCH_MODEL:model,QWEN_MATCH_PRICE_ACK:qwenModel(model)!.priceAck});expect(settings.status.state).toBe('READY');expect(settings.status.model).toBe(model);
+  const transport=vi.fn(async(_url:string,init:RequestInit)=>{const body=JSON.parse(init.body as string);expect(body.model).toBe(model);expect(body.enable_thinking).toBe(false);expect(body.response_format).toMatchObject({type:'json_schema',json_schema:{strict:true}});return response();});
+  await requestQwen(settings,payload,transport);expect(transport).toHaveBeenCalledTimes(1);
+  expect(qwenEnvironment({...env,QWEN_MATCH_MODEL:model,QWEN_MATCH_PRICE_ACK:qwenModel(model)!.priceAck}).QWEN_MATCH_MODEL).toBe(model);
+ });
+ it('unknown prices/models and cross-model price consent never fall back or call',async()=>{
+  expect(qwenSettings(env).status.model).toBe(QWEN_MODEL);
+  expect(qwenSettings({...env,QWEN_MATCH_MODEL:'qwen3.8-max-0902'}).status.state).toBe('BUDGET_REQUIRED');
+  expect(qwenModel('unknown-model')).toBeNull();expect(qwenModel('qwen3.7-plus-2026-05-26')!.priceDescription).toContain('2/8');expect(qwenModel('qwen3.8-max-0902')!.priceDescription).toContain('12/36');
+  const transport=vi.fn(async()=>response());await expect(requestQwen({...qwenSettings(env),status:{...qwenSettings(env).status,model:'unknown-model'}},payload,transport)).rejects.toThrow('MODEL_OR_PRICE_UNVERIFIED');expect(transport).not.toHaveBeenCalled();
+  expect(previewHash(payload,[],1,'flash')).not.toBe(previewHash(payload,[],1,'max'));
  });
  it('fixed Beijing workspace endpoint, nonthinking strict schema, bounded request and no identity metadata',async()=>{
   const transport=vi.fn(async(url:string,init:RequestInit)=>{

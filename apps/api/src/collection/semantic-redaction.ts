@@ -31,7 +31,7 @@ export function prepareOutbound(inputs:SemanticInput[]):SemanticOutbound{
   return {id:'item'+(i+1),title,body,comment,parent:s.parent===null?null:parent,missingParent:!!s.parentId&&s.parent===null,partial:s.coverage==='PARTIAL',truncated};
  });return {redactionVersion:REDACTION_VERSION,target,items};
 }
-export function previewHash(payload:SemanticOutbound,rows:{id:string;version:number}[],revision:number){return createHash('sha256').update(JSON.stringify({payload,rows,revision})).digest('hex');}
+export function previewHash(payload:SemanticOutbound,rows:{id:string;version:number}[],revision:number,modelSelection?:string){return createHash('sha256').update(JSON.stringify({payload,rows,revision,modelSelection})).digest('hex');}
 export function validateQwenEvidence(raw:unknown,payload:SemanticOutbound,inputs:SemanticInput[]):SemanticOutput[]{
  const {items}=qwenResultSchema.parse(raw);if(items.length!==inputs.length||new Set(items.map(r=>r.id)).size!==items.length)throw new QwenError('INVALID_EVIDENCE');
  return inputs.map((input,i)=>{

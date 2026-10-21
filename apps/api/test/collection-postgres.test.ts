@@ -620,4 +620,11 @@ describe('Qwen manual integration: isolated database and fictional HTTP only',()
   expect((await db.semanticModelCall.findFirstOrThrow()).status).toBe('STALE');expect((results.find(x=>x.status==='fulfilled') as PromiseFulfilledResult<any>).value.status).toBe('STALE');
  });
 
+ it('a preview cannot be reused after changing the configured model',async()=>{
+  const {QwenMatchingService}=await import('../src/collection/qwen-matching.service');const c=await fixture();const transport=vi.fn(async(_url:string,init:RequestInit)=>mockResponse(init));
+  const flash=new QwenMatchingService(db,{settings,transport}),max=new QwenMatchingService(db,{settings:()=>({...settings(),status:{...settings().status,model:'qwen3.8-max-0902'}}),transport});
+  const before=await flash.preview(actor,c.id),after=await max.preview(actor,c.id);expect(before.hash).not.toBe(after.hash);
+  await expect(max.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:before.hash,consent:'send-reviewed-redacted-batch-v1'})).rejects.toThrow();expect(transport).not.toHaveBeenCalled();expect(await db.semanticModelCall.count()).toBe(0);
+ });
+
 });
