@@ -47,7 +47,10 @@
     "test:comment-rules:ui": "npm run build -w @crm/web && node scripts/test-comment-rules-ui.mjs",
     "test:semantic:ui": "npm run build -w @crm/web && node scripts/test-semantic-review-ui.mjs",
     "dev:persistent:background": "node scripts/dev-persistent-background.mjs",
-    "test:persistent:background": "node --test scripts/persistent-background.test.mjs"
+    "test:persistent:background": "node --test scripts/persistent-background.test.mjs",
+    "dev:persistent:backend": "node scripts/dev-persistent.mjs --backend",
+    "dev:persistent:web": "node scripts/dev-persistent-web.mjs",
+    "test:persistent:supervision": "node --test scripts/persistent-supervision.test.mjs"
   },
   "devDependencies": {
     "prisma": "6.19.0",

@@ -49,7 +49,7 @@
 
 ## 命令分类与精简记录
 
-日常登录和单次只读采集仅用 `npm run dev:persistent`。保留以下命令是因为承担不同职责，不要把测试命令当日常启动入口。
+日常持久实例使用 `dev:persistent:backend` + `dev:persistent:web`，或一键 `dev:persistent`。保留以下命令是因为承担不同职责，不要把测试命令当日常启动入口。
 
 | 类别 | 保留入口 | 使用范围 |
 | --- | --- | --- |
@@ -123,3 +123,7 @@ Windows当前说明见[平台适配与验收](WINDOWS-ADAPTER-2026-10-20.md)。�
 ### 工具会话与长驻服务（REQ-024）
 
 不要把工具调用返回session ID视为跨对话生命周期保证。Mac已有实例可显式使用 `dev:persistent:background`，由原启动器继续管理相同锁/卷/端口；运行输出转为私有文件，不连接调用方输出管道。不会自动登录、采集、发送或安装系统代理。日常用户前台终端仍支持原命令。新增 `test:persistent:background`只创建虚构进程，测试正常/强制调用方退出、EPIPE拓扑、私有日志及不覆盖已有文件；不得将旧锁在事后补写成正常停止凭证。
+
+## 受监督生命周期（REQ-024，当前）
+
+Mac新v3实例将系统运行锁与磁盘状态记录分离，数据库常驻、前端独立、后台受原生进程组监督；旧v2限制不回溯放宽。`test:persistent:supervision`测试故障注入，`test:persistent`测试完整离线业务/语义/跨重启保留。详见[当前生命周期说明](PERSISTENT-SUPERVISION-2026-10-21.md)。

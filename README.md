@@ -42,6 +42,10 @@ npm run dev:persistent
 
 持久入口会生成Prisma客户端、应用自己的迁移并启动API/前端/专用采集worker；业务卷与本地引用正常停止后保留。全局旧MCP入口仍关闭，账号绑定只读入口单独受逐次授权控制。已有旧环境文件或实例锁冲突时先核对，不擅自读取秘密或清理未知资源。
 
+### Mac日常启停（本轮更新）
+
+推荐把原实例后台与前端分别运行：两个终端执行 `npm run dev:persistent:backend` 和 `npm run dev:persistent:web`。前端可单独Ctrl+C并重新启动；后台正常Ctrl+C后同样可再启动，数据库/Redis继续常驻。保留 `npm run dev:persistent` 一键入口。新v3实例具备受监督的同次系统启动异常恢复；旧v2遗留不能直接改写成新锁。具体机制、测试和旧main迁移限制见[生命周期分离说明](docs/PERSISTENT-SUPERVISION-2026-10-21.md)。
+
 ### 本轮升级
 
 后端需要由用户在原启动终端按 Ctrl+C，再在同一项目运行 `npm run dev:persistent`（若原来带 `--instance`，保留同名参数）。同一实例复用保存的数据库卷与端口；不重新初始化管理员、不删除 `.local` 或卷。当前页面应继续使用63968，若地址变化先停止核对。仅前端更新时会提示加载新版后端并禁用一键绑定。完整说明见[升级与恢复](docs/ONE-CLICK-DEVICE-2026-10-20.md#升级与用户操作)。
@@ -118,7 +122,7 @@ npm run test:windows:native   # 仅Windows11 x64；Mac明确跳过
 
 独立评论规则与零匹配修复见[2026-10-21交付说明](docs/COMMENT-RULES-2026-10-21.md)。旧配置需用户主动启用并保存；新增迁移仅添加三个可空JSON字段，正常启动时应用，不会自动回补或重跑历史评论。
 
-连续Ctrl+C或关闭终端造成反复残留锁的修复与当前恢复边界见[锁生命周期说明](docs/PERSISTENT-LOCK-LIFECYCLE-2026-10-21.md)。正常退出现在等待自有子进程结束再解锁；缺少退出证明的既有残留仍不会自动删除。
+连续Ctrl+C或关闭终端造成反复残留锁的修复与当前恢复边界见[锁生命周期说明](docs/PERSISTENT-LOCK-LIFECYCLE-2026-10-21.md)。此为历史修复；新v3监督与旧v2迁移边界以[生命周期分离说明](docs/PERSISTENT-SUPERVISION-2026-10-21.md)为准。
 
 ## 自然语言语义审核（可选）
 
@@ -130,4 +134,4 @@ npm run test:windows:native   # 仅Windows11 x64；Mac明确跳过
 
 已有管理员和持久实例时，可用 `npm run dev:persistent:background`：在独立进程组中运行原启动器，输出写入实例目录内私有日志；返回成功前检查原API和网页就绪。它不安装系统代理或开机项，系统重启后仍须手动启动。首次管理员初始化仍用前台入口。它保留全部锁/数据库保护，不会绕过遗留锁；未知启动结果应先看输出的日志，不能反复启动。
 
-后台正常停止需先核对本轮输出PID与 `running.json`、实际命令/工作目录一致，再只向该启动器发送一次正常SIGTERM并等待清理；不要向过期PID发信号或手删锁。操作不熟悉时继续在自己的终端使用原前台命令。诊断与本次恢复边界见[独立运行与孤立进程说明](docs/PERSISTENT-BACKGROUND-2026-10-21.md)。
+后台正常停止需先核对本轮输出PID与 `running.json`、实际命令/工作目录一致，再只向该启动器发送一次正常SIGTERM并等待清理；不要向过期PID发信号或手删锁。操作不熟悉时继续在自己的终端使用原前台命令。该入口现已接入新监督器；此前诊断见[独立运行与孤立进程说明](docs/PERSISTENT-BACKGROUND-2026-10-21.md)。

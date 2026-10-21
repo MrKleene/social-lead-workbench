@@ -1,4 +1,5 @@
 import platform from '../runtime/platform.cjs';
+import {supervise,inheritedLease,watchSupervisor} from './persistent-supervision.mjs';
 import {lifecycleJournal} from './persistent-journal.mjs';
 import {installStopHandlers,ownedChildrenExited} from './persistent-lifecycle.mjs';
 import {acquireInstanceLock,lockMessage} from './persistent-lock.mjs';
@@ -15,21 +16,22 @@ import {PrismaClient} from '@prisma/client';
 import argon2 from 'argon2';
 import {cleanEnvironment,preflight} from './real-mcp/core.mjs';
 const root=resolve(fileURLToPath(new URL('../',import.meta.url))),args=process.argv.slice(2);
-let prepareRecovery=false,offline=false,fixture=false,name='main';
-for(let i=0;i<args.length;i++){if(args[i]==='--prepare-lock-recovery')prepareRecovery=true;else if(args[i]==='--offline')offline=true;else if(args[i]==='--test-fixture')fixture=true;else if(args[i]==='--instance')name=args[++i];else throw Error('Use --offline or --instance NAME');}
+let prepareRecovery=false,offline=false,fixture=false,backendOnly=false,name='main';
+for(let i=0;i<args.length;i++){if(args[i]==='--backend')backendOnly=true;else if(args[i]==='--prepare-lock-recovery')prepareRecovery=true;else if(args[i]==='--offline')offline=true;else if(args[i]==='--test-fixture')fixture=true;else if(args[i]==='--instance')name=args[++i];else throw Error('Use --offline or --instance NAME');}
 if(!/^[a-z][a-z0-9-]{0,50}$/.test(name)||fixture&&(!offline||!/^acceptance-[a-f0-9-]{36}$/.test(name)))throw Error('Invalid isolated instance');
 // Prisma CLI can auto-load .env. Refuse legacy env files without reading them.
 for(const path of [join(root,'.env'),join(root,'prisma/.env')]){const stat=await lstat(path).catch(e=>{if(e.code==='ENOENT')return null;throw e;});if(stat)throw Error('Legacy .env exists; persistent startup refuses to read it. Review environment separation before continuing.');}
-const envBase=cleanEnvironment(process.env);
+const callerEnvironment={...process.env};delete callerEnvironment.CRM_SUPERVISED_BOOT;delete callerEnvironment.CRM_SUPERVISOR_PID;delete callerEnvironment.CRM_SUPERVISED_LAUNCHER;
+const envBase=cleanEnvironment(callerEnvironment);
 if(process.platform==='win32'){
  const result=spawnSync(process.execPath,['scripts/build-windows-host.mjs'],{cwd:root,stdio:'inherit'});if(result.status!==0)throw Error('Windows helper unavailable; nothing started');
  await platform.guardCurrentProcess();
 }
 const directory=join(root,'.local',offline?'persistent-offline':'persistent',name);
-if(!offline&&!prepareRecovery)await preflight({root,home:process.env.HOME,session:'persistent-preflight',port:18162,env:process.env});
+if(!offline&&!prepareRecovery)await preflight({root,home:process.env.HOME,session:'persistent-preflight',port:18162,env:callerEnvironment});
 process.umask(0o077);
 const children=[],ownedGroups=new Set(),startedContainers=[];
-let journal;const launchId=randomUUID();
+let journal,supervisorLife;const managed=!!process.env.CRM_SUPERVISED_BOOT;const launchId=randomUUID();
 process.on('exit',code=>{journal?.record('EXIT',{code});journal?.close();});
 let stage='local',runtimeFailure,manifest,secret,lock=false,stopping=false,finish,failed=false,newInstance=false;
 const stopped=new Promise(ok=>{finish=ok;});
@@ -39,8 +41,8 @@ async function privateDir(path){await platform.privateDirectory(path,true);}
 async function privateFile(path){await platform.privateFile(path);}
 async function json(path){await privateFile(path);return JSON.parse(await readFile(path,'utf8'));}
 async function freePort(){const s=createServer();await new Promise((ok,no)=>{s.once('error',no);s.listen(0,'127.0.0.1',ok);});const p=s.address().port;await new Promise(ok=>s.close(ok));if([18060,18061].includes(p))return freePort();return p;}
-function stopGroup(c){if(c?.pid&&c.exitCode===null&&c.signalCode===null)try{if(process.platform==='win32'||c.interactive)c.kill('SIGTERM');else process.kill(-c.pid,'SIGTERM');}catch{}}
-function launch(command,argv,env,{interactive=false,ipc=false,role='local-command'}={}){if(command==='npm')[command,argv]=platform.npmCommand(argv);if(stopping)throw Error('Stopped');const c=spawn(command,argv,{cwd:root,env,detached:process.platform!=='win32'&&!interactive,windowsHide:!interactive,stdio:interactive?'inherit':ipc?['ignore','ignore','ignore','ipc']:['ignore','pipe','pipe']});c.interactive=interactive;children.push(c);journal?.record('CHILD_START',{pid:c.pid,role});if(!interactive&&!ipc){c.stdout.on('data',()=>{});c.stderr.on('data',()=>{});}c.done=new Promise(ok=>{c.once('exit',(code,signal)=>{journal?.record('CHILD_EXIT',{pid:c.pid,role,code,signal});ok(code??1);});c.once('error',()=>ok(1));});if(ipc)c.on('message',m=>{if(!Number.isInteger(m?.pid)||m.pid<=1)return;if(m.kind==='OWNED_LOGIN_PROCESS_STARTED')ownedGroups.add(m.pid);if(m.kind==='OWNED_LOGIN_PROCESS_STOPPED')ownedGroups.delete(m.pid);});return c;}
+function stopGroup(c){if(c?.pid&&c.exitCode===null&&c.signalCode===null)try{if(process.platform==='win32'||managed||c.interactive)c.kill('SIGTERM');else process.kill(-c.pid,'SIGTERM');}catch{}}
+function launch(command,argv,env,{interactive=false,ipc=false,role='local-command'}={}){if(command==='npm')[command,argv]=platform.npmCommand(argv);if(stopping)throw Error('Stopped');const c=spawn(command,argv,{cwd:root,env,detached:process.platform!=='win32'&&!interactive&&!managed,windowsHide:!interactive,stdio:managed?[interactive?'inherit':'ignore',interactive?'inherit':ipc?'ignore':'pipe',interactive?'inherit':ipc?'ignore':'pipe',ipc?'ipc':'ignore',4]:interactive?'inherit':ipc?['ignore','ignore','ignore','ipc']:['ignore','pipe','pipe']});c.interactive=interactive;children.push(c);journal?.record('CHILD_START',{pid:c.pid,role});if(!interactive&&!ipc){c.stdout.on('data',()=>{});c.stderr.on('data',()=>{});}c.done=new Promise(ok=>{c.once('exit',(code,signal)=>{journal?.record('CHILD_EXIT',{pid:c.pid,role,code,signal});ok(code??1);});c.once('error',()=>ok(1));});if(ipc)c.on('message',m=>{if(!Number.isInteger(m?.pid)||m.pid<=1)return;if(m.kind==='OWNED_LOGIN_PROCESS_STARTED')ownedGroups.add(m.pid);if(m.kind==='OWNED_LOGIN_PROCESS_STOPPED')ownedGroups.delete(m.pid);});return c;}
 async function command(argv,env,interactive=false){console.log(`本地步骤：${argv.slice(0,4).join(' ')}`);const c=launch(argv[0],argv.slice(1),env,{interactive});const code=await c.done;if(code!==0)throw new StartupError('LOCAL_COMMAND_FAILED',code);}
 function resourceLabels(type,id){return JSON.parse(docker(type==='volume'?['volume','inspect','--format','{{json .Labels}}',id]:['inspect','--format','{{json .Config.Labels}}',id]));}
 function verifyOwnership(type,id){if(resourceLabels(type,id)?.['crm.persistent.instance']!==manifest.id)throw Error('Resource ownership mismatch');}
@@ -60,12 +62,14 @@ try{
  // Do not adopt a symlinked .local or alter existing directory permissions.
  if(process.platform==='win32')await privateDir(join(root,'.local'));else await mkdir(join(root,'.local'),{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});const ls=await lstat(join(root,'.local'));if(ls.isSymbolicLink()||!ls.isDirectory())throw Error('Unsafe local directory');
  await privateDir(join(root,'.local',offline?'persistent-offline':'persistent'));await privateDir(directory);
+ if(process.platform==='darwin'&&!prepareRecovery&&!managed)process.exit(await supervise({root,directory,args,env:envBase}));
+ if(managed){inheritedLease(directory);supervisorLife=watchSupervisor(()=>{stopping=true;finish();process.kill(-process.pid,'SIGTERM');setTimeout(()=>process.kill(-process.pid,'SIGKILL'),3000).unref();});}
  stage='lock';const acquired=await acquireInstanceLock({root,directory,name,mode:offline?'offline':'real',prepareRecovery});
  if(acquired.prepared){
   console.log('已记录本次 Mac 启动标识与原锁/实例配置摘要；没有删除锁、停止服务或读取凭据。请正常保存工作并重启 Mac；Docker 可用后在同一目录运行原启动命令。未重启前不会恢复。');
  }else{
  lock=acquired;journal=lifecycleJournal(directory,launchId);journal.record('START',{pid:process.pid,ppid:process.ppid});if(stopping)throw Error('Stopped');lock.lost.catch(e=>{console.error(lockMessage(e.code)||'系统锁失效');failed=true;stopping=true;finish();for(const c of children)stopGroup(c);});
- if(lock.recovered)console.log('已核验系统重启与原实例，恢复原锁；继续使用原数据库及端口。');
+ if(lock.recovered)console.log('已核验原实例与运行互斥，恢复运行记录；继续使用原数据库及端口。');
  stage='docker';dockerClient.ready();
  stage='images';for(const image of ['postgres:17','redis:7-alpine'])dockerClient.image(image);
  stage='instance';
@@ -82,7 +86,7 @@ try{
  stage='containers';await container('postgres');await container('redis');
  stage='readiness';for(const [kind,cmd] of [['postgres',['pg_isready','-U','crm','-d',manifest.database]],['redis',['redis-cli','ping']]]){let ready=false;for(let i=0;i<60&&!stopping;i++){if(spawnSync('docker',['exec',manifest[kind].container,...cmd],{stdio:'ignore',timeout:1000}).status===0){ready=true;break;}await new Promise(ok=>setTimeout(ok,200));}if(!ready)throw Error('Readiness timeout');}
  const base=`http://127.0.0.1:${manifest.webPort}`,url=`postgresql://crm:${secret.databasePassword}@127.0.0.1:${manifest.postgres.port}/${manifest.database}?schema=public`;
- const env={...envBase,DATABASE_URL:url,REDIS_URL:`redis://127.0.0.1:${manifest.redis.port}`,DOTENV_CONFIG_PATH:devNull,XHS_MCP_ENABLED:'0',XHS_MCP_LOGIN_ONLY:'0',CRM_ACCOUNT_READ_ENABLED:'1',XHS_ACCOUNT_LOGIN_MODE:manifest.mode,CRM_PROJECT_ROOT:root,CRM_DEVICE_ID:manifest.deviceId,CRM_RUNTIME_ID:randomUUID(),CRM_PERSISTENT:'1',CRM_DEVICE_MANAGEMENT:'1',CRM_INSTANCE_DIRECTORY:directory,XHS_SESSION_ROOT:offline?join(directory,'local-sessions'):join(root,'.local/xhs-qr'),PORT:String(manifest.apiPort),API_HOST:'127.0.0.1',APP_ORIGIN:base,API_PROXY_TARGET:`http://127.0.0.1:${manifest.apiPort}`,COOKIE_SECURE:'false',COLLECTION_QUEUE_NAME:`crm-persist-${manifest.id}`};
+ const env={...envBase,...(managed?{CRM_SUPERVISED_BOOT:process.env.CRM_SUPERVISED_BOOT}:{}),DATABASE_URL:url,REDIS_URL:`redis://127.0.0.1:${manifest.redis.port}`,DOTENV_CONFIG_PATH:devNull,XHS_MCP_ENABLED:'0',XHS_MCP_LOGIN_ONLY:'0',CRM_ACCOUNT_READ_ENABLED:'1',XHS_ACCOUNT_LOGIN_MODE:manifest.mode,CRM_PROJECT_ROOT:root,CRM_DEVICE_ID:manifest.deviceId,CRM_RUNTIME_ID:randomUUID(),CRM_PERSISTENT:'1',CRM_DEVICE_MANAGEMENT:'1',CRM_INSTANCE_DIRECTORY:directory,XHS_SESSION_ROOT:offline?join(directory,'local-sessions'):join(root,'.local/xhs-qr'),PORT:String(manifest.apiPort),API_HOST:'127.0.0.1',APP_ORIGIN:base,API_PROXY_TARGET:`http://127.0.0.1:${manifest.apiPort}`,COOKIE_SECURE:'false',COLLECTION_QUEUE_NAME:`crm-persist-${manifest.id}`};
  stage='generate';await command(['npm','exec','--no','--','prisma','generate'],env);
  stage='migrate';await command(['npm','exec','--no','--','prisma','migrate','deploy'],env);
  stage='build';for(const workspace of ['@crm/contracts','@crm/api'])await command(['npm','run','build','-w',workspace],env);
@@ -92,9 +96,9 @@ try{
  const checkDb=new PrismaClient({datasources:{db:{url}}});try{if(!await checkDb.user.count({where:{role:'ADMIN',active:true}}))throw Error('Administrator initialization incomplete');}finally{await checkDb.$disconnect();}
  manifest.fresh=false;await writeFile(join(directory,'instance.json'),JSON.stringify(manifest,null,2),{mode:0o600});
  stage='services';const collector=launch(process.execPath,['apps/api/dist/collection/worker.js'],env,{ipc:true,role:'collector'});
- const api=launch(process.execPath,['apps/api/dist/main.js'],env,{ipc:true,role:'api'});const web=launch('npm',['run','dev','-w','@crm/web','--','--port',String(manifest.webPort),'--host','127.0.0.1','--strictPort'],env,{role:'web'});
- for(const c of [api,web,collector])c.done.then(code=>{if(!stopping){failed=true;runtimeFailure=new StartupError('SERVICE_EXITED',code);}finish();});
- await writeFile(join(directory,'running.json'),JSON.stringify({pid:process.pid,launchId,lifecycleLog:journal.file,mode:manifest.mode,preview:base,api:env.API_PROXY_TARGET,deviceId:manifest.deviceId,instanceId:manifest.id,containers:[manifest.postgres.container,manifest.redis.container]},null,2),{mode:0o600});
+ const api=launch(process.execPath,['apps/api/dist/main.js'],env,{ipc:true,role:'api'});const web=backendOnly?null:launch('npm',['run','dev','-w','@crm/web','--','--port',String(manifest.webPort),'--host','127.0.0.1','--strictPort'],env,{role:'web'});
+ for(const c of [api,web,collector].filter(Boolean))c.done.then(code=>{if(!stopping){failed=true;runtimeFailure=new StartupError('SERVICE_EXITED',code);}finish();});
+ await writeFile(join(directory,'running.json'),JSON.stringify({pid:process.pid,controllerPid:managed?process.ppid:process.pid,launcherPid:managed?Number(process.env.CRM_SUPERVISED_LAUNCHER):process.pid,backendOnly,launchId,lifecycleLog:journal.file,mode:manifest.mode,preview:base,api:env.API_PROXY_TARGET,deviceId:manifest.deviceId,instanceId:manifest.id,containers:[manifest.postgres.container,manifest.redis.container]},null,2),{mode:0o600});
  console.log(`PERSISTENT ${manifest.mode.toUpperCase()} workbench: ${base}`);console.log(`Instance: ${directory}`);console.log('Business data and device references survive Ctrl+C. No automatic platform request. Existing administrators are never replaced.');
  await stopped;if(runtimeFailure)throw runtimeFailure;
  }
@@ -108,17 +112,17 @@ try{
  if(e?.code==='EEXIST')console.error('实例已被占用或锁文件存在；没有覆盖。请检查原启动终端。');process.exitCode=1;
 }
 finally{
- stopping=true;for(const pid of process.platform==='win32'?[]:ownedGroups)try{process.kill(-pid,'SIGTERM');}catch{}
+ stopping=true;for(const pid of process.platform==='win32'||managed?[]:ownedGroups)try{process.kill(-pid,'SIGTERM');}catch{}
  for(const c of children)stopGroup(c);if(children.length)await new Promise(ok=>setTimeout(ok,1800));
- for(const pid of process.platform==='win32'?[]:ownedGroups)try{process.kill(-pid,'SIGKILL');}catch{}
- for(const c of children)if(process.platform!=='win32'&&c.exitCode===null&&c.signalCode===null&&c.pid)try{process.kill(-c.pid,'SIGKILL');}catch{}
+ for(const pid of process.platform==='win32'||managed?[]:ownedGroups)try{process.kill(-pid,'SIGKILL');}catch{}
+ for(const c of children)if(process.platform!=='win32'&&c.exitCode===null&&c.signalCode===null&&c.pid)try{if(managed)c.kill('SIGKILL');else process.kill(-c.pid,'SIGKILL');}catch{}
  const childrenExited=await ownedChildrenExited(children);
  if(!childrenExited){process.exitCode=1;console.error(diagnosticText(diagnostic(new StartupError('LOCK_CLEANUP_INCOMPLETE'),'cleanup')));}
- // Never rm containers or volumes. Only stop containers started by this run.
- for(const id of startedContainers.reverse())try{verifyOwnership('container',id);docker(['stop','--time','5',id]);}catch(e){process.exitCode=1;console.error(diagnosticText(diagnostic(e,'cleanup')));}
+ // Database/Redis have an independent lifetime. Never stop or remove them on app exit.
  if(lock){try{if(childrenExited)await writeFile(join(directory,'stopped.json'),JSON.stringify({stoppedAt:new Date().toISOString(),dataVolumesRetained:true,platformSessionsRetained:true}),{mode:0o600});}catch{process.exitCode=1;console.error('退出记录写入失败；数据保留。');}finally{try{await lock.release({preserve:!childrenExited});}catch{process.exitCode=1;console.error('锁释放失败；原锁/数据保留，下一次启动仍需验证。');}}}
  journal?.record(childrenExited&&process.exitCode!==1?'CLEANUP_COMPLETE':'CLEANUP_INCOMPLETE');
  if(failed)process.exitCode=1;
  console.log(!childrenExited?'未能确认本次子进程退出；实例锁保留。':children.length||startedContainers.length?'Stopped owned processes. Persistent containers/volumes, business data and local session references retained.':'本次没有启动或停止业务进程/容器；原实例、数据与端口保留。');
+ supervisorLife?.destroy();
  if(process.platform==='win32')process.exit(process.exitCode||0); // guardian EOF closes the entire owned job, including orphaned grandchildren
 }

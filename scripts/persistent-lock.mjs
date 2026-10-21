@@ -4,6 +4,7 @@ import {readFile,writeFile,rename,unlink} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createServer} from 'node:net';
 import platform from '../runtime/platform.cjs';
+import {inheritedLease} from './persistent-supervision.mjs';
 import {buildInstanceLock} from './build-instance-lock.mjs';
 const digest=b=>createHash('sha256').update(b).digest('hex');
 const uuid=s=>typeof s==='string'&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(s);
@@ -37,7 +38,8 @@ export async function acquireInstanceLock({root,directory,name,mode,prepareRecov
   const token=randomUUID();await writeFile(file,JSON.stringify({pid:process.pid,token,startedAt:new Date().toISOString()}),{flag:'wx',mode:0o600});
   return {lost:new Promise(()=>{}),async release({preserve=false}={}){const value=JSON.parse(await readFile(file));if(value.token!==token)throw new LockError('LOCK_CHANGED');if(!preserve)await unlink(file);}};
  }
- const owned=await guard(root,directory);let token;
+ const lease=inheritedLease(directory);
+ const owned=lease?{...lease,lost:new Promise(()=>{}),async release(){}}:await guard(root,directory);let token;
  try{
   const bytes=await optional(file);
   if(prepareRecovery&&!bytes)throw new LockError('LOCK_NOT_PRESENT');
@@ -51,12 +53,12 @@ export async function acquireInstanceLock({root,directory,name,mode,prepareRecov
     await owned.release();return {prepared:true};
    }
    const witnessBytes=await optional(join(directory,'lock-recovery.json'));let witness;try{witness=witnessBytes?JSON.parse(witnessBytes):null;}catch{throw new LockError('LOCK_METADATA_INVALID');}
-   if(!recoveryProven(old,witness,owned.bootId,bytes,manifestBytes))throw new LockError('LOCK_REBOOT_PROOF_REQUIRED');
-   await freePorts([manifest.apiPort,manifest.webPort]);
+   if(!(lease&&old.kind==='crm-persistent-lock-v3'&&uuid(old.token)&&uuid(old.bootId))&&!recoveryProven(old,witness,owned.bootId,bytes,manifestBytes))throw new LockError('LOCK_REBOOT_PROOF_REQUIRED');
+   await freePorts(lease?[manifest.apiPort]:[manifest.apiPort,manifest.webPort]);
    // Compare again immediately before replacing, never unlink/recreate a gap.
    if(!bytes.equals(await readFile(file))||!manifestBytes.equals(await readFile(join(directory,'instance.json'))))throw new LockError('LOCK_CHANGED');
   }
-  token=randomUUID();const record={kind:'crm-persistent-lock-v2',pid:process.pid,token,bootId:owned.bootId,startedAt:new Date().toISOString()};
+  token=randomUUID();const record={kind:lease?'crm-persistent-lock-v3':'crm-persistent-lock-v2',pid:process.pid,token,bootId:owned.bootId,startedAt:new Date().toISOString()};
   if(bytes)await atomic(file,record);else await writeFile(file,JSON.stringify(record),{flag:'wx',mode:0o600});
   return {lost:owned.lost,recovered:!!bytes,async release({preserve=false}={}){try{const current=JSON.parse(await readFile(file));if(current.token!==token)throw new LockError('LOCK_CHANGED');if(!preserve)await unlink(file);}finally{await owned.release();}}};
  }catch(e){await owned.release();throw e;}

@@ -38,11 +38,16 @@ function npmCommand(args,env=process.env,platform=process.platform){
  return [process.execPath,[cli,...args]];
 }
 function spawnOwned(binary,args,options={}){
+ if(process.platform==='darwin'&&process.env.CRM_SUPERVISED_BOOT){
+  const directory=process.env.CRM_INSTANCE_DIRECTORY;if(!directory||!path.isAbsolute(directory))throw Error('SUPERVISED_INSTANCE_REQUIRED');
+  const child=cp.spawn(path.join(projectRoot,'apps/api/dist/native/persistent-supervisor'),[path.join(directory,'.operation.guard'),binary,...args],{...options,env:{...options.env,CRM_SUPERVISED_BOOT:process.env.CRM_SUPERVISED_BOOT},detached:true,stdio:['ignore','ignore','ignore','pipe',4]});
+  child.supervised=true;child.stdio[3].on('error',()=>{});return child;
+ }
  if(process.platform!=='win32')return cp.spawn(binary,args,{...options,detached:true});
  windowsPath(binary);const child=cp.spawn(helper(),['supervise'],{...options,detached:false,windowsHide:true,stdio:['pipe','ignore','ignore']});
  child.stdin.on('error',()=>{});child.stdin.write(JSON.stringify({operation:'supervise',binary,args,cwd:options.cwd})+'\n');return child;
 }
-function stopOwned(child,signal='SIGTERM'){if(!child?.pid)return;try{if(process.platform==='win32')child.kill();else process.kill(-child.pid,signal);}catch{}}
+function stopOwned(child,signal='SIGTERM'){if(!child?.pid)return;try{if(child.supervised){if(!child.stdio[3].destroyed)child.stdio[3].write(signal==='SIGKILL'?'K':'T');}else if(process.platform==='win32')child.kill();else process.kill(-child.pid,signal);}catch{}}
 async function guardCurrentProcess(){
  if(process.platform!=='win32')return;
  const child=cp.spawn(helper(),['guard'],{stdio:['pipe','pipe','ignore'],windowsHide:true});child.stdin.on('error',()=>{});child.stdin.write(JSON.stringify({operation:'guard',pid:process.pid})+'\n');

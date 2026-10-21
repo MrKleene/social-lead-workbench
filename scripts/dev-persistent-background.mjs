@@ -9,7 +9,7 @@ const root=resolve(fileURLToPath(new URL('../',import.meta.url)));
 async function main(){
  if(process.platform!=='darwin')throw Error('MAC_ONLY');
  const args=process.argv.slice(2);let offline=false,fixture=false,name='main';
- for(let i=0;i<args.length;i++){if(args[i]==='--offline')offline=true;else if(args[i]==='--test-fixture')fixture=true;else if(args[i]==='--instance')name=args[++i];else throw Error('INVALID_ARGUMENTS');}
+ for(let i=0;i<args.length;i++){if(args[i]==='--backend')continue;else if(args[i]==='--offline')offline=true;else if(args[i]==='--test-fixture')fixture=true;else if(args[i]==='--instance')name=args[++i];else throw Error('INVALID_ARGUMENTS');}
  if(!/^[a-z][a-z0-9-]{0,50}$/.test(name)||fixture&&(!offline||!/^acceptance-[a-f0-9-]{36}$/.test(name)))throw Error('INVALID_INSTANCE');
  const directory=join(root,'.local',offline?'persistent-offline':'persistent',name);
  // First-run administrator setup stays in the foreground. Never creates a replacement instance.
@@ -24,9 +24,9 @@ async function main(){
  while(Date.now()<end&&!ended){
   try{
    const running=JSON.parse(await readFile(join(directory,'running.json'),'utf8'));
-   if(running.pid===child.pid&&running.instanceId===manifest.id){
+   if((running.launcherPid??running.pid)===child.pid&&running.instanceId===manifest.id){
     const api=await fetch(`http://127.0.0.1:${manifest.apiPort}/api/health/ready`,{signal:AbortSignal.timeout(1000),redirect:'error'});
-    const web=await fetch(`http://127.0.0.1:${manifest.webPort}/`,{signal:AbortSignal.timeout(1000),redirect:'error'});
+    const web=args.includes('--backend')?{ok:true}:await fetch(`http://127.0.0.1:${manifest.webPort}/`,{signal:AbortSignal.timeout(1000),redirect:'error'});
     if(api.ok&&(await api.json()).database==='ready'&&web.ok){console.log('独立进程已就绪；关闭本次命令会话不会主动停止它。仍沿用原实例锁保护；没有自动平台请求。');return;}
    }
   }catch{}
