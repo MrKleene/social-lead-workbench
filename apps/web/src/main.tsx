@@ -14,6 +14,7 @@ import { Loading } from "@/components/feedback";
 import "./styles.css";
 import "./features/work/graphite.css";
 import "./features/work/spatial.css";
+import "./features/work/aurora.css";
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 10000 } },
 });

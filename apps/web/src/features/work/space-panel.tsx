@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 /** Mounted panels preserve unsaved drafts; inactive panels are immediately inert. */
 export function SpacePanel({active,name,children}:{active:boolean;name:string;children:ReactNode}) {
  const ref=useRef<HTMLDivElement>(null);
- useLayoutEffect(()=>{if(!active&&ref.current?.contains(document.activeElement))(document.querySelector<HTMLElement>('.space-node.selected')||document.querySelector<HTMLElement>('.core-start'))?.focus();},[active]);
+ useLayoutEffect(()=>{if(!active&&ref.current?.contains(document.activeElement))(document.querySelector<HTMLElement>('.aurora-dock-active, .space-node.selected')||document.querySelector<HTMLElement>('.core-start'))?.focus();},[active]);
  return <div ref={ref} className="space-panel" data-active={active} data-panel={name} inert={!active} aria-hidden={!active}>{children}</div>;
 }
 /** One outgoing surface, latest destination wins; no stacked copies or stale timers. */

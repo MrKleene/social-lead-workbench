@@ -39,7 +39,7 @@ try{
   // Closing unmounts any unsaved DOM-only input.
   await key.fill(fake);await summary.click();await summary.click();assert.equal(await key.inputValue(),'');
   oldBackend=true;await page.getByRole('button',{name:'刷新模型配置状态'}).click();await page.getByText('模型设置后台尚未部署；',{exact:false}).waitFor();assert.equal(await page.getByLabel('模型 API Key').count(),0);report.checks.push('close clears input and pending backend never accepts Key '+narrow);
-  role='SALES';const before=gets;await page.reload();await page.getByLabel('搜索设置：管理员配置',{exact:true}).waitFor();assert.equal(await summary.count(),0);assert.equal(gets,before);report.checks.push('sales role has no model UI or status request '+narrow);await context.close();
+  role='SALES';const before=gets;await page.reload();await page.getByRole('heading',{name:'让每一次联系， 从理解开始。'}).waitFor();assert.equal(await page.getByRole('button',{name:'搜索与模型设置',exact:true}).count(),0);assert.equal(await summary.count(),0);assert.equal(gets,before);report.checks.push('sales role has no model UI or status request '+narrow);await context.close();
  }
  // The form refuses credentials before transmission on insecure remote HTTP.
  const remote=await browser.newContext({viewport:{width:1000,height:800}});let remoteWrites=0;

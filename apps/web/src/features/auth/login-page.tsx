@@ -40,7 +40,7 @@ export function LoginPage() {
         </div>
         <p className="login-foot">
           <ShieldCheck size={18} />
-          本机开发 · 平台能力尚未接入
+          权限隔离 · 真实发送禁用
         </p>
       </section>
       <section className="login-form-wrap">
@@ -75,7 +75,7 @@ export function LoginPage() {
                 placeholder="请输入密码"
               />
               <FieldDescription>
-                隔离模拟预览：使用启动终端本次显示的 admin@fixture.invalid 和临时密码；原有账号不在隔离库。正式本机环境请由管理员初始化。
+                使用当前工作空间的账号。账号由管理员初始化，没有默认密码。
               </FieldDescription>
             </Field>
           </FieldGroup>
@@ -85,7 +85,7 @@ export function LoginPage() {
             <ArrowRight data-icon="inline-end" />
           </Button>
           <p className="login-disclaimer">
-            没有默认账号。演示数据不包含真实平台用户资料。
+            登录不会启动采集、模型调用或发送消息。
           </p>
         </form>
       </section>
