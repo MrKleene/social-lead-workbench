@@ -44,6 +44,8 @@ npm run dev:persistent
 
 ### Mac日常启停（本轮更新）
 
+原main已完成新生命周期与语义迁移切换，仍用63968；当前部署和验收边界见[原main切换记录](docs/PERSISTENT-MAIN-ROLLOUT-2026-10-21.md)。
+
 推荐把原实例后台与前端分别运行：两个终端执行 `npm run dev:persistent:backend` 和 `npm run dev:persistent:web`。前端可单独Ctrl+C并重新启动；后台正常Ctrl+C后同样可再启动，数据库/Redis继续常驻。保留 `npm run dev:persistent` 一键入口。新v3实例具备受监督的同次系统启动异常恢复；旧v2遗留不能直接改写成新锁。具体机制、测试和旧main迁移限制见[生命周期分离说明](docs/PERSISTENT-SUPERVISION-2026-10-21.md)。
 
 ### 本轮升级
