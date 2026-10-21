@@ -14,10 +14,14 @@ export function qwenSettings(env:Record<string,string|undefined>):QwenSettings{
  if(!/^(?:[1-9]|[1-9][0-9]|100)$/.test(env.QWEN_MATCH_DAILY_LIMIT||''))return {status:{...status,state:'BUDGET_REQUIRED',message:'尚未设置每日请求预算（1–100次）；禁止调用'}};
  status.dailyLimit=Number(env.QWEN_MATCH_DAILY_LIMIT);
  if(env.QWEN_MATCH_PRICE_ACK!==model.priceAck)return {status:{...status,state:'BUDGET_REQUIRED',message:'尚未确认当前型号的北京价格与请求预算；禁止调用。'+model.priceVersion+' 原价：'+model.priceDescription+'。实际费用以账单为准'}};
- const workspace=env.QWEN_WORKSPACE_ID;
- if(!workspace||!env.QWEN_API_KEY)return {status:{...status,state:'UNCONFIGURED',message:'请由用户在本地配置北京业务空间ID与API Key；不要发送到聊天'}};
- if(!/^[a-z0-9][a-z0-9-]{0,62}$/.test(workspace)||/[\r\n]/.test(env.QWEN_API_KEY))return {status:{...status,state:'INVALID_CONFIG',message:'本地配置无效；仅接受北京业务空间，不允许自定义代理地址'}};
- return {status:{...status,state:'READY',message:'Qwen本地配置就绪；官方文档支持非思考JSON Schema，实际连通性和质量未验收。仅逐批确认后调用。'+model.priceVersion+' 原价：'+model.priceDescription+'；费用以账单为准'},endpoint:`https://${workspace}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions`,key:env.QWEN_API_KEY};
+ const profile=env.QWEN_MATCH_ENDPOINT??'beijing-standard';
+ if(!['beijing-standard','beijing-workspace'].includes(profile))return {status:{...status,state:'INVALID_CONFIG',message:'未知端点；仅允许已核实的北京官方接口'}};
+ const workspace=profile==='beijing-workspace'?env.QWEN_WORKSPACE_ID:undefined;
+ if(profile==='beijing-workspace'&&(!workspace||!/^[a-z0-9][a-z0-9-]{0,62}$/.test(workspace)))return {status:{...status,state:'INVALID_CONFIG',message:'旧业务空间专属端点需要有效ID；标准北京调用由Key决定空间，无需ID'}};
+ if(!env.QWEN_API_KEY)return {status:{...status,state:'UNCONFIGURED',message:'请由用户在本地配置北京 API Key；标准接口由Key决定业务空间，不需要额外workspace ID'}};
+ if(/[\r\n]/.test(env.QWEN_API_KEY))return {status:{...status,state:'INVALID_CONFIG',message:'本地密钥格式无效'}};
+ const endpoint=profile==='beijing-standard'?'https://cn-beijing.maas.qianwenaiapi.com/compatible-mode/v1/chat/completions':`https://${workspace}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions`;
+ return {status:{...status,state:'READY',message:'Qwen本地配置就绪；官方文档支持非思考JSON Schema，实际连通性和质量未验收。仅逐批确认后调用。'+model.priceVersion+' 原价：'+model.priceDescription+'；费用以账单为准'},endpoint,key:env.QWEN_API_KEY};
 }
 export class QwenError extends Error{constructor(public code:string){super(code);}}
 export const qwenResultSchema=z.object({items:z.array(z.object({id:z.string().min(1).max(20),score:z.number().int().min(0).max(100),decision:z.enum(['MATCH','NO_MATCH','UNCERTAIN']),reason:z.string().min(1).max(1000),context:z.enum(['SUFFICIENT','INSUFFICIENT']),evidence:z.array(z.object({source:z.enum(['COMMENT','POST_TITLE','POST_BODY','PARENT_COMMENT']),quote:z.string().min(1).max(500)}).strict()).min(1).max(8)}).strict()).min(1).max(5)}).strict();

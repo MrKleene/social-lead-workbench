@@ -3,6 +3,7 @@
 const DEFAULT_QWEN_MODEL='qwen3.7-flash-2026-07-15';
 const QWEN_PRICE_VERSION='beijing-2026-10-21';
 const catalog=Object.freeze({
+ 'qwen3.8-flash':[[1000000,0.8,2.7]],
  'qwen3.7-flash-2026-07-15':[[32000,0.2,0.8],[256000,0.6,2.4],[1000000,1.2,4.8]],
  'qwen3.7-plus-2026-05-26':[[256000,2,8],[1000000,6,24]],
  'qwen3.8-max-0902':[[1000000,12,36]],

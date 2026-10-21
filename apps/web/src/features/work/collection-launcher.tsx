@@ -19,6 +19,7 @@ export function CollectionLauncher({ configs, loading, initialId, runsOpen, onRu
   const readiness=useMcpReadiness();
   const [accountId,setAccountId]=useState(''),[consent,setConsent]=useState(false);
   const [choice, setChoice] = useState(initialId || '');
+  const [postLimit,setPostLimit]=useState(1),[commentPages,setCommentPages]=useState(4);
   const [scenario, setScenario] = useState('BASELINE');
   const [feedback, setFeedback] = useState('');
   const selected = configs.find(c => c.id === choice) || configs.find(c => c.enabled) || configs[0];
@@ -26,6 +27,7 @@ export function CollectionLauncher({ configs, loading, initialId, runsOpen, onRu
   const refresh = useRefreshCollection();
   const backoff = !!selected?.nextAllowedAt && new Date(selected.nextAllowedAt) > new Date();
   const active = selected?.activeRunId;
+  const archiveReady=readiness.data?.captureArchiveVersion===1;
   const accountBound=!!readiness.data?.accountBound && selected?.mode!=="MOCK";
   const accountReady=!!readiness.data?.device?.online&&readiness.data.accounts?.some(a=>a.id===accountId&&a.eligible);
   const feedbackText = selected && !selected.enabled
@@ -39,14 +41,15 @@ export function CollectionLauncher({ configs, loading, initialId, runsOpen, onRu
         <div className="console-title"><div><h2>开始找线索</h2><p>{selected ? `${modeLabels[selected.mode]} · 手动运行一轮有限批次。` : '选择配置后手动运行有限批次。'}</p></div><Link to={legacyWorkspacePath('settings', selected?.id)}><Settings2 size={15}/>搜索设置</Link></div>
         {loading ? <p>正在读取搜索设置…</p> : selected ? <>
           <div className="collection-runbar"><label>本次使用的搜索设置<select aria-label="本次使用的搜索设置" value={selected.id} onChange={e => { setChoice(e.target.value); setConsent(false); setFeedback(''); }}>{configs.map(c => <option key={c.id} value={c.id}>{c.name}{!c.enabled ? '（已暂停）' : ''}</option>)}</select></label>
-            <Button className="start-collection" disabled={!selected.enabled || !!active || backoff || mutation.isPending || (accountBound && (!consent || !accountReady))} onClick={() => mutation.mutate({ path: `/collection/configs/${selected.id}/runs`, body: {...runRequest(selected, scenario, crypto.randomUUID()),...(accountBound?{accountId,consent:"account-read-window-v1"}:{})} }, { onSuccess: () => {setConsent(false);setFeedback(`已提交「${selected.name}」的一轮${modeLabels[selected.mode]}。`);} })}><Play size={16}/>开始找线索（{modeLabels[selected.mode]}）</Button>
+            <Button className="start-collection" disabled={!archiveReady || !selected.enabled || !!active || backoff || mutation.isPending || (accountBound && (!consent || !accountReady))} onClick={() => mutation.mutate({ path: `/collection/configs/${selected.id}/runs`, body: {...runRequest(selected, scenario, crypto.randomUUID()),readPlan:{rounds:1,postsPerRound:Math.min(postLimit,selected.batchLimit),commentPages:selected.mode==='MOCK'?commentPages:1},...(accountBound?{accountId,consent:"account-read-window-v1"}:{})} }, { onSuccess: () => {setConsent(false);setFeedback(`已提交「${selected.name}」的一轮${modeLabels[selected.mode]}。`);} })}><Play size={16}/>开始找线索（{modeLabels[selected.mode]}）</Button>
             {active && <Button variant="outline" onClick={() => mutation.mutate({ path: `/collection/runs/${active}/pause` })}><Pause size={16}/>暂停本轮</Button>}
           </div>
+          <div className="collection-runbar"><label>采集轮数<input aria-label="采集轮数" value="1" readOnly/></label><label>本轮最多帖子数<select aria-label="本轮最多帖子数" value={Math.min(postLimit,selected.batchLimit)} onChange={e=>setPostLimit(Number(e.target.value))}>{Array.from({length:selected.batchLimit},(_,i)=><option key={i+1} value={i+1}>{i+1}</option>)}</select></label><label>每条评论流的页数上限<select aria-label="每条评论流的页数上限" disabled={selected.mode!=='MOCK'} value={selected.mode==='MOCK'?commentPages:1} onChange={e=>setCommentPages(Number(e.target.value))}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select></label></div><p className="helper-text">每次手动运行 1 轮，不自动重复；1 轮 × 1 帖不是 1 页评论。一级评论和每个回复流分别翻页，受本轮总预算限制。当前真实 MCP 未验证游标翻页／展开回复，只读返回窗口，不能保证全部评论。</p>
           {accountBound&&<AccountReadChoice accountId={accountId} onAccount={setAccountId} consent={consent} onConsent={setConsent}/>}
           <dl className="console-terms"><div><dt>关键词</dt><dd>{selected.keywords.join(' / ')}</dd></div><div><dt>排除词</dt><dd>{selected.excludeWords.join(' / ') || '无'}<span>每轮最多 {selected.batchLimit} 帖 · 32 个内部步骤</span></dd></div></dl>
         </> : <div className="console-empty"><p>先添加关键词和排除词，再回到这里开始。</p><Button asChild><Link to={legacyWorkspacePath('settings')}>去搜索设置</Link></Button></div>}
         <div className="console-links"><Button className="refresh-local-status" variant="ghost" size="sm" onClick={() => void refresh()}>刷新本地任务状态</Button><Button variant="ghost" size="sm" aria-expanded={runsOpen} aria-controls="run-module" onClick={onRuns}>查看运行记录</Button>{selected?.mode === 'MOCK' && <details><summary>模拟验收选项</summary><label>模拟场景<select aria-label="模拟场景" value={scenario} onChange={e => setScenario(e.target.value)}>{Object.entries(scenarios).filter(([k]) => k !== 'READ_WINDOW').map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></label></details>}</div>
-        <div className="console-feedback" role="status">{feedbackText}</div><ErrorNotice error={mutation.error}/>
+        <div className="console-feedback" role="status">{!archiveReady?'原文存档后台尚未就绪；完成后台升级后才能使用新采集计划。当前不会启动采集。':feedbackText}</div><ErrorNotice error={mutation.error}/>
       </div>
     </div>
     {selected&&<details className="collection-body"><summary>自然语言审核 · 手动评估</summary><SemanticReviewPanel key={selected.id} configId={selected.id}/></details>}

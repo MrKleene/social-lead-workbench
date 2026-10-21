@@ -16,15 +16,21 @@ describe('Qwen only mocked HTTP, fictional local samples',()=>{
    const source={...env,...patch};Object.defineProperty(source,'QWEN_API_KEY',{get(){throw Error('must not read');}});
    expect(()=>qwenSettings(source)).not.toThrow();expect(()=>qwenEnvironment(source)).not.toThrow();expect(qwenEnvironment(source).QWEN_API_KEY).toBeUndefined();
   }
-  expect(qwenSettings({...env,QWEN_WORKSPACE_ID:'evil.com/path'}).status.state).toBe('INVALID_CONFIG');
+  expect(qwenSettings({...env,QWEN_MATCH_ENDPOINT:'beijing-workspace',QWEN_WORKSPACE_ID:'evil.com/path'}).status.state).toBe('INVALID_CONFIG');
   expect(qwenSettings({...env,QWEN_API_KEY:''}).status.state).toBe('UNCONFIGURED');
   expect(JSON.stringify(qwenSettings(env).status)).not.toContain(env.QWEN_API_KEY);
  });
- it.each(['qwen3.7-flash-2026-07-15','qwen3.7-plus-2026-05-26','qwen3.8-max-0902'])('controlled model %s retains business schema, non-thinking and model-specific price consent',async model=>{
+ it.each(['qwen3.7-flash-2026-07-15','qwen3.7-plus-2026-05-26','qwen3.8-max-0902','qwen3.8-flash'])('controlled model %s retains business schema, non-thinking and model-specific price consent',async model=>{
   const settings=qwenSettings({...env,QWEN_MATCH_MODEL:model,QWEN_MATCH_PRICE_ACK:qwenModel(model)!.priceAck});expect(settings.status.state).toBe('READY');expect(settings.status.model).toBe(model);
   const transport=vi.fn(async(_url:string,init:RequestInit)=>{const body=JSON.parse(init.body as string);expect(body.model).toBe(model);expect(body.enable_thinking).toBe(false);expect(body.response_format).toMatchObject({type:'json_schema',json_schema:{strict:true}});return response();});
   await requestQwen(settings,payload,transport);expect(transport).toHaveBeenCalledTimes(1);
   expect(qwenEnvironment({...env,QWEN_MATCH_MODEL:model,QWEN_MATCH_PRICE_ACK:qwenModel(model)!.priceAck}).QWEN_MATCH_MODEL).toBe(model);
+ });
+ it('standard endpoint needs no workspace ID; legacy explicit profile and unknown endpoint are constrained',()=>{
+  expect(qwenSettings({...env,QWEN_WORKSPACE_ID:undefined}).status.state).toBe('READY');
+  expect(qwenSettings({...env,QWEN_MATCH_ENDPOINT:'evil'}).status.state).toBe('INVALID_CONFIG');
+  expect(qwenSettings({...env,QWEN_MATCH_ENDPOINT:'beijing-workspace'}).endpoint).toBe('https://fictional-space.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions');
+  expect(qwenModel('qwen3.8-flash')!.priceDescription).toContain('0.8/2.7');
  });
  it('unknown prices/models and cross-model price consent never fall back or call',async()=>{
   expect(qwenSettings(env).status.model).toBe(QWEN_MODEL);
@@ -33,9 +39,9 @@ describe('Qwen only mocked HTTP, fictional local samples',()=>{
   const transport=vi.fn(async()=>response());await expect(requestQwen({...qwenSettings(env),status:{...qwenSettings(env).status,model:'unknown-model'}},payload,transport)).rejects.toThrow('MODEL_OR_PRICE_UNVERIFIED');expect(transport).not.toHaveBeenCalled();
   expect(previewHash(payload,[],1,'flash')).not.toBe(previewHash(payload,[],1,'max'));
  });
- it('fixed Beijing workspace endpoint, nonthinking strict schema, bounded request and no identity metadata',async()=>{
+ it('official Beijing standard endpoint (Key determines workspace), nonthinking strict schema, bounded request and no identity metadata',async()=>{
   const transport=vi.fn(async(url:string,init:RequestInit)=>{
-   expect(url).toBe('https://fictional-space.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions');expect(init.redirect).toBe('error');
+   expect(url).toBe('https://cn-beijing.maas.qianwenaiapi.com/compatible-mode/v1/chat/completions');expect(init.redirect).toBe('error');
    const body=JSON.parse(init.body as string);expect(body).toMatchObject({model:QWEN_MODEL,enable_thinking:false,stream:false,max_tokens:2500,response_format:{type:'json_schema',json_schema:{strict:true}}});
    expect(body.messages[0].content).toContain('untrusted DATA');expect(body.messages[1].content).not.toMatch(/fictional-(user|post|comment|row)/);expect(body.tools).toBeUndefined();return response();
   });

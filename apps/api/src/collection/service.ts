@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Inject, Inj
 import { CollectionConfig, Prisma } from "@prisma/client";
 import { Db } from "../common/db";
 import { Actor, requireAdmin } from "../auth/security";
-import { ConfigInput, Scenario, configInput, ReadAdapter, ReadFailure } from "./contract";
+import { ConfigInput, Scenario, configInput, ReadAdapter, ReadFailure, limits } from "./contract";
 import { CollectionQueue } from "./queue";
 import { MockAdapter } from "./adapters/mock";
 import { XhsMcpAdapter } from "./adapters/xhs-mcp";
@@ -10,6 +10,7 @@ import { XhsHttpTransport } from "./mcp/transport";
 import { accountReadMode, loginCheckOnly, mcpSettings, requireMcp } from "./mcp/policy";
 import { AccountReadService } from "./account-read.service";
 import { collect } from "./collector";
+import {checkpointCapture,finishCapture,semanticHash} from './capture-archive';
 import { commitRead } from "./ingestion";
 @Injectable()
 export class CollectionService {
@@ -28,14 +29,14 @@ export class CollectionService {
     }
     async readiness(actor: Actor) {
         requireAdmin(actor);
-        if(accountReadMode() && this.accountReads) return this.accountReads.readiness(actor);
+        if(accountReadMode() && this.accountReads) return {...await this.accountReads.readiness(actor),captureArchiveVersion:1};
         const settings = mcpSettings();
         const last = await this.db.auditLog.findFirst({ where: { action: { in: ["MCP_READINESS_CHECK", "MCP_READINESS_STARTED"] } }, orderBy: { createdAt: "desc" }, select: { createdAt: true, metadata: true } });
-        return { enabled: settings.enabled, mode: settings.enabled ? settings.mode : null, reason: settings.enabled ? "UNVERIFIED" : settings.reason, lastCheck: last, loginOnly: loginCheckOnly(), configurationOnly: process.env.CRM_PERSISTENT === "1", tools: loginCheckOnly() ? ["check_login_status"] : ["check_login_status", "search_feeds", "get_feed_detail"], coverage: "WINDOW_ONLY", automaticPolling: false };
+        return { captureArchiveVersion:1, enabled: settings.enabled, mode: settings.enabled ? settings.mode : null, reason: settings.enabled ? "UNVERIFIED" : settings.reason, lastCheck: last, loginOnly: loginCheckOnly(), configurationOnly: process.env.CRM_PERSISTENT === "1", tools: loginCheckOnly() ? ["check_login_status"] : ["check_login_status", "search_feeds", "get_feed_detail"], coverage: "WINDOW_ONLY", automaticPolling: false };
     }
     async checkReadiness(actor: Actor) {
         requireAdmin(actor);
-        if(accountReadMode() && this.accountReads) return this.accountReads.readiness(actor);
+        if(accountReadMode() && this.accountReads) return {...await this.accountReads.readiness(actor),captureArchiveVersion:1};
         const settings = mcpSettings();
         if (!settings.enabled) throw new ForbiddenException(settings.reason);
         if (this.probeBusy) throw new ConflictException("检查正在进行，请稍后查看状态");
@@ -83,7 +84,7 @@ export class CollectionService {
             return config;
         });
     }
-    async start(actor: Actor, id: string, scenario: Scenario, requestKey: string, mode: ConfigInput["mode"] = "MOCK", accountId?:string, consent?:string) {
+    async start(actor: Actor, id: string, scenario: Scenario, requestKey: string, mode: ConfigInput["mode"] = "MOCK", accountId?:string, consent?:string, readPlan?:{rounds:1;postsPerRound:number;commentPages:number}) {
         requireAdmin(actor);
         if (loginCheckOnly() && !accountReadMode()) throw new ForbiddenException("当前为登录状态验证环境，采集已禁用");
         const run = await this.db.$transaction(async (tx) => {
@@ -95,10 +96,11 @@ export class CollectionService {
             if ((mode === "MOCK") === (scenario === "READ_WINDOW")) throw new BadRequestException("场景与采集模式不一致");
             const old = await tx.collectionRun.findUnique({ where: { requestKey } });
             if (old) {
-                if (old.configId !== id || old.scenario !== scenario || (old.execution as {accountId?:string;actorId?:string}|null)?.accountId !== accountId || (old.execution && (old.execution as {actorId:string}).actorId !== actor.id))
+                if (old.configId !== id || old.scenario !== scenario || (readPlan&&semanticHash(old.readPlan)!==semanticHash(readPlan)) || (old.execution as {accountId?:string;actorId?:string}|null)?.accountId !== accountId || (old.execution && (old.execution as {actorId:string}).actorId !== actor.id))
                     throw new ConflictException("请求键冲突");
                 return { ...old, reused: true };
             }
+            if(readPlan&&(readPlan.postsPerRound>config.batchLimit||(mode!=='MOCK'&&readPlan.commentPages!==1)))throw new BadRequestException('每轮帖数不能超过配置上限；当前 MCP 仅支持一个已验证窗口，不能指定未支持的翻页');
             if (!config.enabled)
                 throw new ConflictException("配置已暂停");
             if (config.nextAllowedAt && config.nextAllowedAt > new Date())
@@ -107,8 +109,9 @@ export class CollectionService {
                 throw new ConflictException("已有运行，完成或暂停后再试");
             const snapshot = configInput.parse({ name: config.name, platform: config.platform, mode: config.mode, semanticRules:config.semanticRules, commentRules:config.commentRules, keywords: config.keywords, excludeWords: config.excludeWords, batchLimit: config.batchLimit, enabled: config.enabled });
             if(accountReadMode() && mode !== 'MOCK' && snapshot.batchLimit>3)throw new BadRequestException('本轮最多3篇帖子');
+            if(readPlan)snapshot.batchLimit=readPlan.postsPerRound;
             const execution=accountReadMode() && mode !== 'MOCK' ? await this.accountReads!.authorize(tx,actor,mode,accountId,consent) : undefined;
-            const created = await tx.collectionRun.create({ data: { configId: id, revision: config.revision, snapshot, scenario, requestKey, ...(execution?{execution}:{}) } });
+            const created = await tx.collectionRun.create({ data: { configId: id, revision: config.revision, snapshot, scenario, requestKey, readPlan:readPlan||{rounds:1,postsPerRound:snapshot.batchLimit,commentPages:mode==="MOCK"?4:1}, ...(execution?{execution}:{}) } });
             await tx.collectionConfig.update({ where: { id }, data: { activeRunId: created.id } });
             await tx.auditLog.create({ data: { actorId: actor.id, action: config.mode === "MOCK" ? "COLLECTION_REQUESTED_MOCK" : "COLLECTION_REQUESTED_MCP", entityId: created.id, metadata: { configId: id, scenario, mode: config.mode } } });
             return { ...created, reused: false };
@@ -159,7 +162,8 @@ export class CollectionService {
                 owned=await this.accountReads.open(run.execution,cancelled);reader=owned.reader;
             }
             else { if(run.execution)throw new ReadFailure('REAL_DISABLED'); const settings = requireMcp(spec.mode); reader = adapter || new XhsMcpAdapter(new XhsHttpTransport(settings.url, settings.mode), true, settings.mode); }
-            const result = await collect(reader, spec, async () => { if(owned)await owned.check(); else if(spec.mode!=="MOCK")requireMcp(spec.mode);return cancelled(); }, owned?{requests:32,pagesPerStream:1,comments:100,callMs:40000,runMs:150000}:undefined, async progress=>{await this.db.collectionRun.updateMany({where:{id,status:'RUNNING'},data:{requests:progress.requests,observed:progress.posts.reduce((n,p)=>n+p.comments.length,0)}});});
+            const result = await collect(reader, spec, async () => { if(owned)await owned.check(); else if(spec.mode!=="MOCK")requireMcp(spec.mode);return cancelled(); }, {...(owned?{requests:32,pagesPerStream:1,comments:100,callMs:40000,runMs:150000}:limits),pagesPerStream:(run.readPlan as {commentPages?:number}|null)?.commentPages??(owned?1:limits.pagesPerStream)}, async progress=>{await checkpointCapture(this.db,run,progress,owned?.commitGuard);await this.db.collectionRun.updateMany({where:{id,status:'RUNNING'},data:{requests:progress.requests,observed:progress.posts.reduce((n,p)=>n+p.comments.length,0)}});});
+            await finishCapture(this.db,run,result);
             if(owned && result.status==='FAILED'){result.discarded=result.discarded||result.posts.length>0;result.posts=[];}
             const finished=await commitRead(this.db, run, result,owned?.commitGuard);
             if(owned)await this.accountReads!.failure(run.execution,result.reason);
@@ -167,6 +171,7 @@ export class CollectionService {
         }
         catch (error) {
             const reason=error instanceof ReadFailure?error.code:"INVALID_DATA";
+            await finishCapture(this.db,run,{posts:[],requests:0,status:"FAILED",reason});
             const failed=await commitRead(this.db, run, { posts: [], requests: 0, status: "FAILED", reason });
             if(run.execution)await this.accountReads?.failure(run.execution,reason);
             return failed;

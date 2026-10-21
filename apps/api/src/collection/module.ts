@@ -14,17 +14,26 @@ import { CollectionQueue } from "./queue";
 import { configInput, scenarioSchema } from "./contract";
 import { semanticEvaluateRequestSchema } from '@crm/contracts';
 import { QwenMatchingService } from './qwen-matching.service';
+import { CaptureService } from './capture.service';
 import { SemanticService } from './semantic.service';
 @Controller("collection")
 @UseGuards(SessionGuard)
 class CollectionController {
     constructor(
     @Inject(CollectionService)
-    private service: CollectionService, @Inject(SemanticService) private semantic:SemanticService, @Inject(QwenMatchingService) private qwen:QwenMatchingService) { }
+    private service: CollectionService, @Inject(SemanticService) private semantic:SemanticService, @Inject(QwenMatchingService) private qwen:QwenMatchingService, @Inject(CaptureService) private captures:CaptureService) { }
+    @Post("configs/:id/capture-preview")
+    capturePreview(@Req() r:AuthedRequest,@Param("id") id:string){const b=parse(z.object({captureIds:z.array(z.string().min(1)).min(1).max(5).refine(a=>new Set(a).size===a.length)}).strict(),r.body);return this.captures.preview(r.actor,id,b.captureIds);}
+    @Get("configs/:id/captures")
+    capturesList(@Req() r:AuthedRequest,@Param('id') id:string,@Query('offset') offset?:string){return this.captures.list(r.actor,id,parse(z.coerce.number().int().min(0).max(100000).default(0),offset));}
+    @Patch('configs/:id/semantic-control')
+    semanticControl(@Req() r:AuthedRequest,@Param('id') id:string){return this.captures.toggle(r.actor,id,parse(z.object({enabled:z.boolean(),version:z.number().int().nonnegative()}).strict(),r.body));}
+    @Post('configs/:id/semantic-queue')
+    semanticQueue(@Req() r:AuthedRequest,@Param('id') id:string){const b=parse(z.object({captureIds:z.array(z.string().min(1).max(200)).min(1).max(5).refine(a=>new Set(a).size===a.length)}).strict(),r.body);return this.captures.enqueue(r.actor,id,b.captureIds);}
     @Get('configs/:id/semantic-reviews')
     reviews(@Req() r:AuthedRequest,@Param('id') id:string,@Query('offset') offset?:string){return this.semantic.list(r.actor,id,parse(z.coerce.number().int().min(0).max(100000).default(0),offset));}
     @Post('configs/:id/semantic-preview')
-    preview(@Req() r:AuthedRequest,@Param('id') id:string){parse(z.object({}).strict(),r.body);return this.qwen.preview(r.actor,id);}
+    preview(@Req() r:AuthedRequest,@Param('id') id:string){const b=parse(z.object({reviewIds:z.array(z.string().min(1).max(200)).min(1).max(5).optional()}).strict(),r.body);return this.qwen.preview(r.actor,id,b.reviewIds);}
     @Post('configs/:id/semantic-evaluate')
     evaluate(@Req() r:AuthedRequest,@Param('id') id:string){if(r.body&&Object.keys(r.body).length===0)return this.semantic.evaluate(r.actor,id);return this.qwen.evaluate(r.actor,id,parse(semanticEvaluateRequestSchema,r.body));}
     @Patch('semantic-reviews/:id')
@@ -70,7 +79,7 @@ class CollectionController {
     @Req()
     r: AuthedRequest, 
     @Param("id")
-    id: string) { const b = parse(z.object({ scenario: scenarioSchema, requestKey: z.string().uuid(), mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]), accountId:z.string().min(1).max(100).optional(), consent:z.literal("account-read-window-v1").optional() }).strict(), r.body); return this.service.start(r.actor, id, b.scenario, b.requestKey, b.mode, b.accountId, b.consent); }
+    id: string) { const b = parse(z.object({ scenario: scenarioSchema, requestKey: z.string().uuid(), mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]), accountId:z.string().min(1).max(100).optional(), consent:z.literal("account-read-window-v1").optional(), readPlan:z.object({rounds:z.literal(1),postsPerRound:z.number().int().min(1).max(20),commentPages:z.number().int().min(1).max(4)}).strict().optional() }).strict(), r.body); return this.service.start(r.actor, id, b.scenario, b.requestKey, b.mode, b.accountId, b.consent, b.readPlan); }
     @Post("runs/:id/pause")
     pause(
     @Req()
@@ -98,6 +107,6 @@ class NoticesController {
     id: string) { parse(z.object({}).strict(), r.body); const notice = await this.db.collectionNotice.findFirst({ where: { id, lead: scope(r.actor) } }); if (!notice)
         throw new NotFoundException(); return this.leads.locked(r.actor, notice.leadId, tx => tx.noticeRead.upsert({ where: { noticeId_userId: { noticeId: id, userId: r.actor.id } }, create: { noticeId: id, userId: r.actor.id }, update: {} })); }
 }
-@Module({ imports: [AuthModule, LeadsModule, DevicesModule], controllers: [CollectionController, NoticesController], providers: [QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService] })
+@Module({ imports: [AuthModule, LeadsModule, DevicesModule], controllers: [CollectionController, NoticesController], providers: [CaptureService, QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService] })
 export class CollectionModule {
 }

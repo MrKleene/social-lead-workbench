@@ -524,8 +524,8 @@ describe('可选自然语言审核：仅虚构数据',()=>{
  async function collectSemantic(){const r=await service.start(actor,semanticConfig,'BASELINE',randomUUID());await service.execute(r.id,adapter);return r;}
  it('只有主动保存才启用；搜索词之外的评论也入队，无模型不评分',async()=>{
   const legacy=await config('语义旧配置');expect(legacy.semanticRules).toBeNull();
-  const c=await config('无偿选题',{semanticRules:rules});semanticConfig=c.id;await collectSemantic();
-  const rows=await db.semanticReview.findMany({where:{configId:c.id}});expect(rows).toHaveLength(2);expect(rows.every(r=>r.score===null&&r.state==='UNCONFIGURED'&&r.reviewStatus==='PENDING')).toBe(true);
+  const c=await config('无偿选题',{semanticRules:rules});semanticConfig=c.id;await db.semanticControl.create({data:{configId:c.id,enabled:true}});await collectSemantic();
+  const rows=await db.semanticReview.findMany({where:{configId:c.id}});expect(rows).toHaveLength(2);expect(rows.every(r=>r.score===null&&r.state==='UNANALYSED'&&r.reviewStatus==='PENDING')).toBe(true);
   expect(await db.sourceMatch.count({where:{configId:c.id}})).toBe(0);expect((rows[0].snapshot as any).body).toContain('虚构正文');
  });
  it('重复窗口不重复评估，规则版本变化保留旧证据',async()=>{
@@ -559,7 +559,7 @@ describe('可选自然语言审核：仅虚构数据',()=>{
  });
  it('失败与过期版本保持待审核，失效租约仅手动重试',async()=>{
   const {SemanticService}=await import('../src/collection/semantic.service');
-  const c=await config('语义失败',{semanticRules:rules});const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,adapter);
+  const c=await config('语义失败',{semanticRules:rules});await db.semanticControl.create({data:{configId:c.id,enabled:true}});const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,adapter);
   const failure=new SemanticService(db,{kind:'LOCAL_TEST',name:'failure',version:'v1',evaluate:async()=>{throw Error('secret must not escape');}});
   await failure.evaluate(actor,c.id);let rows=await db.semanticReview.findMany({where:{configId:c.id}});expect(rows.every(r=>r.state==='FAILED'&&r.reviewStatus==='PENDING'&&r.score===null)).toBe(true);expect(JSON.stringify(rows)).not.toContain('secret must not escape');
   await db.semanticReview.updateMany({where:{configId:c.id},data:{state:'PROCESSING',leaseUntil:new Date(Date.now()-1000)}});
@@ -576,7 +576,7 @@ describe('Qwen manual integration: isolated database and fictional HTTP only',()
  const settings=()=>({status:{state:'READY' as const,message:'FICTIONAL HTTP ONLY',model:'qwen3.7-flash-2026-07-15',region:'cn-beijing' as const,dailyLimit:2,batchLimit:5,automaticRetries:0 as const,timeoutSeconds:20},endpoint:'https://fictional.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions',key:'fictional-not-real'});
  async function fixture(){
   await db.semanticModelCall.deleteMany();
-  const c=await config('虚构Qwen审核',{semanticRules:rules});
+  const c=await config('虚构Qwen审核',{semanticRules:rules});await db.semanticControl.create({data:{configId:c.id,enabled:true}});
   const run=await service.start(actor,c.id,'BASELINE',randomUUID());
   for(const i of [1,2])await db.semanticReview.create({data:{configId:c.id,revision:1,platform:'XHS',platformUserId:'fictional-'+i,runId:run.id,snapshotHash:randomUUID(),snapshot:{postId:'fictional-post',commentId:'fictional-comment-'+i,userId:'fictional-'+i,title:'虚构论文讨论',body:'讨论毕业选题',comment:'护理专业如何选题',parentId:i===2?'missing':null,parent:null,coverage:'PARTIAL',isDemo:true},rules,isDemo:true}});
   return c;
@@ -612,7 +612,7 @@ describe('Qwen manual integration: isolated database and fictional HTTP only',()
  });
  it('different concurrent request keys cannot double-spend; rule edit during request invalidates results',async()=>{
   const {QwenMatchingService}=await import('../src/collection/qwen-matching.service');const c=await fixture();
-  const transport=vi.fn(async(_url:string,init:RequestInit)=>{await db.collectionConfig.update({where:{id:c.id},data:{revision:{increment:1}}});return mockResponse(init);});
+  const transport=vi.fn(async(_url:string,init:RequestInit)=>{await db.collectionConfig.update({where:{id:c.id},data:{revision:{increment:1},semanticRules:{...rules,target:rules.target+'并提供具体专业'}}});return mockResponse(init);});
   const q=new QwenMatchingService(db,{settings,transport}),p=await q.preview(actor,c.id);
   const results=await Promise.allSettled([1,2].map(()=>q.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:p.hash,consent:'send-reviewed-redacted-batch-v1'})));
   expect(results.filter(x=>x.status==='fulfilled')).toHaveLength(1);expect(results.filter(x=>x.status==='rejected')).toHaveLength(1);expect(transport).toHaveBeenCalledTimes(1);
@@ -627,4 +627,50 @@ describe('Qwen manual integration: isolated database and fictional HTTP only',()
   await expect(max.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:before.hash,consent:'send-reviewed-redacted-batch-v1'})).rejects.toThrow();expect(transport).not.toHaveBeenCalled();expect(await db.semanticModelCall.count()).toBe(0);
  });
 
+});
+
+
+describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HTTP',()=>{
+ const rules={version:1 as const,target:'寻找明确请求毕业论文选题帮助的学生',reviewThreshold:70};
+ const sample:import('../src/collection/contract').ReadAdapter={mode:'MOCK',platform:'XHS',search:async()=>({items:[{id:'demo-collect-archive-post',title:'虚构毕业论文讨论'}],complete:true}),post:async p=>({...p,body:'讨论各专业选题'}),comments:async()=>({items:[{id:'demo-collect-archive-root',userId:'demo-collect-archive-a',nickname:'虚构甲',text:'护理专业如何选题',hasReplies:true}],complete:true}),replies:async()=>({items:[{id:'demo-collect-archive-reply',userId:'demo-collect-archive-b',nickname:'虚构乙',text:'同问',hasReplies:false,parentId:'demo-collect-archive-root'}],complete:true})};
+ async function archive(){const c=await config('不会命中此搜索词',{semanticRules:rules});const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,sample);return c;}
+ it('默认关闭仍保存未命中的帖子、一级及回复原文，null评分；独立开关不改原规则',async()=>{
+  const c=await archive(),page=await read(`/collection/configs/${c.id}/captures`);expect(page.status).toBe(200);expect(page.body).toMatchObject({total:2,postTotal:1,control:{enabled:false,version:0}});expect(page.body.items.every((x:any)=>x.reviews.length===0)).toBe(true);
+  expect(page.body.items.find((x:any)=>x.snapshot.parentId).snapshot.parent).toBe('护理专业如何选题');expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(0);expect(await db.sourceMatch.count({where:{configId:c.id}})).toBe(0);
+  const changed=await write('patch',`/collection/configs/${c.id}/semantic-control`,{enabled:true,version:0});expect(changed.body).toMatchObject({enabled:true,version:1});
+  expect((await db.collectionConfig.findUniqueOrThrow({where:{id:c.id}}))).toMatchObject({revision:1,keywords:c.keywords,semanticRules:rules});expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(0);
+  expect((await write('patch',`/collection/configs/${c.id}/semantic-control`,{enabled:false,version:0})).status).toBe(409);
+  const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,sample);expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(2);
+ });
+ it('已有原文离线预览、显式选择入队；同规则去重，改规则/模型保留历史，无重新采集',async()=>{
+  const {CaptureService}=await import('../src/collection/capture.service');const {enqueueCaptured}=await import('../src/collection/capture-archive');const c=await archive(),captures=new CaptureService(db);const page=await captures.list(actor,c.id),ids=page.items.map(x=>x.id);
+  const preview=await captures.preview(actor,c.id,ids);expect(preview.count).toBe(2);expect(JSON.stringify(preview.payload)).not.toContain('demo-collect-archive');
+  await expect(captures.enqueue(actor,c.id,ids)).rejects.toThrow();await captures.toggle(actor,c.id,{enabled:true,version:0});
+  expect(await captures.enqueue(actor,c.id,ids)).toMatchObject({added:2,reused:0});expect(await captures.enqueue(actor,c.id,ids)).toMatchObject({added:0,reused:2});
+  await service.change(actor,c.id,{keywords:['另一个独立搜索词']},1,true);expect(await captures.enqueue(actor,c.id,ids)).toMatchObject({added:0,reused:2});
+  await service.change(actor,c.id,{semanticRules:{...rules,target:rules.target+'并留下专业'}},2,true);expect(await captures.enqueue(actor,c.id,ids)).toMatchObject({added:2,reused:0});
+  const current=await db.collectionConfig.findUniqueOrThrow({where:{id:c.id}});await db.$transaction(async tx=>{for(const row of page.items)await enqueueCaptured(tx,row,current,'qwen3.8-flash');});
+  expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(6);expect(await db.collectionRun.count({where:{configId:c.id}})).toBe(1);expect(await db.contactAttempt.count()).toBe(0);
+ });
+ it('翻页途中失败已到达原文保留，覆盖partial与停止原因；不同评论页数不等于帖子数',async()=>{
+  const {ReadFailure}=await import('../src/collection/contract');const c=await config('存档中断',{semanticRules:rules});let second=0;
+  const interrupted={...sample,comments:async(_p:unknown,cursor?:string)=>{if(cursor){second++;throw new ReadFailure('TIMEOUT');}return {items:[{id:'demo-collect-page-one',userId:'demo-collect-page-user',nickname:'虚构',text:'已读取但未命中',hasReplies:false}],next:'next',complete:false};}};
+  const r=await service.start(actor,c.id,'BASELINE',randomUUID(),'MOCK',undefined,undefined,{rounds:1,postsPerRound:1,commentPages:2});await service.execute(r.id,interrupted);
+  expect(second).toBe(1);expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(1);expect(await db.capturedPost.findFirst({where:{configId:c.id}})).toMatchObject({coverage:'PARTIAL',stopReason:'TIMEOUT'});expect(await db.collectionRun.findUnique({where:{id:r.id}})).toMatchObject({capturedPosts:1,capturedCommentsCount:1,readPlan:{rounds:1,postsPerRound:1,commentPages:2}});
+  const limited=await config('存档一页');const once=await service.start(actor,limited.id,'BASELINE',randomUUID(),'MOCK',undefined,undefined,{rounds:1,postsPerRound:1,commentPages:1});await service.execute(once.id,interrupted);expect(second).toBe(1);expect(await db.capturedPost.findFirst({where:{configId:limited.id}})).toMatchObject({coverage:'PARTIAL',stopReason:'COMMENTS_PARTIAL'});
+ });
+ it('开关在预览后关闭阻止HTTP；已在途的请求可完成，成功同版本不再次调用',async()=>{
+  const {CaptureService}=await import('../src/collection/capture.service');const {QwenMatchingService}=await import('../src/collection/qwen-matching.service');const c=await archive(),captures=new CaptureService(db);await captures.toggle(actor,c.id,{enabled:true,version:0});const ids=(await captures.list(actor,c.id)).items.map(x=>x.id);const queued=await captures.enqueue(actor,c.id,ids);
+  await db.semanticModelCall.deleteMany();let version=1;
+  const settings=()=>({status:{state:'READY' as const,message:'MOCK ONLY',model:'qwen3.7-flash-2026-07-15',region:'cn-beijing' as const,dailyLimit:3,batchLimit:5,automaticRetries:0 as const,timeoutSeconds:20},endpoint:'https://example.invalid',key:'fictional'});
+  const transport=vi.fn(async(_u:string,init:RequestInit)=>{await captures.toggle(actor,c.id,{enabled:false,version:++version});const payload=JSON.parse(JSON.parse(init.body as string).messages[1].content);return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:payload.items.map((item:any)=>({id:item.id,score:80,decision:'MATCH',reason:'虚构语义输出',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:item.comment}]}))})}}]}));});
+  const q=new QwenMatchingService(db,{settings,transport}),p=await q.preview(actor,c.id,queued.reviewIds);await captures.toggle(actor,c.id,{enabled:false,version:version++});const input={requestKey:randomUUID(),previewHash:p.hash,reviewIds:queued.reviewIds,consent:'send-reviewed-redacted-batch-v1' as const};
+  await expect(q.evaluate(actor,c.id,input)).rejects.toThrow();expect(transport).not.toHaveBeenCalled();await captures.toggle(actor,c.id,{enabled:true,version:version});
+  await q.evaluate(actor,c.id,input);expect(transport).toHaveBeenCalledTimes(1);expect((await q.status(db,c.id)).control.enabled).toBe(false);expect(await db.semanticReview.count({where:{configId:c.id,state:'EVALUATED'}})).toBe(2);expect((await q.preview(actor,c.id,queued.reviewIds)).count).toBe(0);
+ });
+ it('存档端点管理员/CSRF隔离；旧ID观察没有伪造原文',async()=>{
+  const c=await archive();expect((await read(`/collection/configs/${c.id}/captures`,a)).status).toBe(403);expect((await api().patch(`/api/collection/configs/${c.id}/semantic-control`).set('Cookie',admin.cookie).send({enabled:true,version:0})).status).toBe(403);
+  const monitor=await db.monitorPost.findFirstOrThrow({where:{configId:c.id}});await db.commentObservation.create({data:{monitorId:monitor.id,platformCommentId:'demo-collect-historical-missing',lastRunId:monitor.lastRunId!}});
+  const page=await read(`/collection/configs/${c.id}/captures`);expect(page.body.legacyWithoutSnapshot).toBe(1);expect(page.body.total).toBe(2);
+ });
 });

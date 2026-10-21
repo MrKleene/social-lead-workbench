@@ -198,6 +198,9 @@ model ReplyTemplate {
   configs CollectionConfig[]
 }
 model CollectionConfig {
+  semanticControl SemanticControl?
+  captures CapturedPost[]
+  capturedComments CapturedComment[]
   semanticCalls SemanticModelCall[]
   semanticRules Json?
   semanticReviews SemanticReview[]
@@ -226,6 +229,11 @@ model CollectionConfig {
   matches SourceMatch[]
 }
 model CollectionRun {
+  captures CapturedPost[]
+  capturedComments CapturedComment[]
+  readPlan Json?
+  capturedPosts Int @default(0)
+  capturedCommentsCount Int @default(0)
   semanticReviews SemanticReview[]
   metrics Json?
   id String @id @default(cuid())
@@ -406,6 +414,12 @@ model DeviceExecutionLease {
 
 // Opt-in, bounded context snapshots. No model credentials or outbound messages.
 model SemanticReview {
+  analysisKey String? @unique
+  selectedModel String?
+  ruleHash String?
+  contextVersion String?
+  captureId String?
+  capture CapturedComment? @relation(fields:[captureId],references:[id],onDelete:SetNull)
   evaluationInput Json?
   id String @id @default(cuid())
   configId String
@@ -455,4 +469,49 @@ model SemanticModelCall {
  finishedAt DateTime?
  reservedUntil DateTime
  @@index([createdAt])
+}
+
+model SemanticControl {
+ configId String @id
+ config CollectionConfig @relation(fields:[configId],references:[id],onDelete:Cascade)
+ enabled Boolean @default(false)
+ version Int @default(0)
+ updatedAt DateTime @updatedAt
+}
+model CapturedPost {
+ id String @id @default(cuid())
+ configId String
+ config CollectionConfig @relation(fields:[configId],references:[id],onDelete:Cascade)
+ runId String
+ run CollectionRun @relation(fields:[runId],references:[id],onDelete:Cascade)
+ platformPostId String
+ contentHash String
+ snapshot Json
+ coverage String @default("UNKNOWN")
+ stopReason String?
+ lastRunId String
+ createdAt DateTime @default(now())
+ lastSeenAt DateTime @default(now())
+ comments CapturedComment[]
+ @@unique([configId,platformPostId,contentHash])
+}
+model CapturedComment {
+ id String @id @default(cuid())
+ configId String
+ config CollectionConfig @relation(fields:[configId],references:[id],onDelete:Cascade)
+ runId String
+ run CollectionRun @relation(fields:[runId],references:[id],onDelete:Cascade)
+ postId String
+ post CapturedPost @relation(fields:[postId],references:[id],onDelete:Cascade)
+ platformCommentId String
+ contentHash String
+ contextVersion String
+ snapshot Json
+ isDemo Boolean
+ lastRunId String
+ createdAt DateTime @default(now())
+ lastSeenAt DateTime @default(now())
+ reviews SemanticReview[]
+ @@unique([configId, platformCommentId, contentHash, contextVersion], map: "CapturedComment_content_version_key")
+ @@index([configId,createdAt])
 }

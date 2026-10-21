@@ -55,10 +55,10 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
             clearInterval(polling!);
         }
     }
-    async function pages<T>(fn: (cursor: string | undefined, signal: AbortSignal) => Promise<Page<T>>, schema: z.ZodType<T>, consume: (items: T[], deleted: string[]) => Promise<void>): Promise<boolean> {
+    async function pages<T>(fn: (cursor: string | undefined, signal: AbortSignal) => Promise<Page<T>>, schema: z.ZodType<T>, consume: (items: T[], deleted: string[]) => Promise<void>, pageLimit=budget.pagesPerStream): Promise<boolean> {
         let cursor: string | undefined;
         const seen = new Set<string>();
-        for (let n = 0; n < budget.pagesPerStream; n++) {
+        for (let n = 0; n < pageLimit; n++) {
             const raw = await call(signal => fn(cursor, signal));
             const page = z.object({ items: z.array(schema).max(200), next: z.string().min(1).optional(), complete: z.boolean(), deletedIds: z.array(z.string().min(1).max(200)).max(200).optional() }).parse(raw);
             await consume(page.items, page.deletedIds || []);
@@ -77,7 +77,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         for (const keyword of config.keywords) {
             const complete = await pages((c, s) => adapter.search(keyword, c, s), postSchema, async (items) => { for (const p of items)
                 if (found.size < config.batchLimit)
-                    found.set(p.id, p); });
+                    found.set(p.id, p); }, adapter.mode==="MOCK"?limits.pagesPerStream:1);
             if (!complete) {
                 result.status = "PARTIAL";
                 result.reason = "SEARCH_PARTIAL";
@@ -93,15 +93,20 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
                 throw new ReadFailure("INVALID_DATA");
             const entry: PostRead = { post, comments: [], deletedIds: [], complete: false };
             result.posts.push(entry);
+            await progress?.(result);
             const roots: Comment[] = [];
             const add = async (items: Comment[], deleted: string[]) => {
                 for (const c of items) {
-                    if (++comments > budget.comments)
-                        throw new ReadFailure("BUDGET");
+                    const prior=entry.comments.find(x=>x.id===c.id);
+                    if(prior){if(prior.text!==c.text||prior.userId!==c.userId||prior.parentId!==c.parentId)throw new ReadFailure("INVALID_DATA");continue;}
+                    comments++;
                     entry.comments.push(c);
                 }
                 entry.deletedIds.push(...deleted);
+                await progress?.(result);
+                if(comments>budget.comments)throw new ReadFailure("BUDGET");
             };
+            if(adapter.receivedComments)await add(z.array(commentSchema).max(200).parse(adapter.receivedComments(post)),[]);
             let complete = await pages((c, s) => adapter.comments(post, c, s), commentSchema, async (items, deleted) => { roots.push(...items); await add(items, deleted); });
             const expanded = new Set<string>();
             for (let i = 0; i < roots.length; i++) {

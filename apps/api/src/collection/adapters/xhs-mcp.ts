@@ -69,6 +69,7 @@ export class XhsMcpAdapter implements ReadAdapter {
         this.details.set(post.id, { roots, replies });
         return { ...post, title: data.data.note.title || post.title, ...(data.data.note.desc?{body:data.data.note.desc}:{}) };
     }
+    receivedComments(post:Post):Comment[]{const d=this.details.get(post.id);return d?[...d.roots,...[...d.replies.values()].flat()]:[];}
     async comments(post: Post, cursor: string | undefined, _signal: AbortSignal): Promise<Page<Comment>> {
         if (!this.allowed) throw new ReadFailure("REAL_DISABLED");
         if (cursor) throw new ReadFailure("UNSUPPORTED");

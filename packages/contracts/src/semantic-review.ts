@@ -8,13 +8,13 @@ export const semanticEvidenceSchema = z.object({source:z.enum(['COMMENT','POST_T
 export const semanticOutputSchema = z.object({id:z.string().min(1),score:z.number().int().min(0).max(100),decision:z.enum(['MATCH','NO_MATCH','UNCERTAIN']).optional(),reason:z.string().trim().min(1).max(1000),context:z.enum(['SUFFICIENT','INSUFFICIENT']),evidence:z.array(semanticEvidenceSchema).min(1).max(8)}).strict();
 export type SemanticOutput = z.infer<typeof semanticOutputSchema>;
 export type SemanticSnapshot = {postId:string;commentId:string;userId:string;title:string;body:string;comment:string;parentId:string|null;parent:string|null;coverage:'PARTIAL'|'COMPLETE';isDemo:boolean};
-export const semanticStateLabels:Record<string,string>={UNCONFIGURED:'模型未配置',EVALUATED:'已评估',PROCESSING:'评估中',FAILED:'评估失败',PENDING:'待审核',APPROVED:'已人工确认',REJECTED:'已排除',SUFFICIENT:'上下文充分',INSUFFICIENT:'上下文不足'};
+export const semanticStateLabels:Record<string,string>={UNANALYSED:'待分析',UNCONFIGURED:'模型未配置',EVALUATED:'已评估',PROCESSING:'评估中',FAILED:'评估失败',PENDING:'待审核',APPROVED:'已人工确认',REJECTED:'已排除',SUFFICIENT:'上下文充分',INSUFFICIENT:'上下文不足'};
 export type SemanticReviewItem={id:string;revision:number;version:number;state:string;reviewStatus:string;score:number|null;reason:string|null;context:string;result:SemanticOutput|null;snapshot:SemanticSnapshot;rules:SemanticRules;provider:string;modelVersion:string|null;isDemo:boolean;createdAt:string;reviewNote:string|null;evaluationInput?:SemanticOutbound|null;eligibility:{canSend:false;blockers:string[]}};
-export type SemanticReviewPage={configured:boolean;provider:string;connection?:SemanticConnection;usage?:SemanticUsage;total:number;items:SemanticReviewItem[];offset:number;hasMore:boolean};
+export type SemanticReviewPage={configured:boolean;provider:string;connection?:SemanticConnection;control?:{enabled:boolean;version:number};usage?:SemanticUsage;total:number;items:SemanticReviewItem[];offset:number;hasMore:boolean};
 
 export type SemanticOutbound={redactionVersion:string;target:string;items:{id:string;title:string;body:string;comment:string;parent:string|null;missingParent:boolean;partial:boolean;truncated:boolean}[]};
 export type SemanticConnection={state:'DISABLED'|'UNAUTHORIZED'|'BUDGET_REQUIRED'|'UNCONFIGURED'|'INVALID_CONFIG'|'READY';message:string;model:string;region:'cn-beijing';dailyLimit:number;batchLimit:number;automaticRetries:0;timeoutSeconds:number};
 export type SemanticUsage={requests:number;dailyLimit:number;inputTokens:number;outputTokens:number;unknownUsage:number;lastStatus:string|null;canCall:boolean};
-export type SemanticPreview={hash:string;revision:number;payload:SemanticOutbound;count:number;connection:SemanticConnection;usage:SemanticUsage};
-export const semanticEvaluateRequestSchema=z.object({requestKey:z.string().uuid(),previewHash:z.string().regex(/^[a-f0-9]{64}$/),consent:z.literal('send-reviewed-redacted-batch-v1')}).strict();
+export type SemanticPreview={hash:string;revision:number;payload:SemanticOutbound;count:number;reviewIds?:string[];connection:SemanticConnection;usage:SemanticUsage};
+export const semanticEvaluateRequestSchema=z.object({requestKey:z.string().uuid(),previewHash:z.string().regex(/^[a-f0-9]{64}$/),reviewIds:z.array(z.string().min(1).max(200)).min(1).max(5).optional(),consent:z.literal('send-reviewed-redacted-batch-v1')}).strict();
 export type SemanticEvaluateRequest=z.infer<typeof semanticEvaluateRequestSchema>;

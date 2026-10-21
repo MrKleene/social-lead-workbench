@@ -5,6 +5,7 @@ import { Db } from '../common/db';
 import { Actor, requireAdmin } from '../auth/security';
 import { evaluateSemanticBatch, SemanticModelAdapter, sendEligibility, SEMANTIC_PROMPT_VERSION } from './semantic-evaluator';
 import { QwenMatchingService } from './qwen-matching.service';
+import { semanticHash } from './capture-archive';
 export const SEMANTIC_MODEL=Symbol('SEMANTIC_MODEL');
 @Injectable()
 export class SemanticService {
@@ -15,10 +16,10 @@ export class SemanticService {
   const [rows,total]=await Promise.all([this.db.semanticReview.findMany({where:{configId},orderBy:[{score:{sort:'desc',nulls:'last'}},{createdAt:'desc'},{id:'asc'}],skip:offset,take:50}),this.db.semanticReview.count({where:{configId}})]);
   const identities=await this.db.platformIdentity.findMany({where:{platform:config.platform,platformUserId:{in:rows.map(r=>r.platformUserId)}},include:{lead:true,contactLedger:true}});
   const duplicates=await this.db.semanticReview.groupBy({by:['platformUserId'],where:{platform:config.platform,platformUserId:{in:rows.map(r=>r.platformUserId)}},_count:{_all:true}});
-  const status=this.qwen?await this.qwen.status():undefined;
+  const status=this.qwen?await this.qwen.status(this.db,configId):undefined;
   return {configured:status?.connection.state==='READY',provider:status?.connection.state==='READY'?'QWEN':'NONE',...status,total,offset,hasMore:offset+rows.length<total,items:rows.map(row=>{
    const identity=identities.find(i=>i.platformUserId===row.platformUserId),rules=semanticRulesSchema.parse(row.rules);
-   return {...row,eligibility:sendEligibility({state:row.state,score:row.score,context:row.context,reviewStatus:row.reviewStatus,threshold:rules.reviewThreshold,stale:row.revision!==config.revision||!config.enabled||!!config.archivedAt,duplicate:(duplicates.find(d=>d.platformUserId===row.platformUserId)?._count._all||0)>1,contacted:!!identity?.contactLedger||!!identity?.lead?.contactedAt||['CONTACTED','INTERESTED'].includes(identity?.lead?.contactStage||''),doNotContact:!!identity?.lead?.doNotContact,platformReady:false,isDemo:row.isDemo})};
+   return {...row,eligibility:sendEligibility({state:row.state,score:row.score,context:row.context,reviewStatus:row.reviewStatus,threshold:rules.reviewThreshold,stale:(row.ruleHash?row.ruleHash!==semanticHash(config.semanticRules):row.revision!==config.revision)||!!config.archivedAt,duplicate:(duplicates.find(d=>d.platformUserId===row.platformUserId)?._count._all||0)>1,contacted:!!identity?.contactLedger||!!identity?.lead?.contactedAt||['CONTACTED','INTERESTED'].includes(identity?.lead?.contactStage||''),doNotContact:!!identity?.lead?.doNotContact,platformReady:false,isDemo:row.isDemo})};
   })};
  }
  async evaluate(actor:Actor,configId:string){
@@ -29,7 +30,7 @@ export class SemanticService {
   const config=await this.db.collectionConfig.findUnique({where:{id:configId}});
   if(!config?.semanticRules||!config.enabled||config.archivedAt)throw new ConflictException('语义审核未启用');
   const rules=semanticRulesSchema.parse(config.semanticRules);
-  const candidates=await this.db.semanticReview.findMany({where:{configId,revision:config.revision,isDemo:true,reviewStatus:'PENDING',OR:[{state:{in:['UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:{createdAt:'asc'},take:10});
+  const candidates=await this.db.semanticReview.findMany({where:{configId,revision:config.revision,isDemo:true,reviewStatus:'PENDING',OR:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:{createdAt:'asc'},take:10});
   const claimed=[];
   for(const row of candidates){const claim=await this.db.semanticReview.updateMany({where:{id:row.id,version:row.version,reviewStatus:'PENDING'},data:{state:'PROCESSING',leaseUntil:new Date(Date.now()+30000),version:{increment:1}}});if(claim.count)claimed.push(row);}
   if(!claimed.length)return {configured:false,processed:0};
@@ -54,7 +55,7 @@ export class SemanticService {
    const config=await tx.collectionConfig.findUniqueOrThrow({where:{id:row.configId}});
    const result=semanticOutputSchema.safeParse(row.result);
    if(input.decision==='APPROVED'&&result.success&&result.data.decision&&result.data.decision!=='MATCH')throw new ConflictException('不匹配或待确认结果不能批准为相关');
-   if(input.decision==='APPROVED'&&(row.state!=='EVALUATED'||row.context!=='SUFFICIENT'||!semanticOutputSchema.safeParse(row.result).success||config.revision!==row.revision||!config.enabled||!!config.archivedAt))throw new ConflictException('缺少有效评估、上下文或当前规则；保持待审核');
+   if(input.decision==='APPROVED'&&(row.state!=='EVALUATED'||row.context!=='SUFFICIENT'||!semanticOutputSchema.safeParse(row.result).success||(row.ruleHash?row.ruleHash!==semanticHash(config.semanticRules):config.revision!==row.revision)||!!config.archivedAt))throw new ConflictException('缺少有效评估、上下文或当前规则；保持待审核');
    const changed=await tx.semanticReview.updateMany({where:{id,version:input.version,reviewStatus:'PENDING'},data:{reviewStatus:input.decision,reviewNote:input.note,reviewedBy:actor.id,reviewedAt:new Date(),version:{increment:1}}});
    if(!changed.count)throw new ConflictException('审核记录已变化，请刷新');
    await tx.auditLog.create({data:{actorId:actor.id,entityId:id,action:'SEMANTIC_REVIEWED',metadata:{decision:input.decision,revision:row.revision}}});

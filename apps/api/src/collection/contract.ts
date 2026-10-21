@@ -38,6 +38,7 @@ export interface ReadAdapter {
     readonly mode: "MOCK" | "XHS_FIXTURE" | "XHS_MCP";
     prepare?(signal: AbortSignal): Promise<void>;
     close?(): Promise<void>;
+    receivedComments?(post:Post):Comment[];
     search(keyword: string, cursor: string | undefined, signal: AbortSignal): Promise<Page<Post>>;
     post(post: Post, signal: AbortSignal): Promise<Post>;
     comments(post: Post, cursor: string | undefined, signal: AbortSignal): Promise<Page<Comment>>;
