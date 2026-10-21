@@ -4,7 +4,7 @@
 
 本功能只管理 Qwen 评论匹配参数和 Key。保存不会访问千问，不启用 LLM、采集、评论或私信；分析仍由独立开关、脱敏预览、逐批确认、预算和限流保护。
 
-本轮仅实现代码与隔离验收。**生产主密钥没有创建，原实例没有停启，新增迁移没有应用到原库。** 前端已热更新时，旧 API 返回 404，入口显示“后台尚未部署”，不接受 Key。部署和初始化需单独确认。真实 Key、实际模型连通性与质量均未验收。
+2026-10-21 14:07 UTC 用户另行批准初始化与部署，并明确跳过本轮数据库备份。14:10 UTC 原 main 已按下述流程初始化主密钥、正常停启后台并完成新增表迁移，保留原数据。模型配置仍为空，真实 Key、实际连通性与质量均未验收。原 Chrome 登录会话过期，登录后的生产表单还待用户重新登录后核验；离线表单验收已通过。
 
 ## 存储与边界
 
@@ -21,17 +21,17 @@
 
 参考：[Node crypto/GCM](https://nodejs.org/api/crypto.html#class-cipheriv)、[Node 文件打开标志](https://nodejs.org/api/fs.html#file-system-flags)。
 
-## 原实例待批准的部署计划
+## 原实例部署流程（本次已获批准并执行）
 
 原实例：`/Users/kleene/projects/social-lead-workbench` 的 `main`，ID `c892ae82-8dc7-4f40-889b-a45eae67b3e8`。保留原端口、容器、卷、业务数据和教培配置。
 
-初始化将只在下列位置创建一个新的随机主密钥（不是千问 API Key）：
+本次在下列位置创建了新的随机主密钥（不是千问 API Key），未输出内容：
 
 ```text
 /Users/kleene/Library/Application Support/SocialLeadWorkbench/model-vault/c892ae82-8dc7-4f40-889b-a45eae67b3e8/master.key
 ```
 
-**以下为计划命令，本轮没有执行。** 仅首次初始化且已确认不应恢复旧主密钥时使用：
+**本次已执行，日常使用不要重复执行。** 仅首次初始化且已确认不应恢复旧主密钥时使用：
 
 ```sh
 cd /Users/kleene/projects/social-lead-workbench
@@ -40,7 +40,7 @@ npm run model:vault:init -- --instance main --confirm-create
 
 命令验证本机 main manifest 与仓库位置；仅 macOS 当前方案可用。使用排他创建，不覆盖现有文件、不改已有目录权限、不配置第三方 Key、不迁移 DB、不启动服务。
 
-获得批准后部署顺序：
+通用部署顺序（本次第 1 步备份由用户明确选择跳过，未删除已有备份）：
 
 1. 复核原进程身份、无运行任务和真实调用关闭；创建受保护的原数据库备份并验证可恢复。不得盲用历史 PID，不删除未知锁。
 2. 首次生成上述本机主密钥；独立保护备份。若存在历史密文却主密钥丢失，先恢复旧主密钥，不直接初始化。
@@ -83,4 +83,18 @@ npm run model:vault:init -- --instance main --confirm-create
 
 本地测试日志：`/tmp/model-settings-{types-final,api-final,db-final,lifecycle,ui-final,semantic-ui}.log`。桌面/窄屏截图及检查报告位于临时目录 `crm-model-settings-ui-GlLcFl`；原审核截图为 `crm-semantic-review-ui-fsFCqu`，均只含虚构数据，不提交仓库。
 
-生产主密钥、真实 Key、原库新迁移和本轮后台重启均未执行；真实收费模型质量仍未验收。
+以上是部署前的隔离验收。真实收费模型质量仍未验收；后续获批准的生产部署记录如下。
+
+
+## 原 main 部署实录 · 2026-10-21 14:10 UTC
+
+- 代码 `665070a12c9f6db0e43ec827e77eb0ebdcbec7b0`，用户明确同意创建独立主密钥、增量迁移和后台停启，同时跳过数据库备份。不删除原数据或已有备份，不配置第三方 Key，不进行模型/采集/发送调用。
+- 初始化前检查目标文件与 model-vault 子目录不存在；执行排他初始化成功。实际目录均 0700、主密钥文件 0600、32 字节、uid 501、单链接、非符号链接；后端检查函数仅输出 `READY`，未输出内容。主密钥未复制或提交。
+- 停止前：原采集均 PARTIAL、无任务、无 RESERVED 模型请求、无有效设备执行租约。核对启动器 PID 17223 的命令、启动时间与仓库 cwd 后，仅发一次 SIGINT。管理日志记录子进程退出、`CLEANUP_COMPLETE`、退出码 0；没有手工删锁。
+- `npm run dev:persistent:background -- --backend` 正常恢复原实例。新 launcher26995 / supervisor26996 / manager26997，API27385；仅作为本次证据，今后停止前仍需重新核验，不能盲用这些 PID。
+- 原 PostgreSQL/Redis 容器、卷与启动时间（10:02:58 UTC）未变；前端 PID3438、63968 端口未重启。后端仍用63967。没有重启 Mac。
+- 迁移 `202610210005_model_settings` 已成功，完成迁移数13→14；`ModelSettings` 行数0、已存 Key 数0。未自动创建配置或启用模型。
+- 前后只读校验相同：用户1、账号2、采集2、观察50；线索/联系/语义结果/模型调用/帖子原文/评论原文均0。整个 CollectionConfig 摘要 `8211d7bd6d97bbf992fa9180465f3e4e` 不变；SemanticControl 仍无记录，保持默认关闭。
+- API `/api/health/ready` 返回 `ok=true,database=ready,platformCallsEnabled=false`；网页 HTTP200；新 `/api/model-settings` 匿名请求401，管理员鉴权生效。
+- 原 Chrome 页面刷新后显示登录页；只读查询2个历史 Session、0个未过期 Session。未读取密码或 token，也未绕过认证。因此本次登录后的“Key未配置 / 密钥库就绪”页面尚待重新登录后验收，不能把离线测试称作本次生产页面验收。
+- 本次未进行新备份，未删除旧备份；业务计数/配置摘要校验不是备份。主密钥尚未单独备份，恢复说明仍适用。
