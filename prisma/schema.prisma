@@ -198,6 +198,7 @@ model ReplyTemplate {
   configs CollectionConfig[]
 }
 model CollectionConfig {
+  semanticCalls SemanticModelCall[]
   semanticRules Json?
   semanticReviews SemanticReview[]
   commentRules Json?
@@ -405,6 +406,7 @@ model DeviceExecutionLease {
 
 // Opt-in, bounded context snapshots. No model credentials or outbound messages.
 model SemanticReview {
+  evaluationInput Json?
   id String @id @default(cuid())
   configId String
   config CollectionConfig @relation(fields:[configId], references:[id], onDelete:Cascade)
@@ -435,4 +437,22 @@ model SemanticReview {
   @@unique([configId,revision,snapshotHash])
   @@index([configId,createdAt])
   @@index([platform,platformUserId])
+}
+
+model SemanticModelCall {
+ id String @id @default(uuid())
+ requestKey String @unique
+ previewHash String
+ configId String
+ config CollectionConfig @relation(fields:[configId],references:[id],onDelete:Cascade)
+ actorId String
+ status String
+ errorCode String?
+ rows Int
+ inputTokens Int?
+ outputTokens Int?
+ createdAt DateTime @default(now())
+ finishedAt DateTime?
+ reservedUntil DateTime
+ @@index([createdAt])
 }

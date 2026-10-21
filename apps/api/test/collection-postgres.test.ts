@@ -5,6 +5,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { AppModule } from '../src/app';
+import { Prisma } from '@prisma/client';
 import { Db } from '../src/common/db';
 import { configure } from '../src/bootstrap';
 import { Actor, hashPassword } from '../src/auth/security';
@@ -565,6 +566,58 @@ describe('可选自然语言审核：仅虚构数据',()=>{
   const stale=new SemanticService(db,{kind:'LOCAL_TEST',name:'stale',version:'v1',evaluate:async request=>{await service.change(actor,c.id,{semanticRules:rules},1,true);return request.untrustedData.map(({id,snapshot})=>({id,score:95,reason:'虚构输出',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:snapshot.comment}]}));}});
   await stale.evaluate(actor,c.id);rows=await db.semanticReview.findMany({where:{configId:c.id}});expect(rows.every(r=>r.state==='FAILED'&&r.score===null&&r.result===null&&r.reviewStatus==='PENDING')).toBe(true);
   expect(rows.every(r=>r.reason==='规则已变化，请核查新版本')).toBe(true);
+ });
+
+});
+
+
+describe('Qwen manual integration: isolated database and fictional HTTP only',()=>{
+ const rules={version:1 as const,target:'寻找毕业论文中需要选题帮助的学生',reviewThreshold:70};
+ const settings=()=>({status:{state:'READY' as const,message:'FICTIONAL HTTP ONLY',model:'qwen3.7-flash-2026-07-15',region:'cn-beijing' as const,dailyLimit:2,batchLimit:5,automaticRetries:0 as const,timeoutSeconds:20},endpoint:'https://fictional.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions',key:'fictional-not-real'});
+ async function fixture(){
+  await db.semanticModelCall.deleteMany();
+  const c=await config('虚构Qwen审核',{semanticRules:rules});
+  const run=await service.start(actor,c.id,'BASELINE',randomUUID());
+  for(const i of [1,2])await db.semanticReview.create({data:{configId:c.id,revision:1,platform:'XHS',platformUserId:'fictional-'+i,runId:run.id,snapshotHash:randomUUID(),snapshot:{postId:'fictional-post',commentId:'fictional-comment-'+i,userId:'fictional-'+i,title:'虚构论文讨论',body:'讨论毕业选题',comment:'护理专业如何选题',parentId:i===2?'missing':null,parent:null,coverage:'PARTIAL',isDemo:true},rules,isDemo:true}});
+  return c;
+ }
+ const mockResponse=(init:RequestInit)=>{const payload=JSON.parse(JSON.parse(init.body as string).messages[1].content);return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:payload.items.map((item:any)=>({id:item.id,score:88,decision:'MATCH',reason:'评论询问选题',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:'护理专业如何选题'}]}))})}}],usage:{prompt_tokens:100,completion_tokens:50}}));};
+ it('local preview authenticated/admin/CSRF and explicit call consent required',async()=>{
+  const c=await fixture();expect((await write('post',`/collection/configs/${c.id}/semantic-preview`,{},a)).status).toBe(403);
+  expect((await api().post(`/api/collection/configs/${c.id}/semantic-preview`).set('Cookie',admin.cookie).send({})).status).toBe(403);
+  const p=await write('post',`/collection/configs/${c.id}/semantic-preview`,{});expect(p.status).toBe(201);expect(p.body.count).toBe(2);expect(p.body.connection.state).toBe('DISABLED');expect(JSON.stringify(p.body.payload)).not.toContain('fictional-post');
+  expect((await write('post',`/collection/configs/${c.id}/semantic-evaluate`,{requestKey:randomUUID(),previewHash:p.body.hash})).status).toBe(400);
+  expect((await write('post',`/collection/configs/${c.id}/semantic-evaluate`,{requestKey:randomUUID(),previewHash:p.body.hash,consent:'send-reviewed-redacted-batch-v1'})).status).toBe(409);expect(await db.semanticModelCall.count()).toBe(0);
+ });
+ it('idempotency, parallel clicks, budget, grounded output and no send records',async()=>{
+  const {QwenMatchingService}=await import('../src/collection/qwen-matching.service');const {SemanticService}=await import('../src/collection/semantic.service');const c=await fixture();
+  const transport=vi.fn(async(_url:string,init:RequestInit)=>mockResponse(init));const q=new QwenMatchingService(db,{settings,transport});
+  const p=await q.preview(actor,c.id),request={requestKey:randomUUID(),previewHash:p.hash,consent:'send-reviewed-redacted-batch-v1' as const};
+  await Promise.all([q.evaluate(actor,c.id,request),q.evaluate(actor,c.id,request)]);expect(transport).toHaveBeenCalledTimes(1);expect(await db.semanticModelCall.count()).toBe(1);
+  let rows=await db.semanticReview.findMany({where:{configId:c.id}});expect(rows.every(r=>r.state==='EVALUATED'&&r.reviewStatus==='PENDING'&&!!r.evaluationInput)).toBe(true);
+  const missing=rows.find(r=>r.context==='INSUFFICIENT')!;expect((missing.result as any).decision).toBe('UNCERTAIN');await expect(new SemanticService(db).review(actor,missing.id,{version:missing.version,decision:'APPROVED',note:'不足不能批准'})).rejects.toThrow();
+  expect((await q.status()).usage).toMatchObject({requests:1,inputTokens:100,outputTokens:50,unknownUsage:0,canCall:false});
+  await db.semanticReview.updateMany({where:{configId:c.id},data:{state:'FAILED',result:Prisma.DbNull,score:null}});
+  const next=await q.preview(actor,c.id);await expect(q.evaluate(actor,c.id,{...request,requestKey:randomUUID(),previewHash:next.hash})).rejects.toThrow();
+  await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});
+  const other={...request,requestKey:randomUUID(),previewHash:next.hash};await q.evaluate(actor,c.id,other);expect(transport).toHaveBeenCalledTimes(2);
+  expect((await q.status()).usage.canCall).toBe(false);await expect(q.evaluate(actor,c.id,{...other,requestKey:randomUUID()})).rejects.toThrow();expect(await db.contactAttempt.count()).toBe(0);
+ });
+ it('stale preview never sends; HTTP failure leaves score null and pending, consumes reservation',async()=>{
+  const {QwenMatchingService}=await import('../src/collection/qwen-matching.service');const c=await fixture();const transport=vi.fn(async()=>new Response('private body',{status:429}));const q=new QwenMatchingService(db,{settings,transport});
+  const p=await q.preview(actor,c.id);await db.semanticReview.updateMany({where:{configId:c.id},data:{version:{increment:1}}});
+  await expect(q.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:p.hash,consent:'send-reviewed-redacted-batch-v1'})).rejects.toThrow();expect(transport).not.toHaveBeenCalled();
+  const fresh=await q.preview(actor,c.id);const out=await q.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:fresh.hash,consent:'send-reviewed-redacted-batch-v1'});expect(out).toMatchObject({status:'FAILED',errorCode:'RATE_LIMIT'});expect(transport).toHaveBeenCalledTimes(1);
+  const rows=await db.semanticReview.findMany({where:{configId:c.id}});expect(rows.every(r=>r.state==='FAILED'&&r.score===null&&r.reviewStatus==='PENDING')).toBe(true);expect(JSON.stringify(rows)).not.toContain('private body');expect((await q.status()).usage).toMatchObject({requests:1,unknownUsage:1});
+ });
+ it('different concurrent request keys cannot double-spend; rule edit during request invalidates results',async()=>{
+  const {QwenMatchingService}=await import('../src/collection/qwen-matching.service');const c=await fixture();
+  const transport=vi.fn(async(_url:string,init:RequestInit)=>{await db.collectionConfig.update({where:{id:c.id},data:{revision:{increment:1}}});return mockResponse(init);});
+  const q=new QwenMatchingService(db,{settings,transport}),p=await q.preview(actor,c.id);
+  const results=await Promise.allSettled([1,2].map(()=>q.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:p.hash,consent:'send-reviewed-redacted-batch-v1'})));
+  expect(results.filter(x=>x.status==='fulfilled')).toHaveLength(1);expect(results.filter(x=>x.status==='rejected')).toHaveLength(1);expect(transport).toHaveBeenCalledTimes(1);
+  const rows=await db.semanticReview.findMany({where:{configId:c.id}});expect(rows.every(r=>r.state==='FAILED'&&r.score===null&&r.result===null&&r.reviewStatus==='PENDING')).toBe(true);
+  expect((await db.semanticModelCall.findFirstOrThrow()).status).toBe('STALE');expect((results.find(x=>x.status==='fulfilled') as PromiseFulfilledResult<any>).value.status).toBe('STALE');
  });
 
 });

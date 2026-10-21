@@ -3,6 +3,7 @@ import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
 import platform from '../runtime/platform.cjs';
+import qwenEnv from '../runtime/qwen-env.cjs';
 import {cleanEnvironment} from './real-mcp/core.mjs';
 import {launchDetached} from './persistent-background.mjs';
 const root=resolve(fileURLToPath(new URL('../',import.meta.url)));
@@ -16,7 +17,7 @@ async function main(){
  await platform.privateDirectory(directory);const path=join(directory,'instance.json');await platform.privateFile(path);
  const manifest=JSON.parse(await readFile(path,'utf8'));
  if(manifest.kind!=='crm-persistent-v1'||manifest.root!==root||manifest.name!==name||manifest.mode!==(offline?'offline':'real')||manifest.fixture!==fixture||![manifest.webPort,manifest.apiPort].every(p=>Number.isInteger(p)&&p>=1024&&p<=65535))throw Error('INSTANCE_MISMATCH');
- const env=cleanEnvironment(process.env),log=join(directory,'launcher-'+randomUUID()+'.log');
+ const env={...cleanEnvironment(process.env),...qwenEnv.qwenEnvironment(process.env)},log=join(directory,'launcher-'+randomUUID()+'.log');
  const child=launchDetached(process.execPath,['scripts/dev-persistent.mjs',...args],{cwd:root,log,env});
  let ended=false;child.once('exit',()=>{ended=true;});child.once('error',()=>{ended=true;});
  console.log(JSON.stringify({kind:'crm-background-requested',pid:child.pid,log,preview:`http://127.0.0.1:${manifest.webPort}`}));

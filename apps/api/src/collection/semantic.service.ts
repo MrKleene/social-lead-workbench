@@ -4,24 +4,26 @@ import { semanticOutputSchema, semanticRulesSchema, SemanticSnapshot } from '@cr
 import { Db } from '../common/db';
 import { Actor, requireAdmin } from '../auth/security';
 import { evaluateSemanticBatch, SemanticModelAdapter, sendEligibility, SEMANTIC_PROMPT_VERSION } from './semantic-evaluator';
+import { QwenMatchingService } from './qwen-matching.service';
 export const SEMANTIC_MODEL=Symbol('SEMANTIC_MODEL');
 @Injectable()
 export class SemanticService {
- constructor(@Inject(Db) private db:Db,@Optional() @Inject(SEMANTIC_MODEL) private adapter?:SemanticModelAdapter){}
+ constructor(@Inject(Db) private db:Db,@Optional() @Inject(SEMANTIC_MODEL) private adapter?:SemanticModelAdapter,@Optional() @Inject(QwenMatchingService) private qwen?:QwenMatchingService){}
  async list(actor:Actor,configId:string,offset=0){
   requireAdmin(actor);
   const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config)throw new NotFoundException();
   const [rows,total]=await Promise.all([this.db.semanticReview.findMany({where:{configId},orderBy:[{score:{sort:'desc',nulls:'last'}},{createdAt:'desc'},{id:'asc'}],skip:offset,take:50}),this.db.semanticReview.count({where:{configId}})]);
   const identities=await this.db.platformIdentity.findMany({where:{platform:config.platform,platformUserId:{in:rows.map(r=>r.platformUserId)}},include:{lead:true,contactLedger:true}});
   const duplicates=await this.db.semanticReview.groupBy({by:['platformUserId'],where:{platform:config.platform,platformUserId:{in:rows.map(r=>r.platformUserId)}},_count:{_all:true}});
-  return {configured:false as const,provider:'NONE' as const,total,offset,hasMore:offset+rows.length<total,items:rows.map(row=>{
+  const status=this.qwen?await this.qwen.status():undefined;
+  return {configured:status?.connection.state==='READY',provider:status?.connection.state==='READY'?'QWEN':'NONE',...status,total,offset,hasMore:offset+rows.length<total,items:rows.map(row=>{
    const identity=identities.find(i=>i.platformUserId===row.platformUserId),rules=semanticRulesSchema.parse(row.rules);
    return {...row,eligibility:sendEligibility({state:row.state,score:row.score,context:row.context,reviewStatus:row.reviewStatus,threshold:rules.reviewThreshold,stale:row.revision!==config.revision||!config.enabled||!!config.archivedAt,duplicate:(duplicates.find(d=>d.platformUserId===row.platformUserId)?._count._all||0)>1,contacted:!!identity?.contactLedger||!!identity?.lead?.contactedAt||['CONTACTED','INTERESTED'].includes(identity?.lead?.contactStage||''),doNotContact:!!identity?.lead?.doNotContact,platformReady:false,isDemo:row.isDemo})};
   })};
  }
  async evaluate(actor:Actor,configId:string){
   requireAdmin(actor);
-  // No external adapter or configuration/secret lookup in this release.
+  // Legacy local-fixture-only path. Real calls require Qwen preview consent and budget reservation.
   if(!this.adapter)return {configured:false,processed:0,reason:'模型未配置；未请求外部服务'};
   if(this.adapter.kind!=='LOCAL_TEST')throw new BadRequestException('尚未授权外部模型与数据范围');
   const config=await this.db.collectionConfig.findUnique({where:{id:configId}});
@@ -50,6 +52,8 @@ export class SemanticService {
    const row=await tx.semanticReview.findUnique({where:{id}});if(!row)throw new NotFoundException();
    await tx.$queryRaw`SELECT id FROM "CollectionConfig" WHERE id=${row.configId} FOR UPDATE`;
    const config=await tx.collectionConfig.findUniqueOrThrow({where:{id:row.configId}});
+   const result=semanticOutputSchema.safeParse(row.result);
+   if(input.decision==='APPROVED'&&result.success&&result.data.decision&&result.data.decision!=='MATCH')throw new ConflictException('不匹配或待确认结果不能批准为相关');
    if(input.decision==='APPROVED'&&(row.state!=='EVALUATED'||row.context!=='SUFFICIENT'||!semanticOutputSchema.safeParse(row.result).success||config.revision!==row.revision||!config.enabled||!!config.archivedAt))throw new ConflictException('缺少有效评估、上下文或当前规则；保持待审核');
    const changed=await tx.semanticReview.updateMany({where:{id,version:input.version,reviewStatus:'PENDING'},data:{reviewStatus:input.decision,reviewNote:input.note,reviewedBy:actor.id,reviewedAt:new Date(),version:{increment:1}}});
    if(!changed.count)throw new ConflictException('审核记录已变化，请刷新');

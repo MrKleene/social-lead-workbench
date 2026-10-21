@@ -14,6 +14,7 @@ import {fileURLToPath} from 'node:url';
 import {createServer} from 'node:net';
 import {PrismaClient} from '@prisma/client';
 import argon2 from 'argon2';
+import qwenEnv from '../runtime/qwen-env.cjs';
 import {cleanEnvironment,preflight} from './real-mcp/core.mjs';
 const root=resolve(fileURLToPath(new URL('../',import.meta.url))),args=process.argv.slice(2);
 let prepareRecovery=false,offline=false,fixture=false,backendOnly=false,name='main';
@@ -28,7 +29,7 @@ if(process.platform==='win32'){
  await platform.guardCurrentProcess();
 }
 const directory=join(root,'.local',offline?'persistent-offline':'persistent',name);
-if(!offline&&!prepareRecovery)await preflight({root,home:process.env.HOME,session:'persistent-preflight',port:18162,env:callerEnvironment});
+if(!offline&&!prepareRecovery)await preflight({root,home:process.env.HOME,session:'persistent-preflight',port:18162,env:envBase});
 process.umask(0o077);
 const children=[],ownedGroups=new Set(),startedContainers=[];
 let journal,supervisorLife;const managed=!!process.env.CRM_SUPERVISED_BOOT;const launchId=randomUUID();
@@ -62,7 +63,7 @@ try{
  // Do not adopt a symlinked .local or alter existing directory permissions.
  if(process.platform==='win32')await privateDir(join(root,'.local'));else await mkdir(join(root,'.local'),{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});const ls=await lstat(join(root,'.local'));if(ls.isSymbolicLink()||!ls.isDirectory())throw Error('Unsafe local directory');
  await privateDir(join(root,'.local',offline?'persistent-offline':'persistent'));await privateDir(directory);
- if(process.platform==='darwin'&&!prepareRecovery&&!managed)process.exit(await supervise({root,directory,args,env:envBase}));
+ if(process.platform==='darwin'&&!prepareRecovery&&!managed)process.exit(await supervise({root,directory,args,env:{...envBase,...qwenEnv.qwenEnvironment(callerEnvironment)}}));
  if(managed){inheritedLease(directory);supervisorLife=watchSupervisor(()=>{stopping=true;finish();process.kill(-process.pid,'SIGTERM');setTimeout(()=>process.kill(-process.pid,'SIGKILL'),3000).unref();});}
  stage='lock';const acquired=await acquireInstanceLock({root,directory,name,mode:offline?'offline':'real',prepareRecovery});
  if(acquired.prepared){
@@ -96,7 +97,7 @@ try{
  const checkDb=new PrismaClient({datasources:{db:{url}}});try{if(!await checkDb.user.count({where:{role:'ADMIN',active:true}}))throw Error('Administrator initialization incomplete');}finally{await checkDb.$disconnect();}
  manifest.fresh=false;await writeFile(join(directory,'instance.json'),JSON.stringify(manifest,null,2),{mode:0o600});
  stage='services';const collector=launch(process.execPath,['apps/api/dist/collection/worker.js'],env,{ipc:true,role:'collector'});
- const api=launch(process.execPath,['apps/api/dist/main.js'],env,{ipc:true,role:'api'});const web=backendOnly?null:launch('npm',['run','dev','-w','@crm/web','--','--port',String(manifest.webPort),'--host','127.0.0.1','--strictPort'],env,{role:'web'});
+ const api=launch(process.execPath,['apps/api/dist/main.js'],{...env,...qwenEnv.qwenEnvironment(callerEnvironment)},{ipc:true,role:'api'});const web=backendOnly?null:launch('npm',['run','dev','-w','@crm/web','--','--port',String(manifest.webPort),'--host','127.0.0.1','--strictPort'],env,{role:'web'});
  for(const c of [api,web,collector].filter(Boolean))c.done.then(code=>{if(!stopping){failed=true;runtimeFailure=new StartupError('SERVICE_EXITED',code);}finish();});
  await writeFile(join(directory,'running.json'),JSON.stringify({pid:process.pid,controllerPid:managed?process.ppid:process.pid,launcherPid:managed?Number(process.env.CRM_SUPERVISED_LAUNCHER):process.pid,backendOnly,launchId,lifecycleLog:journal.file,mode:manifest.mode,preview:base,api:env.API_PROXY_TARGET,deviceId:manifest.deviceId,instanceId:manifest.id,containers:[manifest.postgres.container,manifest.redis.container]},null,2),{mode:0o600});
  console.log(`PERSISTENT ${manifest.mode.toUpperCase()} workbench: ${base}`);console.log(`Instance: ${directory}`);console.log('Business data and device references survive Ctrl+C. No automatic platform request. Existing administrators are never replaced.');
