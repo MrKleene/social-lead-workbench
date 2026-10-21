@@ -1,8 +1,9 @@
-import { commentRulesSchema } from '@crm/contracts';
+import { commentRulesSchema, semanticRulesSchema } from '@crm/contracts';
 import { z } from "zod";
 const normalize = (value: string) => value.normalize("NFKC").toLowerCase();
 const word = z.string().trim().min(1).max(40);
 export const configInput = z.object({
+    semanticRules: semanticRulesSchema.nullable().optional(),
     commentRules: commentRulesSchema.nullable().optional(),
     name: z.string().trim().min(1).max(80), platform: z.enum(["XHS", "DOUYIN"]),
     mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]), keywords: z.array(word).min(1).max(8),
@@ -11,7 +12,7 @@ export const configInput = z.object({
     defaultReplyTemplateId: z.string().min(1).max(100).nullable().optional(),
 }).strict().refine(v => v.mode === "MOCK" || v.platform === "XHS", "MCP只支持小红书")
     .refine(v => new Set(v.keywords.map(normalize)).size === v.keywords.length, "关键词不能重复")
-    .refine(v => !!v.commentRules || !v.keywords.some(k => v.excludeWords.some(e => normalize(k).includes(normalize(e)))), "排除词不能覆盖搜索关键词");
+    .refine(v => !!v.semanticRules || !!v.commentRules || !v.keywords.some(k => v.excludeWords.some(e => normalize(k).includes(normalize(e)))), "排除词不能覆盖搜索关键词");
 export type ConfigInput = z.infer<typeof configInput>;
 export const scenarioSchema = z.enum(["BASELINE", "NEW", "PARTIAL", "TIMEOUT", "LOGIN_EXPIRED", "RESTRICTED", "MISSING", "DELETED", "READ_WINDOW"]);
 export type Scenario = z.infer<typeof scenarioSchema>;

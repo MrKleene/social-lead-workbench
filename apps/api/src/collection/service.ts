@@ -60,7 +60,7 @@ export class CollectionService {
     async detail(actor: Actor, id: string) { requireAdmin(actor); const config = await this.db.collectionConfig.findUnique({ where: { id }, include: { runs: { orderBy: { createdAt: "desc" }, take: 20 }, matches: { orderBy: { createdAt: "desc" }, take: 50, include: { comment: { include: { post: true, identity: { include: { lead: { select: { id: true } } } } } } } }, monitors: { take: 10, orderBy: { id: "desc" }, include: { observations: { take: 100, orderBy: { lastSeenAt: "desc" } } } } } }); if (!config)
         throw new NotFoundException(); return config; }
     async create(actor: Actor, input: ConfigInput) { requireAdmin(actor); input = configInput.parse(input); if(accountReadMode() && input.mode !== "MOCK" && input.batchLimit>3) throw new BadRequestException("本轮最多3篇帖子"); this.gate(input.mode); return this.db.$transaction(async (tx) => { const count = await tx.collectionConfig.count({ where: { archivedAt: null } }); if (count >= 100)
-        throw new BadRequestException("最多100组配置"); if (input.defaultReplyTemplateId && !await tx.replyTemplate.findUnique({ where: { id: input.defaultReplyTemplateId } })) throw new BadRequestException("默认话术不存在，请重新选择"); const config = await tx.collectionConfig.create({ data: {...input,commentRules:input.commentRules||Prisma.DbNull} }); await tx.auditLog.create({ data: { actorId: actor.id, action: "COLLECTION_CONFIG_CREATED", entityId: config.id } }); return config; }); }
+        throw new BadRequestException("最多100组配置"); if (input.defaultReplyTemplateId && !await tx.replyTemplate.findUnique({ where: { id: input.defaultReplyTemplateId } })) throw new BadRequestException("默认话术不存在，请重新选择"); const config = await tx.collectionConfig.create({ data: {...input,semanticRules:input.semanticRules||Prisma.DbNull,commentRules:input.commentRules||Prisma.DbNull} }); await tx.auditLog.create({ data: { actorId: actor.id, action: "COLLECTION_CONFIG_CREATED", entityId: config.id } }); return config; }); }
     async change(actor: Actor, id: string, data: Partial<ConfigInput> & {
         archivedAt?: Date;
     }, revision: number, reset: boolean) {
@@ -76,7 +76,7 @@ export class CollectionService {
             if (reset && current.activeRunId)
                 throw new ConflictException("请先暂停当前运行再编辑");
             if (data.defaultReplyTemplateId && !await tx.replyTemplate.findUnique({ where: { id: data.defaultReplyTemplateId } })) throw new BadRequestException("默认话术不存在，请重新选择");
-            const config = await tx.collectionConfig.update({ where: { id }, data: { ...data, commentRules:data.commentRules===undefined?undefined:data.commentRules||Prisma.DbNull, ...(data.archivedAt ? { defaultReplyTemplateId: null } : {}), ...(reset ? { revision: { increment: 1 } } : {}), ...(data.enabled ? { pauseReason: null } : {}), ...(data.enabled === false ? { activeRunId: null } : {}) } });
+            const config = await tx.collectionConfig.update({ where: { id }, data: { ...data, semanticRules:data.semanticRules===undefined?undefined:data.semanticRules||Prisma.DbNull, commentRules:data.commentRules===undefined?undefined:data.commentRules||Prisma.DbNull, ...(data.archivedAt ? { defaultReplyTemplateId: null } : {}), ...(reset ? { revision: { increment: 1 } } : {}), ...(data.enabled ? { pauseReason: null } : {}), ...(data.enabled === false ? { activeRunId: null } : {}) } });
             if (data.enabled === false)
                 await tx.collectionRun.updateMany({ where: { configId: id, status: { in: ["QUEUED", "RUNNING"] } }, data: { cancelRequested: true, status: "PAUSED", reason: "CONFIG_PAUSED", finishedAt: new Date() } });
             await tx.auditLog.create({ data: { actorId: actor.id, action: data.archivedAt ? "COLLECTION_CONFIG_ARCHIVED" : reset ? "COLLECTION_CONFIG_UPDATED" : "COLLECTION_CONFIG_TOGGLED", entityId: id, metadata: { revision: config.revision, enabled: config.enabled } } });
@@ -105,7 +105,7 @@ export class CollectionService {
                 throw new ConflictException("退避期间，请稍后手动重试");
             if (config.activeRunId)
                 throw new ConflictException("已有运行，完成或暂停后再试");
-            const snapshot = configInput.parse({ name: config.name, platform: config.platform, mode: config.mode, commentRules:config.commentRules, keywords: config.keywords, excludeWords: config.excludeWords, batchLimit: config.batchLimit, enabled: config.enabled });
+            const snapshot = configInput.parse({ name: config.name, platform: config.platform, mode: config.mode, semanticRules:config.semanticRules, commentRules:config.commentRules, keywords: config.keywords, excludeWords: config.excludeWords, batchLimit: config.batchLimit, enabled: config.enabled });
             if(accountReadMode() && mode !== 'MOCK' && snapshot.batchLimit>3)throw new BadRequestException('本轮最多3篇帖子');
             const execution=accountReadMode() && mode !== 'MOCK' ? await this.accountReads!.authorize(tx,actor,mode,accountId,consent) : undefined;
             const created = await tx.collectionRun.create({ data: { configId: id, revision: config.revision, snapshot, scenario, requestKey, ...(execution?{execution}:{}) } });

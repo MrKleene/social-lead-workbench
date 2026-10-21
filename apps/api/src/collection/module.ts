@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Req, Inject, Module, UseGuards, NotFoundException } from "@nestjs/common";
+import { Controller, Get, Post, Patch, Delete, Param, Query, Req, Inject, Module, UseGuards, NotFoundException } from "@nestjs/common";
 import { z } from "zod";
 import { AuthModule, AuthedRequest, SessionGuard } from "../auth/auth";
 import { scope } from "../auth/security";
@@ -12,12 +12,19 @@ import { AccountReadService } from "./account-read.service";
 import { CollectionService } from "./service";
 import { CollectionQueue } from "./queue";
 import { configInput, scenarioSchema } from "./contract";
+import { SemanticService } from './semantic.service';
 @Controller("collection")
 @UseGuards(SessionGuard)
 class CollectionController {
     constructor(
     @Inject(CollectionService)
-    private service: CollectionService) { }
+    private service: CollectionService, @Inject(SemanticService) private semantic:SemanticService) { }
+    @Get('configs/:id/semantic-reviews')
+    reviews(@Req() r:AuthedRequest,@Param('id') id:string,@Query('offset') offset?:string){return this.semantic.list(r.actor,id,parse(z.coerce.number().int().min(0).max(100000).default(0),offset));}
+    @Post('configs/:id/semantic-evaluate')
+    evaluate(@Req() r:AuthedRequest,@Param('id') id:string){parse(z.object({}).strict(),r.body);return this.semantic.evaluate(r.actor,id);}
+    @Patch('semantic-reviews/:id')
+    review(@Req() r:AuthedRequest,@Param('id') id:string){return this.semantic.review(r.actor,id,parse(z.object({version:z.number().int().nonnegative(),decision:z.enum(['APPROVED','REJECTED']),note:z.string().trim().min(1).max(500)}).strict(),r.body));}
     @Get("mcp/readiness")
     readiness(@Req() r: AuthedRequest) { return this.service.readiness(r.actor); }
     @Post("mcp/check")
@@ -87,6 +94,6 @@ class NoticesController {
     id: string) { parse(z.object({}).strict(), r.body); const notice = await this.db.collectionNotice.findFirst({ where: { id, lead: scope(r.actor) } }); if (!notice)
         throw new NotFoundException(); return this.leads.locked(r.actor, notice.leadId, tx => tx.noticeRead.upsert({ where: { noticeId_userId: { noticeId: id, userId: r.actor.id } }, create: { noticeId: id, userId: r.actor.id }, update: {} })); }
 }
-@Module({ imports: [AuthModule, LeadsModule, DevicesModule], controllers: [CollectionController, NoticesController], providers: [CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService] })
+@Module({ imports: [AuthModule, LeadsModule, DevicesModule], controllers: [CollectionController, NoticesController], providers: [SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService] })
 export class CollectionModule {
 }

@@ -198,6 +198,8 @@ model ReplyTemplate {
   configs CollectionConfig[]
 }
 model CollectionConfig {
+  semanticRules Json?
+  semanticReviews SemanticReview[]
   commentRules Json?
   defaultReplyTemplateId String?
   defaultReplyTemplate ReplyTemplate? @relation(fields:[defaultReplyTemplateId],references:[id],onDelete:Restrict)
@@ -223,6 +225,7 @@ model CollectionConfig {
   matches SourceMatch[]
 }
 model CollectionRun {
+  semanticReviews SemanticReview[]
   metrics Json?
   id String @id @default(cuid())
   configId String
@@ -398,4 +401,38 @@ model DeviceExecutionLease {
   device ExecutionDevice @relation(fields:[deviceId],references:[id],onDelete:Restrict)
   token String @unique
   expiresAt DateTime
+}
+
+// Opt-in, bounded context snapshots. No model credentials or outbound messages.
+model SemanticReview {
+  id String @id @default(cuid())
+  configId String
+  config CollectionConfig @relation(fields:[configId], references:[id], onDelete:Cascade)
+  runId String
+  run CollectionRun @relation(fields:[runId], references:[id], onDelete:Cascade)
+  revision Int
+  leaseUntil DateTime?
+  snapshotHash String
+  platform Platform
+  platformUserId String
+  snapshot Json
+  rules Json
+  state String @default("UNCONFIGURED")
+  score Int?
+  reason String?
+  context String @default("INSUFFICIENT")
+  result Json?
+  provider String @default("NONE")
+  modelVersion String?
+  isDemo Boolean
+  reviewStatus String @default("PENDING")
+  reviewNote String?
+  reviewedBy String?
+  reviewedAt DateTime?
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([configId,revision,snapshotHash])
+  @@index([configId,createdAt])
+  @@index([platform,platformUserId])
 }

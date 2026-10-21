@@ -36,3 +36,4 @@ export const replyDraft = z.object({ name: z.string().trim().min(1).max(80), cha
   .refine(v => !/[{}]/.test(v.body.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, '')), '占位符必须使用 {{字段}} 格式');
 
 export * from './comment-rules';
+export * from './semantic-review';

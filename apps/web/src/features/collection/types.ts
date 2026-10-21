@@ -1,6 +1,7 @@
-import type {CommentRules,RunMetrics,Assessment} from '@crm/contracts';
+import type {SemanticRules,CommentRules,RunMetrics,Assessment} from '@crm/contracts';
 import type { Platform } from '@/lib/types';
 export type ConfigDraft = {
+    semanticRules?:SemanticRules|null;
     commentRules?:CommentRules|null;
     name: string;
     platform: Platform;

@@ -1,4 +1,5 @@
 import { RunMetrics } from '@crm/contracts';
+import { semanticSnapshot, snapshotHash } from './semantic-evaluator';
 import { assessComment } from './comment-rules';
 import { Prisma, CollectionRun, CollectionConfig } from "@prisma/client";
 import { Db } from "../common/db";
@@ -21,7 +22,7 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                 }
                 const parsed = configInput.safeParse(run.snapshot);
                 if (!parsed.success && result.posts.length) throw new ReadFailure("INVALID_DATA");
-                const spec = parsed.success ? parsed.data : { mode: "MOCK" as const, platform: "XHS" as const, keywords: [], excludeWords: [], commentRules: null };
+                const spec = parsed.success ? parsed.data : { mode: "MOCK" as const, platform: "XHS" as const, keywords: [], excludeWords: [], commentRules: null, semanticRules:null };
                 if (spec.mode !== "MOCK" && result.posts.length) {
                     if(run.execution){if(!guard||accountReadMode()!==spec.mode)throw new ReadFailure("REAL_DISABLED");}
                     else {if(accountReadMode())throw new ReadFailure("REAL_DISABLED");requireMcp(spec.mode);}
@@ -44,6 +45,12 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                         seen.add(c.id);
                         const prior = await tx.commentObservation.findUnique({ where: { monitorId_platformCommentId: { monitorId: monitor.id, platformCommentId: c.id } } });
                         await tx.commentObservation.upsert({ where: { monitorId_platformCommentId: { monitorId: monitor.id, platformCommentId: c.id } }, create: { monitorId: monitor.id, platformCommentId: c.id, lastRunId: run.id }, update: { state: "PRESENT", lastRunId: run.id, lastSeenAt: new Date() } });
+                        // Separate opt-in queue for EVERY acquired comment, before keyword filtering.
+                        // Immutable context/version dedupe: no external work inside this transaction.
+                        if(spec.semanticRules){
+                            const snapshot=semanticSnapshot(entry.post,c,c.parentId?contextComments.get(c.parentId):undefined,entry.complete,isDemo);
+                            await tx.semanticReview.createMany({data:[{configId:config.id,runId:run.id,revision:run.revision,snapshotHash:snapshotHash(snapshot),platform:spec.platform,platformUserId:c.userId,snapshot:snapshot as unknown as Prisma.InputJsonValue,rules:spec.semanticRules,isDemo,reason:'模型未配置；待人工审核'}],skipDuplicates:true});
+                        }
                         const assessment=spec.commentRules?assessComment(c,entry.post,c.parentId?contextComments.get(c.parentId):undefined,spec.commentRules,spec.excludeWords):null;
                         const hit=assessment?(assessment.classification==='NO_MATCH'?null:assessment):classify(c.text,spec.keywords,spec.excludeWords);
                         if (!hit) {metrics.unmatched++;const reason=assessment?.reason||(spec.excludeWords.some(w=>c.text.normalize('NFKC').toLowerCase().includes(w.normalize('NFKC').toLowerCase()))?'EXCLUDED':'NO_SIGNAL');metrics.filterReasons[reason]=(metrics.filterReasons[reason]||0)+1;continue;}

@@ -1,3 +1,4 @@
+import {SemanticReviewPanel} from '@/features/collection/semantic-review-panel';
 import {RunStats} from '@/features/collection/run-stats';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -48,6 +49,7 @@ export function CollectionLauncher({ configs, loading, initialId, runsOpen, onRu
         <div className="console-feedback" role="status">{feedbackText}</div><ErrorNotice error={mutation.error}/>
       </div>
     </div>
+    {selected&&<details className="collection-body"><summary>自然语言审核 · 模型未配置</summary><SemanticReviewPanel key={selected.id} configId={selected.id}/></details>}
     <div className="module-expansion" data-open={runsOpen} id="run-module" inert={!runsOpen} aria-hidden={!runsOpen}><div><section className="console-history">
       <h3>集中采集进度</h3><div className="run-list">{configs.filter(c => c.runs.length).map(c => { const r = c.runs[0]; return <article key={c.id}><strong>{c.name} · {runLabels[r.status]}</strong><RunStats run={r}/>{r.reason && <small>{reasonLabels[r.reason] || r.reason}</small>}</article>; })}</div>
       {!configs.some(c => c.runs.length) && <p>尚未运行。结果会出现在下面的匹配评论。</p>}
