@@ -515,3 +515,17 @@ model CapturedComment {
  @@unique([configId, platformCommentId, contentHash, contextVersion], map: "CapturedComment_content_version_key")
  @@index([configId,createdAt])
 }
+
+// One local provider configuration. Tombstone remains after removal; no environment fallback.
+model ModelSettings {
+ id String @id
+ version Int @default(0)
+ model String
+ endpoint String @default("beijing-standard")
+ dailyLimit Int
+ priceVersion String
+ consent Boolean @default(false)
+ note String @default("")
+ encryptedKey Json?
+ updatedAt DateTime @updatedAt
+}

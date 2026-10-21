@@ -14,6 +14,7 @@ import { CollectionQueue } from "./queue";
 import { configInput, scenarioSchema } from "./contract";
 import { semanticEvaluateRequestSchema } from '@crm/contracts';
 import { QwenMatchingService } from './qwen-matching.service';
+import {ModelSettingsModule} from '../model-settings/model-settings.module';
 import { CaptureService } from './capture.service';
 import { SemanticService } from './semantic.service';
 @Controller("collection")
@@ -107,6 +108,6 @@ class NoticesController {
     id: string) { parse(z.object({}).strict(), r.body); const notice = await this.db.collectionNotice.findFirst({ where: { id, lead: scope(r.actor) } }); if (!notice)
         throw new NotFoundException(); return this.leads.locked(r.actor, notice.leadId, tx => tx.noticeRead.upsert({ where: { noticeId_userId: { noticeId: id, userId: r.actor.id } }, create: { noticeId: id, userId: r.actor.id }, update: {} })); }
 }
-@Module({ imports: [AuthModule, LeadsModule, DevicesModule], controllers: [CollectionController, NoticesController], providers: [CaptureService, QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService] })
+@Module({ imports: [AuthModule, LeadsModule, DevicesModule,ModelSettingsModule], controllers: [CollectionController, NoticesController], providers: [CaptureService, QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService] })
 export class CollectionModule {
 }

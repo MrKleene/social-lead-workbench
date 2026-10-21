@@ -585,7 +585,7 @@ describe('Qwen manual integration: isolated database and fictional HTTP only',()
  it('local preview authenticated/admin/CSRF and explicit call consent required',async()=>{
   const c=await fixture();expect((await write('post',`/collection/configs/${c.id}/semantic-preview`,{},a)).status).toBe(403);
   expect((await api().post(`/api/collection/configs/${c.id}/semantic-preview`).set('Cookie',admin.cookie).send({})).status).toBe(403);
-  const p=await write('post',`/collection/configs/${c.id}/semantic-preview`,{});expect(p.status).toBe(201);expect(p.body.count).toBe(2);expect(p.body.connection.state).toBe('DISABLED');expect(JSON.stringify(p.body.payload)).not.toContain('fictional-post');
+  const p=await write('post',`/collection/configs/${c.id}/semantic-preview`,{});expect(p.status).toBe(201);expect(p.body.count).toBe(2);expect(p.body.connection.state).toBe('UNCONFIGURED');expect(JSON.stringify(p.body.payload)).not.toContain('fictional-post');
   expect((await write('post',`/collection/configs/${c.id}/semantic-evaluate`,{requestKey:randomUUID(),previewHash:p.body.hash})).status).toBe(400);
   expect((await write('post',`/collection/configs/${c.id}/semantic-evaluate`,{requestKey:randomUUID(),previewHash:p.body.hash,consent:'send-reviewed-redacted-batch-v1'})).status).toBe(409);expect(await db.semanticModelCall.count()).toBe(0);
  });

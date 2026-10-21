@@ -24,7 +24,7 @@ export class CaptureService {
    this.db.capturedComment.findMany({where:{configId},orderBy:[{lastSeenAt:'desc'},{id:'asc'}],skip:offset,take:50,include:{post:{select:{coverage:true,stopReason:true}},reviews:{orderBy:{createdAt:'desc'},take:20,select:{id:true,state:true,score:true,reason:true,selectedModel:true,revision:true,result:true}}}}),
    this.db.capturedComment.count({where:{configId}}),this.db.capturedPost.findMany({where:{configId},orderBy:{lastSeenAt:'desc'},take:20}),this.db.capturedPost.count({where:{configId}}),
    this.db.$queryRaw<{count:bigint}[]>`SELECT COUNT(DISTINCT o."platformCommentId") AS count FROM "CommentObservation" o JOIN "MonitorPost" p ON p.id=o."monitorId" WHERE p."configId"=${configId} AND NOT EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."configId"=p."configId" AND c."platformCommentId"=o."platformCommentId")`,this.control(actor,configId)
-  ]);return {items,total,offset,hasMore:offset+items.length<total,posts,postTotal,legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model:selectedSemanticModel(),hasRules:!!config.semanticRules};
+  ]);return {items,total,offset,hasMore:offset+items.length<total,posts,postTotal,legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model:await selectedSemanticModel(this.db),hasRules:!!config.semanticRules};
  }
  async preview(actor:Actor,configId:string,ids:string[]){
   requireAdmin(actor);const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config?.semanticRules)throw new ConflictException('请先保存自然语言目标');
@@ -37,10 +37,11 @@ export class CaptureService {
    const config=await tx.collectionConfig.findUnique({where:{id:configId}}),control=await tx.semanticControl.findUnique({where:{configId}});
    if(!config||config.archivedAt||!config.semanticRules)throw new ConflictException('请先保存自然语言目标；不会自动改写原规则');
    if(!control?.enabled)throw new ConflictException('LLM语义匹配开关关闭；不会入队或请求模型');
-   if(!qwenModel(selectedSemanticModel()))throw new ConflictException('当前型号未验证；未入队');
+   const model=await selectedSemanticModel(tx);
+   if(!qwenModel(model))throw new ConflictException('当前型号未验证；未入队');
    const rows=await tx.capturedComment.findMany({where:{configId,id:{in:ids}}});if(rows.length!==ids.length)throw new ConflictException('所选原文不存在或不属于当前配置');
    let added=0;const reviewIds:string[]=[];
-   for(const c of rows){added+=await enqueueCaptured(tx,c,config);const review=await tx.semanticReview.findFirst({where:{captureId:c.id,selectedModel:selectedSemanticModel(),ruleHash:semanticHash(config.semanticRules)},orderBy:{createdAt:'desc'}});if(review)reviewIds.push(review.id);}
+   for(const c of rows){added+=await enqueueCaptured(tx,c,config,model);const review=await tx.semanticReview.findFirst({where:{captureId:c.id,selectedModel:model,ruleHash:semanticHash(config.semanticRules)},orderBy:{createdAt:'desc'}});if(review)reviewIds.push(review.id);}
    return {added,reused:rows.length-added,reviewIds,canSend:false};
   });
  }

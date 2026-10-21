@@ -9,8 +9,9 @@ import { DEFAULT_QWEN_MODEL, qwenModel } from '../../../../runtime/qwen-models.c
 export const CAPTURE_CONTEXT_VERSION='captured-context-v1';
 function stable(v:unknown):unknown {return Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b)).map(([k,value])=>[k,stable(value)])):v;}
 export const semanticHash=(v:unknown)=>createHash('sha256').update(JSON.stringify(stable(v))).digest('hex');
-export function selectedSemanticModel(){return process.env.QWEN_MATCH_MODEL??DEFAULT_QWEN_MODEL;}
-export async function enqueueCaptured(tx:Prisma.TransactionClient,c:CapturedComment,config:CollectionConfig,model=selectedSemanticModel()){
+export async function selectedSemanticModel(db:Db|Prisma.TransactionClient){return (await db.modelSettings.findUnique({where:{id:'qwen-comment-matching'},select:{model:true}}))?.model??DEFAULT_QWEN_MODEL;}
+export async function enqueueCaptured(tx:Prisma.TransactionClient,c:CapturedComment,config:CollectionConfig,model?:string){
+ model??=await selectedSemanticModel(tx);
  const rules=semanticRulesSchema.safeParse(config.semanticRules);if(!rules.success||!qwenModel(model))return 0;
  const s=c.snapshot as unknown as SemanticSnapshot,ruleHash=semanticHash(rules.data);
  const analysisKey=semanticHash({configId:config.id,ruleHash,model,context:c.contextVersion,content:c.contentHash});

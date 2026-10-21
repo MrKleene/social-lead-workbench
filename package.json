@@ -50,7 +50,9 @@
     "test:persistent:background": "node --test scripts/persistent-background.test.mjs",
     "dev:persistent:backend": "node scripts/dev-persistent.mjs --backend",
     "dev:persistent:web": "node scripts/dev-persistent-web.mjs",
-    "test:persistent:supervision": "node --test scripts/persistent-supervision.test.mjs"
+    "test:persistent:supervision": "node --test scripts/persistent-supervision.test.mjs",
+    "model:vault:init": "node scripts/init-model-vault.mjs",
+    "test:model-settings:ui": "npm run build -w @crm/web && node scripts/test-model-settings-ui.mjs"
   },
   "devDependencies": {
     "prisma": "6.19.0",

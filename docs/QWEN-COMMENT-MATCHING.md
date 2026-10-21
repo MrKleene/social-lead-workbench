@@ -18,9 +18,9 @@
 ## 北京接口与受控型号
 
 标准接口：`https://cn-beijing.maas.qianwenaiapi.com/compatible-mode/v1/chat/completions`。
-`QWEN_MATCH_ENDPOINT=beijing-standard` 是默认配置。Key 决定业务空间，普通调用不需要额外 workspace ID；项目的管理员权限、按配置隔离和全局预算仍保留。旧专属端点仅在显式选择 `beijing-workspace` 时要求 `QWEN_WORKSPACE_ID`。不接受任意代理、其他地域或重定向。
+管理员页面固定选择北京标准接口。Key 决定业务空间，普通调用不需要额外 workspace ID；项目的管理员权限、按配置隔离和全局预算仍保留。不接受任意代理、自定义端点、其他地域或重定向。
 
-| QWEN_MATCH_MODEL | 北京非思考输入 / 输出，元/百万token |
+| 页面受控型号 | 北京非思考输入 / 输出，元/百万token |
 | --- | --- |
 | qwen3.8-flash（本轮加入的用户候选） | 0.8 / 2.7 |
 | qwen3.7-flash-2026-07-15（保留原默认） | 输入≤32K：0.2 / 0.8；32K–256K：0.6 / 2.4；256K–1M：1.2 / 4.8 |
@@ -31,28 +31,24 @@
 
 核对日期2026-10-21：[Qwen3.8-Flash官方模型页与接口](https://www.qianwenai.com/models/qwen3.8-flash#api-reference)、[JSON Schema支持](https://platform.qianwenai.com/docs/developer-guides/text-generation/structured-output)、[非思考模式参数](https://help.aliyun.com/zh/model-studio/deep-thinking)、[业务空间与Key](https://platform.qianwenai.com/docs/developer-guides/administration/workspace)、[其他型号价格](https://help.aliyun.com/zh/model-studio/model-pricing)。官方支持不等于本项目真实连通性或语义质量验收。3.8-flash是官方提供的型号名，未声称它是不可变快照；若服务商更新同名模型，需更新本地上下文版本以重新验收。
 
-价格是有日期的核对记录，不推定免费额度、折扣或缓存优惠。每次变更型号需重新确认 `QWEN_MATCH_PRICE_ACK=<型号>:beijing-2026-10-21`；不能沿用另一型号的价格。未知型号/价格禁止调用、不回退便宜型号。预算是每日请求次数，不是精确人民币上限，费用以账单为准。
+价格是有日期的核对记录，不推定免费额度、折扣或缓存优惠。每次变更型号或调用上限，页面取消价格确认，需要重新勾选；服务端核对受控型号和当前价格版本，不能沿用另一型号的价格。未知型号/价格禁止调用、不回退便宜型号。预算是每日请求次数，不是精确人民币上限，费用以账单为准。
 
-## 用户本地配置（不要发送Key到聊天）
+## 管理员配置入口（不要发送 Key 到聊天）
 
-本轮未读取/配置任何真实Key，也未执行以下命令。用户尚未批准真实费用测试。待用户选择预算后，在自己的终端先按项目正常流程停止已核对身份且无任务的后台；不得盲目重复启动、删锁或复用文档里的PID。数据库和前端可保持运行。
+**这轮代码需新增迁移和本机主密钥初始化；未完成部署时页面显示“后台尚未部署”，不接受 Key。** 生产初始化与停启须单独批准，具体位置、命令、备份和恢复见 [管理员模型设置安全说明](MODEL-SETTINGS-SECURITY.md)。初始化只生成本机加密主密钥，不创建千问 Key，也不测试模型。
 
-```zsh
-cd /Users/kleene/projects/social-lead-workbench
-export QWEN_MATCH_ENABLED=1
-export QWEN_MATCH_CONSENT=beijing-redacted-comments-v1
-export QWEN_MATCH_ENDPOINT=beijing-standard
-export QWEN_MATCH_MODEL=qwen3.8-flash
-read 'QWEN_MATCH_PRICE_ACK?核对价格后输入 qwen3.8-flash:beijing-2026-10-21: '
-read 'QWEN_MATCH_DAILY_LIMIT?每日最多请求数（1-100，自行选择费用预算）: '
-read -rs 'QWEN_API_KEY?北京空间 API Key（隐藏输入）: '
-printf '\n'
-export QWEN_MATCH_PRICE_ACK QWEN_MATCH_DAILY_LIMIT QWEN_API_KEY
-npm run dev:persistent:background -- --backend
-unset QWEN_API_KEY
-```
+部署并初始化后：
 
-无需额外 workspace ID。Key 仅后端环境引用，不入仓库、不下发浏览器、不写日志；持久入口不读取 `.env`。仅 API 获得Key，采集worker只接收非秘密型号和端点档案以标记队列版本，前端/迁移/构建不接收。后续重启需用户重新提供环境，无自动系统代理。不要粘贴进程环境、Key或密钥截图。页面“配置就绪”仅说明本地参数齐全，不执行联网验Key。
+1. 用管理员账号打开 `http://127.0.0.1:63968/work?module=settings`，展开“模型设置 · 仅管理员”。普通销售没有入口或 API 权限。
+2. 选择型号（如 `qwen3.8-flash`）与每日最多请求次数（1–100）。地域固定北京；不用手填端点、workspace ID 或环境常量。
+3. 在密码输入框输入自己在千问控制台获得的北京 API Key，填写用途备注（不要写密钥），核对该型号价格和每日上限，并确认脱敏文本在北京处理。Key 不要发送到聊天。
+4. 点击“保存模型设置（不调用）”。保存后仅显示已配置、备注、更新时间及非秘密设置；输入框清空，没有查看、复制或部分 Key 提示。配置立即对下一次手动请求生效，正常重启后仍保留，不需要再提供进程环境变量。
+5. 忘记 Key 不影响继续使用，可直接输入新 Key 原子替换。留空可只改备注/型号/上限。替换失败保留旧值，版本冲突需刷新。
+6. “删除已存 Key”需二次明确确认。删除阻断新模型请求，不删历史、不撤销千问平台 Key；在途请求可能已发出并产生费用。若需吊销，请在千问控制台另行操作。
+
+新版运行入口只读数据库加密配置，**不会导入或回退到 `QWEN_API_KEY` 或旧 Qwen 环境变量配置**（即使数据库没有记录或已删除）。旧解析函数仅保留离线兼容测试，不作为运行时配置入口。
+
+保存不测试连接、不自动开启 LLM 匹配、不采集、不发送。收费分析另需独立开关、原文选择/脱敏预览及每批明确确认。页面显示“已配置”仅代表本地保存成功，不保证 Key 有效、额度可用或模型质量达标。
 
 ## 隐私、预算和故障
 
