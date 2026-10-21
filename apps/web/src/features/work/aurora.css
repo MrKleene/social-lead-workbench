@@ -32,3 +32,4 @@ html[data-crm-reduced=true] :is(.aurora-overview,.aurora-card,.space-panel,.spac
 .space-footnote{bottom:100px}.spatial-work[data-expanded=true] .space-footnote{display:none}
 /* Authentication and long reading forms appear immediately, without entrance fades. */
 .login-form{animation:none}
+.login-form [data-slot=button][data-variant=default]{background:#b9f36d;color:#19260e;border-color:#b9f36d;box-shadow:none}.login-form [data-slot=button][data-variant=default]:hover:not(:disabled){background:#cef99a}
