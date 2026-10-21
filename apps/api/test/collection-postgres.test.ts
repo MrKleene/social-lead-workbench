@@ -494,3 +494,23 @@ describe('sales cannot bind devices or manage QR sessions over HTTP',()=>{
   expect((await api().post('/api/devices/bind').set('Cookie',admin.cookie).set('Origin',origin).send({candidateId:id,consent:'bind-local-device-v1'})).status).toBe(403);
  });
 });
+
+describe('独立专业评论规则与历史兼容',()=>{
+ it('显式保存新规则，首次创建候选/依据/分类统计，重复读取不重建线索',async()=>{
+  const {thesisRulePreset}=await import('@crm/contracts');
+  const old=await config('旧配置原样保留');expect(old.commentRules).toBeNull();
+  const created=await write('post','/collection/configs',spec('查找帖子用的独立词',{commentRules:thesisRulePreset}));expect(created.status).toBe(201);
+  const id=created.body.id;expect(created.body.commentRules.version).toBe(1);
+  const adapter=new MockAdapter('XHS','BASELINE');const post={id:'demo-collect-independent-post',title:'毕业论文选题指导'};
+  adapter.search=async()=>({items:[post],complete:true});adapter.post=async p=>p;
+  adapter.comments=async()=>({complete:true,items:[['a','u1','护理',undefined],['b','u1','幼教',undefined],['c','u2','会计','demo-collect-absent'],['d','u3','护理代写包过',undefined],['e','u4','天气不错',undefined],['f','u5','护理，不需要选题了',undefined]].map(([id,u,text,parentId])=>({id:'demo-collect-rules-'+id,userId:'demo-collect-rules-'+u,nickname:'虚构',text:text!,parentId,hasReplies:false}))});
+  const first=await service.start(actor,id,'BASELINE',randomUUID());await service.execute(first.id,adapter);
+  const result=await db.collectionRun.findUniqueOrThrow({where:{id:first.id}});
+  expect(result).toMatchObject({observed:6,matched:3,added:2,notices:0});
+  expect(result.metrics).toMatchObject({postsRead:1,rootComments:5,replies:1,highRelevant:2,needsReview:1,unmatched:3,filterReasons:{PROVIDER:1,NO_SIGNAL:1,NEGATED:1}});
+  const details=await read(`/collection/configs/${id}`);expect(details.body.matches).toHaveLength(3);expect(details.body.matches.every((m:any)=>m.isBaseline&&m.assessment.evidence.length>0)).toBe(true);
+  const second=await service.start(actor,id,'BASELINE',randomUUID());await service.execute(second.id,adapter);expect(await db.collectionRun.findUnique({where:{id:second.id}})).toMatchObject({matched:3,added:0,notices:0});
+  expect(await db.sourceMatch.count({where:{configId:id}})).toBe(3);expect((await db.collectionConfig.findUniqueOrThrow({where:{id:old.id}})).commentRules).toBeNull();
+  await service.change(actor,id,{enabled:false},1,false);expect((await db.collectionConfig.findUniqueOrThrow({where:{id}})).commentRules).toEqual(thesisRulePreset);
+ });
+});

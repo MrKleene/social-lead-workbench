@@ -198,6 +198,7 @@ model ReplyTemplate {
   configs CollectionConfig[]
 }
 model CollectionConfig {
+  commentRules Json?
   defaultReplyTemplateId String?
   defaultReplyTemplate ReplyTemplate? @relation(fields:[defaultReplyTemplateId],references:[id],onDelete:Restrict)
   @@index([defaultReplyTemplateId])
@@ -222,6 +223,7 @@ model CollectionConfig {
   matches SourceMatch[]
 }
 model CollectionRun {
+  metrics Json?
   id String @id @default(cuid())
   configId String
   config CollectionConfig @relation(fields:[configId],references:[id])
@@ -268,6 +270,7 @@ model CommentObservation {
   @@unique([monitorId,platformCommentId])
 }
 model SourceMatch {
+  assessment Json?
   id String @id @default(cuid())
   configId String
   config CollectionConfig @relation(fields:[configId],references:[id])

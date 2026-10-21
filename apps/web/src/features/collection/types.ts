@@ -1,5 +1,7 @@
+import type {CommentRules,RunMetrics,Assessment} from '@crm/contracts';
 import type { Platform } from '@/lib/types';
 export type ConfigDraft = {
+    commentRules?:CommentRules|null;
     name: string;
     platform: Platform;
     mode: 'MOCK' | 'XHS_FIXTURE' | 'XHS_MCP';
@@ -10,6 +12,7 @@ export type ConfigDraft = {
     defaultReplyTemplateId?: string | null;
 };
 export type Run = {
+    metrics?:RunMetrics|null;
     id: string;
     scenario: string;
     status: string;
@@ -35,6 +38,7 @@ export type ConfigDetail = Config & {
         id: string;
         keywords: string[];
         classification: string;
+        assessment?:Assessment|null;
         isBaseline: boolean;
         comment: {
             originalText: string;

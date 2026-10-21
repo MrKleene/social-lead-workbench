@@ -1,3 +1,4 @@
+import {RunStats} from '@/features/collection/run-stats';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Play, Pause, Settings2 } from 'lucide-react';
@@ -41,14 +42,14 @@ export function CollectionLauncher({ configs, loading, initialId, runsOpen, onRu
             {active && <Button variant="outline" onClick={() => mutation.mutate({ path: `/collection/runs/${active}/pause` })}><Pause size={16}/>暂停本轮</Button>}
           </div>
           {accountBound&&<AccountReadChoice accountId={accountId} onAccount={setAccountId} consent={consent} onConsent={setConsent}/>}
-          <dl className="console-terms"><div><dt>关键词</dt><dd>{selected.keywords.join(' / ')}</dd></div><div><dt>排除词</dt><dd>{selected.excludeWords.join(' / ') || '无'}<span>每轮最多 {selected.batchLimit} 帖 · 32 次读取</span></dd></div></dl>
+          <dl className="console-terms"><div><dt>关键词</dt><dd>{selected.keywords.join(' / ')}</dd></div><div><dt>排除词</dt><dd>{selected.excludeWords.join(' / ') || '无'}<span>每轮最多 {selected.batchLimit} 帖 · 32 个内部步骤</span></dd></div></dl>
         </> : <div className="console-empty"><p>先添加关键词和排除词，再回到这里开始。</p><Button asChild><Link to={legacyWorkspacePath('settings')}>去搜索设置</Link></Button></div>}
         <div className="console-links"><Button className="refresh-local-status" variant="ghost" size="sm" onClick={() => void refresh()}>刷新本地任务状态</Button><Button variant="ghost" size="sm" aria-expanded={runsOpen} aria-controls="run-module" onClick={onRuns}>查看运行记录</Button>{selected?.mode === 'MOCK' && <details><summary>模拟验收选项</summary><label>模拟场景<select aria-label="模拟场景" value={scenario} onChange={e => setScenario(e.target.value)}>{Object.entries(scenarios).filter(([k]) => k !== 'READ_WINDOW').map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></label></details>}</div>
         <div className="console-feedback" role="status">{feedbackText}</div><ErrorNotice error={mutation.error}/>
       </div>
     </div>
     <div className="module-expansion" data-open={runsOpen} id="run-module" inert={!runsOpen} aria-hidden={!runsOpen}><div><section className="console-history">
-      <h3>集中采集进度</h3><div className="run-list">{configs.filter(c => c.runs.length).map(c => { const r = c.runs[0]; return <article key={c.id}><strong>{c.name} · {runLabels[r.status]}</strong><p>读取 {r.observed} · 匹配 {r.matched} · 新线索 {r.added} · 新提醒 {r.notices} · 请求 {r.requests}/32</p>{r.reason && <small>{reasonLabels[r.reason] || r.reason}</small>}</article>; })}</div>
+      <h3>集中采集进度</h3><div className="run-list">{configs.filter(c => c.runs.length).map(c => { const r = c.runs[0]; return <article key={c.id}><strong>{c.name} · {runLabels[r.status]}</strong><RunStats run={r}/>{r.reason && <small>{reasonLabels[r.reason] || r.reason}</small>}</article>; })}</div>
       {!configs.some(c => c.runs.length) && <p>尚未运行。结果会出现在下面的匹配评论。</p>}
       {selected && <details><summary>所选设置的运行记录与覆盖范围</summary><ConfigDetailPanel key={selected.id} id={selected.id}/></details>}
     </section></div></div>

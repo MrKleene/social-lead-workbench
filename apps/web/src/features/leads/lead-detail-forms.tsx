@@ -1,3 +1,4 @@
+import {assessmentLabels} from '@crm/contracts';
 import { useDraftGuard } from '@/features/work/draft-guard';
 import { useState, useRef, FormEvent, type ReactNode } from "react";
 import { CheckCircle2, UserRound, CalendarClock, MessageSquare, FileText, ListChecks } from "lucide-react";
@@ -87,7 +88,7 @@ export function DetailForms({
         <h3><FileText size={16} />需求依据</h3>
         {lead.identity.comments?.map((comment) => (
           <blockquote key={comment.id}>
-            <div className="source-flags">{comment.parentPlatformCommentId&&<span className="soft-tag">楼中楼回复</span>}{comment.matches?.map((m,i)=><span className="soft-tag" key={i}>规则 · {m.classification==='POSSIBLE_HELP'?'可能求助':'仅专业相关'} · {m.keywords.join('、')}{m.isBaseline?' · 首次记录':''}</span>)}</div>
+            <div className="source-flags">{comment.parentPlatformCommentId&&<span className="soft-tag">楼中楼回复</span>}{comment.matches?.map((m,i)=><span className="soft-tag" key={i}>规则 · {assessmentLabels[m.classification]||m.classification} · {m.keywords.join('、')}{m.isBaseline?' · 首次记录':''}</span>)}</div>
             <p>{comment.originalText}</p>
             <footer>
               {comment.post.title}

@@ -8,6 +8,7 @@ export type PostRead = {
     windowRead?: boolean;
 };
 export type ReadResult = {
+    discarded?:boolean;
     posts: PostRead[];
     requests: number;
     status: string;
@@ -135,7 +136,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     catch (error) {
         result.reason = error instanceof ReadFailure ? error.code : "INVALID_DATA";
         if (error instanceof ReadFailure) result.retryAfterMs = error.retryAfterMs;
-        if (result.reason === "INVALID_DATA") result.posts = [];
+        if (result.reason === "INVALID_DATA") {result.discarded=result.posts.length>0;result.posts = [];}
         result.status = result.reason === "PAUSED" ? "PAUSED" : result.reason === "BUDGET" ? "PARTIAL" : "FAILED";
     }
     return result;

@@ -1,3 +1,4 @@
+import type {Assessment} from '@crm/contracts';
 export type User = {
   id: string;
   name: string;
@@ -23,7 +24,7 @@ export type Lead = {
       originalText: string;
       platformCommentId: string;
       parentPlatformCommentId?: string | null;
-      matches?: {keywords:string[];classification:string;isBaseline:boolean}[];
+      matches?: {keywords:string[];classification:string;isBaseline:boolean;assessment?:Assessment|null}[];
       post: { title: string; platformPostId: string };
     }[];
   };

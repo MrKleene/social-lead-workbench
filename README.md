@@ -115,3 +115,5 @@ npm run test:windows:native   # 仅Windows11 x64；Mac明确跳过
 持久实例锁报错时，请按[Mac锁安全恢复步骤](docs/PERSISTENT-LOCK-RECOVERY-2026-10-20.md)保留原数据库和端口；不要手删锁或切换新实例。
 
 锁恢复成功后仍退出时，查看[启动失败诊断](docs/PERSISTENT-STARTUP-DIAGNOSTICS-2026-10-20.md)。Docker引擎不可连接应先打开Docker Desktop并等待就绪，无需重复重启或恢复锁。
+
+独立评论规则与零匹配修复见[2026-10-21交付说明](docs/COMMENT-RULES-2026-10-21.md)。旧配置需用户主动启用并保存；新增迁移仅添加三个可空JSON字段，正常启动时应用，不会自动回补或重跑历史评论。

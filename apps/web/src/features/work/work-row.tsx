@@ -1,3 +1,4 @@
+import {assessmentLabels} from '@crm/contracts';
 import { sourceModeLabel } from '@/features/collection/mode';
 import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';

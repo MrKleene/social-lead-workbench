@@ -51,7 +51,7 @@ export class XhsMcpAdapter implements ReadAdapter {
     async post(post: Post, signal: AbortSignal): Promise<Post> {
         const reference = this.tokens.get(post.id);
         if (!reference) throw new ReadFailure("INVALID_DATA");
-        const data = z.object({ feed_id: rawId.optional(), data: z.object({ note: z.object({ noteId: rawId.optional(), title: z.string().max(500).optional() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }).parse(await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false }, signal));
+        const data = z.object({ feed_id: rawId.optional(), data: z.object({ note: z.object({ noteId: rawId.optional(), title: z.string().max(500).optional(), desc: z.string().max(20000).nullish() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }).parse(await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false }, signal));
         if ((data.feed_id && data.feed_id !== reference.rawId) || (data.data.note.noteId && data.data.note.noteId !== reference.rawId)) throw new ReadFailure("INVALID_DATA");
         const replies = new Map<string, Comment[]>(), seen = new Set<string>();
         let count = 0;
@@ -67,7 +67,7 @@ export class XhsMcpAdapter implements ReadAdapter {
         // Validate the entire received tree before exposing any of it to ingestion.
         const roots = (data.data.comments.list || []).map(c => normalize(c));
         this.details.set(post.id, { roots, replies });
-        return { ...post, title: data.data.note.title || post.title };
+        return { ...post, title: data.data.note.title || post.title, ...(data.data.note.desc?{body:data.data.note.desc}:{}) };
     }
     async comments(post: Post, cursor: string | undefined, _signal: AbortSignal): Promise<Page<Comment>> {
         if (!this.allowed) throw new ReadFailure("REAL_DISABLED");

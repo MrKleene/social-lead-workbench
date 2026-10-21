@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
+  resolve: { alias: { "@": path.resolve(import.meta.dirname, "src"), "@crm/contracts": path.resolve(import.meta.dirname, "../../packages/contracts/src/index.ts") } },
   server: {
     port: 5173,
     strictPort: true,

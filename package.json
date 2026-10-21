@@ -28,7 +28,7 @@
     "dev:collector": "DOTENV_CONFIG_PATH=.env tsx --tsconfig apps/api/tsconfig.json apps/api/src/collection/worker.ts",
     "test:queue": "node scripts/test-queue-isolated.mjs",
     "dev:mock:isolated": "node scripts/dev-mock-isolated.mjs",
-    "test:workbench": "vitest run apps/web/src/features/accounts/login-availability.test.ts apps/web/src/features/work/stable-results.test.ts apps/web/src/features/work/motion-policy.test.ts apps/web/src/features/work/navigation-policy.test.ts apps/web/src/features/collection/mode.test.ts",
+    "test:workbench": "vitest run apps/web/src/features/accounts/login-availability.test.ts apps/web/src/features/work/stable-results.test.ts apps/web/src/features/work/motion-policy.test.ts apps/web/src/features/work/navigation-policy.test.ts apps/web/src/features/collection/mode.test.ts apps/web/src/features/collection/run-stats.test.ts",
     "test:mcp": "node scripts/test-queue-isolated.mjs --mcp",
     "test:mock:isolated": "node scripts/test-queue-isolated.mjs --mock-only",
     "dev:mcp:offline": "node scripts/dev-mock-isolated.mjs --mcp-fixture",
@@ -43,7 +43,8 @@
     "test:platform": "node --test runtime/platform.test.cjs",
     "test:windows:native": "node scripts/build-windows-host.mjs && node scripts/test-windows-native.mjs",
     "test:persistent:lock": "node --test scripts/persistent-lock.test.mjs",
-    "test:persistent:diagnostics": "node --test scripts/persistent-diagnostics.test.mjs"
+    "test:persistent:diagnostics": "node --test scripts/persistent-diagnostics.test.mjs",
+    "test:comment-rules:ui": "npm run build -w @crm/web && node scripts/test-comment-rules-ui.mjs"
   },
   "devDependencies": {
     "prisma": "6.19.0",

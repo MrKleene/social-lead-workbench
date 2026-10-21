@@ -3,7 +3,7 @@ import { ContactStage, Prisma } from "@prisma/client";
 import { Db } from "../common/db";
 import { Actor, requireAdmin, requireOwner, scope } from "../auth/security";
 const include = {
-    identity: { include: { comments: { take: 8, orderBy: { observedAt: "desc" }, include: { post: true, matches: { select: { keywords: true, classification: true, isBaseline: true } } } } } },
+    identity: { include: { comments: { take: 8, orderBy: { observedAt: "desc" }, include: { post: true, matches: { select: { keywords: true, classification: true, isBaseline: true, assessment:true } } } } } },
     owner: { select: { id: true, name: true } },
 } as const;
 @Injectable()
@@ -27,7 +27,7 @@ export class LeadsService {
                 identity: {
                     include: {
                         comments: {
-                            include: { post: true, matches: { select: { keywords: true, classification: true, isBaseline: true } } },
+                            include: { post: true, matches: { select: { keywords: true, classification: true, isBaseline: true, assessment:true } } },
                             orderBy: { observedAt: "desc" },
                         },
                     },
