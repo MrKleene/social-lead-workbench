@@ -1,4 +1,5 @@
 import platform from '../runtime/platform.cjs';
+import {lifecycleJournal} from './persistent-journal.mjs';
 import {installStopHandlers,ownedChildrenExited} from './persistent-lifecycle.mjs';
 import {acquireInstanceLock,lockMessage} from './persistent-lock.mjs';
 import {createDocker,StartupError,diagnostic,diagnosticText,saveDiagnostic} from './persistent-diagnostics.mjs';
@@ -28,6 +29,8 @@ const directory=join(root,'.local',offline?'persistent-offline':'persistent',nam
 if(!offline&&!prepareRecovery)await preflight({root,home:process.env.HOME,session:'persistent-preflight',port:18162,env:process.env});
 process.umask(0o077);
 const children=[],ownedGroups=new Set(),startedContainers=[];
+let journal;const launchId=randomUUID();
+process.on('exit',code=>{journal?.record('EXIT',{code});journal?.close();});
 let stage='local',runtimeFailure,manifest,secret,lock=false,stopping=false,finish,failed=false,newInstance=false;
 const stopped=new Promise(ok=>{finish=ok;});
 const safeError=()=>console.error('持久工作台操作失败；数据卷与本地配置保留。请检查依赖、端口和本次运行记录，不要删除或重建已有数据。');
@@ -37,7 +40,7 @@ async function privateFile(path){await platform.privateFile(path);}
 async function json(path){await privateFile(path);return JSON.parse(await readFile(path,'utf8'));}
 async function freePort(){const s=createServer();await new Promise((ok,no)=>{s.once('error',no);s.listen(0,'127.0.0.1',ok);});const p=s.address().port;await new Promise(ok=>s.close(ok));if([18060,18061].includes(p))return freePort();return p;}
 function stopGroup(c){if(c?.pid&&c.exitCode===null&&c.signalCode===null)try{if(process.platform==='win32'||c.interactive)c.kill('SIGTERM');else process.kill(-c.pid,'SIGTERM');}catch{}}
-function launch(command,argv,env,{interactive=false,ipc=false}={}){if(command==='npm')[command,argv]=platform.npmCommand(argv);if(stopping)throw Error('Stopped');const c=spawn(command,argv,{cwd:root,env,detached:process.platform!=='win32'&&!interactive,windowsHide:!interactive,stdio:interactive?'inherit':ipc?['ignore','ignore','ignore','ipc']:['ignore','pipe','pipe']});c.interactive=interactive;children.push(c);if(!interactive&&!ipc){c.stdout.on('data',()=>{});c.stderr.on('data',()=>{});}c.done=new Promise(ok=>{c.once('exit',code=>ok(code??1));c.once('error',()=>ok(1));});if(ipc)c.on('message',m=>{if(!Number.isInteger(m?.pid)||m.pid<=1)return;if(m.kind==='OWNED_LOGIN_PROCESS_STARTED')ownedGroups.add(m.pid);if(m.kind==='OWNED_LOGIN_PROCESS_STOPPED')ownedGroups.delete(m.pid);});return c;}
+function launch(command,argv,env,{interactive=false,ipc=false,role='local-command'}={}){if(command==='npm')[command,argv]=platform.npmCommand(argv);if(stopping)throw Error('Stopped');const c=spawn(command,argv,{cwd:root,env,detached:process.platform!=='win32'&&!interactive,windowsHide:!interactive,stdio:interactive?'inherit':ipc?['ignore','ignore','ignore','ipc']:['ignore','pipe','pipe']});c.interactive=interactive;children.push(c);journal?.record('CHILD_START',{pid:c.pid,role});if(!interactive&&!ipc){c.stdout.on('data',()=>{});c.stderr.on('data',()=>{});}c.done=new Promise(ok=>{c.once('exit',(code,signal)=>{journal?.record('CHILD_EXIT',{pid:c.pid,role,code,signal});ok(code??1);});c.once('error',()=>ok(1));});if(ipc)c.on('message',m=>{if(!Number.isInteger(m?.pid)||m.pid<=1)return;if(m.kind==='OWNED_LOGIN_PROCESS_STARTED')ownedGroups.add(m.pid);if(m.kind==='OWNED_LOGIN_PROCESS_STOPPED')ownedGroups.delete(m.pid);});return c;}
 async function command(argv,env,interactive=false){console.log(`本地步骤：${argv.slice(0,4).join(' ')}`);const c=launch(argv[0],argv.slice(1),env,{interactive});const code=await c.done;if(code!==0)throw new StartupError('LOCAL_COMMAND_FAILED',code);}
 function resourceLabels(type,id){return JSON.parse(docker(type==='volume'?['volume','inspect','--format','{{json .Labels}}',id]:['inspect','--format','{{json .Config.Labels}}',id]));}
 function verifyOwnership(type,id){if(resourceLabels(type,id)?.['crm.persistent.instance']!==manifest.id)throw Error('Resource ownership mismatch');}
@@ -49,7 +52,8 @@ async function container(kind){const spec=manifest[kind],image=kind==='postgres'
   docker(['run','--detach','--pull=never','--name',spec.container,'--label',`crm.persistent.instance=${manifest.id}`,'-p',`127.0.0.1:${spec.port}:${inner}`,'-v',`${spec.volume}:${kind==='postgres'?'/var/lib/postgresql/data':'/data'}`,...(kind==='postgres'?['-e','POSTGRES_USER=crm','-e',`POSTGRES_DB=${manifest.database}`,'-e','POSTGRES_PASSWORD']:[]),image,...(kind==='redis'?['redis-server','--appendonly','yes']:[])],{POSTGRES_PASSWORD:secret.databasePassword});startedContainers.push(spec.container);
  }
 }
-installStopHandlers(()=>{stopping=true;finish();for(const c of children)stopGroup(c);});
+installStopHandlers(signal=>{journal?.record('STOP_REQUESTED',{signal});stopping=true;finish();for(const c of children)stopGroup(c);});
+for(const stream of [process.stdout,process.stderr])stream.on('error',()=>{journal?.record('OUTPUT_CLOSED');stopping=true;finish();for(const c of children)stopGroup(c);});
 // Windows ChildProcess.kill is forceful. Only the owned offline test fixture accepts this IPC stop.
 if(process.platform==='win32'&&fixture&&process.connected)process.on('message',m=>{if(m?.kind==='STOP_OWNED_FIXTURE'){stopping=true;finish();for(const c of children)stopGroup(c);}});
 try{
@@ -60,7 +64,7 @@ try{
  if(acquired.prepared){
   console.log('已记录本次 Mac 启动标识与原锁/实例配置摘要；没有删除锁、停止服务或读取凭据。请正常保存工作并重启 Mac；Docker 可用后在同一目录运行原启动命令。未重启前不会恢复。');
  }else{
- lock=acquired;if(stopping)throw Error('Stopped');lock.lost.catch(e=>{console.error(lockMessage(e.code)||'系统锁失效');failed=true;stopping=true;finish();for(const c of children)stopGroup(c);});
+ lock=acquired;journal=lifecycleJournal(directory,launchId);journal.record('START',{pid:process.pid,ppid:process.ppid});if(stopping)throw Error('Stopped');lock.lost.catch(e=>{console.error(lockMessage(e.code)||'系统锁失效');failed=true;stopping=true;finish();for(const c of children)stopGroup(c);});
  if(lock.recovered)console.log('已核验系统重启与原实例，恢复原锁；继续使用原数据库及端口。');
  stage='docker';dockerClient.ready();
  stage='images';for(const image of ['postgres:17','redis:7-alpine'])dockerClient.image(image);
@@ -87,10 +91,10 @@ try{
  if(adminCount&&!fixture)console.log('已存在 CRM 管理员，跳过创建；网页使用原账号登录。启动器仅检查是否存在启用的管理员，不要求再次输入密码。');
  const checkDb=new PrismaClient({datasources:{db:{url}}});try{if(!await checkDb.user.count({where:{role:'ADMIN',active:true}}))throw Error('Administrator initialization incomplete');}finally{await checkDb.$disconnect();}
  manifest.fresh=false;await writeFile(join(directory,'instance.json'),JSON.stringify(manifest,null,2),{mode:0o600});
- stage='services';const collector=launch(process.execPath,['apps/api/dist/collection/worker.js'],env,{ipc:true});
- const api=launch(process.execPath,['apps/api/dist/main.js'],env,{ipc:true});const web=launch('npm',['run','dev','-w','@crm/web','--','--port',String(manifest.webPort),'--host','127.0.0.1','--strictPort'],env);
+ stage='services';const collector=launch(process.execPath,['apps/api/dist/collection/worker.js'],env,{ipc:true,role:'collector'});
+ const api=launch(process.execPath,['apps/api/dist/main.js'],env,{ipc:true,role:'api'});const web=launch('npm',['run','dev','-w','@crm/web','--','--port',String(manifest.webPort),'--host','127.0.0.1','--strictPort'],env,{role:'web'});
  for(const c of [api,web,collector])c.done.then(code=>{if(!stopping){failed=true;runtimeFailure=new StartupError('SERVICE_EXITED',code);}finish();});
- await writeFile(join(directory,'running.json'),JSON.stringify({pid:process.pid,mode:manifest.mode,preview:base,api:env.API_PROXY_TARGET,deviceId:manifest.deviceId,instanceId:manifest.id,containers:[manifest.postgres.container,manifest.redis.container]},null,2),{mode:0o600});
+ await writeFile(join(directory,'running.json'),JSON.stringify({pid:process.pid,launchId,lifecycleLog:journal.file,mode:manifest.mode,preview:base,api:env.API_PROXY_TARGET,deviceId:manifest.deviceId,instanceId:manifest.id,containers:[manifest.postgres.container,manifest.redis.container]},null,2),{mode:0o600});
  console.log(`PERSISTENT ${manifest.mode.toUpperCase()} workbench: ${base}`);console.log(`Instance: ${directory}`);console.log('Business data and device references survive Ctrl+C. No automatic platform request. Existing administrators are never replaced.');
  await stopped;if(runtimeFailure)throw runtimeFailure;
  }
@@ -113,6 +117,7 @@ finally{
  // Never rm containers or volumes. Only stop containers started by this run.
  for(const id of startedContainers.reverse())try{verifyOwnership('container',id);docker(['stop','--time','5',id]);}catch(e){process.exitCode=1;console.error(diagnosticText(diagnostic(e,'cleanup')));}
  if(lock){try{if(childrenExited)await writeFile(join(directory,'stopped.json'),JSON.stringify({stoppedAt:new Date().toISOString(),dataVolumesRetained:true,platformSessionsRetained:true}),{mode:0o600});}catch{process.exitCode=1;console.error('退出记录写入失败；数据保留。');}finally{try{await lock.release({preserve:!childrenExited});}catch{process.exitCode=1;console.error('锁释放失败；原锁/数据保留，下一次启动仍需验证。');}}}
+ journal?.record(childrenExited&&process.exitCode!==1?'CLEANUP_COMPLETE':'CLEANUP_INCOMPLETE');
  if(failed)process.exitCode=1;
  console.log(!childrenExited?'未能确认本次子进程退出；实例锁保留。':children.length||startedContainers.length?'Stopped owned processes. Persistent containers/volumes, business data and local session references retained.':'本次没有启动或停止业务进程/容器；原实例、数据与端口保留。');
  if(process.platform==='win32')process.exit(process.exitCode||0); // guardian EOF closes the entire owned job, including orphaned grandchildren

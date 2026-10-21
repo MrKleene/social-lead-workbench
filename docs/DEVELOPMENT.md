@@ -118,3 +118,8 @@ Windows当前说明见[平台适配与验收](WINDOWS-ADAPTER-2026-10-20.md)。�
 ## 持久启动诊断
 
 `npm run test:persistent:diagnostics`以虚构Docker输出和自有临时实例验证安全失败，不需要真实Docker引擎。`scripts/persistent-diagnostics.mjs`集中维护固定代码/消息和阶段，禁止输出或持久化原始stderr、连接串或错误对象。只在明确的“资源不存在”响应下走创建分支；网络/权限/超时不能当作不存在。见[启动故障说明](PERSISTENT-STARTUP-DIAGNOSTICS-2026-10-20.md)。
+
+
+### 工具会话与长驻服务（REQ-024）
+
+不要把工具调用返回session ID视为跨对话生命周期保证。Mac已有实例可显式使用 `dev:persistent:background`，由原启动器继续管理相同锁/卷/端口；运行输出转为私有文件，不连接调用方输出管道。不会自动登录、采集、发送或安装系统代理。日常用户前台终端仍支持原命令。新增 `test:persistent:background`只创建虚构进程，测试正常/强制调用方退出、EPIPE拓扑、私有日志及不覆盖已有文件；不得将旧锁在事后补写成正常停止凭证。

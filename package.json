@@ -45,7 +45,9 @@
     "test:persistent:lock": "node --test scripts/persistent-lock.test.mjs",
     "test:persistent:diagnostics": "node --test scripts/persistent-diagnostics.test.mjs",
     "test:comment-rules:ui": "npm run build -w @crm/web && node scripts/test-comment-rules-ui.mjs",
-    "test:semantic:ui": "npm run build -w @crm/web && node scripts/test-semantic-review-ui.mjs"
+    "test:semantic:ui": "npm run build -w @crm/web && node scripts/test-semantic-review-ui.mjs",
+    "dev:persistent:background": "node scripts/dev-persistent-background.mjs",
+    "test:persistent:background": "node --test scripts/persistent-background.test.mjs"
   },
   "devDependencies": {
     "prisma": "6.19.0",
