@@ -12,7 +12,8 @@ async function optional(path){try{await platform.privateFile(path);return await 
 async function atomic(path,value){const temporary=path+'.'+randomUUID()+'.tmp';await writeFile(temporary,JSON.stringify(value),{flag:'wx',mode:0o600});try{await rename(temporary,path);}finally{await unlink(temporary).catch(e=>{if(e.code!=='ENOENT')throw e;});}}
 async function guard(root,directory){
  let binary;try{binary=buildInstanceLock(root);}catch{throw new LockError('LOCK_HELPER_BUILD_FAILED');}
- const child=spawn(binary,[join(directory,'.operation.guard')],{stdio:['pipe','pipe','ignore'],env:platform.minimalEnvironment()});child.stdin.on('error',()=>{});
+ // Detached from the terminal group; stdin EOF still ties lifetime to this parent.
+ const child=spawn(binary,[join(directory,'.operation.guard')],{detached:true,stdio:['pipe','pipe','ignore'],env:platform.minimalEnvironment()});child.stdin.on('error',()=>{});
  let released=false;const ended=new Promise(ok=>{child.once('exit',ok);child.once('error',()=>ok(74));});
  const lost=ended.then(()=>{if(!released)throw new LockError('LOCK_GUARD_LOST');});lost.catch(()=>{});
  let bootId;try{bootId=await new Promise((ok,no)=>{let text='';const timer=setTimeout(()=>{child.kill();no(new LockError('LOCK_GUARD_TIMEOUT'));},10000);const fail=code=>{clearTimeout(timer);no(new LockError(code===73?'LOCK_ACTIVE':'LOCK_GUARD_FAILED'));};child.once('error',()=>fail(74));child.once('exit',fail);child.stdout.on('data',b=>{text+=b;if(text.length>200){child.kill();return fail(74);}if(!text.includes('\n'))return;try{const data=JSON.parse(text);if(!uuid(data.bootId))throw Error();clearTimeout(timer);ok(data.bootId);}catch{fail(74);}});});}catch(e){released=true;child.stdin.end();await ended;throw e;}
@@ -34,7 +35,7 @@ export async function acquireInstanceLock({root,directory,name,mode,prepareRecov
  if(process.platform!=='darwin'){
   if(prepareRecovery)throw new LockError('LOCK_RECOVERY_MAC_ONLY');
   const token=randomUUID();await writeFile(file,JSON.stringify({pid:process.pid,token,startedAt:new Date().toISOString()}),{flag:'wx',mode:0o600});
-  return {lost:new Promise(()=>{}),async release(){const value=JSON.parse(await readFile(file));if(value.token!==token)throw new LockError('LOCK_CHANGED');await unlink(file);}};
+  return {lost:new Promise(()=>{}),async release({preserve=false}={}){const value=JSON.parse(await readFile(file));if(value.token!==token)throw new LockError('LOCK_CHANGED');if(!preserve)await unlink(file);}};
  }
  const owned=await guard(root,directory);let token;
  try{
@@ -57,10 +58,11 @@ export async function acquireInstanceLock({root,directory,name,mode,prepareRecov
   }
   token=randomUUID();const record={kind:'crm-persistent-lock-v2',pid:process.pid,token,bootId:owned.bootId,startedAt:new Date().toISOString()};
   if(bytes)await atomic(file,record);else await writeFile(file,JSON.stringify(record),{flag:'wx',mode:0o600});
-  return {lost:owned.lost,recovered:!!bytes,async release(){try{const current=JSON.parse(await readFile(file));if(current.token!==token)throw new LockError('LOCK_CHANGED');await unlink(file);}finally{await owned.release();}}};
+  return {lost:owned.lost,recovered:!!bytes,async release({preserve=false}={}){try{const current=JSON.parse(await readFile(file));if(current.token!==token)throw new LockError('LOCK_CHANGED');if(!preserve)await unlink(file);}finally{await owned.release();}}};
  }catch(e){await owned.release();throw e;}
 }
-export function lockMessage(code){return ({
+const lockMessages={
+ LOCK_CLEANUP_INCOMPLETE:'本次自有子进程尚未确认退出；保留实例锁和数据，禁止启动第二实例。请保留原终端输出核查。',
  LOCK_HELPER_BUILD_FAILED:'本机锁助手编译失败；需要已安装的Swift工具链，未安装软件或修改原实例。',
  LOCK_GUARD_FAILED:'无法取得或校验系统锁/启动标识；原锁保留，不会猜测恢复。',
  LOCK_GUARD_TIMEOUT:'系统锁助手超时；原锁保留，未启动业务服务。',
@@ -71,4 +73,5 @@ export function lockMessage(code){return ({
  LOCK_CHANGED:'实例锁或运行配置发生变化，恢复已停止；未覆盖其他运行。',
  LOCK_NOT_PRESENT:'没有待恢复的实例锁；未创建实例或启动服务。',
  LOCK_GUARD_LOST:'系统锁守护意外退出；正在停止本次自有服务，保留数据。'
- })[code]||null;}
+ };
+export function lockMessage(code){return Object.hasOwn(lockMessages,code)?lockMessages[code]:null;}

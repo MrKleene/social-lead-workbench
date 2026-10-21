@@ -1,5 +1,7 @@
 # Mac 持久实例锁诊断与恢复（REQ-024）
 
+2026-10-21 更新：本页保留第一次恢复历史；重复停止信号/终端关闭的生命周期修复及当前残留锁边界见[后续修复](PERSISTENT-LOCK-LIFECYCLE-2026-10-21.md)。不要把每次启动失败都归为旧格式锁或Docker未就绪。
+
 ## 已确认的当前故障
 
 用户运行 `npm run dev:persistent` 时被 `operation.lock` 拦住。只读核验原 `.local/persistent/main`：锁和 `running.json` 的PID均为378，启动记录为2026-10-20；原API端口63967、网页端口63968连接被拒绝；归属标签匹配该实例的PostgreSQL、Redis容器仍在运行；没有 `stopped.json`。

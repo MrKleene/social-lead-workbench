@@ -1,4 +1,5 @@
 import platform from '../runtime/platform.cjs';
+import {installStopHandlers,ownedChildrenExited} from './persistent-lifecycle.mjs';
 import {acquireInstanceLock,lockMessage} from './persistent-lock.mjs';
 import {createDocker,StartupError,diagnostic,diagnosticText,saveDiagnostic} from './persistent-diagnostics.mjs';
 import {devNull} from 'node:os';
@@ -48,7 +49,7 @@ async function container(kind){const spec=manifest[kind],image=kind==='postgres'
   docker(['run','--detach','--pull=never','--name',spec.container,'--label',`crm.persistent.instance=${manifest.id}`,'-p',`127.0.0.1:${spec.port}:${inner}`,'-v',`${spec.volume}:${kind==='postgres'?'/var/lib/postgresql/data':'/data'}`,...(kind==='postgres'?['-e','POSTGRES_USER=crm','-e',`POSTGRES_DB=${manifest.database}`,'-e','POSTGRES_PASSWORD']:[]),image,...(kind==='redis'?['redis-server','--appendonly','yes']:[])],{POSTGRES_PASSWORD:secret.databasePassword});startedContainers.push(spec.container);
  }
 }
-for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{stopping=true;finish();for(const c of children)stopGroup(c);});
+installStopHandlers(()=>{stopping=true;finish();for(const c of children)stopGroup(c);});
 // Windows ChildProcess.kill is forceful. Only the owned offline test fixture accepts this IPC stop.
 if(process.platform==='win32'&&fixture&&process.connected)process.on('message',m=>{if(m?.kind==='STOP_OWNED_FIXTURE'){stopping=true;finish();for(const c of children)stopGroup(c);}});
 try{
@@ -93,16 +94,26 @@ try{
  console.log(`PERSISTENT ${manifest.mode.toUpperCase()} workbench: ${base}`);console.log(`Instance: ${directory}`);console.log('Business data and device references survive Ctrl+C. No automatic platform request. Existing administrators are never replaced.');
  await stopped;if(runtimeFailure)throw runtimeFailure;
  }
-}catch(e){safeError();const report=diagnostic(e,stage);console.error(diagnosticText(report));if(lock)try{await saveDiagnostic(directory,report);}catch{console.error('未能写入脱敏失败记录；请保留上面的错误代码和阶段。');}const recoveryCommand=`npm run dev:persistent -- ${offline?'--offline ':''}${name==='main'?'':`--instance ${name} `}--prepare-lock-recovery`;const detail=lockMessage(e?.code)?.replace('npm run dev:persistent -- --prepare-lock-recovery',recoveryCommand);if(detail)console.error(detail);else if(e?.code==='EEXIST')console.error('实例已被占用或锁文件存在；没有覆盖。请检查原启动终端。');process.exitCode=1;}
+}catch(e){
+ safeError();const report=diagnostic(e,stage);
+ const recoveryCommand=`npm run dev:persistent -- ${offline?'--offline ':''}${name==='main'?'':`--instance ${name} `}--prepare-lock-recovery`;
+ const detail=lockMessage(e?.code)?.replace('npm run dev:persistent -- --prepare-lock-recovery',recoveryCommand);
+ if(detail)report.message=detail;
+ console.error(diagnosticText(report));
+ if(lock)try{await saveDiagnostic(directory,report);}catch{console.error('未能写入脱敏失败记录；请保留上面的错误代码和阶段。');}
+ if(e?.code==='EEXIST')console.error('实例已被占用或锁文件存在；没有覆盖。请检查原启动终端。');process.exitCode=1;
+}
 finally{
  stopping=true;for(const pid of process.platform==='win32'?[]:ownedGroups)try{process.kill(-pid,'SIGTERM');}catch{}
  for(const c of children)stopGroup(c);if(children.length)await new Promise(ok=>setTimeout(ok,1800));
  for(const pid of process.platform==='win32'?[]:ownedGroups)try{process.kill(-pid,'SIGKILL');}catch{}
  for(const c of children)if(process.platform!=='win32'&&c.exitCode===null&&c.signalCode===null&&c.pid)try{process.kill(-c.pid,'SIGKILL');}catch{}
+ const childrenExited=await ownedChildrenExited(children);
+ if(!childrenExited){process.exitCode=1;console.error(diagnosticText(diagnostic(new StartupError('LOCK_CLEANUP_INCOMPLETE'),'cleanup')));}
  // Never rm containers or volumes. Only stop containers started by this run.
  for(const id of startedContainers.reverse())try{verifyOwnership('container',id);docker(['stop','--time','5',id]);}catch(e){process.exitCode=1;console.error(diagnosticText(diagnostic(e,'cleanup')));}
- if(lock){try{await writeFile(join(directory,'stopped.json'),JSON.stringify({stoppedAt:new Date().toISOString(),dataVolumesRetained:true,platformSessionsRetained:true}),{mode:0o600});}catch{process.exitCode=1;console.error('退出记录写入失败；数据保留。');}finally{try{await lock.release();}catch{process.exitCode=1;console.error('锁释放失败；原锁/数据保留，下一次启动仍需验证。');}}}
+ if(lock){try{if(childrenExited)await writeFile(join(directory,'stopped.json'),JSON.stringify({stoppedAt:new Date().toISOString(),dataVolumesRetained:true,platformSessionsRetained:true}),{mode:0o600});}catch{process.exitCode=1;console.error('退出记录写入失败；数据保留。');}finally{try{await lock.release({preserve:!childrenExited});}catch{process.exitCode=1;console.error('锁释放失败；原锁/数据保留，下一次启动仍需验证。');}}}
  if(failed)process.exitCode=1;
- console.log(children.length||startedContainers.length?'Stopped owned processes. Persistent containers/volumes, business data and local session references retained.':'本次没有启动或停止业务进程/容器；原实例、数据与端口保留。');
+ console.log(!childrenExited?'未能确认本次子进程退出；实例锁保留。':children.length||startedContainers.length?'Stopped owned processes. Persistent containers/volumes, business data and local session references retained.':'本次没有启动或停止业务进程/容器；原实例、数据与端口保留。');
  if(process.platform==='win32')process.exit(process.exitCode||0); // guardian EOF closes the entire owned job, including orphaned grandchildren
 }

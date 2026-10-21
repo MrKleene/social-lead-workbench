@@ -59,3 +59,7 @@ for(const scenario of ['daemon','image'])test('launcher '+scenario+' failure is 
   const calls=(await readFile(actionFile,'utf8')).trim().split('\n').map(x=>JSON.parse(x));assert.deepEqual(calls,scenario==='daemon'?[['info','--format','{{.ServerVersion}}']]:[['info','--format','{{.ServerVersion}}'],['image','inspect','--format','{{.Id}}','postgres:17']]);
  }finally{await rm(directory,{recursive:true});await rm(bin,{recursive:true});}
 });
+
+test('lock diagnostics expose the precise whitelisted code without raw errors',async()=>{
+ for(const code of ['LOCK_REBOOT_PROOF_REQUIRED','LOCK_ACTIVE','LOCK_GUARD_LOST','LOCK_CLEANUP_INCOMPLETE']){const error=Error(secret);error.code=code;const report=diagnostic(error,'lock');assert.equal(report.code,code);assert(diagnosticText(report).includes('['+code+']'));assert(!JSON.stringify(report).includes(secret));}
+});

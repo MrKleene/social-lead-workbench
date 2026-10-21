@@ -117,3 +117,5 @@ npm run test:windows:native   # 仅Windows11 x64；Mac明确跳过
 锁恢复成功后仍退出时，查看[启动失败诊断](docs/PERSISTENT-STARTUP-DIAGNOSTICS-2026-10-20.md)。Docker引擎不可连接应先打开Docker Desktop并等待就绪，无需重复重启或恢复锁。
 
 独立评论规则与零匹配修复见[2026-10-21交付说明](docs/COMMENT-RULES-2026-10-21.md)。旧配置需用户主动启用并保存；新增迁移仅添加三个可空JSON字段，正常启动时应用，不会自动回补或重跑历史评论。
+
+连续Ctrl+C或关闭终端造成反复残留锁的修复与当前恢复边界见[锁生命周期说明](docs/PERSISTENT-LOCK-LIFECYCLE-2026-10-21.md)。正常退出现在等待自有子进程结束再解锁；缺少退出证明的既有残留仍不会自动删除。

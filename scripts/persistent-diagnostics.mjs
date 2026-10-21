@@ -1,5 +1,6 @@
 // Only fixed codes/messages are exposed. Never persist raw stderr, argv or env.
 import {spawnSync} from 'node:child_process';
+import {lockMessage} from './persistent-lock.mjs';
 import {writeFile,rename,unlink} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
@@ -63,8 +64,8 @@ const knownErrors={
 };
 const codeErrors={P1000:'DATABASE_AUTH_FAILED',P1001:'DATABASE_UNREACHABLE',P1002:'DATABASE_TIMEOUT',EACCES:'LOCAL_PERMISSION_DENIED',EPERM:'LOCAL_PERMISSION_DENIED',ENOENT:'LOCAL_FILE_MISSING',ENOSPC:'LOCAL_STORAGE_FULL',EEXIST:'INSTANCE_LOCK_CONFLICT'};
 export function diagnostic(error,stage){
- const code=error instanceof StartupError&&Object.hasOwn(messages,error.code)?error.code:(Object.hasOwn(codeErrors,error?.code)?codeErrors[error.code]:undefined)||(Object.hasOwn(knownErrors,error?.message)?knownErrors[error.message]:undefined)||(error instanceof SyntaxError?'LOCAL_CONFIG_INVALID':'STARTUP_FAILED');
- const value={kind:'crm-startup-failure-v1',code,stage:Object.hasOwn(stages,stage)?stage:'local',message:messages[code]};
+ const code=(typeof error?.code==='string'&&lockMessage(error.code)?error.code:undefined)||(error instanceof StartupError&&Object.hasOwn(messages,error.code)?error.code:(Object.hasOwn(codeErrors,error?.code)?codeErrors[error.code]:undefined)||(Object.hasOwn(knownErrors,error?.message)?knownErrors[error.message]:undefined)||(error instanceof SyntaxError?'LOCAL_CONFIG_INVALID':'STARTUP_FAILED'));
+ const value={kind:'crm-startup-failure-v1',code,stage:Object.hasOwn(stages,stage)?stage:'local',message:lockMessage(code)||messages[code]};
  if(error instanceof StartupError&&Number.isInteger(error.exitCode)&&error.exitCode>=0&&error.exitCode<=255)value.exitCode=error.exitCode;
  return value;
 }

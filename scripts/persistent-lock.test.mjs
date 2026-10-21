@@ -44,3 +44,19 @@ test('prepare CLI completes without credentials, database, platform preflight or
  }finally{await rm(directory,{recursive:true});}
 });
 async function platformDirectory(directory){const {mkdir}=await import('node:fs/promises');await mkdir(directory,{recursive:true,mode:0o700});}
+
+for(const signals of [['SIGINT'],['SIGINT','SIGINT','SIGTERM'],['SIGHUP','SIGHUP']])test('terminal signal lifecycle '+signals.join('/')+' retains guard through cleanup and allows same-boot restart',{skip:!mac},()=>fixture(async o=>{
+ const lockModule=new URL('./persistent-lock.mjs',import.meta.url).href,lifecycleModule=new URL('./persistent-lifecycle.mjs',import.meta.url).href;
+ const source=`import {acquireInstanceLock} from ${JSON.stringify(lockModule)};import {installStopHandlers} from ${JSON.stringify(lifecycleModule)};let finish;const done=new Promise(ok=>finish=ok);let stops=0;installStopHandlers(()=>{stops++;finish();});const held=await acquireInstanceLock(${JSON.stringify(o)});console.log('ready');try{await done;}finally{console.log('cleaning');await new Promise(ok=>setTimeout(ok,700));await held.release();console.log('released:'+stops);}`;
+ const child=spawn(process.execPath,['--input-type=module','-e',source],{detached:true,stdio:['ignore','pipe','pipe']});let output='';child.stdout.on('data',b=>output+=b);child.stderr.on('data',b=>output+=b);const ended=new Promise(ok=>child.once('exit',(code,signal)=>ok({code,signal})));
+ const until=async word=>{const end=Date.now()+15000;while(!output.includes(word)){if(child.exitCode!==null||child.signalCode!==null||Date.now()>end)throw Error('Fixture lifecycle failed: '+output);await new Promise(ok=>setTimeout(ok,10));}};
+ try{await until('ready');process.kill(-child.pid,signals[0]);await until('cleaning');for(const signal of signals.slice(1)){process.kill(-child.pid,signal);await new Promise(ok=>setTimeout(ok,30));}await rejected(acquireInstanceLock(o),'LOCK_ACTIVE');assert.deepEqual(await ended,{code:0,signal:null});assert.match(output,/released:1/);await assert.rejects(lstat(path(o)),{code:'ENOENT'});const next=await acquireInstanceLock(o);await next.release();}
+ finally{try{process.kill(-child.pid,'SIGKILL');}catch{}await ended;}
+}));
+
+test('unconfirmed child exit keeps operation record instead of advertising clean release',{skip:!mac},()=>fixture(async o=>{
+ const {ownedChildrenExited}=await import('./persistent-lifecycle.mjs');
+ assert.equal(await ownedChildrenExited([{done:Promise.resolve(0)}],20),true);
+ assert.equal(await ownedChildrenExited([{done:new Promise(()=>{})}],20),false);
+ const lock=await acquireInstanceLock(o),before=await read(o);await lock.release({preserve:true});assert.equal(await read(o),before);await rejected(acquireInstanceLock(o),'LOCK_REBOOT_PROOF_REQUIRED');
+}));
