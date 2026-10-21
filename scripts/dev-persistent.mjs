@@ -1,4 +1,5 @@
 import platform from '../runtime/platform.cjs';
+import {serveControl} from './workbench-control.mjs';
 import {supervise,inheritedLease,watchSupervisor} from './persistent-supervision.mjs';
 import {lifecycleJournal} from './persistent-journal.mjs';
 import {installStopHandlers,ownedChildrenExited} from './persistent-lifecycle.mjs';
@@ -32,7 +33,7 @@ const directory=join(root,'.local',offline?'persistent-offline':'persistent',nam
 if(!offline&&!prepareRecovery)await preflight({root,home:process.env.HOME,session:'persistent-preflight',port:18162,env:envBase});
 process.umask(0o077);
 const children=[],ownedGroups=new Set(),startedContainers=[];
-let journal,supervisorLife;const managed=!!process.env.CRM_SUPERVISED_BOOT;const launchId=randomUUID();
+let journal,supervisorLife,control;const managed=!!process.env.CRM_SUPERVISED_BOOT;const launchId=randomUUID();
 process.on('exit',code=>{journal?.record('EXIT',{code});journal?.close();});
 let stage='local',runtimeFailure,manifest,secret,lock=false,stopping=false,finish,failed=false,newInstance=false;
 const stopped=new Promise(ok=>{finish=ok;});
@@ -82,6 +83,7 @@ try{
  if(!/^[a-f0-9-]{36}$/.test(manifest.id)||!/^[a-f0-9-]{36}$/.test(manifest.deviceId)||manifest.database!==(fixture?'crm_persistent_test':'crm'))throw Error('Invalid instance metadata');
  for(const p of [manifest.apiPort,manifest.webPort,manifest.postgres?.port,manifest.redis?.port])if(!Number.isInteger(p)||p<1024||p>65535||[18060,18061].includes(p))throw Error('Invalid saved port');
  for(const [kind,suffix] of [['postgres','pg'],['redis','redis']])if(manifest[kind].container!==`crm-persist-${manifest.id}-${suffix}`||manifest[kind].volume!==`crm-persist-${manifest.id}-${suffix}-data`)throw Error('Invalid resource reference');
+ if(managed)control=await serveControl({root,directory,instanceId:manifest.id,role:'backend',phase:()=>stopping?'stopping':stage==='services'?'running':'starting',onStop:()=>process.emit('SIGINT')});
  stage='credentials';secret ||=await json(join(directory,'secret.json'));if(!/^[a-f0-9]{64}$/.test(secret.databasePassword))throw Error('Invalid local database credential');
  stage='volumes';volume(manifest.postgres.volume);volume(manifest.redis.volume);
  stage='containers';await container('postgres');await container('redis');
@@ -121,6 +123,7 @@ finally{
  if(!childrenExited){process.exitCode=1;console.error(diagnosticText(diagnostic(new StartupError('LOCK_CLEANUP_INCOMPLETE'),'cleanup')));}
  // Database/Redis have an independent lifetime. Never stop or remove them on app exit.
  if(lock){try{if(childrenExited)await writeFile(join(directory,'stopped.json'),JSON.stringify({stoppedAt:new Date().toISOString(),dataVolumesRetained:true,platformSessionsRetained:true}),{mode:0o600});}catch{process.exitCode=1;console.error('退出记录写入失败；数据保留。');}finally{try{await lock.release({preserve:!childrenExited});}catch{process.exitCode=1;console.error('锁释放失败；原锁/数据保留，下一次启动仍需验证。');}}}
+ await control?.close();
  journal?.record(childrenExited&&process.exitCode!==1?'CLEANUP_COMPLETE':'CLEANUP_INCOMPLETE');
  if(failed)process.exitCode=1;
  console.log(!childrenExited?'未能确认本次子进程退出；实例锁保留。':children.length||startedContainers.length?'Stopped owned processes. Persistent containers/volumes, business data and local session references retained.':'本次没有启动或停止业务进程/容器；原实例、数据与端口保留。');

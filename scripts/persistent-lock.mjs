@@ -11,10 +11,11 @@ const uuid=s=>typeof s==='string'&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}
 export class LockError extends Error {constructor(code){super(code);this.code=code;}}
 async function optional(path){try{await platform.privateFile(path);return await readFile(path);}catch(e){if(e.code==='ENOENT')return null;throw e;}}
 async function atomic(path,value){const temporary=path+'.'+randomUUID()+'.tmp';await writeFile(temporary,JSON.stringify(value),{flag:'wx',mode:0o600});try{await rename(temporary,path);}finally{await unlink(temporary).catch(e=>{if(e.code!=='ENOENT')throw e;});}}
-async function guard(root,directory){
+export async function processGuard(root,directory,basename='.operation.guard'){
+ if(!['.operation.guard','.web.guard','.command.guard'].includes(basename))throw new LockError('LOCK_METADATA_INVALID');
  let binary;try{binary=buildInstanceLock(root);}catch{throw new LockError('LOCK_HELPER_BUILD_FAILED');}
  // Detached from the terminal group; stdin EOF still ties lifetime to this parent.
- const child=spawn(binary,[join(directory,'.operation.guard')],{detached:true,stdio:['pipe','pipe','ignore'],env:platform.minimalEnvironment()});child.stdin.on('error',()=>{});
+ const child=spawn(binary,[join(directory,basename)],{detached:true,stdio:['pipe','pipe','ignore'],env:platform.minimalEnvironment()});child.stdin.on('error',()=>{});
  let released=false;const ended=new Promise(ok=>{child.once('exit',ok);child.once('error',()=>ok(74));});
  const lost=ended.then(()=>{if(!released)throw new LockError('LOCK_GUARD_LOST');});lost.catch(()=>{});
  let bootId;try{bootId=await new Promise((ok,no)=>{let text='';const timer=setTimeout(()=>{child.kill();no(new LockError('LOCK_GUARD_TIMEOUT'));},10000);const fail=code=>{clearTimeout(timer);no(new LockError(code===73?'LOCK_ACTIVE':'LOCK_GUARD_FAILED'));};child.once('error',()=>fail(74));child.once('exit',fail);child.stdout.on('data',b=>{text+=b;if(text.length>200){child.kill();return fail(74);}if(!text.includes('\n'))return;try{const data=JSON.parse(text);if(!uuid(data.bootId))throw Error();clearTimeout(timer);ok(data.bootId);}catch{fail(74);}});});}catch(e){released=true;child.stdin.end();await ended;throw e;}
@@ -39,7 +40,7 @@ export async function acquireInstanceLock({root,directory,name,mode,prepareRecov
   return {lost:new Promise(()=>{}),async release({preserve=false}={}){const value=JSON.parse(await readFile(file));if(value.token!==token)throw new LockError('LOCK_CHANGED');if(!preserve)await unlink(file);}};
  }
  const lease=inheritedLease(directory);
- const owned=lease?{...lease,lost:new Promise(()=>{}),async release(){}}:await guard(root,directory);let token;
+ const owned=lease?{...lease,lost:new Promise(()=>{}),async release(){}}:await processGuard(root,directory);let token;
  try{
   const bytes=await optional(file);
   if(prepareRecovery&&!bytes)throw new LockError('LOCK_NOT_PRESENT');

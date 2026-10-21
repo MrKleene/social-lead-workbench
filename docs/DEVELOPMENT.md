@@ -49,26 +49,26 @@
 
 ## 命令分类与精简记录
 
-日常持久实例使用 `dev:persistent:backend` + `dev:persistent:web`，或一键 `dev:persistent`。保留以下命令是因为承担不同职责，不要把测试命令当日常启动入口。
+日常持久实例使用 `npm start` / `npm stop` / `npm restart` / `npm run status`；`npm run dev` 仅独立前端。旧 `dev:persistent:*` 保留兼容，详情见 [命令说明](COMMANDS.md)。保留以下命令是因为承担不同职责，不要把测试命令当日常启动入口。
 
 | 类别 | 保留入口 | 使用范围 |
 | --- | --- | --- |
-| 日常工作台 | `dev:persistent` | 同一持久实例；首次建CRM管理员，以后网页登录；平台扫码由UI另行确认 |
+| 日常工作台 | `start`、`stop`、`restart`、`status`、`dev` | 同一持久实例；首次建CRM管理员，以后网页登录；平台扫码由UI另行确认 |
 | 离线人工检查 | `dev:persistent:offline`、`dev:mock:isolated`、`dev:mcp:offline` | 分别为持久虚构演示、临时CRM、临时协议夹具 |
 | 构建/类型/单元 | `build`、`typecheck`、`test`、`test:workbench` | `pretest` / `pretypecheck` 自动构建共享契约，仍需保留 |
 | 数据库/队列 | `test:integration`、`test:queue`、`test:mcp`、`test:mock:isolated`、`test:worker` | 依各自数据库安全门槛执行，优先自建隔离资源的入口 |
 | 登录/设备/持久化回归 | `test:real:preflight`、`test:real:offline`、`test:xhs:login:browser`、`test:persistent` | 均保留；`real` 是历史协议名称，测试使用虚构资源，不是真实平台验收 |
-| 普通开发 | `dev`、`dev:collector`、`local:env` | 手动Compose开发路径；不用于现有持久实例 |
+| 旧 Compose 开发 | `dev:legacy`、`dev:collector`、`local:env` | 手动Compose开发路径；不用于现有持久实例 |
 | 数据库与用户管理 | `db:generate`、`db:migrate`、`db:seed`、`admin:init`、`user:create` | 保留迁移与初始化工具；不能对未知库播种或初始化 |
 | 协议预留检查 | `agent:check` | 保留远程协议自检，不代表远程平台执行已开放 |
 
-清理6个过时入口：重复别名 `dev:mcp:isolated`；旧分阶段 `xhs:real:prepare`、`xhs:real:login`、`dev:xhs:real`；临时扫码 `dev:xhs:login`、`dev:xhs:login:offline`。删除无人引用的旧 `scripts/xhs-real.mjs`。`real-mcp/core.mjs` 被持久启动器和安全预检测试使用，必须保留；`xhs-login-workbench.mjs` 被浏览器回归使用，仅保留显式 `--offline` 模式。工作区命令和Docker构建引用仍保留；仓库当前没有CI配置。
+前轮已清理6个过时入口（非本轮新增删除）：重复别名 `dev:mcp:isolated`；旧分阶段 `xhs:real:prepare`、`xhs:real:login`、`dev:xhs:real`；临时扫码 `dev:xhs:login`、`dev:xhs:login:offline`。删除无人引用的旧 `scripts/xhs-real.mjs`。`real-mcp/core.mjs` 被持久启动器和安全预检测试使用，必须保留；`xhs-login-workbench.mjs` 被浏览器回归使用，仅保留显式 `--offline` 模式。工作区命令和Docker构建引用仍保留；仓库当前没有CI配置。
 
 清理不修改schema、数据库、卷、`.local`或现有配置，也不停止任何服务。npm脚本列表在文件更新后生效；新初始化文案在下次运行相关入口时生效，**不需要为本次整理中断正在测试的实例**。备份/恢复说明继续保留在持久工作台文档。
 
 ## 本地开发与验证入口
 
-当前持久账号链路优先使用[账号只读联测说明](ACCOUNT-READ-COLLECTION-2026-10-20.md)中的`npm run dev:persistent`。首次管理员初始化、设备批准、扫码和逐次只读确认分别有各自门槛。启动器拒绝混入旧应用环境变量，也拒绝发现项目/Prisma的旧`.env`后静默加载；遇到冲突先核对环境方案，不擅自删除或读取旧秘密。
+当前持久实例日常用 `npm start`，首次交互初始化仍用 `npm run dev:persistent`。账号链路另见[账号只读联测说明](ACCOUNT-READ-COLLECTION-2026-10-20.md)。首次管理员初始化、设备批准、扫码和逐次只读确认分别有各自门槛。启动器拒绝混入旧应用环境变量，也拒绝发现项目/Prisma的旧`.env`后静默加载；遇到冲突先核对环境方案，不擅自删除或读取旧秘密。
 
 以下命令是可选验收入口，按改动选择，不在文档维护时自动运行：
 
@@ -96,7 +96,7 @@ npm run db:migrate
 npm run db:seed         # 仅虚构数据，不创建默认用户
 npm run admin:init      # 交互初始化，已有管理员不重建
 npm run user:create    # 按需创建销售
-npm run dev
+npm run dev:legacy
 ```
 
 该路径采用回环访问；不能仅修改监听地址就宣称完成生产部署。`compose.yaml`的full profile是部署定义，历史验收见[Compose记录](COMPOSE-VALIDATION.md)；当前远程执行、多电脑生产访问仍需REQ-025独立验收。网页用户管理、密码恢复、生产分页与容量等属于待设计事项，不由这些命令自动实现。
@@ -127,3 +127,10 @@ Windows当前说明见[平台适配与验收](WINDOWS-ADAPTER-2026-10-20.md)。�
 ## 受监督生命周期（REQ-024，当前）
 
 Mac新v3实例将系统运行锁与磁盘状态记录分离，数据库常驻、前端独立、后台受原生进程组监督；旧v2限制不回溯放宽。`test:persistent:supervision`测试故障注入，`test:persistent`测试完整离线业务/语义/跨重启保留。详见[当前生命周期说明](PERSISTENT-SUPERVISION-2026-10-21.md)。
+
+
+### 本轮短命令审计
+
+根目录原 `dev` 同时启动读取手动 `.env` 的 API 和普通端口网页，与原 main 不是同一套环境；迁到 `dev:legacy` 保留 Compose 开发职责。`dev` 改为原实例的独立前端入口，避免默认命令误连另一套库。此前仍在使用的脚本没有仅因名字长而删除。
+
+已检查根/工作区 package scripts、scripts 内调用、README、当前/历史 docs、Dockerfile 和 compose.yaml；仓库无 `.github` CI。迁移、播种、账号初始化、设备/协议/锁测试及离线恢复工具均有职责或引用，继续保留。历史验收文档中的旧命令是当时实际执行记录，不批量改写成新命令。新增 `test:commands` 使用独立离线实例，新控制通道还由 `node --test scripts/workbench-control.test.mjs` 验证。
