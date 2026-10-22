@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import type {Run} from '@/features/collection/types';
+import type {Config,Run} from '@/features/collection/types';
 import type {ArchivedPost} from '@/features/collection/archive-data';
 import {progressMessages,mergeProgress,runFinished} from './collection-progress';
 const run:Run={id:'fictional-run',status:'RUNNING',scenario:'BASELINE',reason:null,requests:0,observed:0,matched:0,added:0,notices:0,createdAt:'2026-10-22T00:00:00Z',finishedAt:null};
@@ -12,4 +12,36 @@ describe('observed collection progress',()=>{
  it.each(['PARTIAL','FAILED','PAUSED','UNKNOWN'])('keeps %s visible as a warning, not complete',status=>{const rows=progressMessages({...run,status,reason:'TIMEOUT'},[]);expect(rows[0].warning).toBe(true);expect(rows[0].title).not.toBe('批次完成');expect(rows[0].detail).toContain('超时');});
  it('completed means a finite batch, never all comments',()=>{expect(progressMessages({...run,status:'COMPLETE'},[])[0].detail).toContain('不代表全部评论');expect(runFinished({...run,status:'COMPLETE'})).toBe(true);expect(runFinished(run)).toBe(false);});
  it('different tasks have different event identities',()=>expect(progressMessages({...run,id:'second'},[])[0].id).not.toBe(progressMessages(run,[])[0].id));
+});
+
+// Terminal records are never adopted implicitly as the current task.
+import {collectionTaskSession} from './collection-task-session';
+const config=(runs:Run[],activeRunId:string|null=null)=>({id:'config',runs,activeRunId} as Config);
+describe('current collection versus history',()=>{
+ it.each(['FAILED','COMPLETE','PARTIAL','PAUSED'])('opens idle with old %s and retains history',status=>{
+  const old={...run,status};const view=collectionTaskSession(config([old]),[old]);
+  expect(view.run).toBeUndefined();expect(view.currentId).toBe('');expect(view.runs).toEqual([old]);expect(view.pending).toBe(false);
+ });
+ it.each(['QUEUED','RUNNING'])('recovers server %s without a local id',status=>{
+  const live={...run,status};expect(collectionTaskSession(config([live])).run).toEqual(live);
+ });
+ it('keeps explicitly started terminal feedback for this visit',()=>{
+  const done={...run,status:'FAILED'};expect(collectionTaskSession(config([done]),[],run.id).currentRun).toEqual(done);
+ });
+ it('selects historical tasks explicitly without replacing current identity',()=>{
+  const old={...run,id:'old',status:'FAILED'};const view=collectionTaskSession(config([run],run.id),[old],run.id,old.id);
+  expect(view.history).toBe(true);expect(view.run).toEqual(old);expect(view.currentRun).toEqual(run);
+ });
+ it('current list state wins over stale detail',()=>{
+  const done={...run,status:'COMPLETE'};expect(collectionTaskSession(config([done]),[run],run.id).run?.status).toBe('COMPLETE');
+ });
+ it('does not attach a different configuration or missing task',()=>{
+  const view=collectionTaskSession(config([]),[],run.id);expect(view.run).toBeUndefined();expect(view.pending).toBe(true);
+ });
+ it('blocks unresolved active pointer instead of substituting old failure',()=>{
+  const old={...run,status:'FAILED'};const view=collectionTaskSession(config([old],'new'),[old]);expect(view.pending).toBe(true);expect(view.run).toBeUndefined();
+ });
+ it('blocks terminal detail while server still declares task active',()=>{
+  expect(collectionTaskSession(config([{...run,status:'FAILED'}],run.id)).pending).toBe(true);
+ });
 });
