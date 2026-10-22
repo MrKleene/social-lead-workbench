@@ -642,6 +642,23 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
  const rules={version:1 as const,target:'寻找明确请求毕业论文选题帮助的学生',reviewThreshold:70};
  const sample:import('../src/collection/contract').ReadAdapter={mode:'MOCK',platform:'XHS',search:async()=>({items:[{id:'demo-collect-archive-post',title:'虚构毕业论文讨论'}],complete:true}),post:async p=>({...p,body:'讨论各专业选题'}),comments:async()=>({items:[{id:'demo-collect-archive-root',userId:'demo-collect-archive-a',nickname:'虚构甲',text:'护理专业如何选题',hasReplies:true}],complete:true}),replies:async()=>({items:[{id:'demo-collect-archive-reply',userId:'demo-collect-archive-b',nickname:'虚构乙',text:'同问',hasReplies:false,parentId:'demo-collect-archive-root'}],complete:true})};
  async function archive(){const c=await config('不会命中此搜索词',{semanticRules:rules});const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,sample);return c;}
+ it('逐篇只读接口按任务归属聚合，不借用最近20篇或全库计数',async()=>{
+  const c=await archive(),first=await db.collectionRun.findFirstOrThrow({where:{configId:c.id}}),p=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}});
+  await db.capturedPost.createMany({data:Array.from({length:25},(_,i)=>({configId:c.id,runId:first.id,lastRunId:'not-this-run',platformPostId:'demo-other-'+i,contentHash:'other-'+i,snapshot:{title:'非本轮帖子'},coverage:'PARTIAL'}))});
+  const path=`/collection/configs/${c.id}/runs/${first.id}/posts`,before=await read(path);expect(before.status).toBe(200);expect(before.body).toMatchObject({version:1,runId:first.id,configId:c.id,availability:'AVAILABLE',limited:false});expect(before.body.items).toHaveLength(1);
+  expect(before.body.items[0]).toMatchObject({platformPostId:p.platformPostId,title:'虚构毕业论文讨论',body:'讨论各专业选题',savedCount:2,rootCount:1,replyCount:1,newCount:2,reusedCount:0});
+  expect((await read(path,a)).status).toBe(403);expect((await api().get('/api'+path)).status).toBe(401);expect((await read(`/collection/configs/wrong/runs/${first.id}/posts`)).status).toBe(404);
+  const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,sample);
+  expect((await read(path)).body).toMatchObject({availability:'SUPERSEDED',items:[]});
+  const latest=await read(`/collection/configs/${c.id}/runs/${r.id}/posts`);expect(latest.body.items).toHaveLength(1);expect(latest.body.items[0]).toMatchObject({savedCount:2,rootCount:1,replyCount:1,newCount:0,reusedCount:2});
+  expect(await db.capturedPost.count({where:{configId:c.id}})).toBe(26);expect(await db.semanticModelCall.count({where:{configId:c.id}})).toBe(0);
+ });
+ it('逐篇计数按评论ID去重，保留无正文和部分范围，不暴露原始JSON附加字段',async()=>{
+  const c=await archive(),r=await db.collectionRun.findFirstOrThrow({where:{configId:c.id}}),p=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}}),comment=await db.capturedComment.findFirstOrThrow({where:{configId:c.id}});
+  await db.capturedComment.create({data:{configId:c.id,runId:r.id,lastRunId:r.id,postId:p.id,platformCommentId:comment.platformCommentId,contentHash:'additional-context',contextVersion:'another',snapshot:comment.snapshot as Prisma.InputJsonValue,isDemo:true}});
+  await db.capturedPost.update({where:{id:p.id},data:{snapshot:{title:'',body:'',coverUrl:'https://unsafe.invalid/?token=FICTIONAL',xsecToken:'FICTIONAL_SECRET'},coverage:'PARTIAL',stopReason:'BUDGET'}});
+  const response=await read(`/collection/configs/${c.id}/runs/${r.id}/posts`);expect(response.body.items[0]).toMatchObject({title:'',body:'',savedCount:2,rootCount:1,replyCount:1,coverage:'PARTIAL',stopReason:'BUDGET'});expect(JSON.stringify(response.body)).not.toMatch(/FICTIONAL|userId|xsecToken/);
+ });
  it('空文字及回复照实存档并去重，原文API不造内容且不产生模型调用',async()=>{
   const c=await config('空文字隔离'),adapter={...sample,post:async(p:import('../src/collection/contract').Post)=>({...p,body:''}),comments:async()=>({items:[{id:'demo-collect-empty-root',userId:'demo-collect-empty-user',nickname:'',text:'',hasReplies:true}],complete:true}),replies:async()=>({items:[{id:'demo-collect-empty-reply',userId:'demo-collect-empty-user',nickname:'',text:' \t\n',parentId:'demo-collect-empty-root',hasReplies:false}],complete:true})};
   const calls=await db.semanticModelCall.count(),leads=await db.lead.count();

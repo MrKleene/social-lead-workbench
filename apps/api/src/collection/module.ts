@@ -25,6 +25,8 @@ class CollectionController {
     private service: CollectionService, @Inject(SemanticService) private semantic:SemanticService, @Inject(QwenMatchingService) private qwen:QwenMatchingService, @Inject(CaptureService) private captures:CaptureService) { }
     @Post("configs/:id/capture-preview")
     capturePreview(@Req() r:AuthedRequest,@Param("id") id:string){const b=parse(z.object({captureIds:z.array(z.string().min(1)).min(1).max(5).refine(a=>new Set(a).size===a.length)}).strict(),r.body);return this.captures.preview(r.actor,id,b.captureIds);}
+    @Get('configs/:id/runs/:runId/posts')
+    runPosts(@Req() r:AuthedRequest,@Param('id') id:string,@Param('runId') runId:string){return this.captures.runPosts(r.actor,id,runId);}
     @Get("configs/:id/captures")
     capturesList(@Req() r:AuthedRequest,@Param('id') id:string,@Query('offset') offset?:string){return this.captures.list(r.actor,id,parse(z.coerce.number().int().min(0).max(100000).default(0),offset));}
     @Patch('configs/:id/semantic-control')

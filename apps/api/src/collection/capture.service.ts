@@ -2,12 +2,14 @@ import { ConflictException, Inject, Injectable, NotFoundException } from '@nestj
 import { prepareOutbound } from './semantic-redaction';
 import { semanticRulesSchema, SemanticSnapshot } from '@crm/contracts';
 import { qwenModel } from '../../../../runtime/qwen-models.cjs';
+import {readRunPostFeed} from './run-post-feed';
 import { Db } from '../common/db';
 import { Actor, requireAdmin } from '../auth/security';
 import { enqueueCaptured, selectedSemanticModel, semanticHash } from './capture-archive';
 @Injectable()
 export class CaptureService {
  constructor(@Inject(Db) private db:Db){}
+ async runPosts(actor:Actor,configId:string,runId:string){requireAdmin(actor);return readRunPostFeed(this.db,configId,runId);}
  async control(actor:Actor,configId:string){requireAdmin(actor);if(!await this.db.collectionConfig.findUnique({where:{id:configId}}))throw new NotFoundException();return await this.db.semanticControl.findUnique({where:{configId}})||{configId,enabled:false,version:0};}
  async toggle(actor:Actor,configId:string,input:{enabled:boolean;version:number}){
   requireAdmin(actor);return this.db.$transaction(async tx=>{
