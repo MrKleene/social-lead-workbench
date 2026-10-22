@@ -695,6 +695,16 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
    expect(await db.lead.count()).toBe(leads);expect(await db.collectionNotice.count()).toBe(notices);expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(2);expect(await db.semanticModelCall.count()).toBe(calls);
   }
  });
+ it('图片诊断保存到原文API但不改变内容版本、线索或提醒，旧记录不回填',async()=>{
+  const c=await archive(),before=await read(`/collection/configs/${c.id}/captures`),leads=await db.lead.count(),notices=await db.collectionNotice.count();
+  expect(before.body.posts[0].snapshot.imageDiagnostics).toBeUndefined();
+  const {inspectXhsAvatar,inspectXhsCover}=await import('../src/collection/adapters/xhs-cover');
+  const imageDiagnostics={authorAvatar:inspectXhsAvatar('http://sns-avatar-qc.xhscdn.com/avatar/FAKE_SECRET').diagnostic,searchCover:inspectXhsCover({urlDefault:'https://evil.example/?token=FAKE_SECRET'}).diagnostic};
+  const adapter={...sample,post:async(p:import('../src/collection/contract').Post)=>({...await sample.post(p,new AbortController().signal),imageDiagnostics}),comments:async()=>{const page=await sample.comments({id:'demo-collect-archive-post',title:'虚构'},undefined,new AbortController().signal);return {...page,items:page.items.map(x=>({...x,imageDiagnostics:{authorAvatar:imageDiagnostics.authorAvatar}}))};}};
+  const run=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(run.id,adapter);const after=await read(`/collection/configs/${c.id}/captures`);
+  expect(after.body.postTotal).toBe(1);expect(after.body.total).toBe(2);expect(after.body.posts[0].id).toBe(before.body.posts[0].id);expect(after.body.posts[0].snapshot.imageDiagnostics).toEqual(imageDiagnostics);
+  const root=after.body.items.find((x:any)=>!x.snapshot.parentId);expect(root.snapshot.imageDiagnostics.authorAvatar.outcomes).toEqual([{reason:'PROTOCOL',count:1}]);expect(JSON.stringify(after.body)).not.toContain('FAKE_SECRET');expect(await db.lead.count()).toBe(leads);expect(await db.collectionNotice.count()).toBe(notices);expect(await db.semanticModelCall.count()).toBe(0);
+ });
  it('默认关闭仍保存未命中的帖子、一级及回复原文，null评分；独立开关不改原规则',async()=>{
   const c=await archive(),page=await read(`/collection/configs/${c.id}/captures`);expect(page.status).toBe(200);expect(page.body).toMatchObject({total:2,postTotal:1,control:{enabled:false,version:0}});expect(page.body.items.every((x:any)=>x.reviews.length===0)).toBe(true);
   expect(page.body.items.find((x:any)=>x.snapshot.parentId).snapshot.parent).toBe('护理专业如何选题');expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(0);expect(await db.sourceMatch.count({where:{configId:c.id}})).toBe(0);

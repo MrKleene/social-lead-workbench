@@ -139,3 +139,30 @@ describe('optional upstream display metadata, fictional transport only',()=>{
   expect(next).toEqual(original);expect(snapshotHash(next)).toBe(snapshotHash(original));expect(JSON.stringify(next)).not.toContain(avatar);
  });
 });
+
+
+describe('safe persisted image diagnostics, synthetic values only',()=>{
+ it('classifies missing/empty/unsupported values and each security boundary without storing input',async()=>{
+  const {inspectImageUrl,safeImageDiagnostics}=await import('@crm/contracts');
+  const cases:[unknown,string][]=[[undefined,'NOT_RETURNED'],['','EMPTY'],[{},'UNSUPPORTED_FORMAT'],['not-a-url','URL_FORMAT'],['http://sns-avatar-qc.xhscdn.com/avatar/a','PROTOCOL'],['https://evil.example/avatar/a','HOST'],['https://sns-avatar-qc.xhscdn.com/avatar/a?token=FAKE_SECRET','URL_COMPONENTS'],['https://sns-avatar-qc.xhscdn.com/other/a','PATH'],['https://sns-avatar-qc.xhscdn.com/avatar/a','ACCEPTED']];
+  const {inspectXhsAvatar}=await import('../src/collection/adapters/xhs-cover');
+  for(const [input,reason] of cases){expect(inspectImageUrl(input,'avatar').reason).toBe(reason);const d=inspectXhsAvatar(input).diagnostic;expect(d.outcomes).toEqual([{reason,count:1}]);expect(safeImageDiagnostics({authorAvatar:d})).toEqual({authorAvatar:d});expect(JSON.stringify(d)).not.toMatch(/FAKE_SECRET|https?:|evil|avatar\//);}
+  expect(safeImageDiagnostics({authorAvatar:{version:1,shape:'EMPTY',fieldCount:1,outcomes:[{reason:'EMPTY',count:1}],raw:'FAKE_SECRET'}})).toBeUndefined();
+ });
+ it('examines supported candidates, counts rejected fallback and preserves the existing first-image policy',async()=>{
+  const {inspectXhsCover,inspectXhsDetailCover}=await import('../src/collection/adapters/xhs-cover');const cover='https://sns-webpic-qc.xhscdn.com/fictional';
+  const value=inspectXhsCover({urlDefault:'http://sns-webpic-qc.xhscdn.com/a',urlPre:cover,infoList:[{url:'https://evil.example/secret?token=FAKE_SECRET'}]});
+  expect(value.url).toBe(cover);expect(value.diagnostic).toMatchObject({shape:'SUPPORTED',fieldCount:3});expect(value.diagnostic.outcomes).toEqual(expect.arrayContaining([{reason:'PROTOCOL',count:1},{reason:'ACCEPTED',count:1},{reason:'URL_COMPONENTS',count:1}]));expect(JSON.stringify(value.diagnostic)).not.toMatch(/FAKE_SECRET|https?:/);
+  expect(inspectXhsCover({infoList:cover}).url).toBeUndefined();expect(inspectXhsCover({infoList:[cover]}).diagnostic.outcomes).toContainEqual({reason:'UNSUPPORTED_FORMAT',count:1});
+  expect(inspectXhsDetailCover([{urlDefault:'http://sns-webpic-qc.xhscdn.com/a'},{urlDefault:cover}]).url).toBeUndefined();
+  expect(inspectXhsCover('unsupported').diagnostic.shape).toBe('UNSUPPORTED');expect(inspectXhsDetailCover([]).diagnostic.shape).toBe('EMPTY');
+ });
+ it('carries controlled diagnostic through post/comment validation; identity and semantic hashes ignore it',async()=>{
+  const {postSchema,commentSchema}=await import('../src/collection/contract');
+  const c={id:'c',content:'合成正文',userInfo:{userId:'u',avatar:'http://sns-avatar-qc.xhscdn.com/avatar/FAKE_SECRET'},subComments:[{id:'r',content:'回复',userInfo:{userId:'u2',avatar:''}}]};
+  const call=vi.fn().mockResolvedValueOnce(envelope({feeds:[{id:'p',xsecToken:'FAKE_SECRET',noteCard:{cover:{urlDefault:'http://sns-webpic-qc.xhscdn.com/a'}}}]})).mockResolvedValueOnce(envelope({data:{note:{title:'虚构',imageList:[{urlDefault:'https://sns-webpic-qc.xhscdn.com/a'}]},comments:{list:[c]}}}));
+  const a=new XhsMcpAdapter({call},true),signal=new AbortController().signal,p=(await a.search('虚构',undefined,signal)).items[0],post=postSchema.parse(await a.post(p,signal)),[comment,reply]=a.receivedComments(post).map(c=>commentSchema.parse(c));
+  expect(post.imageDiagnostics?.searchCover?.outcomes).toContainEqual({reason:'PROTOCOL',count:1});expect(post.imageDiagnostics?.detailCover?.outcomes).toContainEqual({reason:'ACCEPTED',count:1});expect(comment.imageDiagnostics?.authorAvatar?.outcomes).toEqual([{reason:'PROTOCOL',count:1}]);expect(reply.imageDiagnostics?.authorAvatar?.outcomes).toEqual([{reason:'EMPTY',count:1}]);
+  expect(JSON.stringify([post,comment,reply])).not.toContain('FAKE_SECRET');expect(semanticSnapshot(post,comment,undefined,false,false)).toEqual(semanticSnapshot({...post,imageDiagnostics:undefined},{...comment,imageDiagnostics:undefined},undefined,false,false));expect(call).toHaveBeenCalledTimes(2);
+ });
+});

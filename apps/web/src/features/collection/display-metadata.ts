@@ -1,10 +1,8 @@
-export type DisplayMetadata={authorNickname?:string;authorAvatarUrl?:string;publishedAt?:string};
+import {safeAvatarUrl,type ImageDiagnostics} from '@crm/contracts';
+export type DisplayMetadata={imageDiagnostics?:ImageDiagnostics;authorNickname?:string;authorAvatarUrl?:string;publishedAt?:string};
 export function displayNickname(value:unknown){if(typeof value!=='string')return;const n=value.trim();return n&&n.length<=200&&!/[\u0000-\u001f\u007f]/.test(n)?n:undefined;}
 /** Public unsigned avatar URLs only. No proxy or local download. */
-export function displayAvatar(value:unknown){
- if(typeof value!=='string'||value.length>2048||!/^https:\/\//.test(value)||/[\s\\%]/.test(value))return;
- try{const u=new URL(value);if(u.hostname!=='sns-avatar-qc.xhscdn.com'||u.username||u.password||u.port||u.search||u.hash||!/^\/avatar\/[A-Za-z0-9_/.!@,=+-]+$/.test(u.pathname))return;return u.href;}catch{return;}
-}
+export const displayAvatar=safeAvatarUrl;
 /** Render normalized ISO timestamps only; never interpret relative text or collection time as publication. */
 export function displayPublication(value:unknown){
  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value))return;

@@ -1,3 +1,4 @@
+import {inspectImageUrl} from './image-diagnostic';
 /** Optional display metadata. Never used as identity, content version or model input. */
 export type CaptureDisplay={authorNickname?:string;authorAvatarUrl?:string;publishedAt?:string};
 export function savedNickname(value:unknown):string|undefined {
@@ -5,10 +6,7 @@ export function savedNickname(value:unknown):string|undefined {
  return name&&name.length<=200&&!/[\u0000-\u001f\u007f]/.test(name)?name:undefined;
 }
 /** Only the observed public avatar CDN and unsigned paths; no URL reconstruction. */
-export function safeAvatarUrl(value:unknown):string|undefined {
- if(typeof value!=='string'||value.length>2048||!/^https:\/\//.test(value)||/[\s\\%]/.test(value))return;
- try{const u=new URL(value);if(u.hostname!=='sns-avatar-qc.xhscdn.com'||u.username||u.password||u.port||u.search||u.hash||!/^\/avatar\/[A-Za-z0-9_/.!@,=+-]+$/.test(u.pathname))return;return u.href;}catch{return;}
-}
+export function safeAvatarUrl(value:unknown):string|undefined{return inspectImageUrl(value,'avatar').url;}
 /** Epoch seconds/milliseconds from upstream; ISO only for our already-normalized records. */
 export function savedPublishedAt(value:unknown):string|undefined {
  let ms:number;

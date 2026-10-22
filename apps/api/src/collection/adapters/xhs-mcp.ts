@@ -1,6 +1,6 @@
-import {savedNickname,safeAvatarUrl,savedPublishedAt} from '@crm/contracts';
+import {savedNickname,savedPublishedAt} from '@crm/contracts';
 import { z } from "zod";
-import {xhsCover,xhsDetailCover} from "./xhs-cover";
+import {inspectXhsCover,inspectXhsDetailCover,inspectXhsAvatar} from "./xhs-cover";
 import { ReadAdapter, ReadFailure, Post, Comment, Page, commentSchema } from "../contract";
 import { ReadOnlyMcpTransport } from "../mcp/transport";
 import { McpMode, ReadTool } from "../mcp/policy";
@@ -52,7 +52,7 @@ export class XhsMcpAdapter implements ReadAdapter {
     async search(keyword: string, cursor: string | undefined, signal: AbortSignal): Promise<Page<Post>> {
         if (cursor) throw new ReadFailure("UNSUPPORTED");
         const data = parseSource(z.object({ feeds: z.array(z.object({ id: rawId, xsecToken: z.string().min(1).max(4096), noteCard: z.object({ displayTitle: z.string().max(500).optional(), cover:z.unknown().optional() }).optional() })).max(200).nullable() }),await this.read("search_feeds", { keyword }, signal),"search");
-        return { items: (data.feeds || []).map(f => { const id = this.id(f.id); this.tokens.set(id, { rawId: f.id, token: f.xsecToken }); return { id, title: f.noteCard?.displayTitle || "未提供标题", coverUrl:xhsCover(f.noteCard?.cover) }; }), complete: false };
+        return { items: (data.feeds || []).map(f => { const id = this.id(f.id); this.tokens.set(id, { rawId: f.id, token: f.xsecToken }); const cover=inspectXhsCover(f.noteCard?.cover);return { id, title: f.noteCard?.displayTitle || "未提供标题", coverUrl:cover.url,imageDiagnostics:{searchCover:cover.diagnostic} }; }), complete: false };
     }
     async post(post: Post, signal: AbortSignal): Promise<Post> {
         const reference = this.tokens.get(post.id);
@@ -72,14 +72,15 @@ export class XhsMcpAdapter implements ReadAdapter {
             active.add(id);
             const nested = (c.subComments || []).map(r => normalize(r, id, depth + 1));
             replies.set(id,[...new Map(nested.map(c=>[c.id,c])).values()]);
-            const value=parseSource(commentSchema,{id,userId:this.id(c.userInfo.userId),nickname:savedNickname(c.userInfo.nickname)||savedNickname(c.userInfo.nickName),authorAvatarUrl:safeAvatarUrl(c.userInfo.avatar),publishedAt:savedPublishedAt(c.createTime),text:c.content,parentId,hasReplies:nested.length>0||Number(c.subCommentCount||0)>0},'post');
+            const avatar=inspectXhsAvatar(c.userInfo.avatar);
+            const value=parseSource(commentSchema,{id,userId:this.id(c.userInfo.userId),nickname:savedNickname(c.userInfo.nickname)||savedNickname(c.userInfo.nickName),authorAvatarUrl:avatar.url,imageDiagnostics:{authorAvatar:avatar.diagnostic},publishedAt:savedPublishedAt(c.createTime),text:c.content,parentId,hasReplies:nested.length>0||Number(c.subCommentCount||0)>0},'post');
             active.delete(id);seen.set(id,{signature,value});return value;
         };
         // Validate the entire received tree before exposing any of it to ingestion.
         const roots = [...new Map((data.data.comments.list || []).map(c => normalize(c)).map(c=>[c.id,c])).values()];
         this.details.set(post.id, { roots, replies });
-        const author=rawUser.safeParse(data.data.note.user);
-        return { ...post,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:author.success?safeAvatarUrl(author.data.avatar):undefined,publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||xhsDetailCover(data.data.note.imageList), title: data.data.note.title || post.title, ...(data.data.note.desc!=null?{body:data.data.note.desc}:{}) };
+        const author=rawUser.safeParse(data.data.note.user),cover=inspectXhsDetailCover(data.data.note.imageList),avatar=inspectXhsAvatar(author.success?author.data.avatar:data.data.note.user==null?undefined:{});
+        return { ...post,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:avatar.url,imageDiagnostics:{...post.imageDiagnostics,detailCover:cover.diagnostic,authorAvatar:avatar.diagnostic},publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||cover.url, title: data.data.note.title || post.title, ...(data.data.note.desc!=null?{body:data.data.note.desc}:{}) };
     }
     receivedComments(post:Post):Comment[]{const d=this.details.get(post.id);return d?[...d.roots,...[...d.replies.values()].flat()]:[];}
     async comments(post: Post, cursor: string | undefined, _signal: AbortSignal): Promise<Page<Comment>> {
