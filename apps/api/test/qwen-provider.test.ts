@@ -55,6 +55,7 @@ describe('Qwen only mocked HTTP, fictional local samples',()=>{
   expect(()=>prepareOutbound([{...input,snapshot:{...input.snapshot,comment:'护理选题，扫这个二维码'}}])).toThrow('DATA_BLOCKED');
   expect(()=>prepareOutbound([{...input,snapshot:{...input.snapshot,comment:'@小明'}}])).toThrow('DATA_BLOCKED');
  });
+ it.each(['',' \t\n'])('empty saved text cannot enter a paid request (%#)',comment=>{expect(()=>prepareOutbound([{...input,snapshot:{...input.snapshot,comment}}])).toThrow('DATA_BLOCKED');});
  it('new archive display metadata is excluded from the model payload',()=>{
   const enriched={...input,snapshot:{...input.snapshot,authorNickname:'虚构昵称',authorAvatarUrl:'https://sns-avatar-qc.xhscdn.com/avatar/fictional.jpg',publishedAt:'2026-10-21T16:10:00.000Z'}};
   expect(prepareOutbound([enriched])).toEqual(prepareOutbound([input]));

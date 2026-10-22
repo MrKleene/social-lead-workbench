@@ -11,3 +11,8 @@ it('新窗口区分帖子、顶层评论、回复和三类结果',()=>{const tex
 it('失败丢弃窗口时不伪造零读取',()=>expect(runSummary({...base,metrics:{version:1,discarded:true} as Run['metrics']})).toContain('不能视为零读取'));
 
 it('only schema-checked diagnostic fields are rendered',()=>{const metrics={version:1,policy:'LEGACY',postsRead:0,rootComments:0,replies:0,highRelevant:0,needsReview:0,unmatched:0,legacyMatches:0,filterReasons:{},diagnostic:{version:1,stage:'post',kind:'SCHEMA_VALIDATION',field:'userInfo',postOrdinal:2,requestStep:17}};const markup=renderToStaticMarkup(createElement(RunStats,{run:{...base,metrics:metrics as Run['metrics']}}));expect(markup).toContain('SCHEMA_VALIDATION');expect(markup).toContain('第 2 篇');const unsafe=renderToStaticMarkup(createElement(RunStats,{run:{...base,metrics:{...metrics,diagnostic:{...metrics.diagnostic,raw:'FAKE_SECRET'}} as Run['metrics']}}));expect(unsafe).not.toContain('FAKE_SECRET');expect(unsafe).not.toContain('安全诊断');});
+
+it('safe text validation reason/type/length are inspectable without the original',()=>{
+ const metrics={version:1,policy:'LEGACY',postsRead:0,rootComments:0,replies:0,highRelevant:0,needsReview:0,unmatched:0,legacyMatches:0,filterReasons:{},diagnostic:{version:1,stage:'post',kind:'SCHEMA_VALIDATION',field:'text',validationReason:'TOO_LONG',actualType:'string',textLength:10001}};
+ const markup=renderToStaticMarkup(createElement(RunStats,{run:{...base,metrics:metrics as Run['metrics']}}));expect(markup).toContain('TOO_LONG');expect(markup).toContain('10001');expect(markup).toContain('UTF-16');
+});

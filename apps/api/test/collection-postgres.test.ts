@@ -642,6 +642,14 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
  const rules={version:1 as const,target:'寻找明确请求毕业论文选题帮助的学生',reviewThreshold:70};
  const sample:import('../src/collection/contract').ReadAdapter={mode:'MOCK',platform:'XHS',search:async()=>({items:[{id:'demo-collect-archive-post',title:'虚构毕业论文讨论'}],complete:true}),post:async p=>({...p,body:'讨论各专业选题'}),comments:async()=>({items:[{id:'demo-collect-archive-root',userId:'demo-collect-archive-a',nickname:'虚构甲',text:'护理专业如何选题',hasReplies:true}],complete:true}),replies:async()=>({items:[{id:'demo-collect-archive-reply',userId:'demo-collect-archive-b',nickname:'虚构乙',text:'同问',hasReplies:false,parentId:'demo-collect-archive-root'}],complete:true})};
  async function archive(){const c=await config('不会命中此搜索词',{semanticRules:rules});const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,sample);return c;}
+ it('空文字及回复照实存档并去重，原文API不造内容且不产生模型调用',async()=>{
+  const c=await config('空文字隔离'),adapter={...sample,post:async(p:import('../src/collection/contract').Post)=>({...p,body:''}),comments:async()=>({items:[{id:'demo-collect-empty-root',userId:'demo-collect-empty-user',nickname:'',text:'',hasReplies:true}],complete:true}),replies:async()=>({items:[{id:'demo-collect-empty-reply',userId:'demo-collect-empty-user',nickname:'',text:' \t\n',parentId:'demo-collect-empty-root',hasReplies:false}],complete:true})};
+  const calls=await db.semanticModelCall.count(),leads=await db.lead.count();
+  for(let i=0;i<2;i++){const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,adapter);expect(await db.collectionRun.findUnique({where:{id:r.id}})).toMatchObject({status:'COMPLETE',capturedPosts:1,capturedCommentsCount:2});}
+  const page=await read(`/collection/configs/${c.id}/captures`);expect(page.status).toBe(200);expect(page.body).toMatchObject({postTotal:1,total:2,control:{enabled:false}});expect(page.body.posts[0].snapshot.body).toBe('');
+  expect(page.body.items.find((x:any)=>!x.snapshot.parentId).snapshot.comment).toBe('');expect(page.body.items.find((x:any)=>x.snapshot.parentId).snapshot).toMatchObject({comment:' \t\n',parent:'',parentId:'demo-collect-empty-root'});
+  expect(await db.semanticModelCall.count()).toBe(calls);expect(await db.lead.count()).toBe(leads);expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(0);
+ });
  it('封面增量写JSON、原文去重保持，API返回安全地址且不触发模型',async()=>{
   const c=await archive();const old=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}});const before=await db.capturedComment.count({where:{configId:c.id}});
   for(const coverUrl of ['https://sns-webpic-qc.xhscdn.com/fictional-cover','https://sns-webpic-qn.xhscdn.com/updated-cover',undefined]){
@@ -696,11 +704,13 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
   const limited=await config('存档一页');const once=await service.start(actor,limited.id,'BASELINE',randomUUID(),'MOCK',undefined,undefined,{rounds:1,postsPerRound:1,commentPages:1});await service.execute(once.id,interrupted);expect(second).toBe(1);expect(await db.capturedPost.findFirst({where:{configId:limited.id}})).toMatchObject({coverage:'PARTIAL',stopReason:'COMMENTS_PARTIAL'});
  });
  it('第二帖数据异常保留第一帖原文并持久化受控诊断，不假成功',async()=>{
-  const {invalidSource}=await import('../src/collection/diagnostics');const c=await config('合成第二帖异常',{batchLimit:2});
-  const interrupted={...sample,search:async()=>({items:[{id:'demo-collect-archive-post',title:'合成首帖'},{id:'demo-collect-second-post',title:'合成第二帖'}],complete:true}),post:async(p:import('../src/collection/contract').Post)=>{if(p.id==='demo-collect-second-post')throw invalidSource('post','SCHEMA_VALIDATION','userInfo');return p;}};
+  const {parseSource}=await import('../src/collection/diagnostics');const {commentSchema}=await import('../src/collection/contract');const c=await config('合成第二帖异常',{batchLimit:2});
+  const interrupted={...sample,search:async()=>({items:[{id:'demo-collect-archive-post',title:'合成首帖'},{id:'demo-collect-second-post',title:'合成第二帖'}],complete:true}),post:async(p:import('../src/collection/contract').Post)=>{if(p.id==='demo-collect-second-post')parseSource(commentSchema,{id:'demo-collect-bad',userId:'demo-collect-user',text:'X'.repeat(10001)},'post');return p;}};
   const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,interrupted);
   const saved=await db.collectionRun.findUniqueOrThrow({where:{id:r.id}});expect(saved).toMatchObject({status:'FAILED',reason:'INVALID_DATA',capturedPosts:1,capturedCommentsCount:2,observed:0});
-  expect(saved.metrics).toMatchObject({discarded:true,diagnostic:{version:1,stage:'post',kind:'SCHEMA_VALIDATION',field:'userInfo',postOrdinal:2}});
+  expect(saved.metrics).toMatchObject({discarded:true,diagnostic:{version:1,stage:'post',kind:'SCHEMA_VALIDATION',field:'text',validationReason:'TOO_LONG',actualType:'string',textLength:10001,postOrdinal:2}});
+  const audit=await db.auditLog.findFirstOrThrow({where:{entityId:r.id,action:'COLLECTION_FINISHED_MOCK'}});expect((audit.metadata as any).diagnostic).toEqual((saved.metrics as any).diagnostic);
+  const response=await read(`/collection/configs/${c.id}`);expect(response.body.runs.find((x:any)=>x.id===r.id).metrics.diagnostic).toEqual((saved.metrics as any).diagnostic);
   expect(await db.capturedPost.count({where:{configId:c.id}})).toBe(1);expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(2);
   expect(await db.capturedPost.findFirst({where:{configId:c.id}})).toMatchObject({coverage:'PARTIAL',stopReason:'INVALID_DATA'});
  });

@@ -17,7 +17,41 @@ describe('safe collection failure diagnostics',()=>{
  it('exact duplicate roots and nested replies are deduplicated',async()=>{const child={...comment,id:'reply'},root={...comment,subComments:[child,child]};const r=await run(envelope(detail([root,root])));expect(r.status).toBe('PARTIAL');expect(r.posts[0].comments).toHaveLength(2);});
  it.each(['content','identity','parent','children'])('conflicting %s is never swallowed',async field=>{let list:unknown[];if(field==='content')list=[comment,{...comment,content:'变更'}];else if(field==='identity')list=[comment,{...comment,userInfo:{...comment.userInfo,userId:'other'}}];else if(field==='parent')list=[comment,{...comment,id:'parent',subComments:[comment]}];else list=[{...comment,subComments:[{...comment,id:'reply'}]},{...comment,subComments:[]}];const r=await run(envelope(detail(list)));expect(r).toMatchObject({status:'FAILED',reason:'INVALID_DATA',diagnostic:{stage:'post',kind:'DUPLICATE_CONFLICT',field:'id',postOrdinal:1}});expect(r.posts).toEqual([]);});
  it('missing user fields expose only controlled field name',async()=>{const r=await run(envelope(detail([{...comment,userInfo:{nickname:secret}}])));expect(r.diagnostic).toMatchObject({stage:'post',kind:'SCHEMA_VALIDATION',field:'userInfo.userId'});expect(JSON.stringify(r)).not.toContain('FAKE_SECRET');});
- it('empty text still fails normalized schema',async()=>{expect((await run(envelope(detail([{...comment,content:''}])))).diagnostic).toMatchObject({kind:'SCHEMA_VALIDATION',field:'text'});});
+ it.each(['',' \t\n','护理 👩🏽‍🎓 e\u0301 العربية 日本語','😀'.repeat(5000)])('preserves valid text verbatim (%#), including empty parents and replies',async content=>{
+  const child={...comment,id:'reply',content},root={...comment,content,subComments:[child,child]};
+  const r=await run(envelope(detail([root,root,{...comment,id:'other'}])));
+  expect(r).toMatchObject({status:'PARTIAL',reason:'MCP_WINDOW_ONLY'});expect(r.posts[0].comments).toHaveLength(3);
+  expect(r.posts[0].comments.find(c=>c.id==='c1')).toMatchObject({text:content,hasReplies:true});
+  expect(r.posts[0].comments.find(c=>c.id==='reply')).toMatchObject({text:content,parentId:'c1'});
+ });
+ it.each([undefined,null,1,{},[],true])('missing or invalid comment text stays fatal (%#)',async content=>{
+  const r=await run(envelope(detail([comment,{...comment,id:'bad',content}])));
+  expect(r).toMatchObject({status:'FAILED',reason:'INVALID_DATA',posts:[],diagnostic:{stage:'post',kind:'SCHEMA_VALIDATION',field:'content',validationReason:content===undefined?'MISSING':'WRONG_TYPE'}});
+ });
+ it('overlong text is never truncated; only safe type/length crosses the logging boundary',async()=>{
+  const content=secret.repeat(200),r=await run(envelope(detail([{...comment,content}])));
+  expect(r).toMatchObject({status:'FAILED',posts:[],diagnostic:{field:'text',validationReason:'TOO_LONG',actualType:'string',textLength:content.length,postOrdinal:1}});
+  const log=vi.spyOn(console,'warn').mockImplementation(()=>{});try{logCollectionDiagnostic('cmvje155o000fi44p0cvv60tp',r.diagnostic);expect(JSON.stringify(log.mock.calls)).not.toContain(secret);expect(JSON.stringify(log.mock.calls)).toContain('TOO_LONG');}finally{log.mockRestore();}
+ });
+ it.each(['', ' \n', undefined, null])('media-only/optional post body is accepted without invented text (%#)',async desc=>{
+  const data=detail([comment]);const r=await run(envelope({...data,data:{...data.data,note:{noteId:'p1',title:'',desc,imageList:[{urlDefault:'https://sns-webpic-qc.xhscdn.com/fictional-cover'}]}}}));
+  expect(r.status).toBe('PARTIAL');expect(r.posts[0].post.body).toBe(desc??undefined);
+ });
+ it.each([42,{},[],true,'帖'.repeat(20001)])('invalid or oversized post body is rejected (%#)',async desc=>{
+  const data=detail([comment]);const r=await run(envelope({...data,data:{...data.data,note:{...data.data.note,desc}}}));
+  expect(r).toMatchObject({status:'FAILED',posts:[],diagnostic:{field:'data.note.desc',validationReason:typeof desc==='string'?'TOO_LONG':'WRONG_TYPE'}});
+ });
+ it('empty content does not make a restriction payload or missing identity valid',async()=>{
+  for(const response of [{error:'LOGIN_REQUIRED',content:''},{data:{note:{},comments:{list:[{content:''}]}}}])expect((await run(envelope(response))).status).toBe('FAILED');
+  expect((await run(envelope(detail([{...comment,content:'',subComments:[{...comment,content:'different'}]}])))).diagnostic?.kind).toBe('DUPLICATE_CONFLICT');
+ });
+ it('second post text fault preserves earlier checkpoints and its precise safe reason',async()=>{
+  const bad=detail([{...comment,content:'x'.repeat(10001)}]);bad.data.note.noteId='p2';
+  const {adapter}=reader(envelope(detail([{...comment,content:''}])),envelope(bad));const saved=new Map();
+  const r=await collect(adapter,{...config,batchLimit:2},async()=>false,{...limits,callMs:1000},async progress=>{for(const p of progress.posts)saved.set(p.post.id,structuredClone(p));});
+  expect(saved.size).toBe(1);expect(saved.get('p1').comments[0].text).toBe('');
+  expect(r).toMatchObject({status:'FAILED',discarded:true,posts:[],diagnostic:{field:'text',validationReason:'TOO_LONG',textLength:10001,postOrdinal:2}});
+ });
  it('wrong post ownership stays fatal',async()=>{expect((await run(envelope(detail([{...comment,noteId:'other'}])))).diagnostic).toMatchObject({kind:'IDENTITY_CONFLICT',field:'noteId'});});
  it('invalid JSON reports parsing without the payload',async()=>{const r=await run({content:[{type:'text',text:secret}]});expect(r.diagnostic).toMatchObject({kind:'JSON_PARSE',stage:'post'});expect(JSON.stringify(r)).not.toContain(secret);});
  it('unrecognized upstream error and empty response remain distinct',async()=>{expect((await run({isError:true,content:[{type:'text',text:secret}]})).diagnostic?.kind).toBe('UPSTREAM_ERROR');expect((await run({content:[]})).diagnostic?.kind).toBe('EMPTY_RESPONSE');});
@@ -27,5 +61,5 @@ describe('safe collection failure diagnostics',()=>{
  it.each([['未登录','LOGIN_EXPIRED'],['频繁','RATE_LIMITED'],['验证码','RESTRICTED'],['超时','TIMEOUT']])('platform %s is not converted to data corruption',async(text,reason)=>{const r=await run({isError:true,content:[{type:'text',text}]});expect(r.reason).toBe(reason);expect(r.diagnostic?.kind).toBe('READ_FAILURE');});
  it('budget stays partial and does not retry',async()=>{const {adapter,call}=reader(envelope(detail([comment])));const r=await collect(adapter,config,async()=>false,{...limits,requests:2});expect(r).toMatchObject({status:'PARTIAL',reason:'BUDGET'});expect(call).toHaveBeenCalledTimes(2);});
  it('hostile error messages and schema paths never enter diagnostic logs',()=>{const err=new z.ZodError([{code:'custom',path:[secret],message:secret}]);const d=diagnose(err,'post',2,8);expect(d.field).toBe('unknown');const log=vi.spyOn(console,'warn').mockImplementation(()=>{});try{logCollectionDiagnostic(secret,d);logCollectionDiagnostic('cmvje155o000fi44p0cvv60tp',{...d,raw:secret});expect(log).toHaveBeenCalledTimes(1);expect(JSON.stringify(log.mock.calls)).not.toContain(secret);expect(JSON.parse(String(log.mock.calls[0][0]))).toMatchObject({task:'unknown',diagnostic:d});}finally{log.mockRestore();}});
- it('rejects forged diagnostic enum and extra keys',()=>{expect(safeCollectionDiagnostic({version:1,stage:secret,kind:'JSON_PARSE'})).toBeUndefined();expect(safeCollectionDiagnostic({version:1,stage:'post',kind:'JSON_PARSE',token:secret})).toBeUndefined();const error=new ReadFailure('INVALID_DATA',undefined,{version:1,stage:'post',kind:secret} as never);expect(diagnose(error,'comments').kind).toBe('READ_FAILURE');});
+ it('rejects forged diagnostic enum and extra keys',()=>{expect(safeCollectionDiagnostic({version:1,stage:secret,kind:'JSON_PARSE'})).toBeUndefined();expect(safeCollectionDiagnostic({version:1,stage:'post',kind:'JSON_PARSE',token:secret})).toBeUndefined();expect(safeCollectionDiagnostic({version:1,stage:'post',kind:'SCHEMA_VALIDATION',validationReason:secret})).toBeUndefined();expect(safeCollectionDiagnostic({version:1,stage:'post',kind:'SCHEMA_VALIDATION',textLength:Infinity})).toBeUndefined();const error=new ReadFailure('INVALID_DATA',undefined,{version:1,stage:'post',kind:secret} as never);expect(diagnose(error,'comments').kind).toBe('READ_FAILURE');});
 });

@@ -40,3 +40,9 @@ describe('optional saved display data',()=>{
  it('shows normalized publication separately in China time',()=>{expect(displayPublication('2026-10-21T16:10:00Z')).toBe('2026-10-21T16:10:00.000Z');expect(readingTime('2026-10-21T16:10:00Z')).toBe('2026/10/22 00:10');});
  it('groups only actual saved reply links, retaining every version',()=>{const reply={...c,id:'reply',snapshot:{...c.snapshot,commentId:'r',parentId:'c'}};const nested={...reply,id:'nested',snapshot:{...reply.snapshot,commentId:'n',parentId:'r'}};const rows=commentThread([nested,reply,c]);expect(replyGroups(rows).get('c')?.map(r=>r.comment.id)).toEqual(['reply','nested']);expect(replyGroups(commentThread([reply,c,{...c,id:'v2'}])).size).toBe(0);expect(replyGroups(commentThread([{...c,snapshot:{...c.snapshot,parentId:'r'}},reply])).size).toBe(0);});
 });
+
+import {savedSourceText} from './saved-text';
+it('distinguishes an empty source string from missing original without altering nonempty text',()=>{
+ expect(savedSourceText('')).toBe('来源返回空文字');expect(savedSourceText(' \n')).toBe('来源返回空文字');
+ expect(savedSourceText(undefined)).toBe('原文未保存');expect(savedSourceText(' 原文 👩🏽‍🎓 ')).toBe(' 原文 👩🏽‍🎓 ');
+});

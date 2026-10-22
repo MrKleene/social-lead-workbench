@@ -79,7 +79,7 @@ export class XhsMcpAdapter implements ReadAdapter {
         const roots = [...new Map((data.data.comments.list || []).map(c => normalize(c)).map(c=>[c.id,c])).values()];
         this.details.set(post.id, { roots, replies });
         const author=rawUser.safeParse(data.data.note.user);
-        return { ...post,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:author.success?safeAvatarUrl(author.data.avatar):undefined,publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||xhsDetailCover(data.data.note.imageList), title: data.data.note.title || post.title, ...(data.data.note.desc?{body:data.data.note.desc}:{}) };
+        return { ...post,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:author.success?safeAvatarUrl(author.data.avatar):undefined,publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||xhsDetailCover(data.data.note.imageList), title: data.data.note.title || post.title, ...(data.data.note.desc!=null?{body:data.data.note.desc}:{}) };
     }
     receivedComments(post:Post):Comment[]{const d=this.details.get(post.id);return d?[...d.roots,...[...d.replies.values()].flat()]:[];}
     async comments(post: Post, cursor: string | undefined, _signal: AbortSignal): Promise<Page<Comment>> {

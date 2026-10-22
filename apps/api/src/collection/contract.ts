@@ -25,7 +25,8 @@ export const postSchema = z.object({ id: z.string().min(1).max(200), title: z.st
 export const commentSchema = z.object({
     id: z.string().min(1).max(200), userId: z.string().min(1).max(200), nickname: z.preprocess(v=>savedNickname(v)??'',z.string().max(200)),
     authorAvatarUrl:displayFields.authorAvatarUrl,publishedAt:displayFields.publishedAt,
-    text: z.string().min(1).max(10000), parentId: z.string().max(200).optional(), hasReplies: z.boolean().default(false),
+    // A valid source comment can have no textual payload; keep it verbatim, including whitespace.
+    text: z.string().max(10000), parentId: z.string().max(200).optional(), hasReplies: z.boolean().default(false),
 });
 export type Post = z.infer<typeof postSchema>;
 export type Comment = z.infer<typeof commentSchema>;
