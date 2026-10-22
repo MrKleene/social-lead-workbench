@@ -25,7 +25,7 @@ export function ConfigEditor({ availableMode, config, onClose, onSaved, onDirty 
     const templates = useReplyTemplates();
     const [templateId, setTemplateId] = useState(config?.defaultReplyTemplateId || '');
     const [name, setName] = useState(config?.name || '');
-    const initialKeywords=config?.keywords.join('\n') || (availableMode?'无偿选题':'');
+    const initialKeywords=config?.keywords.join('\n') || '';
     const [keywords, setKeywords] = useState(initialKeywords);
     const [exclude, setExclude] = useState(config?config.excludeWords.join('\n'):'广告');
     const [platform, setPlatform] = useState<ConfigDraft['platform']>(config?.platform || 'XHS');

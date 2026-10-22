@@ -17,7 +17,8 @@ export function usePanelExpansion(active:SpaceModule|null) {
    if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
   }
   if(!from&&!active)return;
-  const source=root.querySelector<HTMLElement>(active==='runs'||from==='runs'?'.aurora-discover-card':active==='follow'||from==='follow'?'.aurora-handoff-card':'.aurora-review-card');
+  const target=active||from;
+  const source=root.querySelector<HTMLElement>(target==='archive'?'.orbit-archive-satellite':target==='settings'?'.orbit-search':target==='accounts'?'.orbit-account':'.orbit-main');
   const box=el.getBoundingClientRect(),card=source?.getBoundingClientRect();
   const folded=card?`inset(${Math.max(0,card.top-box.top)}px ${Math.max(0,box.right-card.right)}px ${Math.max(0,box.bottom-card.bottom)}px ${Math.max(0,card.left-box.left)}px round 28px)`:'inset(35% 30% round 28px)';
   const running=animation.current?.playState==='running';

@@ -15,6 +15,7 @@ import "./styles.css";
 import "./features/work/graphite.css";
 import "./features/work/spatial.css";
 import "./features/work/aurora.css";
+import "./features/work/orbit.css";
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 10000 } },
 });

@@ -1,10 +1,9 @@
-import { modeLabels, runRequest } from '@/features/collection/mode';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/use-auth';
 import { useAccounts } from '@/features/accounts/use-accounts';
 import { useWork } from './use-work';
-export type SpaceModule = 'matches' | 'runs' | 'follow' | 'notices' | 'settings' | 'templates' | 'accounts';
+export type SpaceModule = 'matches' | 'archive' | 'runs' | 'follow' | 'notices' | 'settings' | 'templates' | 'accounts';
 export const SPACE_PAGE_SIZE = 3;
 export function useSpatialWork() {
   const { user } = useAuth();
@@ -16,7 +15,7 @@ export function useSpatialWork() {
   const work = useWork(admin, view);
   const accounts = useAccounts();
   const requested = params.get('module');
-  const active: SpaceModule | null = requested === 'accounts' ? 'accounts' : (requested === 'settings' || requested === 'templates') && admin ? requested : requested === 'runs' && admin ? 'runs' : requested === 'notices' ? 'notices' : requested === 'follow' || view === 'follow' ? 'follow' : id || requested === 'matches' || params.has('view') ? 'matches' : null;
+  const active: SpaceModule | null = requested === 'archive' && admin ? 'archive' : requested === 'accounts' ? 'accounts' : (requested === 'settings' || requested === 'templates') && admin ? requested : requested === 'runs' && admin ? 'runs' : requested === 'notices' ? 'notices' : requested === 'follow' || view === 'follow' ? 'follow' : id || requested === 'matches' || params.has('view') ? 'matches' : null;
   const moduleHistory=useRef<Partial<Record<SpaceModule,string>>>({});
   useEffect(()=>{if(active)moduleHistory.current[active]=`/work${id?`/${id}`:''}?${params}`;},[active,id,params]);
   const previousModule=useRef(active);
@@ -39,13 +38,8 @@ export function useSpatialWork() {
   const openLead = (leadId: string) => { const next = new URLSearchParams(params); next.set('module', active === 'follow' ? 'follow' : 'matches'); next.set('view', view); navigate(`/work/${leadId}?${next}`); };
   const configs = work.configs.data || [];
   const selectedConfig = configs.find(c => c.id === params.get('config')) || configs.find(c => c.enabled) || configs[0];
-  const start = () => {
-    if (!admin) { navigate('/work?module=matches&view=contacted'); return; }
-    if (!selectedConfig) { openModule('settings'); return; }
-    work.mutation.mutate({ path: `/collection/configs/${selectedConfig.id}/runs`, body: runRequest(selectedConfig, 'BASELINE', crypto.randomUUID()) }, { onSuccess: () => { work.setFeedback(`已开始一轮${modeLabels[selectedConfig.mode]}。首次记录不提醒，覆盖范围见运行记录。`); openModule('runs'); } });
-  };
-  return { detailScroll, accounts, admin, id, view, work, active, rows, page, pages, configs, selectedConfig, start, openModule, setView, closeDetail, openLead,
-    overview: () => navigate('/work'), setConfig: (config: string) => setParams(p => { p.set('config', config); return p; }),
+  return { detailScroll, accounts, admin, id, view, work, active, rows, page, pages, configs, selectedConfig, openModule, setView, closeDetail, openLead,
+    overview: () => navigate(selectedConfig ? `/work?config=${selectedConfig.id}` : '/work'), setConfig: (config: string) => setParams(p => { p.set('config', config); return p; }),
     setPage: (next: number) => { setPagination(current=>({...current,[pageKey]:Math.max(0,Math.min(next,pages-1))})); if(id) closeDetail(); },
     unread: (work.notices.data || []).filter(n => !n.reads.length),
   };

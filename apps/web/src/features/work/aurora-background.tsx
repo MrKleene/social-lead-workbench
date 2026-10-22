@@ -10,7 +10,11 @@ vec3 lime=vec3(.52,.83,.32),violet=vec3(.43,.28,.78),teal=vec3(.13,.46,.42);
 float arch=.72+.12*sin(p.x*4.4+time*.09)+.05*sin(p.x*9.-time*.12);
 float ribbon=exp(-abs(p.y-arch)*7.5);float folds=.5+.5*sin(p.x*8.+p.y*3.+time*.15);
 vec3 glow=mix(violet,lime,smoothstep(.12,.83,p.x+sin(time*.06)*.15));glow=mix(glow,teal,phase*.22);
-vec3 color=vec3(.027,.042,.047)+glow*ribbon*(.25+.2*folds)*(1.-calm*.45);
+vec3 color=vec3(.025,.036,.047)+glow*ribbon*.035*(1.-calm*.65);
+vec2 orb=(uv-vec2(.5,.62))*vec2(resolution.x/resolution.y,1.);orb+=pointer*.007;
+float sphere=exp(-dot(orb,orb)*100.);vec3 mint=vec3(.4,.82,.69);color+=mix(violet,mint,.5+.5*sin(orb.x*9.+time*.2))*sphere*.35*(1.-calm*.85);
+for(int j=0;j<3;j++){float a=float(j)*1.047+time*.07;vec2 q=mat2(cos(a),-sin(a),sin(a),cos(a))*orb;float ring=abs(length(q*vec2(1.,2.8))-.17);color+=mix(violet,mint,float(j)/2.)*(exp(-ring*650.)*.5+exp(-ring*130.)*.09)*(1.-calm*.9);}
+float halo=abs(length(orb*vec2(1.,3.8))-.44);color+=teal*exp(-halo*110.)*.15*(1.-calm);
 color+=violet*.075*exp(-length((uv-vec2(.12,.22))*vec2(1.,2.))*3.);
 vec2 aspect=vec2(resolution.x/resolution.y,1.);
 for(int i=0;i<38;i++){float f=float(i);float z=.25+hash(f+8.)*.75;vec2 pos=vec2(hash(f+1.),hash(f+71.));pos.y=fract(pos.y+time*.003*z);pos+=pointer*.012*z;vec2 delta=(uv-pos)*aspect;float radius=mix(.0007,.0021,z);float dotLight=exp(-dot(delta,delta)/(radius*radius));float halo=exp(-dot(delta,delta)/(radius*radius*20.))*.08;color+=mix(violet,lime,hash(f+3.))*(dotLight+halo)*(.12+.45*z)*(1.-calm*.6);}
