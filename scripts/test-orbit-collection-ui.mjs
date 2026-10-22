@@ -32,17 +32,17 @@ try{
   });
   const page=await context.newPage();currentPage=page;page.on('pageerror',e=>report.errors.push(e.message));await page.goto(base+'/work');
   if(narrow){await page.locator('.orbit-main>small').waitFor();const note=await page.locator('.orbit-main>small').boundingBox(),result=await page.locator('.orbit-archive-satellite').boundingBox();assert(result.y>=note.y+note.height,'mobile results entry must not overlap scope note');}
-  await page.getByRole('button',{name:'自动化采集',exact:true}).click();await page.getByRole('heading',{name:'新增关键词配置',exact:true}).waitFor();
+  await page.getByRole('button',{name:'自动化采集',exact:true}).click();await page.getByRole('button',{name:'配置关键词',exact:true}).click();await page.getByRole('heading',{name:'新增关键词配置',exact:true}).waitFor();
   if(narrow){const nav=await page.locator('.orbit-secondary').boundingBox(),back=await page.locator('.space-back').boundingBox();assert(back.y>=nav.y+nav.height,'mobile return action must not overlap navigation');}
   assert.equal(await page.getByLabel('搜索关键词',{exact:true}).inputValue(),'');
   await page.getByLabel('配置名称',{exact:true}).fill('虚构组');await page.getByLabel('搜索关键词',{exact:true}).fill('虚构用户自定义');await page.getByRole('button',{name:'保存配置',exact:true}).click();
-  await page.getByRole('button',{name:'确认并开始（内置模拟）',exact:true}).waitFor();assert(await page.getByRole('button',{name:'确认并开始（内置模拟）',exact:true}).isEnabled());
-  await page.getByRole('button',{name:'确认并开始（内置模拟）',exact:true}).click();await page.getByRole('button',{name:'暂停本轮并保留已采数据',exact:true}).click();
-  await page.getByRole('button',{name:'打开独立采集结果',exact:true}).click();await page.getByRole('heading',{name:'采集结果',exact:true}).waitFor();await page.getByText('虚构：设备怎么选择？',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'完成设置',exact:true}).click();await page.getByRole('button',{name:'开始采集',exact:true}).waitFor();assert(await page.getByRole('button',{name:'开始采集',exact:true}).isEnabled());assert.equal(await page.getByLabel('本轮最多帖子数',{exact:true}).count(),0);
+  await page.getByRole('button',{name:'开始采集',exact:true}).click();await page.getByRole('button',{name:'停止采集',exact:true}).click();
+  await page.getByRole('button',{name:'查看采集结果',exact:true}).click();await page.getByRole('heading',{name:'采集结果',exact:true}).waitFor();await page.getByText('虚构：设备怎么选择？',{exact:true}).waitFor();
   assert(await page.getByText('未分析 · 无评分',{exact:false}).count());await page.getByText('查看上下文与原文证据',{exact:true}).click();await page.getByText('父评论：原文未采到，需待确认',{exact:true}).waitFor();
   await page.getByLabel('搜索采集原文',{exact:true}).fill('设备');await page.getByRole('button',{name:'返回工作舱',exact:true}).click();await page.getByRole('button',{name:'采集结果',exact:true}).click();assert.equal(await page.getByLabel('搜索采集原文',{exact:true}).inputValue(),'设备');
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:join(out,`results-${narrow}.png`)});report.checks.push('custom keyword save → LLM-off mock run → pause → independent original/parent evidence and retained filter '+narrow);
-  configs=[{...configs[0],mode:'XHS_MCP',activeRunId:null}];await page.goto(base+'/work?module=runs');await page.getByRole('heading',{name:'仅需补充可用账号',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:/确认并开始/}).count(),0);report.checks.push('real mode missing eligible account blocks execution without requiring LLM '+narrow);
+  configs=[{...configs[0],mode:'XHS_MCP',activeRunId:null}];await page.goto(base+'/work?module=runs');await page.getByText('请登录或恢复一个可用账号',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:/确认并开始/}).count(),0);report.checks.push('real mode missing eligible account blocks execution without requiring LLM '+narrow);
   await context.close();
  }
  assert.deepEqual(report.errors,[]);assert.deepEqual(report.unexpected,[]);console.log('PASS '+report.checks.length+' isolated collection flows; only virtual mutations');
