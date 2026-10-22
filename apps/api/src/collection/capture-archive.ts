@@ -30,7 +30,8 @@ export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResul
   for(const entry of result.posts){
    const valid=(id:string)=>spec.mode==='MOCK'?id.startsWith('demo-collect-'):spec.mode==='XHS_FIXTURE'?id.startsWith('fixture-xhs-'):!/^(demo-|fixture-)/.test(id);
    if(!valid(entry.post.id)||entry.comments.some(c=>![c.id,c.userId,...(c.parentId?[c.parentId]:[])].every(valid)))throw new ReadFailure('INVALID_DATA');
-   const postHash=semanticHash(entry.post),p=await tx.capturedPost.upsert({where:{configId_platformPostId_contentHash:{configId:config.id,platformPostId:entry.post.id,contentHash:postHash}},create:{configId:config.id,runId:run.id,platformPostId:entry.post.id,contentHash:postHash,snapshot:entry.post,lastRunId:run.id,coverage:entry.complete?'COMPLETE':'PARTIAL'},update:{lastRunId:run.id,lastSeenAt:new Date(),coverage:entry.complete?'COMPLETE':'PARTIAL',stopReason:entry.complete?null:'WINDOW_IN_PROGRESS'}});
+   const {coverUrl,...textPost}=entry.post;
+   const postHash=semanticHash(textPost),p=await tx.capturedPost.upsert({where:{configId_platformPostId_contentHash:{configId:config.id,platformPostId:entry.post.id,contentHash:postHash}},create:{configId:config.id,runId:run.id,platformPostId:entry.post.id,contentHash:postHash,snapshot:entry.post,lastRunId:run.id,coverage:entry.complete?'COMPLETE':'PARTIAL'},update:{...(coverUrl?{snapshot:entry.post}:{}),lastRunId:run.id,lastSeenAt:new Date(),coverage:entry.complete?'COMPLETE':'PARTIAL',stopReason:entry.complete?null:'WINDOW_IN_PROGRESS'}});
    const parents=new Map(entry.comments.map(c=>[c.id,c]));
    for(const comment of entry.comments){
     const snapshot=semanticSnapshot(entry.post,comment,comment.parentId?parents.get(comment.parentId):undefined,entry.complete,isDemo),contentHash=snapshotHash(snapshot);

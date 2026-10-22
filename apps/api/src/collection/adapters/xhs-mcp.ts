@@ -1,4 +1,5 @@
 import { z } from "zod";
+import {xhsCover,xhsDetailCover} from "./xhs-cover";
 import { ReadAdapter, ReadFailure, Post, Comment, Page, commentSchema } from "../contract";
 import { ReadOnlyMcpTransport } from "../mcp/transport";
 import { McpMode, ReadTool } from "../mcp/policy";
@@ -48,13 +49,13 @@ export class XhsMcpAdapter implements ReadAdapter {
     }
     async search(keyword: string, cursor: string | undefined, signal: AbortSignal): Promise<Page<Post>> {
         if (cursor) throw new ReadFailure("UNSUPPORTED");
-        const data = parseSource(z.object({ feeds: z.array(z.object({ id: rawId, xsecToken: z.string().min(1).max(4096), noteCard: z.object({ displayTitle: z.string().max(500).optional() }).optional() })).max(200).nullable() }),await this.read("search_feeds", { keyword }, signal),"search");
-        return { items: (data.feeds || []).map(f => { const id = this.id(f.id); this.tokens.set(id, { rawId: f.id, token: f.xsecToken }); return { id, title: f.noteCard?.displayTitle || "未提供标题" }; }), complete: false };
+        const data = parseSource(z.object({ feeds: z.array(z.object({ id: rawId, xsecToken: z.string().min(1).max(4096), noteCard: z.object({ displayTitle: z.string().max(500).optional(), cover:z.unknown().optional() }).optional() })).max(200).nullable() }),await this.read("search_feeds", { keyword }, signal),"search");
+        return { items: (data.feeds || []).map(f => { const id = this.id(f.id); this.tokens.set(id, { rawId: f.id, token: f.xsecToken }); return { id, title: f.noteCard?.displayTitle || "未提供标题", coverUrl:xhsCover(f.noteCard?.cover) }; }), complete: false };
     }
     async post(post: Post, signal: AbortSignal): Promise<Post> {
         const reference = this.tokens.get(post.id);
         if (!reference) throw new ReadFailure("INVALID_DATA");
-        const data = parseSource(z.object({ feed_id: rawId.optional(), data: z.object({ note: z.object({ noteId: rawId.optional(), title: z.string().max(500).optional(), desc: z.string().max(20000).nullish() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }),await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false }, signal),"post");
+        const data = parseSource(z.object({ feed_id: rawId.optional(), data: z.object({ note: z.object({ noteId: rawId.optional(), title: z.string().max(500).optional(), desc: z.string().max(20000).nullish(), imageList:z.unknown().optional() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }),await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false }, signal),"post");
         if ((data.feed_id && data.feed_id !== reference.rawId) || (data.data.note.noteId && data.data.note.noteId !== reference.rawId)) throw invalidSource("post","IDENTITY_CONFLICT","noteId");
         const replies = new Map<string, Comment[]>(), seen = new Map<string,{signature:string;value:Comment}>(), active=new Set<string>();
         let count = 0;
@@ -75,7 +76,7 @@ export class XhsMcpAdapter implements ReadAdapter {
         // Validate the entire received tree before exposing any of it to ingestion.
         const roots = [...new Map((data.data.comments.list || []).map(c => normalize(c)).map(c=>[c.id,c])).values()];
         this.details.set(post.id, { roots, replies });
-        return { ...post, title: data.data.note.title || post.title, ...(data.data.note.desc?{body:data.data.note.desc}:{}) };
+        return { ...post, coverUrl:post.coverUrl||xhsDetailCover(data.data.note.imageList), title: data.data.note.title || post.title, ...(data.data.note.desc?{body:data.data.note.desc}:{}) };
     }
     receivedComments(post:Post):Comment[]{const d=this.details.get(post.id);return d?[...d.roots,...[...d.replies.values()].flat()]:[];}
     async comments(post: Post, cursor: string | undefined, _signal: AbortSignal): Promise<Page<Comment>> {

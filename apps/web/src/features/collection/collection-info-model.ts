@@ -1,11 +1,12 @@
+import {safePostCoverUrl} from '@crm/contracts';
 import type {ArchivedComment,ArchivedPost} from './archive-data';
 import {belongsToRun} from './archive-labels';
-export type InfoPost={id:string;title:string;lastSeenAt:string;versions:ArchivedPost[];comments:ArchivedComment[]};
+export type InfoPost={id:string;title:string;coverUrl?:string;lastSeenAt:string;versions:ArchivedPost[];comments:ArchivedComment[]};
 /** Group only returned snapshots; counts are distinct comment IDs in this page, not platform totals. */
 export function infoPosts(posts:ArchivedPost[],comments:ArchivedComment[],runId=''):InfoPost[]{
  const groups=new Map<string,InfoPost>();
  const ensure=(id:string,title:string,date:string)=>{let row=groups.get(id);if(!row){row={id,title,lastSeenAt:date,versions:[],comments:[]};groups.set(id,row);}if(!row.title&&title)row.title=title;if(date>row.lastSeenAt)row.lastSeenAt=date;return row;};
- for(const p of posts.filter(p=>belongsToRun(p,runId)))ensure(p.platformPostId,p.snapshot.title,p.lastSeenAt).versions.push(p);
+ for(const p of [...posts].filter(p=>belongsToRun(p,runId)).sort((a,b)=>b.lastSeenAt.localeCompare(a.lastSeenAt))){const row=ensure(p.platformPostId,p.snapshot.title,p.lastSeenAt);row.versions.push(p);row.coverUrl??=safePostCoverUrl(p.snapshot.coverUrl);}
  for(const c of comments.filter(c=>belongsToRun(c,runId)))ensure(c.snapshot.postId,c.snapshot.title,c.lastSeenAt).comments.push(c);
  return [...groups.values()].sort((a,b)=>b.lastSeenAt.localeCompare(a.lastSeenAt));
 }

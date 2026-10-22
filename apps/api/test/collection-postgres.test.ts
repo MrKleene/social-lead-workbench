@@ -641,6 +641,15 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
  const rules={version:1 as const,target:'寻找明确请求毕业论文选题帮助的学生',reviewThreshold:70};
  const sample:import('../src/collection/contract').ReadAdapter={mode:'MOCK',platform:'XHS',search:async()=>({items:[{id:'demo-collect-archive-post',title:'虚构毕业论文讨论'}],complete:true}),post:async p=>({...p,body:'讨论各专业选题'}),comments:async()=>({items:[{id:'demo-collect-archive-root',userId:'demo-collect-archive-a',nickname:'虚构甲',text:'护理专业如何选题',hasReplies:true}],complete:true}),replies:async()=>({items:[{id:'demo-collect-archive-reply',userId:'demo-collect-archive-b',nickname:'虚构乙',text:'同问',hasReplies:false,parentId:'demo-collect-archive-root'}],complete:true})};
  async function archive(){const c=await config('不会命中此搜索词',{semanticRules:rules});const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,sample);return c;}
+ it('封面增量写JSON、原文去重保持，API返回安全地址且不触发模型',async()=>{
+  const c=await archive();const old=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}});const before=await db.capturedComment.count({where:{configId:c.id}});
+  for(const coverUrl of ['https://sns-webpic-qc.xhscdn.com/fictional-cover','https://sns-webpic-qn.xhscdn.com/updated-cover',undefined]){
+   const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,{...sample,post:async p=>({...p,body:'讨论各专业选题',coverUrl})});
+   expect(await db.capturedPost.count({where:{configId:c.id}})).toBe(1);expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(before);
+   const page=await read(`/collection/configs/${c.id}/captures`);expect(page.body.posts[0]).toMatchObject({id:old.id,snapshot:{coverUrl:coverUrl||'https://sns-webpic-qn.xhscdn.com/updated-cover'}});
+  }
+  expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(0);expect(await db.contactAttempt.count()).toBe(0);
+ });
  it('默认关闭仍保存未命中的帖子、一级及回复原文，null评分；独立开关不改原规则',async()=>{
   const c=await archive(),page=await read(`/collection/configs/${c.id}/captures`);expect(page.status).toBe(200);expect(page.body).toMatchObject({total:2,postTotal:1,control:{enabled:false,version:0}});expect(page.body.items.every((x:any)=>x.reviews.length===0)).toBe(true);
   expect(page.body.items.find((x:any)=>x.snapshot.parentId).snapshot.parent).toBe('护理专业如何选题');expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(0);expect(await db.sourceMatch.count({where:{configId:c.id}})).toBe(0);

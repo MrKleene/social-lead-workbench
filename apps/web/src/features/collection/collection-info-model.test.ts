@@ -13,3 +13,10 @@ describe('post-first saved information',()=>{
  it.each(['-1','NaN','100001','Infinity'])('rejects invalid offset %s',x=>expect(archiveOffset(x)).toBe(0));
  it('normalizes safe page offsets',()=>{expect(archiveOffset('51')).toBe(50);expect(archiveOffset(null)).toBe(0);});
 });
+
+describe('cover selection independent of comments and task history',()=>{
+ const cover='https://sns-webpic-qc.xhscdn.com/fictional-cover';
+ it('uses newest safe returned cover regardless of input order',()=>{const newer={...p,id:'new',lastSeenAt:'2026-10-23',snapshot:{title:'虚构',coverUrl:cover}};expect(infoPosts([p,newer],[c])[0].coverUrl).toBe(cover);expect(savedCommentCount(infoPosts([p,newer],[c])[0].comments)).toBe(1);});
+ it('old and unsafe covers remain placeholders',()=>{expect(infoPosts([p],[c])[0].coverUrl).toBeUndefined();expect(infoPosts([{...p,snapshot:{...p.snapshot,coverUrl:'https://evil.example/p'}}],[c])[0].coverUrl).toBeUndefined();});
+ it('never borrows another task cover',()=>{expect(infoPosts([{...p,runId:'other',lastRunId:'other',snapshot:{...p.snapshot,coverUrl:cover}}],[c],'r')[0].coverUrl).toBeUndefined();});
+});

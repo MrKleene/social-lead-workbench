@@ -80,3 +80,26 @@ describe('话术安全预览', () => {
         expect(replyDraft.safeParse({ name:'测试',channel:'DM',body:'{{ 昵称 }}，你好' }).success).toBe(true);
     });
 });
+
+
+describe('optional safe post covers (synthetic upstream only)',()=>{
+ const cover='https://sns-webpic-qc.xhscdn.com/fictional-cover!webp';
+ it.each(['http://sns-webpic-qc.xhscdn.com/p','https://evil.example/p','https://sns-webpic-qc.xhscdn.com.evil.example/p','https://user:secret@sns-webpic-qc.xhscdn.com/p','https://sns-webpic-qc.xhscdn.com/p?token=secret','https://sns-webpic-qc.xhscdn.com/p#secret','https://127.0.0.1/p','data:image/png;base64,abc','https://sns-webpic-qc.xhscdn.com/%3Ftoken','https://sns-webpic-qc.xhscdn.com:444/p'])('rejects unsafe optional URL without discarding text: %s',async value=>{
+  const {postSchema}=await import('../src/collection/contract');expect(postSchema.parse({id:'p',title:'合成标题',coverUrl:value})).toEqual({id:'p',title:'合成标题',coverUrl:undefined});
+ });
+ it.each([
+  [{urlDefault:cover},[{urlDefault:'https://sns-webpic-qn.xhscdn.com/detail'}],cover],
+  [null,[{urlDefault:cover}],cover],
+  [{urlDefault:'https://evil.example/token',urlPre:cover},undefined,cover],
+  [{infoList:[{url:cover}]},undefined,cover],
+  [42,'bad',undefined],
+ ])('extracts observed cover or first detail image without new calls',async(raw,images,expected)=>{
+  const call=vi.fn().mockResolvedValueOnce(envelope({feeds:[{id:'p1',xsecToken:'fake-secret-not-to-store',noteCard:{displayTitle:'合成帖子',cover:raw}}]})).mockResolvedValueOnce(envelope({data:{note:{title:'合成帖子',imageList:images},comments:{list:[]}}}));
+  const a=new XhsMcpAdapter({call},true),signal=new AbortController().signal;const search=await a.search('合成',undefined,signal),post=await a.post(search.items[0],signal);
+  expect(post.coverUrl).toBe(expected);expect(JSON.stringify(post)).not.toContain('fake-secret');expect(call).toHaveBeenCalledTimes(2);
+ });
+ it('cover metadata is absent from model snapshot and comment hash',async()=>{
+  const {semanticSnapshot,snapshotHash}=await import('../src/collection/semantic-evaluator');const comment={id:'c',userId:'u',nickname:'合成',text:'求助',hasReplies:false};
+  const plain={id:'p',title:'合成'};const a=semanticSnapshot(plain,comment,undefined,false,true),b=semanticSnapshot({...plain,coverUrl:cover},comment,undefined,false,true);expect(b).toEqual(a);expect(snapshotHash(b)).toBe(snapshotHash(a));
+ });
+});
