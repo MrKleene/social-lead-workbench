@@ -10,7 +10,7 @@ import { useEvents } from '@/lib/use-events';
 import { ErrorNotice } from './feedback';
 import { DraftGuardProvider, useConfirmWorkspaceLeave } from '@/features/work/draft-guard';
 const links = [
-  { to: '/work', label: '采集工作台' }, {to:'/work?module=archive',label:'采集结果',adminOnly:true}, { to: '/leads', label: '全部线索' },
+  { to: '/work', label: '采集工作台' }, {to:'/work?module=archive',label:'采集信息',adminOnly:true}, { to: '/leads', label: '全部线索' },
   { to: '/tasks', label: '人工任务' }, { to: '/work?module=settings', label: '搜索设置', adminOnly: true },
   { to: '/work?module=templates', label: '回复话术', adminOnly: true }, { to: '/platforms', label: '平台能力' },
 ];

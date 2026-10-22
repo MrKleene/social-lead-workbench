@@ -29,7 +29,7 @@
     "test:queue": "node scripts/test-queue-isolated.mjs",
     "dev:mock:isolated": "node scripts/dev-mock-isolated.mjs",
     "test:aurora:ui": "npm run build -w @crm/web && node scripts/test-aurora-workspace-ui.mjs",
-    "test:workbench": "vitest run apps/web/src/features/accounts/login-availability.test.ts apps/web/src/features/work/stable-results.test.ts apps/web/src/features/work/motion-policy.test.ts apps/web/src/features/work/navigation-policy.test.ts apps/web/src/features/collection/mode.test.ts apps/web/src/features/collection/run-stats.test.ts apps/web/src/features/work/collection-preflight.test.ts apps/web/src/features/work/collection-progress.test.ts",
+    "test:workbench": "vitest run apps/web/src/features/accounts/login-availability.test.ts apps/web/src/features/work/stable-results.test.ts apps/web/src/features/work/motion-policy.test.ts apps/web/src/features/work/navigation-policy.test.ts apps/web/src/features/collection/mode.test.ts apps/web/src/features/collection/run-stats.test.ts apps/web/src/features/work/collection-preflight.test.ts apps/web/src/features/work/collection-progress.test.ts apps/web/src/features/collection/collection-info-model.test.ts",
     "test:mcp": "node scripts/test-queue-isolated.mjs --mcp",
     "test:mock:isolated": "node scripts/test-queue-isolated.mjs --mock-only",
     "dev:mcp:offline": "node scripts/dev-mock-isolated.mjs --mcp-fixture",
@@ -61,7 +61,8 @@
     "status": "node scripts/workbench.mjs status",
     "test:commands": "node scripts/test-workbench-commands.mjs",
     "test:orbit:ui": "npm run build -w @crm/web && node scripts/test-orbit-collection-ui.mjs",
-    "test:collection-task:ui": "npm run build -w @crm/web && node scripts/test-collection-task-ui.mjs"
+    "test:collection-task:ui": "npm run build -w @crm/web && node scripts/test-collection-task-ui.mjs",
+    "test:collection-info:ui": "npm run build -w @crm/web && node scripts/test-collection-info-ui.mjs"
   },
   "devDependencies": {
     "prisma": "6.19.0",
