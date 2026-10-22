@@ -12,3 +12,13 @@ export function commentThread(items:ArchivedComment[]):CommentRow[]{
  for(const row of rows)visit(row,row.depth); // Cycles remain inspectable, never dropped.
  return result;
 }
+
+/** Group only proven parent links. Ambiguities/cycles stay visible and inspectable. */
+export function replyGroups(rows:CommentRow[]):Map<string,CommentRow[]> {
+ const byId=new Map(rows.map(r=>[r.comment.id,r])),groups=new Map<string,CommentRow[]>();
+ for(const row of rows){let current=row;const seen=new Set<string>();
+  while(current.parent&&!seen.has(current.comment.id)){seen.add(current.comment.id);current=byId.get(current.parent.id)!;}
+  if(current.parent||current===row)continue;
+  groups.set(current.comment.id,[...(groups.get(current.comment.id)||[]),row]);
+ }return groups;
+}
