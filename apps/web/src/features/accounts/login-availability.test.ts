@@ -29,3 +29,13 @@ describe('扫码入口前置条件', () => {
     expect(loginAvailability({ ...configured, mode: 'offline', enabled: true, deviceRequired: false }, false, false)).toBe('ready');
   });
 });
+
+import {accountState,canRecover,hasSavedLogin} from './account-presentation';
+import type {Account} from './types';
+const saved={status:'PAUSED',loginProvider:'real',loginStatus:'UNVERIFIED',loginVerifiedAt:'2026-10-20',sessionReference:{state:'UNVERIFIED'}} as Account;
+describe('当前账号状态不混同历史/模拟状态',()=>{
+ it('历史确认不会显示当前已登录',()=>{expect(hasSavedLogin(saved)).toBe(true);expect(accountState(saved)).toBe('待检查登录');expect(canRecover(saved)).toBe(true);});
+ it('离线模拟不冒充真实登录',()=>expect(accountState({...saved,loginStatus:'OFFLINE_VERIFIED',loginProvider:'offline'})).toBe('离线演示'));
+ it('受限或设备不匹配不提供恢复执行',()=>{expect(canRecover({...saved,status:'RESTRICTED'})).toBe(false);expect(canRecover({...saved,loginStatus:'DEVICE_MISMATCH'})).toBe(false);expect(accountState({...saved,status:'RESTRICTED',loginStatus:'VERIFIED'})).toBe('平台受限');});
+ it('缺少引用不伪造恢复能力',()=>expect(canRecover({...saved,sessionReference:null})).toBe(false));
+});

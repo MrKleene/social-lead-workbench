@@ -12,12 +12,12 @@ export function useAccountLogin(accountId:string){
     const requestKey=key.current;if(!requestKey)return;
     const version=++generation.current;controller.current?.abort();key.current=null;
     setView(v=>v?{...v,image:undefined,state:'CANCELLED'}:null);
-    try{const result=await api<LoginView>(`/accounts/${accountId}/login/cancel`,{method:'POST',body:JSON.stringify({requestKey}),keepalive:true});if(version===generation.current)setView(result);void client.invalidateQueries({queryKey:['accounts']});}catch{if(version===generation.current)setError('取消请求未确认；服务端最迟在断联期限到达后停止等待。');}
+    try{const result=await api<LoginView>(`/accounts/${accountId}/login/cancel`,{method:'POST',body:JSON.stringify({requestKey}),keepalive:true});if(version===generation.current)setView(result);void Promise.all(['accounts','mcp-readiness'].map(key=>client.invalidateQueries({queryKey:[key]})));}catch{if(version===generation.current)setError('取消请求未确认；服务端最迟在断联期限到达后停止等待。');}
   },[accountId,client]);
   useEffect(()=>{const change=()=>setVisible(!document.hidden);document.addEventListener('visibilitychange',change);const pagehide=()=>{void cancel();};window.addEventListener('pagehide',pagehide);return()=>{document.removeEventListener('visibilitychange',change);window.removeEventListener('pagehide',pagehide);void cancel();};},[cancel]);
   useEffect(()=>{if(!active||!visible)void cancel();},[active,visible,cancel]);
   useEffect(()=>{if(!running(view?.state)||!active||!visible)return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[view?.state,active,visible]);
-  const accept=useCallback((result:LoginView,version:number)=>{if(version!==generation.current)return;setNow(Date.now());setView(result);if(!running(result.state)){key.current=null;void client.invalidateQueries({queryKey:['accounts']});}},[client]);
+  const accept=useCallback((result:LoginView,version:number)=>{if(version!==generation.current)return;setNow(Date.now());setView(result);if(!running(result.state)){key.current=null;void Promise.all(['accounts','mcp-readiness'].map(key=>client.invalidateQueries({queryKey:[key]})));}},[client]);
   const start=async()=>{
     if(key.current||!active||!visible)return;
     const requestKey=crypto.randomUUID(),version=++generation.current;key.current=requestKey;controller.current=new AbortController();setError('');setNow(Date.now());

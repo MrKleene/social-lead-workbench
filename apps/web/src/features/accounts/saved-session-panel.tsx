@@ -1,17 +1,13 @@
-import { useSavedSession } from './use-saved-session';
-import { Button } from '@/components/ui/button';
-import type { Account } from './types';
+import {useSavedSession} from './use-saved-session';
+import {Button} from '@/components/ui/button';
+import type {Account} from './types';
+const results:Record<string,string>={VERIFIED:'本机会话已核验，可用于单次只读采集',EXPIRED:'登录已失效；原会话保留，当前不能采集',MISSING:'本机会话文件缺失，未恢复登录',NEEDS_REVIEW:'身份或保存状态不一致，未恢复登录',UNVERIFIED:'暂未完成核验，请稍后手动检查',DEVICE_MISMATCH:'需在原执行电脑恢复'};
 export function SavedSessionPanel({account}:{account:Account}){
-  const {consent,setConsent,verify}=useSavedSession(account.id);
-  const ref=account.sessionReference;
-  return <section className="account-login-panel" aria-label="本地会话恢复">
-    <h3>{ref?.provider==='offline'?'离线模拟会话恢复':'本地会话恢复'}</h3>
-    <p>业务记录与本机会话引用已保留。重启不自动连接平台，历史验证不代表当前在线。采集和发送仍禁用。</p>
-    {ref?<><p className="login-storage">执行设备：{ref.deviceId}</p><p>最近确认：{ref.verifiedAt?new Date(ref.verifiedAt).toLocaleString():'尚无确认'}（历史记录）</p>
-      <label className="login-consent"><input type="checkbox" checked={consent} disabled={verify.isPending} onChange={e=>setConsent(e.target.checked)}/>我同意使用此设备已保存的会话，仅核验登录状态和稳定账号 ID</label>
-      <Button disabled={!consent||verify.isPending||ref.state==='DEVICE_MISMATCH'} onClick={()=>verify.mutate()}>{verify.isPending?'正在核验…':'验证本机已保存会话'}</Button>
-      {['MISSING','EXPIRED','NEEDS_REVIEW'].includes(ref.state)&&<p>请先人工检查会话保存情况；本版本不会导入、复制或自动替换凭据。</p>}
-    </>:<p>旧记录没有可信设备引用；本版本不自动关联遗留目录，需要单独迁移确认。</p>}
-    {verify.error&&<p role="alert">{verify.error instanceof Error?verify.error.message:'核验未完成'}</p>}
-  </section>;
+ const {consent,setConsent,verify}=useSavedSession(account.id),ref=account.sessionReference;
+ return <section className="account-login-panel" aria-label="本地会话恢复">
+  {ref?<><p>使用已保存的本机会话，不要求重新扫码。</p><label className="login-consent"><input type="checkbox" checked={consent} disabled={verify.isPending} onChange={e=>setConsent(e.target.checked)}/>同意检查此账号的登录状态和账号身份</label><Button disabled={!consent||verify.isPending||ref.state==='DEVICE_MISMATCH'} onClick={()=>verify.mutate()}>{verify.isPending?'正在检查…':'确认检查'}</Button></>:<p>没有可恢复的本机会话引用，需管理员核查。</p>}
+  {verify.data&&<p role="status">{verify.data.provider==='offline'?'【离线模拟】':''}{results[verify.data.state]||'核验结果未知，未确认可用'}</p>}
+  {verify.error&&<p role="alert">{verify.error.message}</p>}
+  <details><summary>为什么要检查？</summary><p>登录信息由执行电脑保存，正常重启不会删除。重启后不会自动连接平台；这次检查会核对本地文件和实际登录身份。检查不会自动采集或发送。</p></details>
+ </section>;
 }
