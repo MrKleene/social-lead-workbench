@@ -35,5 +35,6 @@ export const replyDraft = z.object({ name: z.string().trim().min(1).max(80), cha
   .refine(v => previewReply(v.body, {}).unknown.length === 0, '话术包含未知占位符；仅支持昵称、关键词、帖子标题、平台、专业')
   .refine(v => !/[{}]/.test(v.body.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, '')), '占位符必须使用 {{字段}} 格式');
 
+export * from './collection-diagnostic';
 export * from './comment-rules';
 export * from './semantic-review';

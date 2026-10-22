@@ -6,7 +6,7 @@
     "dev": "DOTENV_CONFIG_PATH=../../.env tsx watch --tsconfig tsconfig.json src/main.ts",
     "build": "tsc -p tsconfig.json && node ../../scripts/build-device-vault.mjs && node ../../scripts/build-windows-host.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
-    "test": "vitest run test/unit.test.ts test/http.test.ts test/collection-unit.test.ts test/mcp-transport.test.ts test/login-protocol.test.ts test/persistent-login.test.ts test/device-runtime.test.ts test/windows-device.test.ts test/comment-rules.test.ts test/semantic-review.test.ts test/qwen-provider.test.ts test/model-vault.test.ts",
+    "test": "vitest run test/unit.test.ts test/http.test.ts test/collection-unit.test.ts test/mcp-transport.test.ts test/login-protocol.test.ts test/persistent-login.test.ts test/device-runtime.test.ts test/windows-device.test.ts test/comment-rules.test.ts test/semantic-review.test.ts test/qwen-provider.test.ts test/model-vault.test.ts test/collection-diagnostics.test.ts",
     "test:integration": "vitest run --no-file-parallelism test/postgres.test.ts test/collection-postgres.test.ts test/accounts-postgres.test.ts test/account-login-postgres.test.ts test/devices-postgres.test.ts test/account-read-postgres.test.ts test/model-settings-postgres.test.ts",
     "test:queue": "vitest run --no-file-parallelism test/collection-queue.test.ts"
   },

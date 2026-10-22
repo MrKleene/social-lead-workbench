@@ -1,3 +1,5 @@
+import {diagnose,logCollectionDiagnostic} from './diagnostics';
+import type {CollectionDiagnostic} from '@crm/contracts';
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Optional, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { CollectionConfig, Prisma } from "@prisma/client";
 import { Db } from "../common/db";
@@ -151,6 +153,7 @@ export class CollectionService {
         const run = await this.db.collectionRun.findUniqueOrThrow({ where: { id } });
         let reader: ReadAdapter | undefined;
         let owned: Awaited<ReturnType<AccountReadService['open']>> | undefined;
+        let diagnosticStage:CollectionDiagnostic['stage']='setup';
         const cancelled=async()=>{const config=await this.db.collectionConfig.findUniqueOrThrow({where:{id:run.configId}}),fresh=await this.db.collectionRun.findUniqueOrThrow({where:{id}});return !config.enabled||!!config.archivedAt||config.revision!==run.revision||fresh.cancelRequested||fresh.status!=='RUNNING';};
         try {
             const spec = configInput.parse(run.snapshot);
@@ -159,20 +162,24 @@ export class CollectionService {
             if (spec.mode === "MOCK") reader = adapter || new MockAdapter(spec.platform, run.scenario as Scenario);
             else if(accountReadMode()) {
                 if(adapter||!this.accountReads||spec.mode!==accountReadMode()||spec.batchLimit>3)throw new ReadFailure('REAL_DISABLED');
-                owned=await this.accountReads.open(run.execution,cancelled);reader=owned.reader;
+                diagnosticStage='authorization';owned=await this.accountReads.open(run.execution,cancelled);reader=owned.reader;
             }
             else { if(run.execution)throw new ReadFailure('REAL_DISABLED'); const settings = requireMcp(spec.mode); reader = adapter || new XhsMcpAdapter(new XhsHttpTransport(settings.url, settings.mode), true, settings.mode); }
             const result = await collect(reader, spec, async () => { if(owned)await owned.check(); else if(spec.mode!=="MOCK")requireMcp(spec.mode);return cancelled(); }, {...(owned?{requests:32,pagesPerStream:1,comments:100,callMs:40000,runMs:150000}:limits),pagesPerStream:(run.readPlan as {commentPages?:number}|null)?.commentPages??(owned?1:limits.pagesPerStream)}, async progress=>{await checkpointCapture(this.db,run,progress,owned?.commitGuard);await this.db.collectionRun.updateMany({where:{id,status:'RUNNING'},data:{requests:progress.requests,observed:progress.posts.reduce((n,p)=>n+p.comments.length,0)}});});
+            if(result.diagnostic)logCollectionDiagnostic(run.id,result.diagnostic);
+            diagnosticStage='finish_archive';
             await finishCapture(this.db,run,result);
             if(owned && result.status==='FAILED'){result.discarded=result.discarded||result.posts.length>0;result.posts=[];}
+            diagnosticStage='commit';
             const finished=await commitRead(this.db, run, result,owned?.commitGuard);
             if(owned)await this.accountReads!.failure(run.execution,result.reason);
             return finished;
         }
         catch (error) {
             const reason=error instanceof ReadFailure?error.code:"INVALID_DATA";
+            const diagnostic=diagnose(error,diagnosticStage);logCollectionDiagnostic(run.id,diagnostic);
             await finishCapture(this.db,run,{posts:[],requests:0,status:"FAILED",reason});
-            const failed=await commitRead(this.db, run, { posts: [], requests: 0, status: "FAILED", reason });
+            const failed=await commitRead(this.db, run, { posts: [], requests: 0, status: "FAILED", reason,diagnostic });
             if(run.execution)await this.accountReads?.failure(run.execution,reason);
             return failed;
         } finally { if(owned)await owned.close();else await reader?.close?.(); }

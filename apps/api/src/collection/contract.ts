@@ -18,7 +18,7 @@ export const scenarioSchema = z.enum(["BASELINE", "NEW", "PARTIAL", "TIMEOUT", "
 export type Scenario = z.infer<typeof scenarioSchema>;
 export type Failure = "TIMEOUT" | "LOGIN_EXPIRED" | "RESTRICTED" | "INVALID_DATA" | "BUDGET" | "PAUSED" | "REAL_DISABLED" | "UNSUPPORTED" | "RATE_LIMITED" | "ENDPOINT_INVALID" | "PROFILE_MISMATCH" | "MCP_PROTOCOL" | "MCP_TOOLS_MISSING" | "MCP_SESSION_EXPIRED" | "SOURCE_UNAVAILABLE" | "DEVICE_UNAVAILABLE" | "ACCOUNT_CHANGED" | "IDENTITY_MISMATCH" | "AUTHORIZATION_ENDED";
 export class ReadFailure extends Error {
-    constructor(public code: Failure, public retryAfterMs?: number) { super(code); }
+    constructor(public code: Failure, public retryAfterMs?: number, public diagnostic?:import('@crm/contracts').CollectionDiagnostic) { super(code); }
 }
 export const postSchema = z.object({ id: z.string().min(1).max(200), title: z.string().max(500), body: z.string().max(20000).optional() });
 export const commentSchema = z.object({

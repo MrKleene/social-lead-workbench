@@ -446,7 +446,14 @@ describe.skipIf(process.env.CRM_MOCK_ONLY === '1')('MCP默认关闭、只读就�
     });
     it('缺失与损坏窗口不会报告删除或建立新起点',async()=>{
         const c=await create(); fixture.state.scenario='MALFORMED';
-        expect(await execute(c.id)).toMatchObject({status:'FAILED',reason:'INVALID_DATA',observed:0});
+        const failed=await execute(c.id);
+        expect(failed).toMatchObject({status:'FAILED',reason:'INVALID_DATA',observed:0});
+        const persisted=await db.collectionRun.findUniqueOrThrow({where:{id:failed.id}});
+        expect((persisted.metrics as any).diagnostic).toMatchObject({version:1,stage:'post',kind:'SCHEMA_VALIDATION'});
+        const audit=await db.auditLog.findFirstOrThrow({where:{entityId:failed.id,action:'COLLECTION_FINISHED_MCP'}});
+        expect((audit.metadata as any).diagnostic).toEqual((persisted.metrics as any).diagnostic);
+        const detail=await read(`/collection/configs/${c.id}`);
+        expect(detail.body.runs.find((r:any)=>r.id===failed.id).metrics.diagnostic).toEqual((persisted.metrics as any).diagnostic);
         expect(await db.monitorPost.count({where:{configId:c.id}})).toBe(0);
         expect(await db.commentObservation.count({where:{state:'DELETED_CONFIRMED',platformCommentId:{startsWith:'fixture-xhs-'}}})).toBe(0);
         fixture.state.scenario='BASELINE';
@@ -658,6 +665,15 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
   const r=await service.start(actor,c.id,'BASELINE',randomUUID(),'MOCK',undefined,undefined,{rounds:1,postsPerRound:1,commentPages:2});await service.execute(r.id,interrupted);
   expect(second).toBe(1);expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(1);expect(await db.capturedPost.findFirst({where:{configId:c.id}})).toMatchObject({coverage:'PARTIAL',stopReason:'TIMEOUT'});expect(await db.collectionRun.findUnique({where:{id:r.id}})).toMatchObject({capturedPosts:1,capturedCommentsCount:1,readPlan:{rounds:1,postsPerRound:1,commentPages:2}});
   const limited=await config('存档一页');const once=await service.start(actor,limited.id,'BASELINE',randomUUID(),'MOCK',undefined,undefined,{rounds:1,postsPerRound:1,commentPages:1});await service.execute(once.id,interrupted);expect(second).toBe(1);expect(await db.capturedPost.findFirst({where:{configId:limited.id}})).toMatchObject({coverage:'PARTIAL',stopReason:'COMMENTS_PARTIAL'});
+ });
+ it('第二帖数据异常保留第一帖原文并持久化受控诊断，不假成功',async()=>{
+  const {invalidSource}=await import('../src/collection/diagnostics');const c=await config('合成第二帖异常',{batchLimit:2});
+  const interrupted={...sample,search:async()=>({items:[{id:'demo-collect-archive-post',title:'合成首帖'},{id:'demo-collect-second-post',title:'合成第二帖'}],complete:true}),post:async(p:import('../src/collection/contract').Post)=>{if(p.id==='demo-collect-second-post')throw invalidSource('post','SCHEMA_VALIDATION','userInfo');return p;}};
+  const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,interrupted);
+  const saved=await db.collectionRun.findUniqueOrThrow({where:{id:r.id}});expect(saved).toMatchObject({status:'FAILED',reason:'INVALID_DATA',capturedPosts:1,capturedCommentsCount:2,observed:0});
+  expect(saved.metrics).toMatchObject({discarded:true,diagnostic:{version:1,stage:'post',kind:'SCHEMA_VALIDATION',field:'userInfo',postOrdinal:2}});
+  expect(await db.capturedPost.count({where:{configId:c.id}})).toBe(1);expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(2);
+  expect(await db.capturedPost.findFirst({where:{configId:c.id}})).toMatchObject({coverage:'PARTIAL',stopReason:'INVALID_DATA'});
  });
  it('开关在预览后关闭阻止HTTP；已在途的请求可完成，成功同版本不再次调用',async()=>{
   const {CaptureService}=await import('../src/collection/capture.service');const {QwenMatchingService}=await import('../src/collection/qwen-matching.service');const c=await archive(),captures=new CaptureService(db);await captures.toggle(actor,c.id,{enabled:true,version:0});const ids=(await captures.list(actor,c.id)).items.map(x=>x.id);const queued=await captures.enqueue(actor,c.id,ids);

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type {CollectionDiagnostic} from "@crm/contracts";
+import {diagnose,invalidSource} from "./diagnostics";
 import { Comment, Post, Page, ReadAdapter, ReadFailure, ConfigInput, commentSchema, postSchema, limits } from "./contract";
 export type PostRead = {
     post: Post;
@@ -8,6 +10,7 @@ export type PostRead = {
     windowRead?: boolean;
 };
 export type ReadResult = {
+    diagnostic?:CollectionDiagnostic;
     discarded?:boolean;
     posts: PostRead[];
     requests: number;
@@ -27,9 +30,12 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         throw new ReadFailure("REAL_DISABLED");
     const result: ReadResult = { posts: [], requests: 0, status: "COMPLETE" };
     const started = Date.now();
-    let comments = 0;
+    let comments = 0, postOrdinal=0;
+    let stage:CollectionDiagnostic['stage']='prepare';
+    const checkpoint=async()=>{const previous=stage;stage='checkpoint';await progress?.(result);stage=previous;};
+    const checkCancelled=async()=>{try{return await cancelled();}catch(error){throw new ReadFailure(error instanceof ReadFailure?error.code:'INVALID_DATA',error instanceof ReadFailure?error.retryAfterMs:undefined,diagnose(error,'authorization'));}};
     async function call<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
-        if (await cancelled())
+        if (await checkCancelled())
             throw new ReadFailure("PAUSED");
         if (result.requests >= budget.requests || Date.now() - started >= budget.runMs)
             throw new ReadFailure("BUDGET");
@@ -44,7 +50,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
                     polling = setInterval(async () => {
                         if (checking) return;
                         checking = true;
-                        try { if (await cancelled()) { reject(new ReadFailure("PAUSED")); controller.abort(); } }
+                        try { if (await checkCancelled()) { reject(new ReadFailure("PAUSED")); controller.abort(); } }
                         catch (error) { reject(error instanceof ReadFailure ? error : new ReadFailure("INVALID_DATA")); controller.abort(); }
                         finally { checking = false; }
                     }, 100);
@@ -75,6 +81,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         if (adapter.prepare) await call(s => adapter.prepare!(s));
         const found = new Map<string, Post>();
         for (const keyword of config.keywords) {
+            stage='search';
             const complete = await pages((c, s) => adapter.search(keyword, c, s), postSchema, async (items) => { for (const p of items)
                 if (found.size < config.batchLimit)
                     found.set(p.id, p); }, adapter.mode==="MOCK"?limits.pagesPerStream:1);
@@ -88,31 +95,35 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
                 break;
         }
         for (const item of found.values()) {
+            postOrdinal++;stage='post';
             const post = postSchema.parse(await call(s => adapter.post(item, s)));
             if (post.id !== item.id)
                 throw new ReadFailure("INVALID_DATA");
             const entry: PostRead = { post, comments: [], deletedIds: [], complete: false };
             result.posts.push(entry);
-            await progress?.(result);
+            await checkpoint();
             const roots: Comment[] = [];
             const add = async (items: Comment[], deleted: string[]) => {
                 for (const c of items) {
                     const prior=entry.comments.find(x=>x.id===c.id);
-                    if(prior){if(prior.text!==c.text||prior.userId!==c.userId||prior.parentId!==c.parentId)throw new ReadFailure("INVALID_DATA");continue;}
+                    if(prior){if(prior.text!==c.text||prior.userId!==c.userId||prior.parentId!==c.parentId)throw invalidSource(stage,"DUPLICATE_CONFLICT","id");continue;}
                     comments++;
                     entry.comments.push(c);
                 }
                 entry.deletedIds.push(...deleted);
-                await progress?.(result);
+                await checkpoint();
                 if(comments>budget.comments)throw new ReadFailure("BUDGET");
             };
+            stage='received_comments';
             if(adapter.receivedComments)await add(z.array(commentSchema).max(200).parse(adapter.receivedComments(post)),[]);
+            stage='comments';
             let complete = await pages((c, s) => adapter.comments(post, c, s), commentSchema, async (items, deleted) => { roots.push(...items); await add(items, deleted); });
             const expanded = new Set<string>();
             for (let i = 0; i < roots.length; i++) {
                 const root = roots[i];
                 if (!root.hasReplies || expanded.has(root.id)) continue;
                 expanded.add(root.id);
+                stage='replies';
                 const all = await pages((c, s) => adapter.replies(post, root.id, c, s), commentSchema, async (items, deleted) => {
                     if (items.some(c => c.parentId !== root.id))
                         throw new ReadFailure("INVALID_DATA");
@@ -131,7 +142,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
             entry.comments = [...unique.values()];
             entry.complete = complete;
             entry.windowRead = true;
-            await progress?.(result);
+            await checkpoint();
             if (!complete) {
                 result.status = "PARTIAL";
                 result.reason = adapter.mode === "MOCK" ? "COMMENTS_PARTIAL" : "MCP_WINDOW_ONLY";
@@ -139,6 +150,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         }
     }
     catch (error) {
+        result.diagnostic=diagnose(error,stage,postOrdinal,result.requests);
         result.reason = error instanceof ReadFailure ? error.code : "INVALID_DATA";
         if (error instanceof ReadFailure) result.retryAfterMs = error.retryAfterMs;
         if (result.reason === "INVALID_DATA") {result.discarded=result.posts.length>0;result.posts = [];}
