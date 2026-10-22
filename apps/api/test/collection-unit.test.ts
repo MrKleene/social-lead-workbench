@@ -103,3 +103,39 @@ describe('optional safe post covers (synthetic upstream only)',()=>{
   const plain={id:'p',title:'合成'};const a=semanticSnapshot(plain,comment,undefined,false,true),b=semanticSnapshot({...plain,coverUrl:cover},comment,undefined,false,true);expect(b).toEqual(a);expect(snapshotHash(b)).toBe(snapshotHash(a));
  });
 });
+
+
+import {savedNickname,safeAvatarUrl,savedPublishedAt} from '@crm/contracts';
+import {semanticSnapshot,snapshotHash} from '../src/collection/semantic-evaluator';
+describe('optional upstream display metadata, fictional transport only',()=>{
+ const epoch=1792599000,iso='2026-10-21T16:10:00.000Z',avatar='https://sns-avatar-qc.xhscdn.com/avatar/fictional.jpg';
+ it('accepts numeric epoch seconds/milliseconds and normalized ISO, rejects ambiguous or invalid times',()=>{
+  for(const v of [epoch,epoch*1000,iso,'2026-10-21T16:10:00Z'])expect(savedPublishedAt(v)).toBe(iso);
+  for(const v of [null,{},'',String(epoch),'昨天',0,-1,Infinity,NaN,1.5,999999999999999,'2026-02-30T00:00:00Z','2026-10-21','2026-10-21T16:10:00+08:00'])expect(savedPublishedAt(v)).toBeUndefined();
+ });
+ it('ignores malformed names and credential-bearing/unapproved avatar URLs',()=>{
+  expect(savedNickname(' 虚构昵称 ')).toBe('虚构昵称');for(const v of [null,{},123,'','n'.repeat(201),'name\nother'])expect(savedNickname(v)).toBeUndefined();
+  expect(safeAvatarUrl(avatar)).toBe(avatar);
+  for(const v of [null,{},'http://sns-avatar-qc.xhscdn.com/avatar/a','https://evil.example/avatar/a','https://sns-avatar-qc.xhscdn.com.evil.example/avatar/a','https://user:secret@sns-avatar-qc.xhscdn.com/avatar/a','https://sns-avatar-qc.xhscdn.com/avatar/a?token=secret','https://sns-avatar-qc.xhscdn.com/avatar/a#secret','https://sns-avatar-qc.xhscdn.com/avatar/%2f','https://sns-avatar-qc.xhscdn.com:444/avatar/a'])expect(safeAvatarUrl(v)).toBeUndefined();
+ });
+ it.each([false,true])('pinned userInfo nickname/nickName/avatar and createTime on roots and replies; malformed=%s',async malformed=>{
+  const user={userId:'u1',nickname:malformed?{}:'虚构昵称',nickName:malformed?null:'备用昵称',avatar:malformed?'https://evil.example/private?key=fictional':avatar};
+  const reply={id:'r1',content:'回复正文',userInfo:{userId:'u2',nickName:'虚构回复'},createTime:epoch*1000};
+  const c={id:'c1',content:'评论正文',userInfo:user,createTime:malformed?'昨天':epoch,subComments:[reply]};
+  const call=vi.fn().mockResolvedValueOnce(envelope({feeds:[{id:'p1',xsecToken:'fictional-only'}]})).mockResolvedValueOnce(envelope({data:{note:{noteId:'p1',title:'虚构标题',user,time:malformed?null:epoch},comments:{list:[c]}}}));
+  const adapter=new XhsMcpAdapter({call},true),signal=new AbortController().signal,p=(await adapter.search('虚构',undefined,signal)).items[0],detail=await adapter.post(p,signal);
+  const [root]=adapter.receivedComments(p),[child]=(await adapter.replies(p,'c1',undefined,signal)).items;
+  expect(root).toMatchObject({id:'c1',userId:'u1',text:'评论正文',nickname:malformed?'':'虚构昵称'});expect(root.authorAvatarUrl).toBe(malformed?undefined:avatar);expect(root.publishedAt).toBe(malformed?undefined:iso);expect(detail.publishedAt).toBe(malformed?undefined:iso);
+  expect(child).toMatchObject({nickname:'虚构回复',publishedAt:iso,parentId:'c1'});expect(call).toHaveBeenCalledTimes(2);expect(JSON.stringify(detail)).not.toContain('fictional-only');
+ });
+ it('same comment with changed display metadata is not a conflicting content identity',async()=>{
+  const c={id:'c1',content:'虚构正文',userInfo:{userId:'u1',nickname:'旧昵称'},createTime:epoch};
+  const call=vi.fn().mockResolvedValueOnce(envelope({feeds:[{id:'p1',xsecToken:'fictional-only'}]})).mockResolvedValueOnce(envelope({data:{note:{title:'虚构'},comments:{list:[c,{...c,userInfo:{...c.userInfo,nickname:'新昵称',avatar},createTime:epoch*1000}]}}}));
+  const a=new XhsMcpAdapter({call},true),signal=new AbortController().signal,p=(await a.search('虚构',undefined,signal)).items[0];await a.post(p,signal);expect(a.receivedComments(p)).toHaveLength(1);
+ });
+ it('display changes do not alter semantic input or its historical content hash',()=>{
+  const post={id:'p',title:'虚构'},c={id:'c',userId:'u',nickname:'旧昵称',text:'正文',hasReplies:false};
+  const original=semanticSnapshot(post,c,undefined,false,true),next=semanticSnapshot({...post,authorNickname:'新作者',authorAvatarUrl:avatar,publishedAt:iso},{...c,nickname:'新昵称',authorAvatarUrl:avatar,publishedAt:iso},undefined,false,true);
+  expect(next).toEqual(original);expect(snapshotHash(next)).toBe(snapshotHash(original));expect(JSON.stringify(next)).not.toContain(avatar);
+ });
+});

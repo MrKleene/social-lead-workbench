@@ -1,4 +1,4 @@
-import { commentRulesSchema, semanticRulesSchema, safePostCoverUrl } from '@crm/contracts';
+import { commentRulesSchema, semanticRulesSchema, safePostCoverUrl, savedNickname, safeAvatarUrl, savedPublishedAt } from '@crm/contracts';
 import { z } from "zod";
 const normalize = (value: string) => value.normalize("NFKC").toLowerCase();
 const word = z.string().trim().min(1).max(40);
@@ -20,9 +20,11 @@ export type Failure = "TIMEOUT" | "LOGIN_EXPIRED" | "RESTRICTED" | "INVALID_DATA
 export class ReadFailure extends Error {
     constructor(public code: Failure, public retryAfterMs?: number, public diagnostic?:import('@crm/contracts').CollectionDiagnostic) { super(code); }
 }
-export const postSchema = z.object({ id: z.string().min(1).max(200), title: z.string().max(500), body: z.string().max(20000).optional(), coverUrl:z.preprocess(safePostCoverUrl,z.string().optional()) });
+const displayFields={authorNickname:z.preprocess(savedNickname,z.string().optional()),authorAvatarUrl:z.preprocess(safeAvatarUrl,z.string().optional()),publishedAt:z.preprocess(savedPublishedAt,z.string().optional())};
+export const postSchema = z.object({ id: z.string().min(1).max(200), title: z.string().max(500), body: z.string().max(20000).optional(), coverUrl:z.preprocess(safePostCoverUrl,z.string().optional()),...displayFields });
 export const commentSchema = z.object({
-    id: z.string().min(1).max(200), userId: z.string().min(1).max(200), nickname: z.string().min(1).max(200),
+    id: z.string().min(1).max(200), userId: z.string().min(1).max(200), nickname: z.preprocess(v=>savedNickname(v)??'',z.string().max(200)),
+    authorAvatarUrl:displayFields.authorAvatarUrl,publishedAt:displayFields.publishedAt,
     text: z.string().min(1).max(10000), parentId: z.string().max(200).optional(), hasReplies: z.boolean().default(false),
 });
 export type Post = z.infer<typeof postSchema>;

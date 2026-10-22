@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { CapturedComment, CollectionConfig, CollectionRun, Prisma } from '@prisma/client';
-import { SemanticSnapshot, semanticRulesSchema } from '@crm/contracts';
+import { SemanticSnapshot, CaptureDisplay, captureDisplay, safePostCoverUrl, semanticRulesSchema } from '@crm/contracts';
 import { Db } from '../common/db';
 import { configInput, ReadFailure } from './contract';
 import { ReadResult } from './collector';
@@ -30,12 +30,21 @@ export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResul
   for(const entry of result.posts){
    const valid=(id:string)=>spec.mode==='MOCK'?id.startsWith('demo-collect-'):spec.mode==='XHS_FIXTURE'?id.startsWith('fixture-xhs-'):!/^(demo-|fixture-)/.test(id);
    if(!valid(entry.post.id)||entry.comments.some(c=>![c.id,c.userId,...(c.parentId?[c.parentId]:[])].every(valid)))throw new ReadFailure('INVALID_DATA');
-   const {coverUrl,...textPost}=entry.post;
-   const postHash=semanticHash(textPost),p=await tx.capturedPost.upsert({where:{configId_platformPostId_contentHash:{configId:config.id,platformPostId:entry.post.id,contentHash:postHash}},create:{configId:config.id,runId:run.id,platformPostId:entry.post.id,contentHash:postHash,snapshot:entry.post,lastRunId:run.id,coverage:entry.complete?'COMPLETE':'PARTIAL'},update:{...(coverUrl?{snapshot:entry.post}:{}),lastRunId:run.id,lastSeenAt:new Date(),coverage:entry.complete?'COMPLETE':'PARTIAL',stopReason:entry.complete?null:'WINDOW_IN_PROGRESS'}});
+   const {coverUrl,authorNickname,authorAvatarUrl,publishedAt,...textPost}=entry.post;
+   const display=captureDisplay({authorNickname,authorAvatarUrl,publishedAt});
+   const previousPost=await tx.capturedPost.findUnique({where:{configId_platformPostId_contentHash:{configId:config.id,platformPostId:entry.post.id,contentHash:semanticHash(textPost)}},select:{snapshot:true}});
+   const previousSnapshot=(previousPost?.snapshot||{}) as CaptureDisplay & {coverUrl?:string};
+   const retainedCover=coverUrl||safePostCoverUrl(previousSnapshot.coverUrl);
+   const postSnapshot={...textPost,...captureDisplay(previousSnapshot),...display,...(retainedCover?{coverUrl:retainedCover}:{})};
+   const postHash=semanticHash(textPost),p=await tx.capturedPost.upsert({where:{configId_platformPostId_contentHash:{configId:config.id,platformPostId:entry.post.id,contentHash:postHash}},create:{configId:config.id,runId:run.id,platformPostId:entry.post.id,contentHash:postHash,snapshot:postSnapshot,lastRunId:run.id,coverage:entry.complete?'COMPLETE':'PARTIAL'},update:{snapshot:postSnapshot,lastRunId:run.id,lastSeenAt:new Date(),coverage:entry.complete?'COMPLETE':'PARTIAL',stopReason:entry.complete?null:'WINDOW_IN_PROGRESS'}});
    const parents=new Map(entry.comments.map(c=>[c.id,c]));
    for(const comment of entry.comments){
     const snapshot=semanticSnapshot(entry.post,comment,comment.parentId?parents.get(comment.parentId):undefined,entry.complete,isDemo),contentHash=snapshotHash(snapshot);
-    const c=await tx.capturedComment.upsert({where:{configId_platformCommentId_contentHash_contextVersion:{configId:config.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION}},create:{configId:config.id,runId:run.id,postId:p.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION,snapshot,isDemo,lastRunId:run.id},update:{lastRunId:run.id,lastSeenAt:new Date()}});
+    const key={configId:config.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION};
+    const previous=await tx.capturedComment.findUnique({where:{configId_platformCommentId_contentHash_contextVersion:key},select:{snapshot:true}});
+    // Preserve optional metadata when a later finite window omits it; semantic hash stays text-only.
+    const archived={...snapshot,...captureDisplay((previous?.snapshot||{}) as CaptureDisplay),...captureDisplay({authorNickname:comment.nickname,authorAvatarUrl:comment.authorAvatarUrl,publishedAt:comment.publishedAt})};
+    const c=await tx.capturedComment.upsert({where:{configId_platformCommentId_contentHash_contextVersion:{configId:config.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION}},create:{configId:config.id,runId:run.id,postId:p.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION,snapshot:archived,isDemo,lastRunId:run.id},update:{snapshot:archived,lastRunId:run.id,lastSeenAt:new Date()}});
     if(enabled)await enqueueCaptured(tx,c,config);
    }
   }

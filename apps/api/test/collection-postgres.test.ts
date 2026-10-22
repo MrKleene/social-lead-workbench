@@ -427,6 +427,7 @@ describe.skipIf(process.env.CRM_MOCK_ONLY === '1')('MCP默认关闭、只读就�
     it('首次窗口无提醒；嵌套来源、重复幂等、新观察提醒与人工处理保留',async()=>{
         const c=await create(); const first=await execute(c.id);
         expect(first).toMatchObject({status:'PARTIAL',reason:'MCP_WINDOW_ONLY',observed:5,matched:3,added:3,notices:0});
+        const archive=await read(`/collection/configs/${c.id}/captures`);expect(archive.body.items).toHaveLength(5);for(const row of archive.body.items)expect(row.snapshot).toMatchObject({authorNickname:expect.stringContaining('离线样例'),authorAvatarUrl:'https://sns-avatar-qc.xhscdn.com/avatar/fictional.jpg',publishedAt:'2026-10-21T16:10:00.000Z'});
         expect(await db.monitorPost.findFirst({where:{configId:c.id}})).toMatchObject({baselineAt:null,coverage:'PARTIAL',lastRunId:first.id});
         const source=await db.sourceComment.findUniqueOrThrow({where:{platform_platformCommentId:{platform:'XHS',platformCommentId:'fixture-xhs-deep'}},include:{identity:{include:{lead:true}}}});
         expect(source).toMatchObject({isDemo:true,parentPlatformCommentId:'fixture-xhs-reply'});
@@ -649,6 +650,25 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
    const page=await read(`/collection/configs/${c.id}/captures`);expect(page.body.posts[0]).toMatchObject({id:old.id,snapshot:{coverUrl:coverUrl||'https://sns-webpic-qn.xhscdn.com/updated-cover'}});
   }
   expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(0);expect(await db.contactAttempt.count()).toBe(0);
+ });
+ it('昵称头像时间增量存档/API贯通，旧版本补元数据不重复评论、线索、提醒或分析',async()=>{
+  const c=await config('护理专业',{semanticRules:rules}),first=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(first.id,sample);
+  const old=await db.capturedComment.findMany({where:{configId:c.id}}),post=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}});
+  // Simulate pre-metadata JSON in this disposable test database only.
+  for(const row of old){const snapshot=row.snapshot as Record<string,Prisma.InputJsonValue>;const {authorNickname,authorAvatarUrl,publishedAt,...legacy}=snapshot;await db.capturedComment.update({where:{id:row.id},data:{snapshot:legacy}});}
+  const leads=await db.lead.count(),notices=await db.collectionNotice.count(),calls=await db.semanticModelCall.count();
+  expect((await write('patch',`/collection/configs/${c.id}/semantic-control`,{enabled:true,version:0})).status).toBe(200);
+  const iso='2026-10-21T16:10:00.000Z';
+  for(const nickname of ['虚构改名甲','虚构改名乙',undefined]){
+   const metadata=nickname?{authorAvatarUrl:'https://sns-avatar-qc.xhscdn.com/avatar/fictional.jpg',publishedAt:iso}:{};
+   const adapter={...sample,post:async(p:import('../src/collection/contract').Post)=>({...await sample.post(p,new AbortController().signal),...metadata,...(nickname?{authorNickname:nickname}:{})}),comments:async()=>{const page=await sample.comments({id:'demo-collect-archive-post',title:'虚构'},undefined,new AbortController().signal);return {...page,items:page.items.map(x=>({...x,nickname:nickname??'',...metadata}))};},replies:async()=>{const page=await sample.replies({id:'demo-collect-archive-post',title:'虚构'},'demo-collect-archive-root',undefined,new AbortController().signal);return {...page,items:page.items.map(x=>({...x,nickname:nickname??'',...metadata}))};}};
+   const run=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(run.id,adapter);
+   expect((await db.collectionRun.findUniqueOrThrow({where:{id:run.id}})).status).toBe('COMPLETE');
+   const page=await read(`/collection/configs/${c.id}/captures`);expect(page.status).toBe(200);expect(page.body.total).toBe(2);expect(page.body.postTotal).toBe(1);
+   expect(page.body.posts[0]).toMatchObject({id:post.id,contentHash:post.contentHash,snapshot:{authorNickname:nickname||'虚构改名乙',publishedAt:iso}});
+   for(const previous of old){const row=page.body.items.find((x:any)=>x.id===previous.id);expect(row).toMatchObject({contentHash:previous.contentHash,snapshot:{authorNickname:nickname||'虚构改名乙',authorAvatarUrl:'https://sns-avatar-qc.xhscdn.com/avatar/fictional.jpg',publishedAt:iso}});}
+   expect(await db.lead.count()).toBe(leads);expect(await db.collectionNotice.count()).toBe(notices);expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(2);expect(await db.semanticModelCall.count()).toBe(calls);
+  }
  });
  it('默认关闭仍保存未命中的帖子、一级及回复原文，null评分；独立开关不改原规则',async()=>{
   const c=await archive(),page=await read(`/collection/configs/${c.id}/captures`);expect(page.status).toBe(200);expect(page.body).toMatchObject({total:2,postTotal:1,control:{enabled:false,version:0}});expect(page.body.items.every((x:any)=>x.reviews.length===0)).toBe(true);

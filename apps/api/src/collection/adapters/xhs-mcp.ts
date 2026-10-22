@@ -1,3 +1,4 @@
+import {savedNickname,safeAvatarUrl,savedPublishedAt} from '@crm/contracts';
 import { z } from "zod";
 import {xhsCover,xhsDetailCover} from "./xhs-cover";
 import { ReadAdapter, ReadFailure, Post, Comment, Page, commentSchema } from "../contract";
@@ -21,7 +22,8 @@ function text(input: unknown, stage:'prepare'|'search'|'post'): string {
     return text;
 }
 const rawId = z.string().regex(/^[A-Za-z0-9_-]{1,150}$/);
-const rawComment = z.object({ id: rawId, noteId: rawId.optional(), content: z.string(), userInfo: z.object({ userId: rawId, nickname: z.string() }), subCommentCount: z.string().regex(/^\d*$/).optional(), subComments: z.array(z.unknown()).max(100).nullish() });
+const rawUser=z.object({userId:rawId,nickname:z.unknown().optional(),nickName:z.unknown().optional(),avatar:z.unknown().optional()});
+const rawComment = z.object({ id: rawId, noteId: rawId.optional(), content: z.string(), userInfo: rawUser, createTime:z.unknown().optional(), subCommentCount: z.string().regex(/^\d*$/).optional(), subComments: z.array(z.unknown()).max(100).nullish() });
 /** Pinned upstream exposes no comment cursor input. Only the returned finite window is consumed. */
 export class XhsMcpAdapter implements ReadAdapter {
     readonly platform = "XHS" as const;
@@ -55,7 +57,7 @@ export class XhsMcpAdapter implements ReadAdapter {
     async post(post: Post, signal: AbortSignal): Promise<Post> {
         const reference = this.tokens.get(post.id);
         if (!reference) throw new ReadFailure("INVALID_DATA");
-        const data = parseSource(z.object({ feed_id: rawId.optional(), data: z.object({ note: z.object({ noteId: rawId.optional(), title: z.string().max(500).optional(), desc: z.string().max(20000).nullish(), imageList:z.unknown().optional() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }),await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false }, signal),"post");
+        const data = parseSource(z.object({ feed_id: rawId.optional(), data: z.object({ note: z.object({ noteId: rawId.optional(), title: z.string().max(500).optional(), desc: z.string().max(20000).nullish(), imageList:z.unknown().optional(),user:z.unknown().optional(),time:z.unknown().optional() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }),await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false }, signal),"post");
         if ((data.feed_id && data.feed_id !== reference.rawId) || (data.data.note.noteId && data.data.note.noteId !== reference.rawId)) throw invalidSource("post","IDENTITY_CONFLICT","noteId");
         const replies = new Map<string, Comment[]>(), seen = new Map<string,{signature:string;value:Comment}>(), active=new Set<string>();
         let count = 0;
@@ -63,20 +65,21 @@ export class XhsMcpAdapter implements ReadAdapter {
             if (++count > 100 || depth > 8) throw new ReadFailure("BUDGET");
             const c = parseSource(rawComment,input,'post'), id = this.id(c.id);
             if(c.noteId && c.noteId!==reference.rawId)throw invalidSource('post','IDENTITY_CONFLICT','noteId');
-            // Exact repeated payload + same parent is harmless. Any changed payload or parent remains fatal.
-            const signature=JSON.stringify({comment:c,parentId:parentId||null}),prior=seen.get(id);
+            // Display-only changes are harmless. Identity, text, tree and parent conflicts remain fatal.
+            const signature=JSON.stringify({comment:c,parentId:parentId||null},(key,value)=>['nickname','nickName','avatar','createTime'].includes(key)?undefined:value),prior=seen.get(id);
             if(active.has(id)||(prior&&prior.signature!==signature))throw invalidSource('post','DUPLICATE_CONFLICT','id');
             if(prior)return prior.value;
             active.add(id);
             const nested = (c.subComments || []).map(r => normalize(r, id, depth + 1));
             replies.set(id,[...new Map(nested.map(c=>[c.id,c])).values()]);
-            const value=parseSource(commentSchema,{id,userId:this.id(c.userInfo.userId),nickname:c.userInfo.nickname,text:c.content,parentId,hasReplies:nested.length>0||Number(c.subCommentCount||0)>0},'post');
+            const value=parseSource(commentSchema,{id,userId:this.id(c.userInfo.userId),nickname:savedNickname(c.userInfo.nickname)||savedNickname(c.userInfo.nickName),authorAvatarUrl:safeAvatarUrl(c.userInfo.avatar),publishedAt:savedPublishedAt(c.createTime),text:c.content,parentId,hasReplies:nested.length>0||Number(c.subCommentCount||0)>0},'post');
             active.delete(id);seen.set(id,{signature,value});return value;
         };
         // Validate the entire received tree before exposing any of it to ingestion.
         const roots = [...new Map((data.data.comments.list || []).map(c => normalize(c)).map(c=>[c.id,c])).values()];
         this.details.set(post.id, { roots, replies });
-        return { ...post, coverUrl:post.coverUrl||xhsDetailCover(data.data.note.imageList), title: data.data.note.title || post.title, ...(data.data.note.desc?{body:data.data.note.desc}:{}) };
+        const author=rawUser.safeParse(data.data.note.user);
+        return { ...post,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:author.success?safeAvatarUrl(author.data.avatar):undefined,publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||xhsDetailCover(data.data.note.imageList), title: data.data.note.title || post.title, ...(data.data.note.desc?{body:data.data.note.desc}:{}) };
     }
     receivedComments(post:Post):Comment[]{const d=this.details.get(post.id);return d?[...d.roots,...[...d.replies.values()].flat()]:[];}
     async comments(post: Post, cursor: string | undefined, _signal: AbortSignal): Promise<Page<Comment>> {

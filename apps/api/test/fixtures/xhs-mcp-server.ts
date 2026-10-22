@@ -44,7 +44,7 @@ export async function startXhsFixture(options: { sse?: boolean; name?: string; m
         }
         if (state.scenario === 'SOURCE_UNAVAILABLE') { reply({isError:true,content:[{type:'text',text:'笔记不存在或不可见'}]}); return; }
         const keyword = keywords.get(session) || '部署咨询';
-        const comment = (id: string, content: string, subComments: unknown[] = []): unknown => ({ id, noteId: 'offline-post', content, userInfo: { userId: `user-${id}`, nickname: `离线样例 ${id}` }, subCommentCount: String(subComments.length), subComments: subComments.length ? subComments : null });
+        const comment = (id: string, content: string, subComments: unknown[] = []): unknown => ({ id, noteId: 'offline-post', content, userInfo: { userId: `user-${id}`, nickname: `离线样例 ${id}`, avatar:'https://sns-avatar-qc.xhscdn.com/avatar/fictional.jpg' }, createTime:1792599000000, subCommentCount: String(subComments.length), subComments: subComments.length ? subComments : null });
         const list = [comment('root', `请问${keyword}怎么开始？`, [comment('reply', `${keyword}相关经验`, [comment('deep', `需要${keyword}帮助`)])]), comment('excluded', `${keyword}广告`), comment('irrelevant', '无关内容')];
         if (state.scenario === 'NEW') list.push(comment('later', `求助${keyword}的后续方案`));
         if (state.scenario === 'MALFORMED') list.push({ id: 'bad', content: 'missing user' });
