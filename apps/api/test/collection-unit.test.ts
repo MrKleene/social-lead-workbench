@@ -152,9 +152,9 @@ describe('safe persisted image diagnostics, synthetic values only',()=>{
  it('examines supported candidates, counts rejected fallback and preserves the existing first-image policy',async()=>{
   const {inspectXhsCover,inspectXhsDetailCover}=await import('../src/collection/adapters/xhs-cover');const cover='https://sns-webpic-qc.xhscdn.com/fictional';
   const value=inspectXhsCover({urlDefault:'http://sns-webpic-qc.xhscdn.com/a',urlPre:cover,infoList:[{url:'https://evil.example/secret?token=FAKE_SECRET'}]});
-  expect(value.url).toBe(cover);expect(value.diagnostic).toMatchObject({shape:'SUPPORTED',fieldCount:3});expect(value.diagnostic.outcomes).toEqual(expect.arrayContaining([{reason:'PROTOCOL',count:1},{reason:'ACCEPTED',count:1},{reason:'URL_COMPONENTS',count:1}]));expect(JSON.stringify(value.diagnostic)).not.toMatch(/FAKE_SECRET|https?:/);
+  expect(value.url).toBe(cover);expect(value.diagnostic).toMatchObject({shape:'SUPPORTED',fieldCount:3});expect(value.diagnostic.outcomes).toEqual(expect.arrayContaining([{reason:'ACCEPTED',count:2},{reason:'URL_COMPONENTS',count:1}]));expect(JSON.stringify(value.diagnostic)).not.toMatch(/FAKE_SECRET|https?:/);
   expect(inspectXhsCover({infoList:cover}).url).toBeUndefined();expect(inspectXhsCover({infoList:[cover]}).diagnostic.outcomes).toContainEqual({reason:'UNSUPPORTED_FORMAT',count:1});
-  expect(inspectXhsDetailCover([{urlDefault:'http://sns-webpic-qc.xhscdn.com/a'},{urlDefault:cover}]).url).toBeUndefined();
+  expect(inspectXhsDetailCover([{urlDefault:'http://sns-webpic-qn.xhscdn.com/a'},{urlDefault:cover}]).url).toBeUndefined();
   expect(inspectXhsCover('unsupported').diagnostic.shape).toBe('UNSUPPORTED');expect(inspectXhsDetailCover([]).diagnostic.shape).toBe('EMPTY');
  });
  it('carries controlled diagnostic through post/comment validation; identity and semantic hashes ignore it',async()=>{
@@ -162,7 +162,31 @@ describe('safe persisted image diagnostics, synthetic values only',()=>{
   const c={id:'c',content:'合成正文',userInfo:{userId:'u',avatar:'http://sns-avatar-qc.xhscdn.com/avatar/FAKE_SECRET'},subComments:[{id:'r',content:'回复',userInfo:{userId:'u2',avatar:''}}]};
   const call=vi.fn().mockResolvedValueOnce(envelope({feeds:[{id:'p',xsecToken:'FAKE_SECRET',noteCard:{cover:{urlDefault:'http://sns-webpic-qc.xhscdn.com/a'}}}]})).mockResolvedValueOnce(envelope({data:{note:{title:'虚构',imageList:[{urlDefault:'https://sns-webpic-qc.xhscdn.com/a'}]},comments:{list:[c]}}}));
   const a=new XhsMcpAdapter({call},true),signal=new AbortController().signal,p=(await a.search('虚构',undefined,signal)).items[0],post=postSchema.parse(await a.post(p,signal)),[comment,reply]=a.receivedComments(post).map(c=>commentSchema.parse(c));
-  expect(post.imageDiagnostics?.searchCover?.outcomes).toContainEqual({reason:'PROTOCOL',count:1});expect(post.imageDiagnostics?.detailCover?.outcomes).toContainEqual({reason:'ACCEPTED',count:1});expect(comment.imageDiagnostics?.authorAvatar?.outcomes).toEqual([{reason:'PROTOCOL',count:1}]);expect(reply.imageDiagnostics?.authorAvatar?.outcomes).toEqual([{reason:'EMPTY',count:1}]);
+  expect(post.imageDiagnostics?.searchCover?.httpsUpgrades).toBe(1);expect(post.imageDiagnostics?.detailCover?.outcomes).toContainEqual({reason:'ACCEPTED',count:1});expect(comment.imageDiagnostics?.authorAvatar?.outcomes).toEqual([{reason:'PROTOCOL',count:1}]);expect(reply.imageDiagnostics?.authorAvatar?.outcomes).toEqual([{reason:'EMPTY',count:1}]);
   expect(JSON.stringify([post,comment,reply])).not.toContain('FAKE_SECRET');expect(semanticSnapshot(post,comment,undefined,false,false)).toEqual(semanticSnapshot({...post,imageDiagnostics:undefined},{...comment,imageDiagnostics:undefined},undefined,false,false));expect(call).toHaveBeenCalledTimes(2);
+ });
+});
+
+
+describe('source titles and narrowly scoped cover compatibility',()=>{
+ it.each([[undefined,undefined,''],[null,null,''],['','',''],['搜索原文','', '搜索原文'],['搜索原文','详情原文','详情原文'],['','详情原文','详情原文'],[' 原文 👩🏽‍🎓 ','',' 原文 👩🏽‍🎓 ']])('keeps actual text and never invents a missing title',async(searchTitle,detailTitle,expected)=>{
+  const call=vi.fn().mockResolvedValueOnce(envelope({feeds:[{id:'p',xsecToken:'FICTIONAL',noteCard:{displayTitle:searchTitle}}]})).mockResolvedValueOnce(envelope({data:{note:{noteId:'p',title:detailTitle,desc:'真实结构的合成正文'},comments:{list:[]}}}));
+  const a=new XhsMcpAdapter({call},true),signal=new AbortController().signal,search=(await a.search('虚构',undefined,signal)).items[0],post=await a.post(search,signal);
+  expect(search.title).toBe(searchTitle??'');expect(post.title).toBe(expected);expect(JSON.stringify(post)).not.toContain('未提供标题');expect(call).toHaveBeenCalledTimes(2);
+ });
+ it('does not accept page errors or conflicting identities as titleless posts',async()=>{
+  for(const detail of [{isError:true,content:[{type:'text',text:'未登录'}]},envelope({data:{note:{noteId:'different',title:''},comments:{list:[]}}}),envelope({login:'required'})]){
+   const call=vi.fn().mockResolvedValueOnce(envelope({feeds:[{id:'p',xsecToken:'FICTIONAL'}]})).mockResolvedValueOnce(detail);const a=new XhsMcpAdapter({call},true),signal=new AbortController().signal,p=(await a.search('虚构',undefined,signal)).items[0];await expect(a.post(p,signal)).rejects.toThrow();
+  }
+ });
+ it('upgrades only exact reviewed qc unsigned cover paths, not other hosts, avatars or malformed URLs',async()=>{
+  const {inspectXhsCover,inspectXhsAvatar}=await import('../src/collection/adapters/xhs-cover');
+  const value=inspectXhsCover({urlDefault:'http://sns-webpic-qc.xhscdn.com/fake/a!webp'});expect(value.url).toBe('https://sns-webpic-qc.xhscdn.com/fake/a!webp');expect(value.diagnostic).toMatchObject({httpsUpgrades:1,urlClasses:[{protocol:'HTTP',host:'ALLOWED',count:1}]});
+  for(const raw of ['http://sns-webpic-qn.xhscdn.com/a','http://evil.example/a','http://sns-webpic-qc.xhscdn.com.evil.example/a','http://sns-webpic-qc.xhscdn.com:80/a','http://sns-webpic-qc.xhscdn.com:443/a','http://user:secret@sns-webpic-qc.xhscdn.com/a','http://sns-webpic-qc.xhscdn.com/a?token=secret','http://sns-webpic-qc.xhscdn.com/a#secret','http://sns-webpic-qc.xhscdn.com/%61','http://sns-webpic-qc.xhscdn.com/\\evil.example/a','//sns-webpic-qc.xhscdn.com/a','ftp://sns-webpic-qc.xhscdn.com/a','data:text/plain,secret'])expect(inspectXhsCover({urlDefault:raw}).url).toBeUndefined();
+  expect(inspectXhsAvatar('http://sns-avatar-qc.xhscdn.com/avatar/a').url).toBeUndefined();
+ });
+ it('classifies rejected protocols and hosts without exposing arbitrary values; v1 records remain valid',async()=>{
+  const {imageUrlClass,safeImageDiagnostics}=await import('@crm/contracts');expect(imageUrlClass('http://evil.example/private?token=secret','cover')).toEqual({protocol:'HTTP',host:'OTHER'});expect(imageUrlClass('https://sns-webpic-qn.xhscdn.com/a','cover')).toEqual({protocol:'HTTPS',host:'ALLOWED'});expect(imageUrlClass('SECRET','cover')).toEqual({protocol:'INVALID',host:'UNAVAILABLE'});
+  const old={authorAvatar:{version:1,truncated:false,shape:'EMPTY',fieldCount:1,outcomes:[{reason:'EMPTY',count:1}]}};expect(safeImageDiagnostics(old)).toEqual(old);expect(safeImageDiagnostics({authorAvatar:{...old.authorAvatar,urlClasses:[{protocol:'secret',host:'OTHER',count:1}]}})).toBeUndefined();
  });
 });

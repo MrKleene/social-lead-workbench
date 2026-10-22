@@ -51,13 +51,13 @@ export class XhsMcpAdapter implements ReadAdapter {
     }
     async search(keyword: string, cursor: string | undefined, signal: AbortSignal): Promise<Page<Post>> {
         if (cursor) throw new ReadFailure("UNSUPPORTED");
-        const data = parseSource(z.object({ feeds: z.array(z.object({ id: rawId, xsecToken: z.string().min(1).max(4096), noteCard: z.object({ displayTitle: z.string().max(500).optional(), cover:z.unknown().optional() }).optional() })).max(200).nullable() }),await this.read("search_feeds", { keyword }, signal),"search");
-        return { items: (data.feeds || []).map(f => { const id = this.id(f.id); this.tokens.set(id, { rawId: f.id, token: f.xsecToken }); const cover=inspectXhsCover(f.noteCard?.cover);return { id, title: f.noteCard?.displayTitle || "未提供标题", coverUrl:cover.url,imageDiagnostics:{searchCover:cover.diagnostic} }; }), complete: false };
+        const data = parseSource(z.object({ feeds: z.array(z.object({ id: rawId, xsecToken: z.string().min(1).max(4096), noteCard: z.object({ displayTitle: z.string().max(500).nullish(), cover:z.unknown().optional() }).optional() })).max(200).nullable() }),await this.read("search_feeds", { keyword }, signal),"search");
+        return { items: (data.feeds || []).map(f => { const id = this.id(f.id); this.tokens.set(id, { rawId: f.id, token: f.xsecToken }); const cover=inspectXhsCover(f.noteCard?.cover);return { id, title: f.noteCard?.displayTitle ?? "", coverUrl:cover.url,imageDiagnostics:{searchCover:cover.diagnostic} }; }), complete: false };
     }
     async post(post: Post, signal: AbortSignal): Promise<Post> {
         const reference = this.tokens.get(post.id);
         if (!reference) throw new ReadFailure("INVALID_DATA");
-        const data = parseSource(z.object({ feed_id: rawId.optional(), data: z.object({ note: z.object({ noteId: rawId.optional(), title: z.string().max(500).optional(), desc: z.string().max(20000).nullish(), imageList:z.unknown().optional(),user:z.unknown().optional(),time:z.unknown().optional() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }),await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false }, signal),"post");
+        const data = parseSource(z.object({ feed_id: rawId.optional(), data: z.object({ note: z.object({ noteId: rawId.optional(), title: z.string().max(500).nullish(), desc: z.string().max(20000).nullish(), imageList:z.unknown().optional(),user:z.unknown().optional(),time:z.unknown().optional() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }),await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false }, signal),"post");
         if ((data.feed_id && data.feed_id !== reference.rawId) || (data.data.note.noteId && data.data.note.noteId !== reference.rawId)) throw invalidSource("post","IDENTITY_CONFLICT","noteId");
         const replies = new Map<string, Comment[]>(), seen = new Map<string,{signature:string;value:Comment}>(), active=new Set<string>();
         let count = 0;

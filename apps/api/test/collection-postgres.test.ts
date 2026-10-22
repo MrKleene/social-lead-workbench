@@ -705,6 +705,14 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
   expect(after.body.postTotal).toBe(1);expect(after.body.total).toBe(2);expect(after.body.posts[0].id).toBe(before.body.posts[0].id);expect(after.body.posts[0].snapshot.imageDiagnostics).toEqual(imageDiagnostics);
   const root=after.body.items.find((x:any)=>!x.snapshot.parentId);expect(root.snapshot.imageDiagnostics.authorAvatar.outcomes).toEqual([{reason:'PROTOCOL',count:1}]);expect(JSON.stringify(after.body)).not.toContain('FAKE_SECRET');expect(await db.lead.count()).toBe(leads);expect(await db.collectionNotice.count()).toBe(notices);expect(await db.semanticModelCall.count()).toBe(0);
  });
+ it('旧占位原文保留，新空标题与安全封面照实归档，线索和提醒不因展示修正重复',async()=>{
+  const c=await config('护理'),{inspectXhsCover}=await import('../src/collection/adapters/xhs-cover');
+  const withTitle=(title:string)=>({...sample,post:async(p:import('../src/collection/contract').Post)=>({...p,title,body:'合成正文',coverUrl:inspectXhsCover({urlDefault:'http://sns-webpic-qc.xhscdn.com/fictional'}).url})});
+  const first=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(first.id,withTitle('未提供标题'));const old=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}}),leads=await db.lead.count(),notices=await db.collectionNotice.count();expect(leads).toBeGreaterThan(0);
+  for(let i=0;i<2;i++){const next=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(next.id,withTitle(''));expect(await db.lead.count()).toBe(leads);expect(await db.collectionNotice.count()).toBe(notices);}
+  expect((await db.capturedPost.findUniqueOrThrow({where:{id:old.id}})).snapshot).toEqual(old.snapshot);expect(await db.capturedPost.count({where:{configId:c.id}})).toBe(2);
+  const latest=await db.collectionRun.findFirstOrThrow({where:{configId:c.id},orderBy:{createdAt:'desc'}}),feed=await read(`/collection/configs/${c.id}/runs/${latest.id}/posts`);expect(feed.body.items[0]).toMatchObject({title:'',coverUrl:'https://sns-webpic-qc.xhscdn.com/fictional',savedCount:2,newCount:0,reusedCount:2});expect(await db.semanticModelCall.count()).toBe(0);
+ });
  it('默认关闭仍保存未命中的帖子、一级及回复原文，null评分；独立开关不改原规则',async()=>{
   const c=await archive(),page=await read(`/collection/configs/${c.id}/captures`);expect(page.status).toBe(200);expect(page.body).toMatchObject({total:2,postTotal:1,control:{enabled:false,version:0}});expect(page.body.items.every((x:any)=>x.reviews.length===0)).toBe(true);
   expect(page.body.items.find((x:any)=>x.snapshot.parentId).snapshot.parent).toBe('护理专业如何选题');expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(0);expect(await db.sourceMatch.count({where:{configId:c.id}})).toBe(0);

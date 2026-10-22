@@ -46,3 +46,6 @@ it('distinguishes an empty source string from missing original without altering 
  expect(savedSourceText('')).toBe('来源返回空文字');expect(savedSourceText(' \n')).toBe('来源返回空文字');
  expect(savedSourceText(undefined)).toBe('原文未保存');expect(savedSourceText(' 原文 👩🏽‍🎓 ')).toBe(' 原文 👩🏽‍🎓 ');
 });
+
+import {savedTitleLabel} from './saved-text';
+it('title labels are presentation only and support historical placeholders',()=>{for(const v of [undefined,null,'',' ','未提供标题'])expect(savedTitleLabel(v)).toBe('无标题');expect(savedTitleLabel(' 原文 👩🏽‍🎓 ')).toBe(' 原文 👩🏽‍🎓 ');expect(infoPosts([{...p,snapshot:{title:'未提供标题'}}],[])[0].versions[0].snapshot.title).toBe('未提供标题');});

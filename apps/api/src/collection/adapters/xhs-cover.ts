@@ -1,9 +1,20 @@
-import {inspectImageUrl,type ImageDiagnostic,type ImageReason} from '@crm/contracts';
+import {inspectImageUrl,imageUrlClass,type ImageDiagnostic,type ImageReason,type ImageUrlClass} from '@crm/contracts';
 const record=(v:unknown):Record<string,unknown>|undefined=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:undefined;
 function diagnose(value:unknown,values:unknown[],fieldCount:number,kind:'cover'|'avatar',supported:boolean,truncated=false){
- const counts=new Map<ImageReason,number>();let url:string|undefined;
- for(const candidate of values){const result=inspectImageUrl(candidate,kind);counts.set(result.reason,(counts.get(result.reason)||0)+1);url??=result.url;}
- const diagnostic:ImageDiagnostic={version:1,truncated,shape:value===undefined?'NOT_RETURNED':value===null||value===''||Array.isArray(value)&&!value.length?'EMPTY':supported?'SUPPORTED':'UNSUPPORTED',fieldCount,outcomes:[...counts].map(([reason,count])=>({reason,count}))};
+ const counts=new Map<ImageReason,number>(),classes=new Map<string,ImageUrlClass & {count:number}>();let url:string|undefined,upgradedUrl:string|undefined,httpsUpgrades=0;
+ for(const candidate of values){
+  const facts=imageUrlClass(candidate,kind);if(facts){const key=facts.protocol+':'+facts.host;classes.set(key,{...facts,count:(classes.get(key)?.count||0)+1});}
+  let result=inspectImageUrl(candidate,kind);let upgraded=false;
+  // Local reviewed source accepts HTTP image references. Only this existing public CDN
+  // passed a credential-free HTTPS/TLS check (2026-10-22); never upgrade other hosts,
+  // ports, query-bearing references or avatars. Keep the exact source path, prefer native HTTPS.
+  if(kind==='cover'&&result.reason==='PROTOCOL'&&typeof candidate==='string'&&candidate.startsWith('http://sns-webpic-qc.xhscdn.com/')){
+   const secure=inspectImageUrl('https:'+candidate.slice(5),'cover');if(secure.url){result=secure;upgraded=true;httpsUpgrades++;}
+  }
+  counts.set(result.reason,(counts.get(result.reason)||0)+1);if(upgraded)upgradedUrl??=result.url;else url??=result.url;
+ }
+ url??=upgradedUrl;
+ const diagnostic:ImageDiagnostic={version:1,truncated,urlClasses:[...classes.values()],httpsUpgrades,shape:value===undefined?'NOT_RETURNED':value===null||value===''||Array.isArray(value)&&!value.length?'EMPTY':supported?'SUPPORTED':'UNSUPPORTED',fieldCount,outcomes:[...counts].map(([reason,count])=>({reason,count}))};
  return {url,diagnostic};
 }
 /** Pinned types.go: search cover and detail imageList[0]; never construct URLs from file IDs. */
