@@ -20,3 +20,14 @@ describe('cover selection independent of comments and task history',()=>{
  it('old and unsafe covers remain placeholders',()=>{expect(infoPosts([p],[c])[0].coverUrl).toBeUndefined();expect(infoPosts([{...p,snapshot:{...p.snapshot,coverUrl:'https://evil.example/p'}}],[c])[0].coverUrl).toBeUndefined();});
  it('never borrows another task cover',()=>{expect(infoPosts([{...p,runId:'other',lastRunId:'other',snapshot:{...p.snapshot,coverUrl:cover}}],[c],'r')[0].coverUrl).toBeUndefined();});
 });
+
+import {commentThread} from './comment-thread';
+describe('readable threads preserve all saved versions',()=>{
+ const reply={...c,id:'reply-row',platformCommentId:'reply',snapshot:{...c.snapshot,commentId:'reply',parentId:'c',parent:'原文'}};
+ it('puts a reply after its actual parent, even if API returned it first',()=>{const rows=commentThread([reply,c]);expect(rows.map(r=>r.comment.id)).toEqual(['c','reply-row']);expect(rows[1].depth).toBe(1);expect(rows[1].parent?.id).toBe('c');});
+ it('does not attach an ambiguous parent version',()=>{const rows=commentThread([reply,c,{...c,id:'c-version2'}]);expect(rows).toHaveLength(3);expect(rows[0].parentAmbiguous).toBe(true);expect(rows[0].parent).toBeUndefined();});
+ it('keeps missing/cross-page parents as replies',()=>{const [row]=commentThread([reply]);expect(row.depth).toBe(1);expect(row.parent).toBeUndefined();expect(row.comment.snapshot.parentId).toBe('c');});
+ it('never links the same id from another post',()=>{expect(commentThread([reply,{...c,snapshot:{...c.snapshot,postId:'other'}}])[0].parent).toBeUndefined();});
+ it('preserves cycles and self parents without recursion or omission',()=>{const root={...c,snapshot:{...c.snapshot,parentId:'reply'}};const rows=commentThread([root,reply]);expect(new Set(rows.map(r=>r.comment.id)).size).toBe(2);expect(commentThread([{...c,snapshot:{...c.snapshot,parentId:'c'}}])).toHaveLength(1);});
+ it('caps indentation but keeps deeper replies',()=>{const items=[c,...Array.from({length:6},(_,i)=>({...reply,id:'row'+i,snapshot:{...reply.snapshot,commentId:'r'+i,parentId:i?'r'+(i-1):'c'}}))];const rows=commentThread(items);expect(rows).toHaveLength(7);expect(Math.max(...rows.map(r=>r.depth))).toBe(3);});
+});
