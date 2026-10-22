@@ -31,3 +31,13 @@ html[data-crm-reduced=true] .task-message{animation:none}html[data-crm-reduced=t
 @media(prefers-reduced-motion:reduce){.task-message,.task-settings-sheet{animation:none!important;transition:none!important}}
 @media(max-width:900px){.task-room{padding:20px 16px!important;gap:20px}.task-heading{gap:12px}.task-heading h1{font-size:22px}.task-heading>div{min-width:0}.task-config-summary{max-width:170px}.task-heading button{padding:8px 10px;flex-shrink:0;font-size:12px}.task-message-stream{max-height:380px}.task-settings-body{padding:20px}.task-settings-sheet [data-slot=sheet-header]{padding:25px 20px 18px}.task-settings-sheet .form-pair{grid-template-columns:1fr}.task-settings-sheet .space-inline-editor h2{font-size:19px}}
 .task-state{font-weight:500;font-size:11px;margin-left:12px;color:#b7e9cf}.task-state[data-warning=true],.task-outcome{color:#dec18c}.task-outcome{font-size:12px;line-height:1.7;margin:0}
+
+/* Stable task prose; history is exclusively a drawer, never a current-run selector. */
+.task-result-summary{font-size:15px;line-height:1.9;overflow-wrap:anywhere;color:var(--foreground);max-width:75ch;margin:12px 0 16px}
+.task-result-summary[data-warning=true]{border-left:2px solid #cba46e;padding-left:16px}
+.task-current-result{padding:12px 8px 20px}.task-history-list{display:flex;flex-direction:column;gap:8px}
+.task-history-list>button{display:flex;flex-direction:column;gap:8px;text-align:left;padding:16px;border:1px solid #ffffff16;border-radius:12px;background:#ffffff04;overflow-wrap:anywhere;min-width:0}
+.task-history-list>button:hover{background:#ffffff09}.task-history-list>button:focus-visible{outline:2px solid #8de5c1;outline-offset:2px}
+.task-history-row-head{display:flex;justify-content:space-between;gap:12px;font-size:12px}.task-history-list small,.task-record-detail time{color:#a4afb9}.task-history-row-head strong{flex-shrink:0}
+.task-record-detail h3{margin-top:16px}.task-history-sheet .task-settings-body{display:flex;flex-direction:column;gap:16px}
+@media(max-width:480px){.task-history-row-head{flex-wrap:wrap}.task-result-summary{font-size:14px}.task-current-result{padding:4px 0 16px}}

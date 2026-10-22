@@ -45,3 +45,13 @@ describe('current collection versus history',()=>{
   expect(collectionTaskSession(config([{...run,status:'FAILED'}],run.id)).pending).toBe(true);
  });
 });
+
+import {collectionTaskSummary,savedCollectionCounts} from './collection-task-summary';
+describe('truthful task prose',()=>{
+ it('unknown saved counts are not zero or legacy matches',()=>{expect(savedCollectionCounts({...run,observed:900})).toBe('帖子数量未返回 · 评论数量未返回');});
+ it('reports stored counts even when matching metrics were discarded',()=>{const text=collectionTaskSummary({...run,status:'FAILED',reason:'INVALID_DATA',capturedPosts:1,capturedCommentsCount:19,metrics:{discarded:true,diagnostic:{version:1,kind:'SCHEMA_VALIDATION',stage:'post',field:'text',postOrdinal:2}} as Run['metrics']});expect(text).toContain('第 2 篇帖子的评论文本');expect(text).toContain('已保存 1 篇帖子 · 19 条评论/回复');expect(text).toContain('尚未完成');expect(text).not.toContain('空文本');});
+ it('zero is explicit and does not fabricate saved results',()=>expect(collectionTaskSummary({...run,status:'FAILED',capturedPosts:0,capturedCommentsCount:0})).toContain('0 篇帖子 · 0 条评论/回复'));
+ it('partial remains partial and complete remains finite',()=>{expect(collectionTaskSummary({...run,status:'PARTIAL'})).toContain('仅覆盖部分范围');expect(collectionTaskSummary({...run,status:'COMPLETE'})).toContain('不代表全部评论');});
+ it('uses only this task plan and counters',()=>{const text=collectionTaskSummary({...run,status:'COMPLETE',readPlan:{rounds:1,postsPerRound:3,commentPages:1},capturedPosts:2,capturedCommentsCount:8});expect(text).toContain('最多 3 篇');expect(text).toContain('2 篇帖子 · 8 条');});
+ it.each(['QUEUED','RUNNING','PAUSED','OTHER'])('keeps %s distinct from completed',status=>expect(collectionTaskSummary({...run,status})).not.toContain('批次完成'));
+});

@@ -13,6 +13,7 @@ export type ConfigDraft = {
     defaultReplyTemplateId?: string | null;
 };
 export type Run = {
+    snapshot?:{name?:string;keywords?:string[]};
     capturedPosts?:number;capturedCommentsCount?:number;readPlan?:{rounds:number;postsPerRound:number;commentPages:number}|null;
     metrics?:RunMetrics|null;
     id: string;
