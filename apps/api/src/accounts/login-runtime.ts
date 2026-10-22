@@ -1,3 +1,4 @@
+import {confirmSessionFile} from './session-save-proof';
 import {privateDirectory,privateFile,isWithin,inspectTools,minimalEnvironment,spawnOwned,stopOwned,windowsDataRoot} from '../../../../runtime/platform.cjs';
 import { XhsHttpTransport, ReadOnlyMcpTransport } from '../collection/mcp/transport';
 import { AccountFixtureTransport } from '../collection/adapters/account-fixture';
@@ -65,6 +66,14 @@ export class LoginRuntime {
       const f=await privateFile(join(dir,provider==='offline'?'fixture-state.json':'cookies.json'));
       return f.isFile()&&!f.isSymbolicLink()&&f.nlink===1?'UNVERIFIED':'NEEDS_REVIEW';
     }catch(e){return (e as NodeJS.ErrnoException).code==='ENOENT'?'MISSING':'NEEDS_REVIEW';}
+  }
+  async confirmSaved(accountId:string,key:string,signal:AbortSignal,executionRoot?:string){
+    if(!this.persistent()||!this.mode())throw Error('SESSION_SAVE_UNCONFIRMED');
+    try{
+      if(await this.inspect(accountId,key,this.deviceId(),this.mode()!,executionRoot)!=='UNVERIFIED')throw Error();
+      const dir=await this.directory(accountId,key,false,executionRoot);
+      await confirmSessionFile(join(dir,this.mode()==='offline'?'fixture-state.json':'cookies.json'),this.mode()!,signal);
+    }catch{throw Error('SESSION_SAVE_UNCONFIRMED');}
   }
   async openSaved(accountId:string,key:string,signal:AbortSignal,executionRoot?:string){return this.open(accountId,key,signal,true,executionRoot);}
 

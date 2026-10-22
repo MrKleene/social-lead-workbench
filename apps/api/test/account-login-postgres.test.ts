@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { beforeAll,afterAll,afterEach,describe,it,expect,vi } from 'vitest';
+import { beforeAll,afterAll,beforeEach,afterEach,describe,it,expect,vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Db } from '../src/common/db';
 import { AccountLoginService } from '../src/accounts/account-login.service';
@@ -49,3 +49,38 @@ describe('saved-session verification / isolated database',()=>{
 });
 
 describe('real login device boundary',()=>{it('legacy real entry without approved device rejects before opening runtime',async()=>{const a=await account(),spy=vi.spyOn(runtime,'open');vi.stubEnv('XHS_ACCOUNT_LOGIN_MODE','real');try{await expect(begin(a.id)).rejects.toThrow();expect((await service.capabilities(admin)).enabled).toBe(false);expect(spy).not.toHaveBeenCalled();}finally{vi.stubEnv('XHS_ACCOUNT_LOGIN_MODE','offline');}});});
+
+import {mkdtemp,realpath,mkdir,readFile,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+describe('persistent candidate confirmation and atomic reference replacement / synthetic only',()=>{
+ let root:string,device:string;
+ beforeEach(async()=>{root=await realpath(await mkdtemp(join(tmpdir(),'crm-session-save-test-')));await mkdir(join(root,'.local'),{mode:0o700});device=randomUUID();for(const [k,v]of Object.entries({CRM_PROJECT_ROOT:root,CRM_DEVICE_ID:device,CRM_PERSISTENT:'1',XHS_SESSION_ROOT:join(root,'.local/fake')}))vi.stubEnv(k,v);});
+ afterEach(async()=>{await service.onModuleDestroy();await rm(root,{recursive:true});vi.stubEnv('CRM_PERSISTENT','0');});
+ const path=(accountId:string,key:string)=>join(root,'.local/fake',accountId,key,'fixture-state.json');
+ async function bound(){const a=await account(),r=await begin(a.id);expect((await service.simulate(admin,a.id,r.requestKey,'SUCCESS')).localSaved).toBe(true);return {a,r,old:await readFile(path(a.id,r.id),'utf8')};}
+ const replace=(id:string,key=randomUUID())=>service.start(admin,id,key,'local-session-replace-v1');
+ async function untouched(a:{id:string},r:{id:string},old:string){expect((await db.platformAccount.findUniqueOrThrow({where:{id:a.id}})).loginSessionKey).toBe(r.id);expect((await db.accountSessionReference.findUniqueOrThrow({where:{accountId:a.id}})).sessionKey).toBe(r.id);expect(await readFile(path(a.id,r.id),'utf8')).toBe(old);}
+ it('requires independent proof and reports SAVING before committing first reference',async()=>{const a=await account(),open=runtime.open.bind(runtime);vi.spyOn(runtime,'open').mockImplementation(async(...args)=>{const driver=await open(...args);await driver.simulate!('SUCCESS');return driver;});const r=await begin(a.id);expect((await service.check(admin,a.id,r.requestKey)).state).toBe('SAVING');expect((await db.platformAccount.findUniqueOrThrow({where:{id:a.id}})).loginSessionKey).toBeNull();const result=await service.check(admin,a.id,r.requestKey);expect(result).toMatchObject({state:'VERIFIED',localSaved:true});expect(JSON.stringify(result)).not.toContain('fixture-state');});
+ it('same-account update changes both references together and leaves old file intact',async()=>{const {a,r,old}=await bound();const next=await replace(a.id);expect((await service.simulate(admin,a.id,next.requestKey,'SUCCESS')).localSaved).toBe(true);expect((await db.platformAccount.findUniqueOrThrow({where:{id:a.id}})).loginSessionKey).toBe(next.id);expect((await db.accountSessionReference.findUniqueOrThrow({where:{accountId:a.id}})).sessionKey).toBe(next.id);expect(await readFile(path(a.id,r.id),'utf8')).toBe(old);expect(await runtime.inspect(a.id,next.id,device,'offline')).toBe('UNVERIFIED');});
+ it('replacement requires distinct consent, stable identity and same original device',async()=>{const {a,r,old}=await bound(),spy=vi.spyOn(runtime,'open');await expect(begin(a.id)).rejects.toThrow('明确确认更新');await db.accountSessionReference.update({where:{accountId:a.id},data:{deviceId:randomUUID()}});await expect(replace(a.id)).rejects.toThrow('归属无法确认');expect(spy).not.toHaveBeenCalled();await untouched(a,r,old);});
+ it('a different platform identity never replaces the old session',async()=>{const {a,r,old}=await bound(),open=runtime.open.bind(runtime);vi.spyOn(runtime,'open').mockImplementation(async(...args)=>{const driver=await open(...args);return {...driver,status:async()=>({loggedIn:true,userId:'different-fictional-person'})};});const next=await replace(a.id);expect((await service.check(admin,a.id,next.requestKey)).reason).toBe('SESSION_IDENTITY_MISMATCH');await untouched(a,r,old);});
+ it.each(['cancel','expire','save-failure','invalid-file','metadata-change','restart'] as const)('%s preserves the original reference and file',async failure=>{const {a,r,old}=await bound();const next=await replace(a.id);if(failure==='cancel')await service.cancel(admin,a.id,next.requestKey);else if(failure==='expire')await service.simulate(admin,a.id,next.requestKey,'EXPIRED');else if(failure==='restart'){await service.onModuleDestroy();await service.onModuleInit();}else{if(failure==='save-failure')vi.spyOn(runtime,'confirmSaved').mockRejectedValue(Error('SYNTHETIC_SECRET_FROM_FILESYSTEM'));if(failure==='invalid-file'){const confirm=runtime.confirmSaved.bind(runtime);vi.spyOn(runtime,'confirmSaved').mockImplementation(async(...args)=>{await writeFile(path(a.id,next.id),'');return confirm(...args);});}if(failure==='metadata-change')await db.platformAccount.update({where:{id:a.id},data:{version:{increment:1}}});const result=await service.simulate(admin,a.id,next.requestKey,'SUCCESS');expect(result.state).toBe('FAILED');expect(result.localSaved).toBe(false);expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');}await untouched(a,r,old);const audit=JSON.stringify(await db.auditLog.findMany({where:{entityId:next.id}}));expect(audit).not.toContain('SYNTHETIC_SECRET');expect(audit).not.toContain('fixture-state');});
+ it('duplicate requests open one candidate and concurrent different requests are rejected',async()=>{const {a}=await bound(),key=randomUUID(),spy=vi.spyOn(runtime,'open');const result=await Promise.all([replace(a.id,key),replace(a.id,key)]);expect(result[0].id).toBe(result[1].id);expect(spy).toHaveBeenCalledTimes(1);await expect(replace(a.id)).rejects.toThrow('已有登录尝试');});
+ it('cancel while persistence confirmation is pending prevents late commit',async()=>{const {a,r,old}=await bound();let release!:()=>void;vi.spyOn(runtime,'confirmSaved').mockImplementation(()=>new Promise<void>(ok=>{release=ok;}));const next=await replace(a.id),checking=service.simulate(admin,a.id,next.requestKey,'SUCCESS');while(!release)await new Promise(ok=>setTimeout(ok,1));await service.cancel(admin,a.id,next.requestKey);release();expect((await checking).state).toBe('CANCELLED');await untouched(a,r,old);});
+ it('a changed device reference before commit leaves the original session selected',async()=>{const {a,r,old}=await bound(),next=await replace(a.id),confirm=runtime.confirmSaved.bind(runtime);vi.spyOn(runtime,'confirmSaved').mockImplementation(async(...args)=>{await confirm(...args);await db.accountSessionReference.update({where:{accountId:a.id},data:{deviceKeyId:'changed-during-save'}});});expect((await service.simulate(admin,a.id,next.requestKey,'SUCCESS')).reason).toBe('SESSION_CHANGED');await untouched(a,r,old);});
+ it('a database error after reference writes rolls back both updates and preserves the old file',async()=>{
+  const {a,r,old}=await bound(),next=await replace(a.id),confirm=runtime.confirmSaved.bind(runtime),transaction=db.$transaction.bind(db);
+  vi.spyOn(runtime,'confirmSaved').mockImplementation(async(...args)=>{
+   await confirm(...args);
+   vi.spyOn(db,'$transaction').mockImplementation(((callback:any,...options:any[])=>transaction(async(tx:any)=>{
+    const wrapped=new Proxy(tx,{get(target,key){if(key!=='auditLog')return target[key];return new Proxy(target.auditLog,{get(delegate,method){if(method!=='create')return delegate[method];return (args:any)=>{if(args.data.action==='ACCOUNT_LOGIN_VERIFIED')throw Error('SYNTHETIC_COMMIT_FAILURE');return delegate.create(args);};}});}});
+    return callback(wrapped);
+   },...options)) as typeof db.$transaction);
+  });
+  const result=await service.simulate(admin,a.id,next.requestKey,'SUCCESS');expect(result.state).toBe('FAILED');expect(JSON.stringify(result)).not.toContain('SYNTHETIC_COMMIT_FAILURE');await untouched(a,r,old);
+ });
+
+ it('saving has its own bounded deadline and a safe save-timeout reason',async()=>{const {a,r,old}=await bound(),open=runtime.open.bind(runtime);vi.spyOn(runtime,'open').mockImplementation(async(...args)=>{const d=await open(...args);await d.simulate!('SUCCESS');return d;});const next=await replace(a.id);expect((await service.check(admin,a.id,next.requestKey)).state).toBe('SAVING');await db.accountLogin.update({where:{id:next.id},data:{expiresAt:new Date(0)}});const result=await service.check(admin,a.id,next.requestKey);expect(result).toMatchObject({state:'FAILED',reason:'SESSION_SAVE_TIMEOUT',localSaved:false});await untouched(a,r,old);});
+
+});

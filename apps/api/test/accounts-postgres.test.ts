@@ -198,6 +198,21 @@ describe("account center / isolated PostgreSQL", () => {
       ).status,
     ).toBe(403);
   });
+  it("QR create and replacement preserve HTTP Origin, CSRF and administrator boundaries",async()=>{
+    const api=request(app.getHttpServer()),c=await account();
+    const auth=await api.post('/api/auth/login').set('Origin','http://127.0.0.1:5173').send({email:admin.email,password});
+    const cookie=auth.headers['set-cookie'][0].split(';')[0];
+    const salesAuth=await api.post('/api/auth/login').set('Origin','http://127.0.0.1:5173').send({email:b.email,password});
+    const salesCookie=salesAuth.headers['set-cookie'][0].split(';')[0];
+    for(const consent of ['local-session-v1','local-session-replace-v1']){
+      const payload={requestKey:randomUUID(),consent};
+      expect((await api.post(`/api/accounts/${c.id}/login`).set('Cookie',cookie).set('Origin','http://127.0.0.1:5173').send(payload)).status).toBe(403);
+      expect((await api.post(`/api/accounts/${c.id}/login`).set('Cookie',cookie).set('Origin','https://foreign.invalid').set('x-csrf-token',auth.body.csrfToken).send(payload)).status).toBe(403);
+      expect((await api.post(`/api/accounts/${c.id}/login`).set('Cookie',salesCookie).set('Origin','http://127.0.0.1:5173').set('x-csrf-token',salesAuth.body.csrfToken).send(payload)).status).toBe(403);
+      expect((await api.post(`/api/accounts/${c.id}/login`).set('Cookie',cookie).set('Origin','http://127.0.0.1:5173').set('x-csrf-token',auth.body.csrfToken).send({...payload,cookie:'SYNTHETIC_FORBIDDEN_INPUT'})).status).toBe(400);
+    }
+    expect(await db.accountLogin.count({where:{accountId:c.id}})).toBe(0);
+  });
   it("serializes cross-account first contact; unknown stays occupied; failed never rotates", async () => {
     const l = await lead(),
       c = await account(),

@@ -67,3 +67,26 @@ describe('one-click binding / isolated fixtures',()=>{
   await expect(bind()).rejects.toThrow('已有会话引用');
  });
 });
+
+
+describe('replacement shares the authenticated device lease / synthetic only',()=>{
+ it('updates only on the same authenticated device and excludes concurrent saved checks',async()=>{
+  await approve();const a=await account(),first=await login.start(admin,a.id,randomUUID(),'local-session-v1');await login.simulate(admin,a.id,first.requestKey,'SUCCESS');
+  const next=await login.start(admin,a.id,randomUUID(),'local-session-replace-v1');
+  await expect(login.verifySaved(admin,a.id,'read-local-session-v1')).rejects.toThrow();
+  await expect(service.acquire(admin,a.id)).rejects.toThrow();
+  expect((await login.simulate(admin,a.id,next.requestKey,'SUCCESS')).localSaved).toBe(true);
+  const ref=await db.accountSessionReference.findUniqueOrThrow({where:{accountId:a.id}}),device=await db.executionDevice.findUniqueOrThrow({where:{id}});
+  expect(ref).toMatchObject({deviceId:id,deviceKeyId:device.keyId,sessionKey:next.id});
+ });
+ it('device revocation during persistence confirmation cannot switch the old reference',async()=>{
+  await approve();const a=await account(),first=await login.start(admin,a.id,randomUUID(),'local-session-v1');await login.simulate(admin,a.id,first.requestKey,'SUCCESS');
+  const next=await login.start(admin,a.id,randomUUID(),'local-session-replace-v1');let release!:()=>void;
+  vi.spyOn(loginRuntime,'confirmSaved').mockImplementation(()=>new Promise<void>(ok=>{release=ok;}));
+  const checking=login.simulate(admin,a.id,next.requestKey,'SUCCESS');while(!release)await new Promise(ok=>setTimeout(ok,1));
+  await service.revoke(admin,id,(await service.status(admin)).device!.version);release();
+  expect((await checking).state).toBe('CANCELLED');
+  expect((await db.accountSessionReference.findUniqueOrThrow({where:{accountId:a.id}})).sessionKey).toBe(first.id);
+  expect((await db.platformAccount.findUniqueOrThrow({where:{id:a.id}})).loginSessionKey).toBe(first.id);
+ });
+});

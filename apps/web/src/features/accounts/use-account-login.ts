@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '@/lib/api';
-export type LoginView={id:string;requestKey:string;state:string;mode:string;image?:string;expiresAt:string;reason?:string|null};
-const running=(s?:string)=>s==='STARTING'||s==='WAITING';
+export type LoginView={id:string;requestKey:string;state:string;mode:string;localSaved?:boolean;image?:string;expiresAt:string;reason?:string|null};
+const running=(s?:string)=>s==='STARTING'||s==='WAITING'||s==='SAVING';
 export function useAccountLogin(accountId:string){
   const client=useQueryClient(),[params]=useSearchParams(),active=params.get('module')==='accounts';
   const [view,setView]=useState<LoginView|null>(null),[error,setError]=useState(''),[now,setNow]=useState(Date.now()),[visible,setVisible]=useState(!document.hidden);
@@ -18,17 +18,17 @@ export function useAccountLogin(accountId:string){
   useEffect(()=>{if(!active||!visible)void cancel();},[active,visible,cancel]);
   useEffect(()=>{if(!running(view?.state)||!active||!visible)return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[view?.state,active,visible]);
   const accept=useCallback((result:LoginView,version:number)=>{if(version!==generation.current)return;setNow(Date.now());setView(result);if(!running(result.state)){key.current=null;void Promise.all(['accounts','mcp-readiness'].map(key=>client.invalidateQueries({queryKey:[key]})));}},[client]);
-  const start=async()=>{
+  const start=async(replace=false)=>{
     if(key.current||!active||!visible)return;
     const requestKey=crypto.randomUUID(),version=++generation.current;key.current=requestKey;controller.current=new AbortController();setError('');setNow(Date.now());
     setView({id:'',requestKey,state:'STARTING',mode:'',expiresAt:new Date(Date.now()+45000).toISOString()});
-    try{accept(await api<LoginView>(`/accounts/${accountId}/login`,{method:'POST',body:JSON.stringify({requestKey,consent:'local-session-v1'}),signal:controller.current.signal}),version);}catch(e){if(version===generation.current){setError(e instanceof Error?e.message:'登录请求失败');await cancel();}}
+    try{accept(await api<LoginView>(`/accounts/${accountId}/login`,{method:'POST',body:JSON.stringify({requestKey,consent:replace?'local-session-replace-v1':'local-session-v1'}),signal:controller.current.signal}),version);}catch(e){if(version===generation.current){setError(e instanceof Error?e.message:'登录请求失败');await cancel();}}
   };
   useEffect(()=>{
     if(!active||!visible||!running(view?.state)||!key.current)return;
     const version=generation.current,requestKey=key.current;
     // One request at a time. Leaving the module aborts it and cancels the server lease.
-    const timer=setTimeout(async()=>{controller.current=new AbortController();try{accept(await api<LoginView>(`/accounts/${accountId}/login/check`,{method:'POST',body:JSON.stringify({requestKey}),signal:controller.current.signal}),version);}catch(e){if(version===generation.current){setError(e instanceof Error?e.message:'状态检查失败');void cancel();}}},view?.state==='STARTING'?1000:Math.max(0,Math.min(10000,new Date(view!.expiresAt).getTime()-Date.now())));
+    const timer=setTimeout(async()=>{controller.current=new AbortController();try{accept(await api<LoginView>(`/accounts/${accountId}/login/check`,{method:'POST',body:JSON.stringify({requestKey}),signal:controller.current.signal}),version);}catch(e){if(version===generation.current){setError(e instanceof Error?e.message:'状态检查失败');void cancel();}}},(view?.state==='STARTING'||view?.state==='SAVING')?1000:Math.max(0,Math.min(10000,new Date(view!.expiresAt).getTime()-Date.now())));
     return()=>clearTimeout(timer);
   },[view,active,visible,accountId,accept,cancel]);
   const simulate=async(scenario:string)=>{if(!key.current)return;accept(await api<LoginView>(`/accounts/${accountId}/login/offline`,{method:'POST',body:JSON.stringify({requestKey:key.current,scenario})}),generation.current);};
