@@ -1,4 +1,4 @@
-# Search note parsing candidate — prepared, not deployed
+# Search note parsing candidate and approved deployment
 
 Base: `868a541`. Work is isolated in `search-note-parse-fix`; production checkout, executable, reviewed runtime pins, budgets and services remain unchanged.
 
@@ -38,3 +38,15 @@ Independent repeat build: `mcp-search-note-review-2`; its SHA matches exactly. R
 Installation is NOT performed by this preparation. It requires a new approval: verify exact artifact/hash and clean production tree, confirm idle tasks/leases/queue; back up the installed MCP and both reviewed pins; fast-forward approved source, atomically replace `~/.local/bin/xiaohongshu-mcp`, update only the two reviewed hashes, build and normally restart API/worker. No migration is needed. Preserve frontend behavior, DB/Redis, sessions, secrets and budgets. Refresh frontend after approved deployment.
 
 Current installed hash to preserve/restore: `34e291206661343772f2c03a1d230a49cd7b726a5b1a79948af0d88ff64d08cf`. Rollback restores that binary, its two pins and prior approved application revision using the normal controller; no lock deletion or manual force-kill. Real platform validation remains separately bounded and must not be started by installation scripts. Historical failing field and real search success remain unverified.
+
+## Approved deployment — 2026-10-23 18:52 UTC
+
+After explicit approval, the clean production checkout was fast-forwarded from `868a541` to `e2c7a28`. The candidate source, build metadata and exact SHA above were reverified before atomic installation. Both reviewed Mac MCP pins now match that SHA. The full workspace build and 17 runtime/preflight tests passed.
+
+Rollback binary: `/Users/kleene/.local/bin/xiaohongshu-mcp.backup-34e291206661`. Prior pins, unchanged read policy and rollback manifest: `mcp-search-note-review-1/deployment-rollback` under the independent preparation directory. No credential material is included. Restore the prior binary and its matching pins/application revision with the normal controller if rollback is needed.
+
+The supported backend controller stopped the old collector (55072, exit 0). The old API (55073) required the launcher's existing 1.8-second cleanup escalation (SIGKILL); cleanup completed and the supervisor exited 0. No extra manual kill or lock deletion was used. New collector 62941 and API 62942 started at 18:52:12 UTC under supervisor 62715. API readiness and `/work` returned 200; the worker was idle, active leases/tasks and queue counts were zero. The frontend process 3438 and database/Redis start times were unchanged. All 14 migrations were already applied; no migration ran.
+
+Before/after counts matched: three collection runs, zero post/comment versions, two accounts, one session reference and one collection configuration; other checked preserved business counts also matched. The installed hash was verified via the existing runtime inspection. Built contract/API artifacts predated the new service starts, and the frontend actually served the open-state confirmation guard and parse-issue display.
+
+Reading budgets remain unchanged: zero root-page advances, eight reply-click attempts, 20 roots, 100 comments, ten replies per root, 15 seconds. No platform request, LLM call, send, cleanup or backfill was triggered. Refresh `/work` before the separately approved browser test (one round, one post, existing account authorization). Real search success and the historical failing field remain unverified; deployment health is not platform acceptance.
