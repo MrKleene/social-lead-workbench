@@ -18,3 +18,8 @@
 +		AvatarSourceDiagnostic: avatarDiagnostic,
 +		Note:                   noteDetail.Note,
 +		Comments:               noteDetail.Comments,
+--- a/xiaohongshu/types.go
++++ b/xiaohongshu/types.go
+@@ -266,1 +266,1 @@
+-	UserInfo        User      `json:"userInfo"`
++	UserInfo        CommentUser `json:"userInfo"`

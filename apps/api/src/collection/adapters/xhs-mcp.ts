@@ -22,7 +22,7 @@ function text(input: unknown, stage:'prepare'|'search'|'post'): string {
     return text;
 }
 const rawId = z.string().regex(/^[A-Za-z0-9_-]{1,150}$/);
-const rawUser=z.object({userId:rawId,nickname:z.unknown().optional(),nickName:z.unknown().optional(),avatar:z.unknown().optional()});
+const rawUser=z.object({userId:rawId,nickname:z.unknown().optional(),nickName:z.unknown().optional(),avatar:z.unknown().optional(),avatarSource:z.unknown().optional()});
 const rawComment = z.object({ id: rawId, noteId: rawId.optional(), content: z.string(), userInfo: rawUser, createTime:z.unknown().optional(), subCommentCount: z.string().regex(/^\d*$/).optional(), subComments: z.array(z.unknown()).max(100).nullish() });
 /** Pinned upstream exposes no comment cursor input. Only the returned finite window is consumed. */
 export class XhsMcpAdapter implements ReadAdapter {
@@ -66,13 +66,13 @@ export class XhsMcpAdapter implements ReadAdapter {
             const c = parseSource(rawComment,input,'post'), id = this.id(c.id);
             if(c.noteId && c.noteId!==reference.rawId)throw invalidSource('post','IDENTITY_CONFLICT','noteId');
             // Display-only changes are harmless. Identity, text, tree and parent conflicts remain fatal.
-            const signature=JSON.stringify({comment:c,parentId:parentId||null},(key,value)=>['nickname','nickName','avatar','createTime'].includes(key)?undefined:value),prior=seen.get(id);
+            const signature=JSON.stringify({comment:c,parentId:parentId||null},(key,value)=>['nickname','nickName','avatar','avatarSource','createTime'].includes(key)?undefined:value),prior=seen.get(id);
             if(active.has(id)||(prior&&prior.signature!==signature))throw invalidSource('post','DUPLICATE_CONFLICT','id');
             if(prior)return prior.value;
             active.add(id);
             const nested = (c.subComments || []).map(r => normalize(r, id, depth + 1));
             replies.set(id,[...new Map(nested.map(c=>[c.id,c])).values()]);
-            const avatar=inspectXhsAvatar(c.userInfo.avatar);
+            const avatar=inspectXhsAvatar(c.userInfo.avatar,c.userInfo.avatarSource);
             const value=parseSource(commentSchema,{id,userId:this.id(c.userInfo.userId),nickname:savedNickname(c.userInfo.nickname)||savedNickname(c.userInfo.nickName),authorAvatarUrl:avatar.url,imageDiagnostics:{authorAvatar:avatar.diagnostic},publishedAt:savedPublishedAt(c.createTime),text:c.content,parentId,hasReplies:nested.length>0||Number(c.subCommentCount||0)>0},'post');
             active.delete(id);seen.set(id,{signature,value});return value;
         };

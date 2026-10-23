@@ -1,55 +1,50 @@
-# MCP 转换前头像诊断补丁与离线构建
+# 评论头像兼容补丁与离线构建
 
-这是诊断补丁，不是头像取值修复。它不增加平台请求、不读取账号文件、不映射猜测别名、不下载图片。
+本目录包含既有 v1/v2 安全诊断和 `userInfo.image` 兼容补丁。只准备源码、测试和候选构建；安装运行须另行确认。不会新增平台请求、读取会话、访问个人主页或下载图片。
 
-## 来源与边界
+## 来源与证据
 
-- 来源：本机已安装 MCP 对应的既有源码目录 `xiaohongshu-mcp-a5c8f7799980ba1fdd501999843eb2d17e4c9a9f`，包含之前的本地搜索提交诊断修改；目录名不是此本地修改树的 Git 提交证明。
-- 原始源码基线对应的旧安装版本：`v2.5.5-local-search-submit-diagnostics`，安装文件 SHA-256：`17d57acd1a4f4cad3f2525bd13de40e112cb34594231a10b54b05ced9485cf80`。
-- `source-manifest.json` 固定本次读取的 69 个源码、模块、许可和嵌入资源文件哈希。准备工具拒绝文件漂移和符号链接，只复制这些文件；不会复制 Cookie、会话、配置 JSON、日志或二进制。
-- 原项目许可 Apache-2.0，随附 `LICENSE.upstream`。不向上游仓库推送。
+- 本机已审核源码基础：`xiaohongshu-mcp-a5c8f7799980ba1fdd501999843eb2d17e4c9a9f`，包含原有本地搜索提交诊断；目录名不是本地修改树的提交证明。
+- `source-manifest.json` 固定 69 个源码、依赖清单、许可与嵌入资源哈希。准备工具拒绝漂移、符号链接和重叠目录，不复制 Cookie、会话、配置或日志。
+- Apache-2.0 许可保留于 `LICENSE.upstream`，不向上游仓库推送。
+- 最新已核查的 37 条评论/回复中，固定 `avatar` 缺失，`userInfo.image` 均为非空字符串，属于 HTTPS、允许的专用头像域名和 `/avatar/` 路径。这支持字段兼容，但不等同图片实际加载成功。
+- 这 37 条地址的组成分类均为 `RESTRICTED`。现有存档没有原地址，也未细分限制来自 query、fragment、credentials、port 或编码字符，因此无法确定实际限制项。**本补丁不会让这批受限地址通过，也不会删除参数、猜测签名或回填旧记录。**
 
-## 补丁内容
+## 最小映射范围
 
-`integration.patch` 仅改两处：在 `extractFeedDetail` 的 Go 固定结构反序列化之前调用检查；在 `FeedDetailResponse` 增加可选 `avatarSourceDiagnostic`。新增两个 Go 文件实现和测试诊断。
+`integration.patch` 保留既有提取前诊断接入，并仅将 `Comment.UserInfo` 改为独立 `CommentUser`。帖子/个人主页的全局 `User` 类型不变。
 
-诊断处理的是浏览器 `JSON.stringify(noteDetailMap)` 已返回的 JSON，不是任意浏览器对象：因此 `undefined`、不可枚举属性或此前页面逻辑已删除的字段，不能据此证明原始页面不存在。诊断不改变已有反序列化失败规则；原响应若整体解码失败，不会返回成功诊断。
+- 原 `avatar` 为非空白字符串时按原值保留，标记来源 `avatar`。即使它不符合图片网址政策，也不会以回退值悄悄覆盖；工作台继续独立校验。
+- 原值缺失、空白、null 或非字符串时，仅考虑已确认的精确字段 `image`。不猜其他大小写或别名。
+- 回退只接受原生 `https://sns-avatar-qc.xhscdn.com/avatar/` 地址，长度、字符、路径须通过既有严格规则；拒绝凭据、显式端口、query、fragment、百分号编码、反斜杠、空白、路径穿越。不会协议升级、重写或剥离参数。
+- 回退成功标记 `avatarSource: image`。主评和所有嵌套回复共用此规则。错误的可选头像类型不再阻断正常评论；身份、昵称字段类型和评论结构仍按原规则解码。
+- 工作台只接受来源枚举 `avatar | image`，保存于现有 JSON 的 `imageDiagnostics.authorAvatar.sourceField`。没有数据库迁移，旧 MCP/旧记录仍兼容。来源诊断不参与内容哈希、去重或 LLM 上下文。
 
-只保留当前请求帖子的评论与回复汇总，不含帖子/评论/用户标识：
+## 安全诊断边界
 
-- `USER_INFO`、`FIXED_AVATAR`：缺失、null、空串、空白串、非空串及类型计数。
-- `AVATAR_CASE_VARIANT`：检查 Go 原本就接受的大小写变体，不改变现有解码。
-- `IMAGE_NAMED_MEMBER`：仅表示未识别字段名包含 image/avatar。此旧汇总项不输出字段名，也不证明它是头像或 URL，更不将其映射到头像。
-- `OTHER_MEMBER`：其他未映射字段的类型计数，不输出名称或值。
-- `conversion`：实际 `User` 类型解码及 JSON 往返后，固定 avatar 为空、保留非空、解码失败或序列化异常的计数。
+v2 检查的是浏览器已序列化的 `noteDetailMap` JSON，不是任意页面对象。仅记录受控字段名、类型/空值、ROOT/REPLY、协议/域名类别、路径类别和转换结果。诊断词表的其他图片键不是已确认的映射别名。
 
-v2 增加 `candidates`：仅接受源码明确列出的 33 个结构键（例如 image、images、imageb、avatarUrl），分别记录 ROOT/REPLY、类型/空值、协议/允许头像域名类别、受限网址组成和路径类别。不记录实际值、URL、域名、用户资料。白名单是诊断词表，**不是已确认的头像别名**。字段名上限 32 个 ASCII 字符；敏感键、未知图片键、格式超限只记受控过滤计数。未知字段不会原样输出，因此若实际键不在词表仍需进一步评估，不能假称已定位。
-
-v2 的 `transitions` 按主评/回复记录实际 User 转换结果；最多 256 个不同候选组合。接收端兼容 v1，并严格校验 v2 名称、枚举、唯一性和角色计数；缺失或非法诊断不妨碍正常评论。证据抽屉按需显示，诊断不进入 LLM 上下文。
-
-诊断最多检查 2 MiB JSON、1000 条评论/回复、16 层回复及每个用户 64 个字段；达到限制标记 `truncated`，只限制诊断，不截断业务数据。结果排序稳定，不新增原始数据日志。
-
-同批项目修改加入可选白名单接收：仅接受固定枚举、有限计数和一致总数，沿现有 `imageDiagnostics.avatarSource` JSON 存档保存。非法诊断整体丢弃，不改变正常评论；旧 MCP 无此字段仍兼容。既有存档代码将 `imageDiagnostics` 排除于内容哈希之外，不引入新的内容版本、线索或提醒。没有数据库迁移。接收代码需要随 API/worker 正常加载，构建脚本不会重启服务。
+上限为 2 MiB JSON、1000 条评论/回复、16 层回复、每用户 64 字段、256 个候选组合；达到上限只标记诊断截断，不截断业务原文。不输出任意字段、URL、身份、原文或凭据。转换统计使用实际 `CommentUser` 解码/序列化逻辑；旧字段名 `NONEMPTY_PRESERVED` 表示解码后的非空 avatar 经序列化保留，不证明原字段就是 avatar，精确来源看 `sourceField`。
 
 ## 离线复现
 
-需要已经审阅的本地 Go 1.24.13（darwin/arm64）及已缓存依赖；工具不下载依赖。目标目录必须不存在，且必须在原源码树之外。参数均为路径，不要输入任何凭据。
+使用已经审核的本地 Go 1.24.13 darwin/arm64 和已有模块缓存；输出目录必须不存在，且位于原源码树外。
 
 ```sh
 node scripts/mcp-avatar-diagnostics/test-prepare.mjs /absolute/path/to/reviewed-source
 node scripts/mcp-avatar-diagnostics/build-candidate.mjs /absolute/path/to/reviewed-source /absolute/path/to/new-output /absolute/path/to/go/bin/go /absolute/path/to/existing/go/pkg/mod
 ```
 
-构建器使用干净环境、独立 HOME/cache/tmp、`GOPROXY=off`、`GOSUMDB=off`、`GOTOOLCHAIN=local`、`CGO_ENABLED=0`、`-mod=readonly -trimpath -buildvcs=false`；版本为 `v2.5.5-local-avatar-source-diagnostics-v2`。只运行独立文件形式的 Go 单元测试，不加载平台包、不运行主程序。随后编译完整 MCP，输出二进制和 `BUILD.json`、测试/编译日志；绝不执行产物。源码基线对应的早期安装版本 CGO_ENABLED=1；v1 和本次 v2 候选均为纯 Go 构建，v2 运行兼容性仍需获准后的验收。
+构建环境隔离 HOME/cache/tmp，设置 `GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local CGO_ENABLED=0`，使用 `-mod=readonly -trimpath -buildvcs=false`。独立文件 Go 单测不加载平台包；随后编译完整 MCP，但不执行产物。版本 `v2.5.5-local-comment-image-compat`；候选路径、SHA-256、编译参数写入各构建目录 `BUILD.json`。
 
-v2 两次独立构建 SHA-256 相同：`0beb819c1b9d3579d1190e19ef48807b2bc2701a6eec80c6629eff56737a1de9`。10 个 Go 测试组（包含字段类型、受控键名、主评/回复、网址分类与上限测试）、5 项准备保护检查通过。候选未安装、未运行，实际平台数据与运行兼容性未验证。
+测试数据全为合成，覆盖原值优先、精确字段回退、非法类型、主评回复、URL 绕过、受限地址不改写、隐私诊断、现有 JSON 保存与版本去重。不把离线测试称为真实图片验收。
 
-准备 v2 时仍安装的是 v1，SHA-256 `f1124a3fb0819725828bac70b28f1510359953a5f7bf99025d52e3eb379e5a5f`，本轮没有替换它，也没有更新运行审核哈希。
+## 安装与回滚（本轮不执行）
 
-## 上线与回滚（需独立授权）
+当前已安装诊断 v2 SHA-256：`0beb819c1b9d3579d1190e19ef48807b2bc2701a6eec80c6629eff56737a1de9`。准备过程不更改安装文件、`runtime/platform.cjs` 或 `scripts/real-mcp/core.mjs` 的运行审核哈希。
 
-需要用户对安装/运行另行当次确认。安装目标是当前用户的 `~/.local/bin/xiaohongshu-mcp`，不是登录工具；确认无活动采集/扫码后，保留旧二进制及其校验值，再按已审核流程原子替换。还需分别更新 `runtime/platform.cjs` 与 `scripts/real-mcp/core.mjs` 的审核哈希，并正常加载 API/worker 接收代码；离线准备脚本不会修改审核哈希；部署时必须另行核对实际产物。保留前端、DB、Redis、账号会话和密钥，不自动采集。
+获得另一次安装运行确认后，先复核候选哈希和无活跃任务，备份当前 v2 二进制及哈希，原子替换 `~/.local/bin/xiaohongshu-mcp`，更新两处审核哈希并通过已有控制通道加载 API/worker。保留前端、DB、Redis、会话和配置，不自动采集。
 
-回滚应恢复部署前备份的 v1 MCP 文件和两处 v1 哈希（`f1124a3…e5a5f`，完整值见上文；不能混用源码基线旧哈希），必要时通过现有控制通道恢复旧 API/worker 构建；无需删除会话或数据库数据。新诊断接收字段本身兼容旧 MCP。
+回滚恢复部署前备份的 **v2** 二进制和两处 `0beb819…a1de9` 哈希，不误用更早的 v1/原版备份。新接收字段兼容旧 MCP，不需删除数据库或会话。
 
-本补丁只能为后续获准的有限采集提供证据。当前评论头像缺失的真实来源仍未确认，不能把离线通过或 `IMAGE_NAMED_MEMBER` 非零说成头像已经修复。
+映射缺口可以离线修补；实际受限网址是否能安全使用仍未确定。未获必要证据前保持拒绝，不能声称本轮已修好真实头像。

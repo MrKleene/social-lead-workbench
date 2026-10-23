@@ -12,7 +12,7 @@ export function imageUrlClass(value:unknown,kind:'cover'|'avatar'):ImageUrlClass
  try{const u=new URL(value);return {protocol:u.protocol==='http:'?'HTTP':u.protocol==='https:'?'HTTPS':'OTHER',host:allowedHosts(kind).includes(u.hostname)?'ALLOWED':u.hostname?'OTHER':'UNAVAILABLE'};}catch{return {protocol:'INVALID',host:'UNAVAILABLE'};}
 }
 
-export const imageDiagnosticSchema=z.object({version:z.literal(1),truncated:z.boolean(),shape:z.enum(['NOT_RETURNED','EMPTY','UNSUPPORTED','SUPPORTED']),fieldCount:count,urlClasses:z.array(urlClassSchema).max(12).optional(),httpsUpgrades:count.optional(),outcomes:z.array(z.object({reason:z.enum(imageReasons),count:count}).strict()).max(9)}).strict().refine(v=>new Set(v.outcomes.map(x=>x.reason)).size===v.outcomes.length&&v.outcomes.reduce((n,x)=>n+x.count,0)<=12&&(v.urlClasses||[]).reduce((n,x)=>n+x.count,0)<=12);
+export const imageDiagnosticSchema=z.object({version:z.literal(1),sourceField:z.enum(['avatar','image']).optional(),truncated:z.boolean(),shape:z.enum(['NOT_RETURNED','EMPTY','UNSUPPORTED','SUPPORTED']),fieldCount:count,urlClasses:z.array(urlClassSchema).max(12).optional(),httpsUpgrades:count.optional(),outcomes:z.array(z.object({reason:z.enum(imageReasons),count:count}).strict()).max(9)}).strict().refine(v=>new Set(v.outcomes.map(x=>x.reason)).size===v.outcomes.length&&v.outcomes.reduce((n,x)=>n+x.count,0)<=12&&(v.urlClasses||[]).reduce((n,x)=>n+x.count,0)<=12);
 export type ImageDiagnostic=z.infer<typeof imageDiagnosticSchema>;
 import {avatarSourceDiagnosticSchema} from './avatar-source-diagnostic';
 export {avatarSourceDiagnosticSchema,safeAvatarSourceDiagnostic,type AvatarSourceDiagnostic} from './avatar-source-diagnostic';

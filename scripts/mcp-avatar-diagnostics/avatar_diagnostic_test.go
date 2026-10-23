@@ -32,10 +32,10 @@ func conversionCount(d *AvatarSourceDiagnostic, state string) int {
 func TestAvatarSourceTypes(t *testing.T) {
 	cases := []struct{ input, shape, state string }{
 		{`{}`, "MISSING", "EMPTY_AFTER_DECODE"}, {`{"avatar":null}`, "NULL", "EMPTY_AFTER_DECODE"},
-		{`{"avatar":""}`, "EMPTY_STRING", "EMPTY_AFTER_DECODE"}, {`{"avatar":"  "}`, "WHITESPACE_STRING", "NONEMPTY_PRESERVED"},
+		{`{"avatar":""}`, "EMPTY_STRING", "EMPTY_AFTER_DECODE"}, {`{"avatar":"  "}`, "WHITESPACE_STRING", "EMPTY_AFTER_DECODE"},
 		{`{"avatar":"https://example.invalid/fake?token=NEVER_LOG"}`, "NONEMPTY_STRING", "NONEMPTY_PRESERVED"},
-		{`{"avatar":42}`, "NUMBER", "USER_DECODE_FAILED"}, {`{"avatar":true}`, "BOOLEAN", "USER_DECODE_FAILED"},
-		{`{"avatar":[]}`, "ARRAY", "USER_DECODE_FAILED"}, {`{"avatar":{}}`, "OBJECT", "USER_DECODE_FAILED"},
+		{`{"avatar":42}`, "NUMBER", "EMPTY_AFTER_DECODE"}, {`{"avatar":true}`, "BOOLEAN", "EMPTY_AFTER_DECODE"},
+		{`{"avatar":[]}`, "ARRAY", "EMPTY_AFTER_DECODE"}, {`{"avatar":{}}`, "OBJECT", "EMPTY_AFTER_DECODE"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.shape, func(t *testing.T) {
@@ -155,8 +155,8 @@ func TestV2CandidateRolesAndSafeClasses(t *testing.T) {
 	if b.Protocol != "HTTP" || b.Host != "OTHER" || b.Components != "RESTRICTED" {
 		t.Fatal("reply classification")
 	}
-	if seen["ROOT:avatar"].Shape != "MISSING" || conversionCount(d, "EMPTY_AFTER_DECODE") != 2 {
-		t.Fatal("candidate must not populate avatar")
+	if seen["ROOT:avatar"].Shape != "MISSING" || conversionCount(d, "EMPTY_AFTER_DECODE") != 1 || conversionCount(d, "NONEMPTY_PRESERVED") != 1 {
+		t.Fatal("only the confirmed clean image field may populate avatar")
 	}
 	for _, v := range []string{"https:", "other.invalid", "FAKE_ID", "PRIVATE_PERSON", "PRIVATE_NAME", "PRIVATE_TOKEN"} {
 		if strings.Contains(string(wire), v) {

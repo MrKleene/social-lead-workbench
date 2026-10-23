@@ -172,11 +172,11 @@ func inspectRawAvatarSource(payload []byte, feedID string) *AvatarSourceDiagnost
 					}
 					add(group, avatarShape(user[key]))
 				}
-				var typed User
+				var typed CommentUser
 				if json.Unmarshal(c.User, &typed) != nil {
 					converted("USER_DECODE_FAILED")
 				} else {
-					// 使用实际 User 类型和实际 JSON 序列化器，检查固定 avatar 是否在往返中丢失。
+					// 使用实际 CommentUser 类型和实际 JSON 序列化器，检查固定 avatar 是否在往返中丢失。
 					wire, err := json.Marshal(typed)
 					var out map[string]json.RawMessage
 					if err != nil || json.Unmarshal(wire, &out) != nil {

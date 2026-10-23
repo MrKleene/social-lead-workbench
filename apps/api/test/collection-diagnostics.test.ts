@@ -107,3 +107,31 @@ describe('v2 avatar structural evidence (synthetic only)',()=>{
   const r=await run(envelope({data:{...detail([comment]).data,avatarSourceDiagnostic:diagnostic}}));expect(r.status).toBe('PARTIAL');expect(r.posts[0].post.imageDiagnostics?.avatarSource).toBeUndefined();expect(JSON.stringify(r)).not.toContain(secret);
  });
 });
+
+
+describe('mapped comment avatar provenance (synthetic MCP responses only)',()=>{
+ const url='https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg';
+ it('preserves roots/replies and optional provenance without changing semantic inputs',async()=>{
+  const root={...comment,userInfo:{...comment.userInfo,avatar:url,avatarSource:'image'},subComments:[{...comment,id:'reply',userInfo:{...comment.userInfo,avatar:url,avatarSource:'avatar'}}]};
+  const r=await run(envelope(detail([root])));expect(r.status).toBe('PARTIAL');
+  expect(r.posts[0].comments.map(c=>c.imageDiagnostics?.authorAvatar?.sourceField)).toEqual(['image','avatar']);
+  expect(r.posts[0].comments[1].parentId).toBe('c1');
+  const {semanticSnapshot,snapshotHash}=await import('../src/collection/semantic-evaluator');
+  const original=r.posts[0].comments[0],changed={...original,imageDiagnostics:{authorAvatar:{...original.imageDiagnostics!.authorAvatar!,sourceField:'avatar' as const}}};
+  const a=semanticSnapshot(r.posts[0].post,original,undefined,false,false),b=semanticSnapshot(r.posts[0].post,changed,undefined,false,false);
+  expect(a).toEqual(b);expect(snapshotHash(a)).toBe(snapshotHash(b));expect(JSON.stringify(a)).not.toContain(url);expect(JSON.stringify(a)).not.toContain('sourceField');
+  expect(safeImageDiagnostics(original.imageDiagnostics)?.authorAvatar?.sourceField).toBe('image');
+ });
+ it('metadata source changes do not create a duplicate conflict',async()=>{
+  const r=await run(envelope(detail(['avatar','image'].map(avatarSource=>({...comment,userInfo:{...comment.userInfo,avatar:url,avatarSource}})))));
+  expect(r.status).toBe('PARTIAL');expect(r.posts[0].comments).toHaveLength(1);
+ });
+ it.each([undefined,null,42,secret,{}])('ignores unsupported provenance without discarding comments (%#)',async avatarSource=>{
+  const r=await run(envelope(detail([{...comment,userInfo:{...comment.userInfo,avatar:url,avatarSource}}])));
+  expect(r.status).toBe('PARTIAL');expect(r.posts[0].comments[0].authorAvatarUrl).toBe(url);expect(r.posts[0].comments[0].imageDiagnostics?.authorAvatar?.sourceField).toBeUndefined();expect(JSON.stringify(r)).not.toContain(secret);
+ });
+ it.each([url+'?signature=FAKE_SECRET',url+'#FAKE_SECRET','http://sns-avatar-qc.xhscdn.com/avatar/FAKE_SECRET','https://evil.invalid/avatar/FAKE_SECRET'])('provenance never bypasses URL safety (%#)',async avatar=>{
+  const r=await run(envelope(detail([{...comment,userInfo:{...comment.userInfo,avatar,avatarSource:'image'}}])));
+  expect(r.status).toBe('PARTIAL');expect(r.posts[0].comments[0].authorAvatarUrl).toBeUndefined();expect(r.posts[0].comments[0].imageDiagnostics?.authorAvatar?.sourceField).toBe('image');expect(JSON.stringify(r)).not.toContain('FAKE_SECRET');
+ });
+});

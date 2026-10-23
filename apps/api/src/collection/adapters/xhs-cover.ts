@@ -31,6 +31,6 @@ export function inspectXhsDetailCover(value:unknown){
  if(!value.length)return diagnose(value,[],0,'cover',true);
  return inspectXhsCover(value[0]);
 }
-export function inspectXhsAvatar(value:unknown){return diagnose(value,[value],value===undefined?0:1,'avatar',typeof value==='string');}
+export function inspectXhsAvatar(value:unknown,sourceField?:unknown){const result=diagnose(value,[value],value===undefined?0:1,'avatar',typeof value==='string');if(sourceField==='avatar'||sourceField==='image')result.diagnostic.sourceField=sourceField;return result;}
 export function xhsCover(value:unknown){return inspectXhsCover(value).url;}
 export function xhsDetailCover(value:unknown){return inspectXhsDetailCover(value).url;}
