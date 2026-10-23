@@ -1,4 +1,4 @@
-# Search JSON transport candidate — not installed
+# Search JSON transport candidate and approved deployment
 
 Base: `38d5302`, isolated worktree `search-transport-fix`. Production remains at that revision with MCP `v2.5.5-local-search-note-parse` / SHA-256 `e16b2e9f7305883123b07c59e468971ef19780475cf6109a944233ed08ce99de`.
 
@@ -38,3 +38,15 @@ SHA-256: `b69353e2530405afdcaa8ac97da10ffd7fec2f2ed4a04ba76a737d083050a3b6`.
 No installation, runtime hash changes, production source update, service restart, migration or platform request has occurred in this preparation. Installation requires specific approval: verify this exact hash/source, check idle tasks/locks, retain the current binary and both pins, fast-forward the approved revision without overwriting user changes, atomically install, update the two reviewed Mac pins and normally restart API/worker. Preserve DB/Redis, account/session/configuration and reading budgets. Rollback uses the saved `e16b2e9f…` binary with matching pins and prior application revision through the existing controller; no manual kill or lock deletion.
 
 After an approved deployment, a separately bounded browser test is still required. This offline reproduction fixes the demonstrated transport defect; it does not prove live search success, later note validity, or complete comment coverage. Do not automatically retry real searches.
+
+## Approved installation — 2026-10-23 19:15 UTC
+
+Explicit installation approval was received. The clean production tree fast-forwarded from `38d5302` to `de0ae78`; candidate source/manifest, build metadata and the exact `b69353e2…` SHA above were verified before atomic replacement. Both reviewed Mac pins now match the installed candidate. Full workspace build and 17 runtime/preflight tests passed. No platform request was made.
+
+Rollback executable: `/Users/kleene/.local/bin/xiaohongshu-mcp.backup-e16b2e9f7305`. Matching old pins, unchanged read policy and manifest are in `mcp-search-transport-review-1/deployment-rollback` under the independent preparation directory. No secrets were read or copied.
+
+Normal controller stop: collector 62941 exited 0; API 62942 required the existing launcher 1.8-second cleanup escalation (SIGKILL), followed by CLEANUP_COMPLETE and supervisor exit 0. No additional manual kill or lock deletion occurred. New supervisor 68393 started collector 68614 and API 68615 at 19:15:33 UTC. Readiness and `/work` returned 200, worker idle; active tasks, leases, checks and queue counts zero. Runtime tool inspection verified the installed reviewed SHA. Built API/contracts predated the new process starts; frontend served expected modules.
+
+Before/after checks matched: four task histories, zero post/comment versions, two accounts, one session reference, one collection configuration; all other checked business counts unchanged. Frontend PID 3438 and DB/Redis start times unchanged, all 14 migrations already applied with no new migration. Read budgets unchanged (root pages 0, reply attempts 8, roots 20, comments 100, replies per root 10, timeout 15 seconds). LLM/contact call counts remain zero.
+
+Deployment is healthy; real search/collection behavior is not yet validated. The browser operator should refresh `/work` and perform only the separately approved one-round/one-post test using the existing account/consent flow. Installation did not initiate that test or retry a search.
