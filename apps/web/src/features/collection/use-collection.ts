@@ -26,9 +26,10 @@ export function useConfig(id: string | undefined) { return useQuery({ queryKey: 
 export function useNotices() { return useQuery({ queryKey: ['notices'], queryFn: () => api<Notice[]>('/notices') }); }
 export function useWorkspaceMutation<T = unknown>() {
     const client = useQueryClient();
-    return useMutation({ mutationFn: ({ path, method = 'POST', body = {} }: {
+    return useMutation({ mutationFn: async ({ path, method = 'POST', body = {}, onResponse }: {
             path: string;
             method?: string;
             body?: unknown;
-        }) => send<T>(path, method, body), onSuccess: async () => { await Promise.all(['accounts', 'account-contact', 'collection', 'notices', 'leads', 'lead', 'tasks', 'mcp-readiness'].map(key => client.invalidateQueries({ queryKey: [key] }))); } });
+            onResponse?: (result:T)=>void;
+        }) => {const result=await send<T>(path, method, body);onResponse?.(result);return result;}, onSuccess: async () => { await Promise.all(['accounts', 'account-contact', 'collection', 'notices', 'leads', 'lead', 'tasks', 'mcp-readiness'].map(key => client.invalidateQueries({ queryKey: [key] }))); } });
 }

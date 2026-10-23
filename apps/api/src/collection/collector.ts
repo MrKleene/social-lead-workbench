@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type {CollectionDiagnostic} from "@crm/contracts";
+import {searchAttemptSchema,type SearchAttempt,type CollectionDiagnostic} from "@crm/contracts";
 import {diagnose,invalidSource} from "./diagnostics";
 import { Comment, Post, Page, ReadAdapter, ReadFailure, ConfigInput, commentSchema, postSchema, limits } from "./contract";
 export type PostRead = {
@@ -11,6 +11,7 @@ export type PostRead = {
     stopReason?:string;
 };
 export type ReadResult = {
+    searchAttempts?:SearchAttempt[];
     diagnostic?:CollectionDiagnostic;
     discarded?:boolean;
     posts: PostRead[];
@@ -31,7 +32,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         throw new ReadFailure("REAL_DISABLED");
     const result: ReadResult = { posts: [], requests: 0, status: "COMPLETE" };
     const started = Date.now();
-    let comments = 0, postOrdinal=0;
+    let comments = 0, postOrdinal=0,keywordOrdinal=0;
     let stage:CollectionDiagnostic['stage']='prepare';
     const checkpoint=async()=>{const previous=stage;stage='checkpoint';await progress?.(result);stage=previous;};
     const checkCancelled=async()=>{try{return await cancelled();}catch(error){throw new ReadFailure(error instanceof ReadFailure?error.code:'INVALID_DATA',error instanceof ReadFailure?error.retryAfterMs:undefined,diagnose(error,'authorization'));}};
@@ -67,6 +68,11 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         const seen = new Set<string>();
         for (let n = 0; n < pageLimit; n++) {
             const raw = await call(signal => fn(cursor, signal));
+            if(stage==='search'&&adapter.mode!=='MOCK'){
+                const supplied={keywordOrdinal,requestStep:result.requests,...(raw.searchEvidence||{evidence:'LEGACY_UNAVAILABLE',returnedCount:raw.items.length})};
+                const safe=searchAttemptSchema.safeParse(supplied);
+                (result.searchAttempts??=[]).push(safe.success?safe.data:{keywordOrdinal,requestStep:result.requests,evidence:'INVALID_DIAGNOSTIC',returnedCount:null});
+            }
             const page = z.object({ items: z.array(schema).max(200), next: z.string().min(1).optional(), complete: z.boolean(), deletedIds: z.array(z.string().min(1).max(200)).max(200).optional() }).parse(raw);
             await consume(page.items, page.deletedIds || []);
             if (!page.next)
@@ -82,7 +88,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         if (adapter.prepare) await call(s => adapter.prepare!(s));
         const found = new Map<string, Post>();
         for (const keyword of config.keywords) {
-            stage='search';
+            stage='search';keywordOrdinal++;
             const complete = await pages((c, s) => adapter.search(keyword, c, s), postSchema, async (items) => { for (const p of items)
                 if (found.size < config.batchLimit)
                     found.set(p.id, p); }, adapter.mode==="MOCK"?limits.pagesPerStream:1);
@@ -165,6 +171,10 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     }
     catch (error) {
         result.diagnostic=diagnose(error,stage,postOrdinal,result.requests);
+        if(stage==='search'&&result.diagnostic.searchObservation&&!(result.searchAttempts||[]).some(a=>a.requestStep===result.requests)){
+            const observation=result.diagnostic.searchObservation;
+            (result.searchAttempts??=[]).push({keywordOrdinal,requestStep:result.requests,evidence:'AVAILABLE',returnedCount:observation.acceptedCount,observation});
+        }
         result.reason = error instanceof ReadFailure ? error.code : "INVALID_DATA";
         if (error instanceof ReadFailure) result.retryAfterMs = error.retryAfterMs;
         if (result.reason === "INVALID_DATA") {result.discarded=result.posts.length>0;result.posts = [];}

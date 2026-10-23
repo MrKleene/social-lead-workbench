@@ -1,4 +1,4 @@
-import { RunMetrics,safeCollectionDiagnostic } from '@crm/contracts';
+import { RunMetrics,safeCollectionDiagnostic,safeSearchAttempts } from '@crm/contracts';
 import { assessComment } from './comment-rules';
 import { Prisma, CollectionRun, CollectionConfig } from "@prisma/client";
 import { Db } from "../common/db";
@@ -29,7 +29,8 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                 const isDemo = spec.mode !== "XHS_MCP";
                 const prefix = spec.mode === "MOCK" ? "【模拟】" : spec.mode === "XHS_FIXTURE" ? "【离线MCP夹具】" : "【小红书只读】";
                 const diagnostic=safeCollectionDiagnostic(result.diagnostic);
-                const metrics:RunMetrics={...(diagnostic?{diagnostic}:{}),version:1,discarded:!!result.discarded,policy:spec.commentRules?'INDEPENDENT_V1':'LEGACY',postsRead:result.posts.length,rootComments:0,replies:0,highRelevant:0,needsReview:0,unmatched:0,legacyMatches:0,filterReasons:{}};
+                const searchAttempts=safeSearchAttempts(result.searchAttempts);
+                const metrics:RunMetrics={...(searchAttempts?{searchAttempts}:{}),...(diagnostic?{diagnostic}:{}),version:1,discarded:!!result.discarded,policy:spec.commentRules?'INDEPENDENT_V1':'LEGACY',postsRead:result.posts.length,rootComments:0,replies:0,highRelevant:0,needsReview:0,unmatched:0,legacyMatches:0,filterReasons:{}};
                 let observed = 0, matched = 0, added = 0, notices = 0;
                 for (const entry of result.posts) {
                     const monitor = await tx.monitorPost.upsert({ where: { configId_revision_platformPostId: { configId: config.id, revision: run.revision, platformPostId: entry.post.id } }, create: { configId: config.id, revision: run.revision, platformPostId: entry.post.id }, update: {} });
@@ -82,7 +83,7 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                 const restricted = ["RESTRICTED", "LOGIN_EXPIRED", "RATE_LIMITED", "IDENTITY_MISMATCH"].includes(result.reason || "");
                 await tx.collectionConfig.update({ where: { id: config.id }, data: { activeRunId: null, failureCount: failed ? { increment: 1 } : 0, nextAllowedAt: failed ? new Date(Date.now() + Math.max(result.retryAfterMs || 0, Math.min(300000, 30000 * 2 ** Math.min(config.failureCount, 4)))) : null, ...(restricted ? { enabled: false, pauseReason: result.reason } : {}) } });
                 const finished = await tx.collectionRun.update({ where: { id: run.id }, data: { status: result.status, reason: result.reason || null, requests: result.requests, observed, matched, added, notices, metrics:metrics as unknown as Prisma.InputJsonValue, finishedAt: new Date() } });
-                await tx.auditLog.create({ data: { action: spec.mode === "MOCK" ? "COLLECTION_FINISHED_MOCK" : "COLLECTION_FINISHED_MCP", entityId: run.id, metadata: { mode: spec.mode, status: result.status, reason: result.reason || null, observed, matched, added, notices,...(diagnostic?{diagnostic}:{}) } } });
+                await tx.auditLog.create({ data: { action: spec.mode === "MOCK" ? "COLLECTION_FINISHED_MOCK" : "COLLECTION_FINISHED_MCP", entityId: run.id, metadata: { mode: spec.mode, status: result.status, reason: result.reason || null, observed, matched, added, notices,...(diagnostic?{diagnostic}:{}),...(searchAttempts?{searchAttempts}:{}) } } });
                 return finished;
             }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
         }

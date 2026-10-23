@@ -45,3 +45,5 @@ export * from './semantic-review';
 export * from './run-post-feed';
 
 export * from './bounded-read';
+
+export * from './search-observation';

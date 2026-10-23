@@ -33,6 +33,7 @@ export const commentSchema = z.object({
 export type Post = z.infer<typeof postSchema>;
 export type Comment = z.infer<typeof commentSchema>;
 export type Page<T> = {
+    searchEvidence?:Pick<import('@crm/contracts').SearchAttempt,'evidence'|'returnedCount'|'observation'>;
     items: T[];
     next?: string;
     complete: boolean;

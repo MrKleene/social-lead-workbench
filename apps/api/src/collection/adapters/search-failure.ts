@@ -8,3 +8,5 @@ export function searchFailureReason(text:string):NonNullable<CollectionDiagnosti
  if(text.startsWith('搜索Feeds失败: failed to unmarshal feeds: '))return 'DESERIALIZATION_FAILED';
  return 'UNKNOWN';
 }
+
+export function searchFailureObservation(text:string){try{const p=searchFailureEnvelopeSchema.safeParse(JSON.parse(text));return p.success?p.data.searchObservation:undefined;}catch{return undefined;}}

@@ -1,6 +1,6 @@
-import {searchFailureReason} from './search-failure';
+import {searchFailureReason,searchFailureObservation} from './search-failure';
 import * as commentPolicy from '../../../../../runtime/comment-read-policy.cjs';
-import {boundedReadConfigSchema,boundedReadReportSchema,type BoundedReadConfig, safeCoverageDiagnostic,savedNickname,savedPublishedAt,safeAvatarSourceDiagnostic} from '@crm/contracts';
+import {safeSearchObservation,boundedReadConfigSchema,boundedReadReportSchema,type BoundedReadConfig, safeCoverageDiagnostic,savedNickname,savedPublishedAt,safeAvatarSourceDiagnostic} from '@crm/contracts';
 import { z } from "zod";
 import {inspectXhsCover,inspectXhsDetailCover,inspectXhsAvatar} from "./xhs-cover";
 import { ReadAdapter, ReadFailure, Post, Comment, Page, commentSchema } from "../contract";
@@ -15,13 +15,15 @@ function text(input: unknown, stage:'prepare'|'search'|'post'): string {
     const text = value.content.filter(c => c.type === "text").map(c => c.text || "").join("\n");
     if (value.isError) {
         const searchReason=stage==='search'?searchFailureReason(text):undefined;
-        switch(searchReason){case 'LOGIN_EXPIRED':case 'RATE_LIMITED':case 'RESTRICTED':case 'SOURCE_UNAVAILABLE':case 'TIMEOUT':throw new ReadFailure(searchReason);}
+        const observation=stage==='search'?searchFailureObservation(text):undefined;
+        const searchDiagnostic=searchReason?{version:1 as const,stage:'search' as const,kind:'UPSTREAM_ERROR' as const,searchReason,...(observation?{searchObservation:observation}:{})}:undefined;
+        switch(searchReason){case 'LOGIN_EXPIRED':case 'RATE_LIMITED':case 'RESTRICTED':case 'SOURCE_UNAVAILABLE':case 'TIMEOUT':throw new ReadFailure(searchReason,undefined,searchDiagnostic);}
         if (/未登录|登录失效|login/i.test(text)) throw new ReadFailure("LOGIN_EXPIRED");
         if (/频繁|限流|rate.?limit/i.test(text)) throw new ReadFailure("RATE_LIMITED");
         if (/限制|封禁|验证码|restricted/i.test(text)) throw new ReadFailure("RESTRICTED");
         if (/不存在|不可见|未找到|not found/i.test(text)) throw new ReadFailure("SOURCE_UNAVAILABLE");
         if (/超时|timeout/i.test(text)) throw new ReadFailure("TIMEOUT");
-        throw new ReadFailure("INVALID_DATA",undefined,{version:1,stage,kind:"UPSTREAM_ERROR",...(searchReason?{searchReason}:{})});
+        throw new ReadFailure("INVALID_DATA",undefined,{version:1,stage,kind:"UPSTREAM_ERROR",...(searchDiagnostic||{})});
     }
     if (!text) throw invalidSource(stage,"EMPTY_RESPONSE");
     return text;
@@ -56,8 +58,12 @@ export class XhsMcpAdapter implements ReadAdapter {
     }
     async search(keyword: string, cursor: string | undefined, signal: AbortSignal): Promise<Page<Post>> {
         if (cursor) throw new ReadFailure("UNSUPPORTED");
-        const data = parseSource(z.object({ feeds: z.array(z.object({ id: rawId, xsecToken: z.string().min(1).max(4096), noteCard: z.object({ displayTitle: z.string().max(500).nullish(), cover:z.unknown().optional() }).optional() })).max(200).nullable() }),await this.read("search_feeds", { keyword }, signal),"search");
-        return { items: (data.feeds || []).map(f => { const id = this.id(f.id); this.tokens.set(id, { rawId: f.id, token: f.xsecToken }); const cover=inspectXhsCover(f.noteCard?.cover);return { id, title: f.noteCard?.displayTitle ?? "", coverUrl:cover.url,imageDiagnostics:{searchCover:cover.diagnostic} }; }), complete: false };
+        const data = parseSource(z.object({ searchObservation:z.unknown().optional(),feeds: z.array(z.object({ id: rawId, xsecToken: z.string().min(1).max(4096), noteCard: z.object({ displayTitle: z.string().max(500).nullish(), cover:z.unknown().optional() }).optional() })).max(200).nullable() }),await this.read("search_feeds", { keyword }, signal),"search");
+        const observation=safeSearchObservation(data.searchObservation);
+        const count=data.feeds?.length||0;
+        const consistent=observation&&observation.acceptedCount===count;
+        const searchEvidence={evidence:consistent?'AVAILABLE' as const:data.searchObservation===undefined?'LEGACY_UNAVAILABLE' as const:'INVALID_DIAGNOSTIC' as const,returnedCount:count,...(consistent?{observation}:{})};
+        return { searchEvidence,items: (data.feeds || []).map(f => { const id = this.id(f.id); this.tokens.set(id, { rawId: f.id, token: f.xsecToken }); const cover=inspectXhsCover(f.noteCard?.cover);return { id, title: f.noteCard?.displayTitle ?? "", coverUrl:cover.url,imageDiagnostics:{searchCover:cover.diagnostic} }; }), complete: false };
     }
     async post(post: Post, signal: AbortSignal, remainingComments?:number, diagnosticOnly=false): Promise<Post> {
         let readWindow=diagnosticOnly?undefined:this.readWindow;
