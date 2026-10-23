@@ -2,7 +2,7 @@
   "sourceBase": "a5c8f7799980ba1fdd501999843eb2d17e4c9a9f plus existing local search-submit diagnostics",
   "installedVersion": "v2.5.5-local-search-submit-diagnostics",
   "installedSha256": "17d57acd1a4f4cad3f2525bd13de40e112cb34594231a10b54b05ced9485cf80",
-  "candidateVersion": "v2.5.5-local-comment-image-compat",
+  "candidateVersion": "v2.5.5-local-avatar-url-reasons",
   "goVersion": "go1.24.13",
   "files": {
     "LICENSE": "9d8b162d4b4822b793666e2a8cb6c94df7ecdb8204f23a20e6042f93e691cb0d",

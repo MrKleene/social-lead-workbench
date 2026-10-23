@@ -24,6 +24,10 @@
 
 v2 检查的是浏览器已序列化的 `noteDetailMap` JSON，不是任意页面对象。仅记录受控字段名、类型/空值、ROOT/REPLY、协议/域名类别、路径类别和转换结果。诊断词表的其他图片键不是已确认的映射别名。
 
+本次在 v2 候选中可选增加 `restrictions`：query、fragment、userinfo、port、encodedPath、encodedElsewhere 六个布尔标志。`queryForm` 仅为 NONE、EMPTY、KEY_VALUE、BARE、MIXED，既不保存参数名也不保存参数值。旧 v2 没有这些字段仍可读取；新字段必须完整且与原 RESTRICTED 分类一致，未知字段或矛盾组合丢弃诊断，不丢评论。证据详情仅按需显示固定中文标签。
+
+这些事实在原始值转换前生成；原映射规则、允许域名、协议和参数拒绝规则均不放宽。已存记录不能恢复缺失的细分类别。候选仍包含上一轮已准备但未安装的 image 映射，不重复实现该补丁。
+
 上限为 2 MiB JSON、1000 条评论/回复、16 层回复、每用户 64 字段、256 个候选组合；达到上限只标记诊断截断，不截断业务原文。不输出任意字段、URL、身份、原文或凭据。转换统计使用实际 `CommentUser` 解码/序列化逻辑；旧字段名 `NONEMPTY_PRESERVED` 表示解码后的非空 avatar 经序列化保留，不证明原字段就是 avatar，精确来源看 `sourceField`。
 
 ## 离线复现
@@ -35,7 +39,7 @@ node scripts/mcp-avatar-diagnostics/test-prepare.mjs /absolute/path/to/reviewed-
 node scripts/mcp-avatar-diagnostics/build-candidate.mjs /absolute/path/to/reviewed-source /absolute/path/to/new-output /absolute/path/to/go/bin/go /absolute/path/to/existing/go/pkg/mod
 ```
 
-构建环境隔离 HOME/cache/tmp，设置 `GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local CGO_ENABLED=0`，使用 `-mod=readonly -trimpath -buildvcs=false`。独立文件 Go 单测不加载平台包；随后编译完整 MCP，但不执行产物。版本 `v2.5.5-local-comment-image-compat`；候选路径、SHA-256、编译参数写入各构建目录 `BUILD.json`。
+构建环境隔离 HOME/cache/tmp，设置 `GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local CGO_ENABLED=0`，使用 `-mod=readonly -trimpath -buildvcs=false`。独立文件 Go 单测不加载平台包；随后编译完整 MCP，但不执行产物。版本 `v2.5.5-local-avatar-url-reasons`；候选路径、SHA-256、编译参数写入各构建目录 `BUILD.json`。
 
 测试数据全为合成，覆盖原值优先、精确字段回退、非法类型、主评回复、URL 绕过、受限地址不改写、隐私诊断、现有 JSON 保存与版本去重。不把离线测试称为真实图片验收。
 
@@ -48,3 +52,5 @@ node scripts/mcp-avatar-diagnostics/build-candidate.mjs /absolute/path/to/review
 回滚恢复部署前备份的 **v2** 二进制和两处 `0beb819…a1de9` 哈希，不误用更早的 v1/原版备份。新接收字段兼容旧 MCP，不需删除数据库或会话。
 
 映射缺口可以离线修补；实际受限网址是否能安全使用仍未确定。未获必要证据前保持拒绝，不能声称本轮已修好真实头像。
+
+要获得实际限制原因，仍需另行批准安装运行该候选并加载接收端，再对同一个已采帖子做一次有限只读检查；不需要整轮重采。该检查只会辨明限制组成，不保证这些组成可以安全放行。当前准备过程没有发起该请求。

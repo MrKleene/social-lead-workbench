@@ -7,7 +7,8 @@ const state=z.enum(['COMMENT_SHAPE_INVALID','USER_UNAVAILABLE','USER_DECODE_FAIL
 const common={status:z.enum(['OK','BYTE_LIMIT','INVALID_JSON','FEED_MISSING','INVALID_SHAPE']),truncated:z.boolean(),roots:n,replies:n,
  fields:z.array(z.object({group:z.enum(['USER_INFO','FIXED_AVATAR','AVATAR_CASE_VARIANT','IMAGE_NAMED_MEMBER','OTHER_MEMBER']),shape,count:z.number().int().min(1).max(64000)}).strict()).max(50),
  conversion:z.array(z.object({state,count:positive}).strict()).max(7)};
-const candidate=z.object({name:z.enum(avatarCandidateNames),role,shape,protocol:z.enum(['NONE','INVALID','HTTP','HTTPS','RELATIVE','OTHER']),host:z.enum(['ALLOWED','OTHER','UNAVAILABLE']),components:z.enum(['NA','CLEAN','RESTRICTED']),path:z.enum(['AVATAR_PATH','OTHER','UNAVAILABLE']),count:positive}).strict();
+const restrictions=z.object({query:z.boolean(),fragment:z.boolean(),userinfo:z.boolean(),port:z.boolean(),encodedPath:z.boolean(),encodedElsewhere:z.boolean()}).strict();
+const candidate=z.object({restrictions:restrictions.optional(),queryForm:z.enum(['NONE','EMPTY','KEY_VALUE','BARE','MIXED']).optional(),name:z.enum(avatarCandidateNames),role,shape,protocol:z.enum(['NONE','INVALID','HTTP','HTTPS','RELATIVE','OTHER']),host:z.enum(['ALLOWED','OTHER','UNAVAILABLE']),components:z.enum(['NA','CLEAN','RESTRICTED']),path:z.enum(['AVATAR_PATH','OTHER','UNAVAILABLE']),count:positive}).strict();
 const v1=z.object({version:z.literal(1),...common}).strict();
 const v2=z.object({version:z.literal(2),...common,candidates:z.array(candidate).max(256),filtered:z.array(z.object({role,reason:z.enum(['INVALID_KEY','SENSITIVE_KEY','UNLISTED_IMAGE_KEY']),count:z.number().int().min(1).max(64000)}).strict()).max(6),transitions:z.array(z.object({role,state,count:positive}).strict()).max(14)}).strict();
 const unique=(keys:string[])=>new Set(keys).size===keys.length;
@@ -24,6 +25,8 @@ export const avatarSourceDiagnosticSchema=z.discriminatedUnion('version',[v1,v2]
  for(const c of v.conversion)if(v.transitions.filter(x=>x.state===c.state).reduce((n,x)=>n+x.count,0)!==c.count)reject();
  if(v.transitions.some(t=>!v.conversion.some(c=>c.state===t.state)))reject();
  for(const c of v.candidates){
+  if((c.restrictions===undefined)!==(c.queryForm===undefined))reject();
+  if(c.restrictions){const any=Object.values(c.restrictions).some(Boolean);if(any!==(c.components==='RESTRICTED')||c.restrictions.query!==(c.queryForm!=='NONE'))reject();}
   if(c.shape!=='NONEMPTY_STRING'&&(c.protocol!=='NONE'||c.host!=='UNAVAILABLE'||c.components!=='NA'||c.path!=='UNAVAILABLE'))reject();
   if(c.shape==='NONEMPTY_STRING'&&c.protocol==='NONE')reject();
   if(c.protocol==='INVALID'&&(c.host!=='UNAVAILABLE'||c.components!=='NA'||c.path!=='UNAVAILABLE'))reject();

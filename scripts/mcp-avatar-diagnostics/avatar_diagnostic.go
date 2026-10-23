@@ -251,15 +251,26 @@ func inspectRawAvatarSource(payload []byte, feedID string) *AvatarSourceDiagnost
 }
 
 // Synthetic vocabulary for inspection only: inclusion is NOT evidence of an avatar alias.
+type AvatarURLRestrictions struct {
+	Query            bool `json:"query"`
+	Fragment         bool `json:"fragment"`
+	Userinfo         bool `json:"userinfo"`
+	Port             bool `json:"port"`
+	EncodedPath      bool `json:"encodedPath"`
+	EncodedElsewhere bool `json:"encodedElsewhere"`
+}
+
 type AvatarCandidateCount struct {
-	Name       string `json:"name"`
-	Role       string `json:"role"`
-	Shape      string `json:"shape"`
-	Protocol   string `json:"protocol"`
-	Host       string `json:"host"`
-	Components string `json:"components"`
-	Path       string `json:"path"`
-	Count      int    `json:"count"`
+	Restrictions AvatarURLRestrictions `json:"restrictions"`
+	QueryForm    string                `json:"queryForm"`
+	Name         string                `json:"name"`
+	Role         string                `json:"role"`
+	Shape        string                `json:"shape"`
+	Protocol     string                `json:"protocol"`
+	Host         string                `json:"host"`
+	Components   string                `json:"components"`
+	Path         string                `json:"path"`
+	Count        int                   `json:"count"`
 }
 type AvatarFilteredCount struct {
 	Role   string `json:"role"`
@@ -294,7 +305,7 @@ func avatarCandidateKey(key string) string {
 	return "ALLOWED"
 }
 func avatarCandidate(name, role string, raw json.RawMessage) AvatarCandidateCount {
-	c := AvatarCandidateCount{Name: name, Role: role, Shape: avatarShape(raw), Protocol: "NONE", Host: "UNAVAILABLE", Components: "NA", Path: "UNAVAILABLE"}
+	c := AvatarCandidateCount{Name: name, Role: role, Shape: avatarShape(raw), Protocol: "NONE", Host: "UNAVAILABLE", Components: "NA", Path: "UNAVAILABLE", QueryForm: "NONE"}
 	if c.Shape != "NONEMPTY_STRING" {
 		return c
 	}
@@ -326,7 +337,8 @@ func avatarCandidate(name, role string, raw json.RawMessage) AvatarCandidateCoun
 		}
 	}
 	c.Components = "CLEAN"
-	if u.User != nil || u.Port() != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(value, "%") || strings.Contains(value, "#") {
+	c.Restrictions, c.QueryForm = avatarURLRestrictions(value, u)
+	if c.Restrictions.Query || c.Restrictions.Fragment || c.Restrictions.Userinfo || c.Restrictions.Port || c.Restrictions.EncodedPath || c.Restrictions.EncodedElsewhere {
 		c.Components = "RESTRICTED"
 	}
 	if u.Path != "" {
@@ -336,4 +348,49 @@ func avatarCandidate(name, role string, raw json.RawMessage) AvatarCandidateCoun
 		}
 	}
 	return c
+}
+
+// Return fixed structural facts only. Never emit a query key/value, URL or identity.
+func avatarURLRestrictions(value string, u *url.URL) (AvatarURLRestrictions, string) {
+	rawPath := strings.SplitN(strings.SplitN(value, "#", 2)[0], "?", 2)[0]
+	if u.Opaque != "" {
+		rawPath = ""
+	} else if u.Host != "" {
+		start := strings.Index(rawPath, "//")
+		if start >= 0 {
+			authority := rawPath[start+2:]
+			if slash := strings.Index(authority, "/"); slash >= 0 {
+				rawPath = authority[slash:]
+			} else {
+				rawPath = ""
+			}
+		} else {
+			rawPath = ""
+		}
+	} else if u.Scheme != "" {
+		rawPath = strings.TrimPrefix(rawPath, u.Scheme+":")
+	}
+	facts := AvatarURLRestrictions{Query: u.RawQuery != "" || u.ForceQuery, Fragment: strings.Contains(value, "#"), Userinfo: u.User != nil, Port: u.Port() != "", EncodedPath: strings.Contains(rawPath, "%"), EncodedElsewhere: strings.Count(value, "%") > strings.Count(rawPath, "%")}
+	form := "NONE"
+	if facts.Query {
+		form = "EMPTY"
+		if u.RawQuery != "" {
+			pairs, bare := false, false
+			for _, segment := range strings.Split(u.RawQuery, "&") {
+				if strings.Contains(segment, "=") {
+					pairs = true
+				} else {
+					bare = true
+				}
+			}
+			if pairs && bare {
+				form = "MIXED"
+			} else if pairs {
+				form = "KEY_VALUE"
+			} else {
+				form = "BARE"
+			}
+		}
+	}
+	return facts, form
 }

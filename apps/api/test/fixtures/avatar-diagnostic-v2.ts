@@ -5,3 +5,6 @@ export const avatarDiagnosticV2:Extract<AvatarSourceDiagnostic,{version:2}>={ver
  conversion:[{state:'EMPTY_AFTER_DECODE',count:2}],
  transitions:[{role:'ROOT',state:'EMPTY_AFTER_DECODE',count:1},{role:'REPLY',state:'EMPTY_AFTER_DECODE',count:1}],filtered:[],
  candidates:[{name:'image',role:'ROOT',shape:'NONEMPTY_STRING',protocol:'HTTPS',host:'ALLOWED',components:'CLEAN',path:'AVATAR_PATH',count:1},{name:'images',role:'REPLY',shape:'NONEMPTY_STRING',protocol:'HTTP',host:'OTHER',components:'RESTRICTED',path:'OTHER',count:1}]};
+
+// Synthetic optional URL facts; legacy v2 above remains unchanged.
+export const avatarDiagnosticUrlReasons:Extract<AvatarSourceDiagnostic,{version:2}>={...avatarDiagnosticV2,candidates:avatarDiagnosticV2.candidates.map(c=>({...c,restrictions:{query:c.role==='REPLY',fragment:c.role==='REPLY',userinfo:false,port:false,encodedPath:false,encodedElsewhere:c.role==='REPLY'},queryForm:c.role==='REPLY'?'KEY_VALUE':'NONE'}))};

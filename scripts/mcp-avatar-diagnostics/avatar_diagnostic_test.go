@@ -233,3 +233,76 @@ func TestV2CandidateBoundAndStableSerialization(t *testing.T) {
 		t.Fatal("deterministic ordering")
 	}
 }
+
+func TestURLRestrictionReasonsWithoutValues(t *testing.T) {
+	base := "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg"
+	cases := []struct {
+		value, form string
+		want        AvatarURLRestrictions
+	}{
+		{base, "NONE", AvatarURLRestrictions{}},
+		{base + "?", "EMPTY", AvatarURLRestrictions{Query: true}},
+		{base + "?PRIVATE_KEY=PRIVATE_VALUE", "KEY_VALUE", AvatarURLRestrictions{Query: true}},
+		{base + "?PRIVATE_TRANSFORM/80", "BARE", AvatarURLRestrictions{Query: true}},
+		{base + "?PRIVATE_KEY=PRIVATE_VALUE&PRIVATE_BARE", "MIXED", AvatarURLRestrictions{Query: true}},
+		{base + "#", "NONE", AvatarURLRestrictions{Fragment: true}},
+		{base + "#PRIVATE_FRAGMENT", "NONE", AvatarURLRestrictions{Fragment: true}},
+		{"https://PRIVATE_USER:PRIVATE_PASS@sns-avatar-qc.xhscdn.com/avatar/a", "NONE", AvatarURLRestrictions{Userinfo: true}},
+		{"https://sns-avatar-qc.xhscdn.com:443/avatar/a", "NONE", AvatarURLRestrictions{Port: true}},
+		{"https://sns-avatar-qc.xhscdn.com/avatar/%61", "NONE", AvatarURLRestrictions{EncodedPath: true}},
+		{base + "?PRIVATE_KEY=%61", "KEY_VALUE", AvatarURLRestrictions{Query: true, EncodedElsewhere: true}},
+		{base + "#%61", "NONE", AvatarURLRestrictions{Fragment: true, EncodedElsewhere: true}},
+		{"https://PRIVATE%61@sns-avatar-qc.xhscdn.com/avatar/a", "NONE", AvatarURLRestrictions{Userinfo: true, EncodedElsewhere: true}},
+		{"https://sns-avatar-qc.xhscdn.com/avatar/%61?PRIVATE_KEY=%62#%63", "KEY_VALUE", AvatarURLRestrictions{Query: true, Fragment: true, EncodedPath: true, EncodedElsewhere: true}},
+		{"https://sns-avatar-qc.xhscdn.com/avatar/中文字?PRIVATE_KEY=%61", "KEY_VALUE", AvatarURLRestrictions{Query: true, EncodedElsewhere: true}},
+		{"/avatar/%61", "NONE", AvatarURLRestrictions{EncodedPath: true}},
+		{"//sns-avatar-qc.xhscdn.com/avatar/%61", "NONE", AvatarURLRestrictions{EncodedPath: true}},
+	}
+	for i, tc := range cases {
+		raw, _ := json.Marshal(tc.value)
+		c := avatarCandidate("image", "ROOT", raw)
+		if c.Restrictions != tc.want || c.QueryForm != tc.form {
+			t.Fatalf("wrong synthetic reason classification %d", i)
+		}
+		wire, _ := json.Marshal(c)
+		for _, private := range []string{"PRIVATE", "sns-avatar", "synthetic.jpg", "https://", "中文字", "%61"} {
+			if strings.Contains(string(wire), private) {
+				t.Fatal("URL diagnostic leaked value")
+			}
+		}
+		// Fact granularity must not relax the established classifier or mapping boundary.
+		wantRestricted := tc.want != (AvatarURLRestrictions{})
+		if (c.Components == "RESTRICTED") != wantRestricted {
+			t.Fatal("restricted classification changed")
+		}
+		if wantRestricted {
+			u := decodeSyntheticUser(t, map[string]any{"image": tc.value})
+			if u.Avatar != "" {
+				t.Fatal("diagnostics bypassed URL boundary")
+			}
+		}
+	}
+}
+func TestURLRestrictionAggregationAndRoles(t *testing.T) {
+	raw := []byte(`{"requested":{"comments":{"list":[{"userInfo":{"image":"https://sns-avatar-qc.xhscdn.com/avatar/a?PRIVATE=1"},"subComments":[{"userInfo":{"image":"https://sns-avatar-qc.xhscdn.com/avatar/a#PRIVATE"}}]},{"userInfo":{"image":"https://sns-avatar-qc.xhscdn.com/avatar/b?PRIVATE=2"}}]}}}`)
+	d := inspectRawAvatarSource(raw, "requested")
+	roots, replies := 0, 0
+	for _, c := range d.Candidates {
+		if c.Name != "image" {
+			continue
+		}
+		if c.Role == "ROOT" && c.Restrictions.Query && c.Count == 2 {
+			roots++
+		}
+		if c.Role == "REPLY" && c.Restrictions.Fragment && c.Count == 1 {
+			replies++
+		}
+	}
+	if roots != 1 || replies != 1 {
+		t.Fatal("structurally identical URLs must aggregate without their values")
+	}
+	wire, _ := json.Marshal(d)
+	if strings.Contains(string(wire), "PRIVATE") || strings.Contains(string(wire), "https:") {
+		t.Fatal("aggregate leaked URL")
+	}
+}

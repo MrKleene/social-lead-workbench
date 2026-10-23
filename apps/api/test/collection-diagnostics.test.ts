@@ -135,3 +135,29 @@ describe('mapped comment avatar provenance (synthetic MCP responses only)',()=>{
   expect(r.status).toBe('PARTIAL');expect(r.posts[0].comments[0].authorAvatarUrl).toBeUndefined();expect(r.posts[0].comments[0].imageDiagnostics?.authorAvatar?.sourceField).toBe('image');expect(JSON.stringify(r)).not.toContain('FAKE_SECRET');
  });
 });
+
+
+import {avatarDiagnosticUrlReasons} from './fixtures/avatar-diagnostic-v2';
+describe('optional URL restriction facts (synthetic only)',()=>{
+ it('accepts legacy v2 and carries specific facts through the adapter without affecting LLM input',async()=>{
+  expect(safeAvatarSourceDiagnostic(avatarDiagnosticV2)).toEqual(avatarDiagnosticV2);
+  expect(safeAvatarSourceDiagnostic(avatarDiagnosticUrlReasons)).toEqual(avatarDiagnosticUrlReasons);
+  const old=await run(envelope(detail([comment]))),r=await run(envelope({data:{...detail([comment]).data,avatarSourceDiagnostic:avatarDiagnosticUrlReasons}}));
+  expect(r.posts[0].post.imageDiagnostics?.avatarSource).toEqual(avatarDiagnosticUrlReasons);
+  const {semanticSnapshot,snapshotHash}=await import('../src/collection/semantic-evaluator');
+  expect(snapshotHash(semanticSnapshot(r.posts[0].post,r.posts[0].comments[0],undefined,false,false))).toBe(snapshotHash(semanticSnapshot(old.posts[0].post,old.posts[0].comments[0],undefined,false,false)));
+ });
+ it.each([
+  {restrictions:{query:true}},
+  {restrictions:{...avatarDiagnosticUrlReasons.candidates[0].restrictions,query:secret}},
+  {restrictions:{...avatarDiagnosticUrlReasons.candidates[0].restrictions,url:secret}},
+  {queryForm:secret}, {queryForm:'BARE'},
+  {restrictions:{...avatarDiagnosticUrlReasons.candidates[0].restrictions,query:true}},
+  {restrictions:undefined}, {queryForm:undefined},
+ ])('drops unknown, incomplete or contradictory facts without losing comments (%#)',async patch=>{
+  const malformed={...avatarDiagnosticUrlReasons,candidates:[{...avatarDiagnosticUrlReasons.candidates[0],...patch},avatarDiagnosticUrlReasons.candidates[1]]};
+  expect(safeAvatarSourceDiagnostic(malformed)).toBeUndefined();
+  const r=await run(envelope({data:{...detail([comment]).data,avatarSourceDiagnostic:malformed}}));
+  expect(r.status).toBe('PARTIAL');expect(r.posts[0].comments).toHaveLength(1);expect(r.posts[0].post.imageDiagnostics?.avatarSource).toBeUndefined();expect(JSON.stringify(r)).not.toContain(secret);
+ });
+});
