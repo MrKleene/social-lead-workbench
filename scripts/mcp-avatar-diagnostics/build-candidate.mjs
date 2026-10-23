@@ -11,7 +11,7 @@ const output=resolve(outputArg),go=await realpath(goArg),modcache=await realpath
 if(!(await lstat(go)).isFile()||!(await lstat(modcache)).isDirectory())throw Error('Existing local compiler/cache required');
 await mkdir(output,{recursive:false,mode:0o700});
 for(const d of ['home','cache','tmp'])await mkdir(join(output,d),{mode:0o700});
-const env={PATH:'/usr/bin:/bin',HOME:join(output,'home'),TMPDIR:join(output,'tmp'),GOCACHE:join(output,'cache'),GOMODCACHE:modcache,GOPROXY:'off',GOSUMDB:'off',GOTOOLCHAIN:'local',GOWORK:'off',GOENV:'off',CGO_ENABLED:'0',GOOS:'darwin',GOARCH:'arm64'};
+const env={PATH:'/usr/bin:/bin',HOME:join(output,'home'),TMPDIR:join(output,'tmp'),GOCACHE:join(output,'cache'),GOMODCACHE:modcache,GOPROXY:'off',GOSUMDB:'off',GOTOOLCHAIN:'local',GOWORK:'off',GOENV:'off',GOTELEMETRY:'off',CGO_ENABLED:'0',GOOS:'darwin',GOARCH:'arm64'};
 function run(binary,args,cwd=output,log){const r=spawnSync(binary,args,{cwd,env,encoding:'utf8',maxBuffer:4*1024*1024,timeout:240000});if(log)return writeFile(join(output,log),(r.stdout||'')+(r.stderr||'')).then(()=>{if(r.status!==0)throw Error('Offline step failed: '+log);return r.stdout});if(r.status!==0)throw Error('Preparation/toolchain check failed');return r.stdout;}
 const version=run(go,['version']).trim();if(version!=='go version go1.24.13 darwin/arm64')throw Error('Unreviewed compiler version');
 run(process.execPath,[join(bundle,'prepare.mjs'),source,join(output,'source')]);

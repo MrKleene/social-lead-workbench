@@ -1,3 +1,4 @@
+import {avatarDiagnosticV2} from './fixtures/avatar-diagnostic-v2';
 import 'reflect-metadata';
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
@@ -699,7 +700,7 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
   const c=await archive(),before=await read(`/collection/configs/${c.id}/captures`),leads=await db.lead.count(),notices=await db.collectionNotice.count();
   expect(before.body.posts[0].snapshot.imageDiagnostics).toBeUndefined();
   const {inspectXhsAvatar,inspectXhsCover}=await import('../src/collection/adapters/xhs-cover');
-  const imageDiagnostics={authorAvatar:inspectXhsAvatar('http://sns-avatar-qc.xhscdn.com/avatar/FAKE_SECRET').diagnostic,searchCover:inspectXhsCover({urlDefault:'https://evil.example/?token=FAKE_SECRET'}).diagnostic};
+  const imageDiagnostics={avatarSource:avatarDiagnosticV2,authorAvatar:inspectXhsAvatar('http://sns-avatar-qc.xhscdn.com/avatar/FAKE_SECRET').diagnostic,searchCover:inspectXhsCover({urlDefault:'https://evil.example/?token=FAKE_SECRET'}).diagnostic};
   const adapter={...sample,post:async(p:import('../src/collection/contract').Post)=>({...await sample.post(p,new AbortController().signal),imageDiagnostics}),comments:async()=>{const page=await sample.comments({id:'demo-collect-archive-post',title:'虚构'},undefined,new AbortController().signal);return {...page,items:page.items.map(x=>({...x,imageDiagnostics:{authorAvatar:imageDiagnostics.authorAvatar}}))};}};
   const run=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(run.id,adapter);const after=await read(`/collection/configs/${c.id}/captures`);
   expect(after.body.postTotal).toBe(1);expect(after.body.total).toBe(2);expect(after.body.posts[0].id).toBe(before.body.posts[0].id);expect(after.body.posts[0].snapshot.imageDiagnostics).toEqual(imageDiagnostics);

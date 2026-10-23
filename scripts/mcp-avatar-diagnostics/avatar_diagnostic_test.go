@@ -135,3 +135,101 @@ func TestAvatarResponseRoundTrip(t *testing.T) {
 		t.Fatal("diagnostic not delivered")
 	}
 }
+
+// All data below is synthetic. No captured page, network or login session is used.
+func TestV2CandidateRolesAndSafeClasses(t *testing.T) {
+	raw := []byte(`{"requested":{"comments":{"list":[{"userInfo":{"image":"https://sns-avatar-qc.xhscdn.com/avatar/FAKE_ID.jpg","userId":"PRIVATE_PERSON"},"subComments":[{"userInfo":{"images":"http://other.invalid/p?token=PRIVATE_TOKEN","nickname":"PRIVATE_NAME"}}]}]}}}`)
+	d := inspectRawAvatarSource(raw, "requested")
+	wire, _ := json.Marshal(d)
+	if d.Version != 2 || d.Roots != 1 || d.Replies != 1 || len(d.Transitions) != 2 {
+		t.Fatal("v2 role coverage")
+	}
+	seen := map[string]AvatarCandidateCount{}
+	for _, c := range d.Candidates {
+		seen[c.Role+":"+c.Name] = c
+	}
+	a, b := seen["ROOT:image"], seen["REPLY:images"]
+	if a.Shape != "NONEMPTY_STRING" || a.Protocol != "HTTPS" || a.Host != "ALLOWED" || a.Path != "AVATAR_PATH" || a.Components != "CLEAN" {
+		t.Fatal("safe root classification")
+	}
+	if b.Protocol != "HTTP" || b.Host != "OTHER" || b.Components != "RESTRICTED" {
+		t.Fatal("reply classification")
+	}
+	if seen["ROOT:avatar"].Shape != "MISSING" || conversionCount(d, "EMPTY_AFTER_DECODE") != 2 {
+		t.Fatal("candidate must not populate avatar")
+	}
+	for _, v := range []string{"https:", "other.invalid", "FAKE_ID", "PRIVATE_PERSON", "PRIVATE_NAME", "PRIVATE_TOKEN"} {
+		if strings.Contains(string(wire), v) {
+			t.Fatal("value leakage")
+		}
+	}
+}
+func TestV2KeyVocabularyRejectsArbitraryNames(t *testing.T) {
+	cases := map[string]string{"image": "ALLOWED", "imageb": "ALLOWED", "avatarURL": "ALLOWED", "imageSecret": "SENSITIVE_KEY", "avatarToken": "SENSITIVE_KEY", "imageCustomPerson": "UNLISTED_IMAGE_KEY", "image\nName": "INVALID_KEY", strings.Repeat("image", 10): "INVALID_KEY", "头像image": "INVALID_KEY", "nickname": "UNRELATED"}
+	for key, want := range cases {
+		if got := avatarCandidateKey(key); got != want {
+			t.Fatal("key classification mismatch")
+		}
+	}
+	user := map[string]any{}
+	for key := range cases {
+		user[key] = "PRIVATE_VALUE"
+	}
+	raw, _ := json.Marshal(user)
+	d := inspectRawAvatarSource(avatarFixture(string(raw)), "requested")
+	wire, _ := json.Marshal(d)
+	for key, want := range cases {
+		if want != "ALLOWED" && strings.Contains(string(wire), key) {
+			t.Fatal("rejected key leaked")
+		}
+	}
+	if strings.Contains(string(wire), "PRIVATE_VALUE") || len(d.Filtered) != 3 {
+		t.Fatal("filter counters or value leak")
+	}
+}
+func TestV2CandidateURLClassificationNeverFetches(t *testing.T) {
+	cases := []struct{ value, protocol, host, components, path string }{
+		{"https://sns-avatar-qc.xhscdn.com/avatar/fake.jpg", "HTTPS", "ALLOWED", "CLEAN", "AVATAR_PATH"},
+		{"http://sns-avatar-qc.xhscdn.com/avatar/fake.jpg", "HTTP", "ALLOWED", "CLEAN", "AVATAR_PATH"},
+		{"https://sns-avatar-qc.xhscdn.com.evil.invalid/avatar/a", "HTTPS", "OTHER", "CLEAN", "AVATAR_PATH"},
+		{"https://user:PASS@sns-avatar-qc.xhscdn.com:444/avatar/a?token=TOKEN#FRAGMENT", "HTTPS", "ALLOWED", "RESTRICTED", "AVATAR_PATH"},
+		{"//sns-avatar-qc.xhscdn.com/avatar/a", "RELATIVE", "ALLOWED", "CLEAN", "AVATAR_PATH"},
+		{"/avatar/a", "RELATIVE", "UNAVAILABLE", "CLEAN", "AVATAR_PATH"},
+		{"data:image/png;base64,PRIVATE", "OTHER", "UNAVAILABLE", "CLEAN", "UNAVAILABLE"},
+		{"https://sns-avatar-qc.xhscdn.com/avatar/%2f", "HTTPS", "ALLOWED", "RESTRICTED", "OTHER"},
+		{"https://sns-avatar-qc.xhscdn.com\\@evil.invalid/a", "INVALID", "UNAVAILABLE", "NA", "UNAVAILABLE"},
+		{strings.Repeat("x", 2049), "INVALID", "UNAVAILABLE", "NA", "UNAVAILABLE"},
+	}
+	for _, tc := range cases {
+		raw, _ := json.Marshal(tc.value)
+		c := avatarCandidate("image", "ROOT", raw)
+		if c.Protocol != tc.protocol || c.Host != tc.host || c.Components != tc.components || c.Path != tc.path {
+			t.Fatal("controlled URL classification mismatch", c)
+		}
+	}
+	for _, raw := range []string{`null`, `""`, `"  "`, `42`, `true`, `[]`, `{}`} {
+		c := avatarCandidate("image", "REPLY", []byte(raw))
+		if c.Protocol != "NONE" || c.Components != "NA" {
+			t.Fatal("non-URL classification")
+		}
+	}
+}
+func TestV2CandidateBoundAndStableSerialization(t *testing.T) {
+	users := []string{}
+	for name := range avatarCandidateNames {
+		for _, value := range []any{nil, "", " ", 42, true, []string{}, map[string]string{}, "https://other.invalid/fake", "/relative"} {
+			raw, _ := json.Marshal(map[string]any{name: value})
+			users = append(users, string(raw))
+		}
+	}
+	raw := avatarFixture(users...)
+	d := inspectRawAvatarSource(raw, "requested")
+	if !d.Truncated || len(d.Candidates) != 256 {
+		t.Fatal("candidate cardinality cap")
+	}
+	first, _ := json.Marshal(d)
+	again, _ := json.Marshal(inspectRawAvatarSource(raw, "requested"))
+	if string(first) != string(again) {
+		t.Fatal("deterministic ordering")
+	}
+}

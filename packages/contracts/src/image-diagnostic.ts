@@ -14,14 +14,8 @@ export function imageUrlClass(value:unknown,kind:'cover'|'avatar'):ImageUrlClass
 
 export const imageDiagnosticSchema=z.object({version:z.literal(1),truncated:z.boolean(),shape:z.enum(['NOT_RETURNED','EMPTY','UNSUPPORTED','SUPPORTED']),fieldCount:count,urlClasses:z.array(urlClassSchema).max(12).optional(),httpsUpgrades:count.optional(),outcomes:z.array(z.object({reason:z.enum(imageReasons),count:count}).strict()).max(9)}).strict().refine(v=>new Set(v.outcomes.map(x=>x.reason)).size===v.outcomes.length&&v.outcomes.reduce((n,x)=>n+x.count,0)<=12&&(v.urlClasses||[]).reduce((n,x)=>n+x.count,0)<=12);
 export type ImageDiagnostic=z.infer<typeof imageDiagnosticSchema>;
-// Only bounded enums/counters from the reviewed pre-User MCP diagnostic. Never raw fields/URLs.
-const sourceCount=z.number().int().min(0).max(1000);
-export const avatarSourceDiagnosticSchema=z.object({
- version:z.literal(1),status:z.enum(['OK','BYTE_LIMIT','INVALID_JSON','FEED_MISSING','INVALID_SHAPE']),truncated:z.boolean(),roots:sourceCount,replies:sourceCount,
- fields:z.array(z.object({group:z.enum(['USER_INFO','FIXED_AVATAR','AVATAR_CASE_VARIANT','IMAGE_NAMED_MEMBER','OTHER_MEMBER']),shape:z.enum(['MISSING','NULL','EMPTY_STRING','WHITESPACE_STRING','NONEMPTY_STRING','OBJECT','ARRAY','BOOLEAN','NUMBER','INVALID']),count:z.number().int().min(1).max(64000)}).strict()).max(50),
- conversion:z.array(z.object({state:z.enum(['COMMENT_SHAPE_INVALID','USER_UNAVAILABLE','USER_DECODE_FAILED','WIRE_FAILED','WIRE_CHANGED','EMPTY_AFTER_DECODE','NONEMPTY_PRESERVED']),count:z.number().int().min(1).max(1000)}).strict()).max(7),
-}).strict().refine(v=>v.roots+v.replies<=1000&&new Set(v.fields.map(x=>x.group+':'+x.shape)).size===v.fields.length&&new Set(v.conversion.map(x=>x.state)).size===v.conversion.length&&v.fields.reduce((n,x)=>n+x.count,0)<=66000&&v.conversion.reduce((n,x)=>n+x.count,0)===v.roots+v.replies);
-export function safeAvatarSourceDiagnostic(value:unknown){const p=avatarSourceDiagnosticSchema.safeParse(value);return p.success?p.data:undefined;}
+import {avatarSourceDiagnosticSchema} from './avatar-source-diagnostic';
+export {avatarSourceDiagnosticSchema,safeAvatarSourceDiagnostic,type AvatarSourceDiagnostic} from './avatar-source-diagnostic';
 export const imageDiagnosticsSchema=z.object({avatarSource:avatarSourceDiagnosticSchema.optional(),searchCover:imageDiagnosticSchema.optional(),detailCover:imageDiagnosticSchema.optional(),authorAvatar:imageDiagnosticSchema.optional()}).strict();
 export type ImageDiagnostics=z.infer<typeof imageDiagnosticsSchema>;
 export function safeImageDiagnostics(value:unknown):ImageDiagnostics|undefined {const parsed=imageDiagnosticsSchema.safeParse(value);return parsed.success?parsed.data:undefined;}
