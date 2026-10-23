@@ -161,3 +161,44 @@ describe('optional URL restriction facts (synthetic only)',()=>{
   expect(r.status).toBe('PARTIAL');expect(r.posts[0].comments).toHaveLength(1);expect(r.posts[0].post.imageDiagnostics?.avatarSource).toBeUndefined();expect(JSON.stringify(r)).not.toContain(secret);
  });
 });
+
+// Shared Go/TypeScript cases are synthetic and make no external requests.
+import {readFileSync} from 'node:fs';
+import {inspectImageUrl} from '@crm/contracts';
+const thumbnailCases=JSON.parse(readFileSync(require('node:path').resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/avatar-query-cases.json'),'utf8')) as {synthetic:boolean;cases:{url:string;accepted:boolean}[]};
+describe('strict thumbnail query compatibility',()=>{
+ it.each(thumbnailCases.cases.map((c,i)=>({...c,i})))('same Go/TS boundary $i',({url,accepted})=>{
+  expect(thumbnailCases.synthetic).toBe(true);
+  const result=inspectImageUrl(url,'avatar');expect(result.reason==='ACCEPTED').toBe(accepted);
+  if(accepted)expect(result.url).toBe(url);else expect(result.url).toBeUndefined();
+ });
+ it('never grants cover URLs the avatar query exception',()=>{
+  expect(inspectImageUrl('https://sns-webpic-qc.xhscdn.com/synthetic?imageView2/2/w/80','cover').reason).toBe('URL_COMPONENTS');
+ });
+ it('passes synthetic root and reply thumbnail URLs through existing adapter',async()=>{
+  const avatar='https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80';
+  const userInfo={userId:'synthetic',nickname:'合成',avatar,avatarSource:'image'};
+  const r=await run(envelope(detail([{...comment,userInfo,subComments:[{...comment,id:'reply',userInfo}]}])));
+  expect(r.posts[0].comments).toHaveLength(2);
+  for(const c of r.posts[0].comments)expect(c.authorAvatarUrl).toBe(avatar);
+ });
+ it('only accepts optional controlled query policy and preserves old diagnostics',()=>{
+  const d=structuredClone(avatarDiagnosticUrlReasons);expect(safeAvatarSourceDiagnostic(d)).toBeDefined();
+  const c=d.candidates[0];const next={...d,candidates:d.candidates.map((x,i)=>i?x:{...c,queryPolicy:'NONE'})};
+  expect(safeAvatarSourceDiagnostic(next)).toBeDefined();
+  const thumbnail={...next,candidates:next.candidates.map((x,i)=>i?x:{...x,queryPolicy:'IMAGE_VIEW2_THUMBNAIL',queryForm:'BARE',components:'RESTRICTED',restrictions:{query:true,fragment:false,userinfo:false,port:false,encodedPath:false,encodedElsewhere:false}})};
+  expect(safeAvatarSourceDiagnostic(thumbnail)).toBeDefined();
+  expect(safeAvatarSourceDiagnostic({...thumbnail,candidates:thumbnail.candidates.map((x,i)=>i?x:{...x,queryPolicy:'NONE'})})).toBeUndefined();
+  expect(safeAvatarSourceDiagnostic({...thumbnail,candidates:thumbnail.candidates.map((x,i)=>i?x:{...x,queryForm:'KEY_VALUE'})})).toBeUndefined();
+
+  expect(safeAvatarSourceDiagnostic({...next,candidates:next.candidates.map((x,i)=>i?x:{...x,queryPolicy:secret})})).toBeUndefined();
+ });
+});
+
+it('thumbnail metadata and format diagnostic never change semantic/hash identity',async()=>{
+ const {semanticSnapshot,snapshotHash}=await import('../src/collection/semantic-evaluator');
+ const post={id:'p',title:'合成'},c={id:'c',userId:'u',nickname:'合成',text:'正文',hasReplies:false};
+ const avatar='https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80';
+ const a=semanticSnapshot(post,c,undefined,false,true),b=semanticSnapshot(post,{...c,authorAvatarUrl:avatar},undefined,false,true);
+ expect(b).toEqual(a);expect(snapshotHash(b)).toBe(snapshotHash(a));expect(JSON.stringify(b)).not.toContain('imageView2');
+});

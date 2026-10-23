@@ -41,22 +41,10 @@ func (u *CommentUser) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	image := raw["image"] // exact confirmed key, not case-folded speculative aliases
-	facts := avatarCandidate("image", "ROOT", image)
-	if facts.Shape == "NONEMPTY_STRING" && facts.Protocol == "HTTPS" && facts.Host == "ALLOWED" && facts.Components == "CLEAN" && facts.Path == "AVATAR_PATH" {
-		var value string
-		if json.Unmarshal(image, &value) == nil && strings.HasPrefix(value, "https://sns-avatar-qc.xhscdn.com/avatar/") {
-			// Reject path traversal rather than normalize it into a different resource.
-			safe := true
-			for _, part := range strings.Split(strings.TrimPrefix(value, "https://sns-avatar-qc.xhscdn.com"), "/") {
-				if part == "." || part == ".." {
-					safe = false
-				}
-			}
-			if safe {
-				next.Avatar = value
-				next.AvatarSource = "image"
-			}
-		}
+	var value string
+	if json.Unmarshal(image, &value) == nil && safeCommentImage(value) {
+		next.Avatar = value
+		next.AvatarSource = "image"
 	}
 	*u = next
 	return nil

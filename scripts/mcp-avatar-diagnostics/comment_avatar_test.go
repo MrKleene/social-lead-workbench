@@ -48,7 +48,7 @@ func TestCommentImageStrictBoundary(t *testing.T) {
 		"http://sns-avatar-qc.xhscdn.com/avatar/a", "//sns-avatar-qc.xhscdn.com/avatar/a", "javascript:alert(1)",
 		"https://sns-avatar-qc.xhscdn.com.evil.invalid/avatar/a", "https://evil.invalid/avatar/a",
 		"https://user:FAKE@sns-avatar-qc.xhscdn.com/avatar/a", "https://sns-avatar-qc.xhscdn.com:443/avatar/a",
-		syntheticImage + "?", syntheticImage + "?imageView2/2/w/80", syntheticImage + "?signature=FAKE", syntheticImage + "#", syntheticImage + "#FAKE",
+		syntheticImage + "?", syntheticImage + "?signature=FAKE", syntheticImage + "#", syntheticImage + "#FAKE",
 		"https://sns-avatar-qc.xhscdn.com/avatar/%61", "https://sns-avatar-qc.xhscdn.com/avatar/../a", "https://sns-avatar-qc.xhscdn.com/avatar/./a",
 		"https://sns-avatar-qc.xhscdn.com/other/a", "https://sns-avatar-qc.xhscdn.com/avatar/", syntheticImage + "\\", syntheticImage + "\n",
 		syntheticImage + strings.Repeat("a", 2049), "https://SNS-AVATAR-QC.XHSCDN.COM/avatar/a"}

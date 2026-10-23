@@ -262,6 +262,7 @@ type AvatarURLRestrictions struct {
 
 type AvatarCandidateCount struct {
 	Restrictions AvatarURLRestrictions `json:"restrictions"`
+	QueryPolicy  string                `json:"queryPolicy"`
 	QueryForm    string                `json:"queryForm"`
 	Name         string                `json:"name"`
 	Role         string                `json:"role"`
@@ -305,7 +306,7 @@ func avatarCandidateKey(key string) string {
 	return "ALLOWED"
 }
 func avatarCandidate(name, role string, raw json.RawMessage) AvatarCandidateCount {
-	c := AvatarCandidateCount{Name: name, Role: role, Shape: avatarShape(raw), Protocol: "NONE", Host: "UNAVAILABLE", Components: "NA", Path: "UNAVAILABLE", QueryForm: "NONE"}
+	c := AvatarCandidateCount{Name: name, Role: role, Shape: avatarShape(raw), Protocol: "NONE", Host: "UNAVAILABLE", Components: "NA", Path: "UNAVAILABLE", QueryForm: "NONE", QueryPolicy: "NONE"}
 	if c.Shape != "NONEMPTY_STRING" {
 		return c
 	}
@@ -338,6 +339,7 @@ func avatarCandidate(name, role string, raw json.RawMessage) AvatarCandidateCoun
 	}
 	c.Components = "CLEAN"
 	c.Restrictions, c.QueryForm = avatarURLRestrictions(value, u)
+	c.QueryPolicy = avatarQueryPolicy(u.RawQuery, c.Restrictions.Query)
 	if c.Restrictions.Query || c.Restrictions.Fragment || c.Restrictions.Userinfo || c.Restrictions.Port || c.Restrictions.EncodedPath || c.Restrictions.EncodedElsewhere {
 		c.Components = "RESTRICTED"
 	}

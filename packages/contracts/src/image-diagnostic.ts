@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {avatarQueryPolicy} from './avatar-query';
 export const imageReasons=['NOT_RETURNED','EMPTY','UNSUPPORTED_FORMAT','URL_FORMAT','PROTOCOL','HOST','URL_COMPONENTS','PATH','ACCEPTED'] as const;
 export type ImageReason=typeof imageReasons[number];
 const count=z.number().int().min(0).max(12);
@@ -28,7 +29,13 @@ export function inspectImageUrl(value:unknown,kind:'cover'|'avatar'):{reason:Ima
  if(value.length>2048||/[\s\\%]/.test(value))return {reason:'URL_FORMAT'};
  let u:URL;try{u=new URL(value);}catch{return {reason:'URL_FORMAT'};}
  if(u.protocol!=='https:'||!value.startsWith('https://'))return {reason:'PROTOCOL'};
- if(u.username||u.password||u.port||u.search||u.hash)return {reason:'URL_COMPONENTS'};
+ if(u.username||u.password||u.port||value.includes('#'))return {reason:'URL_COMPONENTS'};
+ if(kind==='avatar'){
+  if(!value.startsWith('https://sns-avatar-qc.xhscdn.com/'))return {reason:'HOST'};
+  const rawPath=value.slice('https://sns-avatar-qc.xhscdn.com'.length).split('?')[0];
+  if(rawPath.split('/').some(p=>p==='.'||p==='..'))return {reason:'PATH'};
+  if(avatarQueryPolicy(u.search.slice(1),value.includes('?'))==='UNSUPPORTED')return {reason:'URL_COMPONENTS'};
+ }else if(value.includes('?'))return {reason:'URL_COMPONENTS'};
  const hosts=allowedHosts(kind);
  if(!hosts.includes(u.hostname))return {reason:'HOST'};
  if(!(kind==='cover'?/^\/[A-Za-z0-9_/.!@,=+-]+$/:/^\/avatar\/[A-Za-z0-9_/.!@,=+-]+$/).test(u.pathname)||u.pathname==='/')return {reason:'PATH'};
