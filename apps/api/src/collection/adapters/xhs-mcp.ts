@@ -89,12 +89,13 @@ export class XhsMcpAdapter implements ReadAdapter {
         return { ...post,boundedRead,coverageDiagnostic:safeCoverageDiagnostic(data.data.coverageDiagnostic),sourceReference:this.mode==="XHS_MCP"&&(data.feed_id||data.data.note.noteId)?savedPostReference({postId:reference.rawId,token:reference.token,source:post.sourceReference?.source||"pc_feed"},post.id):undefined,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:avatar.url,imageDiagnostics:{...post.imageDiagnostics,detailCover:cover.diagnostic,authorAvatar:avatar.diagnostic,avatarSource:safeAvatarSourceDiagnostic(data.data.avatarSourceDiagnostic)},publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||cover.url, title: data.data.note.title || post.title, ...(data.data.note.desc!=null?{body:data.data.note.desc}:{}) };
     }
     /** One bounded detail call. The caller owns account authorization and the device lease. */
-    async postReference(value:PostReference,signal:AbortSignal):Promise<Post>{
+    async postReference(value:PostReference,signal:AbortSignal,mode:'INITIAL_WINDOW'|'BOUNDED_REPLIES'='INITIAL_WINDOW'):Promise<Post>{
         const ref=postReferenceSchema.parse(value),id=this.id(ref.postId);
+        if(mode==='BOUNDED_REPLIES'&&!this.readWindow)throw new ReadFailure("UNSUPPORTED");
         if(!this.allowed)throw new ReadFailure("REAL_DISABLED");
         await this.transport.connect?.(signal);
         this.tokens.set(id,{rawId:ref.postId,token:ref.token});
-        try{const post=await this.post({id,title:'',sourceReference:ref},signal,undefined,true);if(this.mode==='XHS_MCP'&&!post.sourceReference)throw invalidSource('post','IDENTITY_CONFLICT','noteId');return post;}finally{this.tokens.delete(id);}
+        try{const post=await this.post({id,title:'',sourceReference:ref},signal,undefined,mode==='INITIAL_WINDOW');if(this.mode==='XHS_MCP'&&!post.sourceReference)throw invalidSource('post','IDENTITY_CONFLICT','noteId');return post;}finally{this.tokens.delete(id);}
     }
     receivedComments(post:Post):Comment[]{const d=this.details.get(post.id);return d?[...d.roots,...[...d.replies.values()].flat()]:[];}
     async comments(post: Post, cursor: string | undefined, _signal: AbortSignal): Promise<Page<Comment>> {

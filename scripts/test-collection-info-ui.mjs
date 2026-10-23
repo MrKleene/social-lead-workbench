@@ -96,10 +96,10 @@ try{
   report.checks.push('official ID link / no credentials or referer / keyboard new tab without opener / invalid legacy ID unavailable / empty comments '+narrow);
   await page.goto(base+'/work?module=archive');let diagnosticCalls=0;
   await context.route(base+'/api/collection/mcp/readiness',route=>route.fulfill({json:{enabled:true,device:{online:true,name:'合成设备'},accounts:[{id:'fake-account',label:'合成已存账号',reason:'UNVERIFIED',eligible:false}]}}));
-  await context.route(base+'/api/collection/single-post-check',async route=>{diagnosticCalls++;assert.equal(route.request().method(),'POST');assert.equal(route.request().headers()['x-csrf-token'],'fake');const b=route.request().postDataJSON();assert.equal(b.accountId,'fake-account');assert.equal(b.consent,'single-post-read-v1');assert.equal(b.url,'https://www.xiaohongshu.com/explore/0123456789abcdef01234567?xsec_token=SYNTHETIC_TEST_ONLY&xsec_source=pc_feed');await new Promise(r=>setTimeout(r,200));return route.fulfill({json:{status:'CHECKED',coverage:'WINDOW_ONLY',roots:{count:1,displayableAvatars:0},replies:{count:1,displayableAvatars:0},imageDiagnostics,coverageDiagnostic}});});
+  await context.route(base+'/api/collection/single-post-check',async route=>{diagnosticCalls++;assert.equal(route.request().method(),'POST');assert.equal(route.request().headers()['x-csrf-token'],'fake');const b=route.request().postDataJSON();assert.equal(b.accountId,'fake-account');assert.equal(b.consent,b.mode==='BOUNDED_REPLIES'?'single-post-bounded-read-v1':'single-post-read-v1');assert(['INITIAL_WINDOW','BOUNDED_REPLIES'].includes(b.mode));assert.equal(b.url,'https://www.xiaohongshu.com/explore/0123456789abcdef01234567?xsec_token=SYNTHETIC_TEST_ONLY&xsec_source=pc_feed');await new Promise(r=>setTimeout(r,200));return route.fulfill({json:{status:'CHECKED',mode:b.mode,coverage:b.mode==='BOUNDED_REPLIES'?'PARTIAL':'WINDOW_ONLY',boundedRead:b.mode==='BOUNDED_REPLIES'?posts[0].snapshot.boundedRead:null,roots:{count:1,displayableAvatars:0},replies:{count:1,displayableAvatars:0},imageDiagnostics,coverageDiagnostic}});});
   await page.getByRole('button',{name:'单帖检查',exact:true}).click();const dialog=page.getByRole('dialog',{name:'单帖只读检查',exact:true});await dialog.waitFor();
   const missingReference='https://www.xiaohongshu.com/explore/0123456789abcdef01234567';
-  await page.getByLabel('单帖原文链接').fill(missingReference);await dialog.getByRole('checkbox').check();
+  await page.getByLabel('单帖原文链接').fill(missingReference);await dialog.getByRole('checkbox',{name:'确认本次只读检查'}).check();
   await dialog.getByText('缺少帖子访问引用；只有帖子编号的地址不能用于检查。',{exact:true}).waitFor();
   assert(await page.getByRole('button',{name:'只读检查这一篇',exact:true}).isDisabled());
   await page.getByLabel('单帖原文链接').press('Enter');await page.waitForTimeout(200);
@@ -109,22 +109,30 @@ try{
   await page.screenshot({path:join(out,`single-post-local-invalid-${narrow}.png`),fullPage:narrow});
   await page.getByLabel('单帖原文链接').fill(missingReference+'?xsec_token=SYNTHETIC_TEST_ONLY&amp;xsec_source=pc_feed');
   await dialog.getByText('链接分隔符被转义，请从浏览器地址栏直接复制，不要复制网页代码。',{exact:true}).waitFor();assert.equal(diagnosticCalls,0);
-  await dialog.getByRole('checkbox').uncheck();
+  await dialog.getByRole('checkbox',{name:'确认本次只读检查'}).uncheck();
   await page.getByLabel('单帖原文链接').fill(missingReference+'?xsec_token=SYNTHETIC_TEST_ONLY&xsec_source=pc_feed&source=web_explore_feed');
   await dialog.getByText('链接格式有效；点击后才核验账号，尚未访问小红书。',{exact:true}).waitFor();
   assert(await page.getByRole('button',{name:'只读检查这一篇',exact:true}).isDisabled());
   report.checks.push('local URL diagnosis / invalid input retained / zero POST on invalid+Enter / corrected without remount / fixed page source omitted from POST / no persistence '+narrow);
-  await dialog.getByRole('checkbox').check();await page.getByRole('button',{name:'只读检查这一篇',exact:true}).click();
+  await dialog.getByRole('checkbox',{name:'确认本次只读检查'}).check();await page.getByRole('button',{name:'只读检查这一篇',exact:true}).click();
   await page.getByRole('region',{name:'单帖检查结果',exact:true}).waitFor();assert.equal(diagnosticCalls,1);assert.equal(await page.getByLabel('单帖原文链接').inputValue(),'');assert(await page.getByRole('button',{name:'本次检查已提交',exact:true}).isDisabled());
   assert(!(await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}))).includes('SYNTHETIC_TEST_ONLY'));assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await dialog.getByText('评论覆盖诊断',{exact:true}).click();await dialog.getByText('平台声明评论数：15（是否包含回复尚未确认）',{exact:true}).waitFor();await dialog.getByText('还有下一页：否；游标：为空。',{exact:true}).waitFor();assert((await dialog.innerText()).includes('计数相同不代表完整采集'));await dialog.getByText('查看各层回复计数与观察记录',{exact:true}).click();await dialog.getByText('回复 #2（父节点 #1）：回复声明 未返回，本层已加载 0',{exact:true}).waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));report.checks.push('coverage shared Go fixture / explicit false and missing versus zero / anonymous reply groups / no full coverage claim '+narrow);
   await page.screenshot({path:join(out,`single-post-check-${narrow}.png`),fullPage:narrow});await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>document.activeElement.textContent),'单帖检查');report.checks.push('single-post consent / one POST / input cleared / no browser persistence / result / keyboard focus '+narrow);
+  await page.getByRole('button',{name:'单帖检查',exact:true}).click();await dialog.waitFor();assert(!(await dialog.getByRole('checkbox',{name:'验证回复展开',exact:true}).isChecked()));
+  await page.getByLabel('单帖原文链接').fill(missingReference+'?xsec_token=SYNTHETIC_TEST_ONLY&xsec_source=pc_feed');
+  await dialog.getByRole('checkbox',{name:'确认本次只读检查'}).check();await dialog.getByRole('checkbox',{name:'验证回复展开',exact:true}).focus();await page.keyboard.press('Space');
+  assert(!(await dialog.getByRole('checkbox',{name:'确认本次只读检查'}).isChecked()));assert(await page.getByRole('button',{name:'只读检查这一篇',exact:true}).isDisabled());
+  await dialog.getByText('最多尝试展开 8 次，限时 15 秒；不翻主评论页，不写入采集信息。',{exact:true}).waitFor();await dialog.getByRole('checkbox',{name:'确认本次只读检查'}).check();const boundedBefore=diagnosticCalls;
+  await page.getByRole('button',{name:'只读检查这一篇',exact:true}).click();await dialog.getByText('读取方式：验证回复展开',{exact:true}).waitFor();assert.equal(diagnosticCalls,boundedBefore+1);await dialog.getByText('达到回复展开次数上限；不代表全部评论。',{exact:true}).waitFor();
+  await dialog.getByText('本轮读取范围',{exact:true}).click();await dialog.getByText('各层回复范围',{exact:true}).click();assert((await dialog.innerText()).includes('声明 3，已加载 1'));assert(!(await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage}))).includes('SYNTHETIC_TEST_ONLY'));assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.screenshot({path:join(out,`single-post-bounded-${narrow}.png`),fullPage:narrow});await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>document.activeElement.textContent),'单帖检查');report.checks.push('explicit bounded mode / default off / mode change resets consent / single POST / stops and gaps / no persistence / keyboard '+narrow);
   // Synthetic rejection/unknown outcomes: no actual platform or production endpoint.
   const errorHandler=async route=>{diagnosticCalls++;if(errorMode==='network')return route.abort('failed');return route.fulfill({status:Number(errorMode),json:{message:errorMode==='400'?'请提供含有效访问引用的小红书原文链接':errorMode==='403'?'CSRF 校验失败':'PRIVATE_SENTINEL_DO_NOT_RENDER'}});};
   let errorMode='400';await context.route(base+'/api/collection/single-post-check',errorHandler);
   for(const mode of ['400','403','409','500','network']){
    errorMode=mode;await page.getByRole('button',{name:'单帖检查',exact:true}).click();const errors=page.getByRole('dialog',{name:'单帖只读检查'});
-   await page.getByLabel('单帖原文链接').fill('https://www.xiaohongshu.com/explore/0123456789abcdef01234567?xsec_token=SYNTHETIC_TEST_ONLY&xsec_source=pc_feed');await errors.getByRole('checkbox').check();const before=diagnosticCalls;
+   await page.getByLabel('单帖原文链接').fill('https://www.xiaohongshu.com/explore/0123456789abcdef01234567?xsec_token=SYNTHETIC_TEST_ONLY&xsec_source=pc_feed');await errors.getByRole('checkbox',{name:'确认本次只读检查'}).check();const before=diagnosticCalls;
    await page.getByRole('button',{name:'只读检查这一篇',exact:true}).click();await errors.getByRole('alert').waitFor();
    const text=await errors.getByRole('alert').innerText();assert(!text.includes('PRIVATE_SENTINEL'));assert(mode==='network'?text.includes('是否已执行尚不确定'):text.includes('HTTP '+mode));
    assert(await errors.getByRole('button',{name:'未取得检查结果',exact:true}).isDisabled());assert.equal(await page.getByLabel('单帖原文链接').inputValue(),'');

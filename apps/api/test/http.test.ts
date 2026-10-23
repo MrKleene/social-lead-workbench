@@ -42,6 +42,7 @@ describe("未认证 HTTP 边界", () => {
         (await request(app.getHttpServer()).get(`/api/${route}`)).status,
       ).toBe(401);
     });
+  it.each(['INITIAL_WINDOW','BOUNDED_REPLIES'])('单帖检查 %s 仍拒绝匿名请求',async mode=>{const r=await request(app.getHttpServer()).post('/api/collection/single-post-check').send({mode,accountId:'synthetic',requestKey:'00000000-0000-4000-8000-000000000001',url:'https://www.xiaohongshu.com/explore/0123456789abcdef01234567?xsec_token=SYNTHETIC&xsec_source=pc_feed',consent:mode==='BOUNDED_REPLIES'?'single-post-bounded-read-v1':'single-post-read-v1'});expect(r.status).toBe(401);});
   it("伪造会话不被信任", async () => {
     expect(
       (

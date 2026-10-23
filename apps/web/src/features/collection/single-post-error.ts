@@ -3,6 +3,7 @@ import {ApiError} from '../../lib/api';
 export function singlePostError(error:unknown):string {
  if(!(error instanceof ApiError))return '连接中断或响应不可用，未取得检查结果。是否已执行尚不确定，请先核查；不会自动重试。';
  if(error.status===400){
+  if(error.message==='本机受控展开尚未启用')return '本机受控展开尚未启用（HTTP 400），没有读取帖子。';
   if(error.message==='请提供含有效访问引用的小红书原文链接')return '链接格式未通过检查（HTTP 400），尚未开始账号核验。请从小红书地址栏复制完整原文链接。';
   if(error.message==='本机只读服务未启用')return '本机只读服务未启用（HTTP 400），尚未开始检查。';
   if(error.message==='请求格式无效；未执行')return '请求格式无效（HTTP 400），尚未执行检查。';
