@@ -1,12 +1,12 @@
-# 有限评论读取候选（尚未启用）
+# 有限评论读取（Mac 已批准部署，真实效果未验收）
 
-本轮是源码、离线测试和候选构建。没有替换已安装 MCP、改审核哈希、重启服务或请求小红书。
+候选准备提交为 `8d3bd00`。用户随后批准安装和策略启用；2026-10-23 15:39 UTC 已备份并安装该候选，更新两处审核哈希，仅正常重启 API/worker。此次部署没有请求小红书。
 
 ## 范围与停止条件
 
 工作台仍发送旧两个参数 `load_all_comments=false`、`click_more_replies=false`。新增 `read_window` 与旧全量路径互斥，主评论和回复分别有预算；工具必须同时声明 `crm-bounded-comments-v1` 和输入结构，否则请求被阻止。
 
-服务端策略 `runtime/comment-read-policy.cjs` 的 `enabled` 默认 false，HTTP 调用方不能传入或开启。预设是 0 次主评滚动、8 次回复展开尝试、最多 20 个主评、100 条唯一评论/回复、每根最多 10 条回复的点击准入阈值、15 秒内部读取期限。各帖实际 max_comments/max_roots 还会按整轮剩余评论预算收紧，预算耗尽不再读取下一帖。硬上限分别 3 / 12 / 40 / 100 / 30 / 15 秒。`root_pages` 是有界滚动尝试数，不代表已证明加载了几页；只有明确 hasMore 才尝试主评滚动。
+服务端策略 `runtime/comment-read-policy.cjs` 准备时 `enabled=false`，本次批准部署后为 true；仅持久实例的真实账号读取上下文（XHS_MCP、CRM_PERSISTENT=1、CRM_ACCOUNT_READ_ENABLED=1）自动采用，fixture/非持久环境不自动采用。HTTP 调用方不能传入或开启。预设是 0 次主评滚动、8 次回复展开尝试、最多 20 个主评、100 条唯一评论/回复、每根最多 10 条回复的点击准入阈值、15 秒内部读取期限。各帖实际 max_comments/max_roots 还会按整轮剩余评论预算收紧，预算耗尽不再读取下一帖。硬上限分别 3 / 12 / 40 / 100 / 30 / 15 秒。`root_pages` 是有界滚动尝试数，不代表已证明加载了几页；只有明确 hasMore 才尝试主评滚动。
 
 主评 hasMore=false 不阻止回复阶段。回复只能操作本次已载根节点内的已知按钮；只接受带明确数字的“展开 N 条回复”，未知数量不点。准入时检查可容纳的回复数及根节点阈值。实际页面仍可能返回超出声明的条目，因此总保留上限独立执行，超限返回部分结果而不是成功。回复滚动意外加载的新根节点不纳入，记录排除数量。
 
@@ -24,11 +24,11 @@
 
 平台隐藏、删除、折叠后不可访问、风控内容不能保证获取。本地 DOM fixtures 验证机制，不代表生产页面选择器、时序或全量覆盖已经实测。
 
-## 构建与后续安装（本轮未执行）
+## 构建、安装与回退
 
 沿 `scripts/mcp-avatar-diagnostics/source-manifest.json` 校验的原始源码，通过 `prepare.mjs` 应用累计补丁，再用已审核本地 Go 1.24.13 和现有依赖缓存离线构建。目标 `v2.5.5-local-bounded-comment-read`，darwin/arm64；产物不进 Git。
 
-安装须另获当次批准：先无活跃任务，核验本轮候选完整 SHA-256，备份 `~/.local/bin/xiaohongshu-mcp` 及 `runtime/platform.cjs`、`scripts/real-mcp/core.mjs` 审核哈希；原子替换，更新两处哈希，明确启用服务端有限策略后正常重启 API/worker。前端、DB、Redis、账号/会话和密钥保留，无迁移。不应仅安装二进制就假定策略已启用。
+每次更换构建须当次批准；本次已获批准并完成以下流程：先无活跃任务，核验本轮候选完整 SHA-256，备份 `~/.local/bin/xiaohongshu-mcp` 及 `runtime/platform.cjs`、`scripts/real-mcp/core.mjs` 审核哈希；原子替换，更新两处哈希，明确启用服务端有限策略后正常重启 API/worker。前端、DB、Redis、账号/会话和密钥保留，无迁移。不应仅安装二进制就假定策略已启用。
 
 回退：正常停止对应后台，恢复备份二进制及两处原哈希，关闭 `comment-read-policy.cjs` enabled，正常启动后台。不得强删未知锁、强杀未知进程或删数据库。
 
@@ -38,7 +38,16 @@
 
 - 候选：`/Users/kleene/Documents/Codex/2026-10-21/task-2/mcp-bounded-review/final-3/xiaohongshu-mcp-candidate`。
 - SHA-256：`53774562ae853ac7643e7556eb2cbcc54586a4f1ab565b2e250aafa054757e08`；final-2/final-3 两次独立构建一致。
-- 当前安装版仍为 `92a73a599fcc3cbb53a23f38e6d01d01e085d168041bf9472d2e869de6fee94f`。
+- 当前安装版已与候选 SHA-256 一致；旧版 `92a73a599fcc3cbb53a23f38e6d01d01e085d168041bf9472d2e869de6fee94f` 保留在 `~/.local/bin/xiaohongshu-mcp.backup-92a73a599fcc`。两处原审核文件和启用前策略保留于独立工作目录 `mcp-bounded-review/deployment-rollback/`。
 - 395 项 API 单元/协议/mock 测试、100 项工作台单元测试、34 组桌面/390px mock 交互通过；类型检查及全项目构建通过。
 - Go 纯逻辑回归与仅 loopback 的合成浏览器 fixture 通过，验证 root hasMore=false 下 replyClicks=0/1 的不点击/展开行为。没有执行候选 MCP 程序，也没有连接真实账号浏览器。
 - 未运行真实采集、平台全覆盖验收或正式数据库写入测试；Windows 原生验证不在此 Mac 构建范围。
+
+## 本次部署核验与单帖入口限制
+
+- API/worker 从 PID 21007/21006 换为 34226/34225；原 supervisor 记录正常 CLEANUP_COMPLETE、EXIT 0，API SIGTERM、worker 退出 0。未手动强杀或删除锁。
+- API ready 与网页均为 HTTP 200，队列空闲、一个 worker 等待任务；前端 PID 3438 未变，数据库/Redis 启动时间未变。
+- 前后均为 5 次任务、11 个帖子版本、183 个评论版本、2 个账号、1 个会话、1 份采集配置；模型调用/联系记录为 0。14 项已有迁移保持，无新增迁移执行。
+- 部署配置下 396 项 API 离线测试、17 项平台/审核策略测试通过；类型检查通过，正常启动完成 contracts/API 构建。构建后的代码在新进程启动前生成。
+- `http://127.0.0.1:63968/work?module=archive` → “单帖检查”仍强制不展开，不能作为本候选回复展开验收入口。当前没有受支持的 UI 单帖受控展开入口。普通采集以关键词/任务为范围，也不能冒充精确单帖诊断。
+- 本次没有新增入口、提交平台请求或新采集任务；需要另行确定正常受保护的单帖验证入口后，才可对目标帖子验收。不要通过伪造会话、直接绕过 CSRF 或启动整轮采集替代。

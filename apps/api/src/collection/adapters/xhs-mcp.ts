@@ -31,7 +31,7 @@ export class XhsMcpAdapter implements ReadAdapter {
     readonly platform = "XHS" as const;
     private tokens = new Map<string, { rawId: string; token: string }>();
     private details = new Map<string, { roots: Comment[]; replies: Map<string, Comment[]> }>();
-    constructor(private transport: ReadOnlyMcpTransport, private allowed = false, readonly mode: McpMode = "XHS_MCP", private readWindow:BoundedReadConfig|undefined=commentPolicy.enabled?boundedReadConfigSchema.parse(commentPolicy.readWindow):undefined) {}
+    constructor(private transport: ReadOnlyMcpTransport, private allowed = false, readonly mode: McpMode = "XHS_MCP", private readWindow:BoundedReadConfig|undefined=commentPolicy.enabled&&mode==='XHS_MCP'&&process.env.CRM_PERSISTENT==='1'&&process.env.CRM_ACCOUNT_READ_ENABLED==='1'?boundedReadConfigSchema.parse(commentPolicy.readWindow):undefined) {}
     private id(value: string) {
         if (/^(demo-|fixture-)/.test(value)) throw new ReadFailure("INVALID_DATA");
         return this.mode === "XHS_FIXTURE" ? `fixture-xhs-${value}` : value;
