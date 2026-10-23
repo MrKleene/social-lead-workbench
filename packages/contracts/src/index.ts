@@ -43,3 +43,5 @@ export * from './collection-diagnostic';
 export * from './comment-rules';
 export * from './semantic-review';
 export * from './run-post-feed';
+
+export * from './bounded-read';

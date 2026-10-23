@@ -1,3 +1,4 @@
+import {readWindow} from '../../../runtime/comment-read-policy.cjs';
 import { CollectionService } from '../src/collection/service';
 import { Db } from '../src/common/db';
 import { CollectionQueue } from '../src/collection/queue';
@@ -40,6 +41,11 @@ describe('真实协议，仅离线端点', () => {
         for (const name of ['post_comment_to_feed','get_login_qrcode','list_notifications']) await expect(f.transport.call(name as ReadTool, {}, signal())).rejects.toMatchObject({ code: 'UNSUPPORTED' });
         await expect(f.transport.call('get_feed_detail', { feed_id:'p',xsec_token:'x',load_all_comments:true },signal())).rejects.toMatchObject({code:'INVALID_DATA'});
         expect(f.state.calls).toHaveLength(0);
+    });
+    it('旧工具未声明有限读取能力时不会发出扩展请求',async()=>{
+      const f=await setup();await f.transport.connect(signal());expect(f.transport.supportsBoundedComments()).toBe(false);
+      await expect(f.transport.call('get_feed_detail',{feed_id:'p',xsec_token:'synthetic',load_all_comments:false,click_more_replies:false,read_window:readWindow},signal())).rejects.toMatchObject({code:'UNSUPPORTED'});
+      expect(f.state.calls).toHaveLength(0);
     });
     it.each([{ name: 'unexpected-real-server' }, { missingTool: true }])('服务器身份/缺失工具不进入读取 %s', async options => {
         const f = await setup(options);

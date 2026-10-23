@@ -31,15 +31,15 @@ export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResul
   for(const entry of result.posts){
    const valid=(id:string)=>spec.mode==='MOCK'?id.startsWith('demo-collect-'):spec.mode==='XHS_FIXTURE'?id.startsWith('fixture-xhs-'):!/^(demo-|fixture-)/.test(id);
    if(!valid(entry.post.id)||entry.comments.some(c=>![c.id,c.userId,...(c.parentId?[c.parentId]:[])].every(valid)))throw new ReadFailure('INVALID_DATA');
-   const {coverageDiagnostic:_coverageDiagnostic,sourceReference,coverUrl,authorNickname,authorAvatarUrl,publishedAt,imageDiagnostics,...textPost}=entry.post;
+   const {boundedRead,coverageDiagnostic:_coverageDiagnostic,sourceReference,coverUrl,authorNickname,authorAvatarUrl,publishedAt,imageDiagnostics,...textPost}=entry.post;
    const display=captureDisplay({authorNickname,authorAvatarUrl,publishedAt});
    const previousPost=await tx.capturedPost.findUnique({where:{configId_platformPostId_contentHash:{configId:config.id,platformPostId:entry.post.id,contentHash:semanticHash(textPost)}},select:{snapshot:true}});
    const previousSnapshot=(previousPost?.snapshot||{}) as CaptureDisplay & {coverUrl?:string;sourceReference?:unknown};
    const retainedCover=coverUrl||safePostCoverUrl(previousSnapshot.coverUrl);
    const diagnostic=safeImageDiagnostics(imageDiagnostics);
    const retainedReference=spec.mode==='XHS_MCP'?savedPostReference(sourceReference,entry.post.id)||savedPostReference(previousSnapshot.sourceReference,entry.post.id):undefined;
-   const postSnapshot={...textPost,...(retainedReference?{sourceReference:retainedReference}:{}),...(diagnostic?{imageDiagnostics:diagnostic}:{}),...captureDisplay(previousSnapshot),...display,...(retainedCover?{coverUrl:retainedCover}:{})};
-   const postHash=semanticHash(textPost),p=await tx.capturedPost.upsert({where:{configId_platformPostId_contentHash:{configId:config.id,platformPostId:entry.post.id,contentHash:postHash}},create:{configId:config.id,runId:run.id,platformPostId:entry.post.id,contentHash:postHash,snapshot:postSnapshot,lastRunId:run.id,coverage:entry.complete?'COMPLETE':'PARTIAL'},update:{snapshot:postSnapshot,lastRunId:run.id,lastSeenAt:new Date(),coverage:entry.complete?'COMPLETE':'PARTIAL',stopReason:entry.complete?null:'WINDOW_IN_PROGRESS'}});
+   const postSnapshot={...textPost,...(boundedRead?{boundedRead}:{}),...(retainedReference?{sourceReference:retainedReference}:{}),...(diagnostic?{imageDiagnostics:diagnostic}:{}),...captureDisplay(previousSnapshot),...display,...(retainedCover?{coverUrl:retainedCover}:{})};
+   const postHash=semanticHash(textPost),p=await tx.capturedPost.upsert({where:{configId_platformPostId_contentHash:{configId:config.id,platformPostId:entry.post.id,contentHash:postHash}},create:{configId:config.id,runId:run.id,platformPostId:entry.post.id,contentHash:postHash,snapshot:postSnapshot,lastRunId:run.id,stopReason:entry.stopReason||null,coverage:entry.complete?'COMPLETE':'PARTIAL'},update:{snapshot:postSnapshot,lastRunId:run.id,lastSeenAt:new Date(),coverage:entry.complete?'COMPLETE':'PARTIAL',stopReason:entry.stopReason||(entry.complete?null:'WINDOW_IN_PROGRESS')}});
    const parents=new Map(entry.comments.map(c=>[c.id,c]));
    for(const comment of entry.comments){
     const snapshot=semanticSnapshot(entry.post,comment,comment.parentId?parents.get(comment.parentId):undefined,entry.complete,isDemo),contentHash=snapshotHash(snapshot);
@@ -58,4 +58,5 @@ export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResul
 }
 export async function finishCapture(db:Db,run:CollectionRun,result:ReadResult){
  await db.capturedPost.updateMany({where:{configId:run.configId,lastRunId:run.id},data:{stopReason:result.reason||null,...(result.status!=='COMPLETE'?{coverage:'PARTIAL'}:{})}});
+ for(const entry of result.posts){if(entry.stopReason)await db.capturedPost.updateMany({where:{configId:run.configId,lastRunId:run.id,platformPostId:entry.post.id},data:{stopReason:entry.stopReason,coverage:'PARTIAL'}});}
 }

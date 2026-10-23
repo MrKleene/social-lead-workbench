@@ -6,7 +6,7 @@ const bool=z.object({state,value:z.boolean().nullable()}).strict().refine(v=>(v.
 const n=z.number().int().min(0).max(200);
 const loaded=z.object({roots:n,replies:n,uniqueKnown:n,duplicateIds:n,missingIds:n,invalidNodes:n}).strict().refine(v=>v.roots+v.replies<=200&&v.uniqueKnown+v.duplicateIds+v.missingIds===v.roots+v.replies&&v.invalidNodes<=v.missingIds);
 const group=z.object({ordinal:z.number().int().min(1).max(200),parent:z.number().int().min(1).max(199).nullable(),depth:z.number().int().min(0).max(8),declared:count,loaded:count}).strict();
-const sample=z.object({
+export const coverageSampleSchema=z.object({
  status:z.enum(['OK','UNAVAILABLE','LIMIT','INVALID_JSON','FEED_MISSING']),
  ready:z.object({document:z.enum(['UNKNOWN','loading','interactive','complete']),container:z.boolean()}).strict(),
  total:count,hasMore:bool,cursor:z.enum(['MISSING','NULL','EMPTY','NONEMPTY','INVALID']),list:state,
@@ -23,7 +23,7 @@ const sample=z.object({
  }
 });
 export const coverageDiagnosticSchema=z.object({
- version:z.literal(1),totalScope:z.literal('UNCONFIRMED'),returnedSample:z.literal(0),samples:z.array(sample).min(1).max(3),
+ version:z.literal(1),totalScope:z.literal('UNCONFIRMED'),returnedSample:z.literal(0),samples:z.array(coverageSampleSchema).min(1).max(3),
  observation:z.enum(['UNAVAILABLE','COUNTS_UNCHANGED','CHANGED']),elapsedMs:z.number().int().min(0).max(60000),rangeExpanded:z.literal(false),
 }).strict().superRefine((v,ctx)=>{
  if(v.observation==='UNAVAILABLE')return;

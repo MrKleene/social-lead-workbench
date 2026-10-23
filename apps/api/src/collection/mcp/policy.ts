@@ -1,3 +1,4 @@
+import {boundedReadConfigSchema} from '@crm/contracts';
 import { z } from 'zod';
 import { ReadFailure } from '../contract';
 export const mcpModes = ['XHS_FIXTURE', 'XHS_MCP'] as const;
@@ -5,7 +6,7 @@ export type McpMode = typeof mcpModes[number];
 export const toolArguments = {
   check_login_status: z.object({}).strict(),
   search_feeds: z.object({ keyword: z.string().trim().min(1).max(40) }).strict(),
-  get_feed_detail: z.object({ feed_id: z.string().min(1).max(200), xsec_token: z.string().min(1).max(4096), load_all_comments: z.literal(false), click_more_replies: z.literal(false) }).strict(),
+  get_feed_detail: z.object({ read_window:boundedReadConfigSchema.optional(), feed_id: z.string().min(1).max(200), xsec_token: z.string().min(1).max(4096), load_all_comments: z.literal(false), click_more_replies: z.literal(false) }).strict(),
 };
 export type ReadTool = keyof typeof toolArguments;
 export function endpointUrl(value: string): URL {

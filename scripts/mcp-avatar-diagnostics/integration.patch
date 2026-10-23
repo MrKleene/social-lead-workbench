@@ -1,20 +1,32 @@
 --- a/xiaohongshu/types.go
 +++ b/xiaohongshu/types.go
-@@ -112,2 +112,4 @@
+@@ -112,2 +112,5 @@
 -	Note     FeedDetail  `json:"note"`
 -	Comments CommentList `json:"comments"`
++ BoundedRead *BoundedReadReport `json:"boundedRead,omitempty"`
 +	CoverageDiagnostic *CoverageDiagnostic `json:"coverageDiagnostic,omitempty"`
 +	AvatarSourceDiagnostic *AvatarSourceDiagnostic `json:"avatarSourceDiagnostic,omitempty"`
 +	Note                   FeedDetail              `json:"note"`
 +	Comments               CommentList             `json:"comments"`
-@@ -265 +267 @@
+@@ -265 +268 @@
 -	UserInfo        User      `json:"userInfo"`
 +	UserInfo        CommentUser `json:"userInfo"`
 --- a/xiaohongshu/feed_detail.go
 +++ b/xiaohongshu/feed_detail.go
-@@ -945,0 +946 @@
+@@ -39,0 +40 @@
++ ReadWindow *BoundedReadConfig
+@@ -99 +100,2 @@
+-	config = config.normalize()
++	if config.ReadWindow!=nil && (!config.ReadWindow.Valid()||loadAllComments||config.ClickMoreReplies){return nil,fmt.Errorf("INVALID_READ_WINDOW")}
++ config = config.normalize()
+@@ -104 +106 @@
+-	logrus.Infof("打开 feed 详情页: %s", url)
++	logrus.Info("打开 feed 详情页")
+@@ -131,0 +134 @@
++	if config.ReadWindow!=nil {return boundedReadDetail(ctx,page,feedID,*config.ReadWindow)}
+@@ -945,0 +949 @@
 +	var coverageReady CoverageReady
-@@ -950,9 +951,3 @@
+@@ -950,9 +954,3 @@
 -			evalResult := page.MustEval(`() => {
 -				if (window.__INITIAL_STATE__ &&
 -					window.__INITIAL_STATE__.note &&
@@ -27,15 +39,38 @@
 +			evalResult, ready, observationErr := captureCoveragePage(page)
 +			if observationErr != nil { return fmt.Errorf("无法获取初始状态数据") }
 +			coverageReady = ready
-@@ -982,0 +978,4 @@
+@@ -982,0 +981,4 @@
 +	// 在固定结构丢弃未知字段前，仅提取无内容的类型计数。
 +	avatarDiagnostic := inspectRawAvatarSource([]byte(result), feedID)
 +	coverageDiagnostic := observeCoverage(page, feedID, result, coverageReady)
 +
-@@ -998,2 +997,4 @@
+@@ -998,2 +1000,4 @@
 -		Note:     noteDetail.Note,
 -		Comments: noteDetail.Comments,
 +		AvatarSourceDiagnostic: avatarDiagnostic,
 +		CoverageDiagnostic: coverageDiagnostic,
 +		Note:                   noteDetail.Note,
 +		Comments:               noteDetail.Comments,
+--- a/mcp_server.go
++++ b/mcp_server.go
+@@ -3,0 +4 @@
++ "github.com/xpzouying/xiaohongshu-mcp/xiaohongshu"
+@@ -57,0 +59 @@
++ ReadWindow *xiaohongshu.BoundedReadConfig `json:"read_window,omitempty" jsonschema:"crm-bounded-comments-v1 independent finite read budgets"`
+@@ -291 +293 @@
+-			Description: "获取小红书笔记详情，返回笔记内容、图片、作者信息、互动数据（点赞/收藏/分享数）及评论列表。视频笔记额外返回 video 字段，含各编码档位的视频直链与字幕地址（均带签名、有时效）。默认返回前10条一级评论，如需更多评论请设置load_all_comments=true",
++			Description: "获取小红书笔记详情，返回笔记内容、图片、作者信息、互动数据（点赞/收藏/分享数）及评论列表。视频笔记额外返回 video 字段，含各编码档位的视频直链与字幕地址（均带签名、有时效）。默认返回前10条一级评论，如需更多评论请设置load_all_comments=true; crm-bounded-comments-v1",
+@@ -303,0 +306 @@
++			if args.ReadWindow!=nil {if !args.ReadWindow.Valid()||args.LoadAllComments||args.ClickMoreReplies{return nil,nil,fmt.Errorf("INVALID_READ_WINDOW")};argsMap["read_window"]=args.ReadWindow}
+--- a/mcp_handlers.go
++++ b/mcp_handlers.go
+@@ -3,0 +4 @@
++ "bytes"
+@@ -432 +433,6 @@
+-	logrus.Infof("MCP: 获取Feed详情 - Feed ID: %s, loadAllComments=%v, config=%+v", feedID, loadAll, config)
++ if raw,ok:=args["read_window"];ok {
++  value,e:=json.Marshal(raw);if e!=nil{return &MCPToolResult{IsError:true,Content:[]MCPContent{{Type:"text",Text:"INVALID_READ_WINDOW"}}}}
++  var window xiaohongshu.BoundedReadConfig;d:=json.NewDecoder(bytes.NewReader(value));d.DisallowUnknownFields()
++  if d.Decode(&window)!=nil||!window.Valid()||loadAll||config.ClickMoreReplies{return &MCPToolResult{IsError:true,Content:[]MCPContent{{Type:"text",Text:"INVALID_READ_WINDOW"}}}};config.ReadWindow=&window
++ }
++ logrus.Info("MCP: bounded feed detail request")

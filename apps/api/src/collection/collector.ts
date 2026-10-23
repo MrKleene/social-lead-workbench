@@ -8,6 +8,7 @@ export type PostRead = {
     deletedIds: string[];
     complete: boolean;
     windowRead?: boolean;
+    stopReason?:string;
 };
 export type ReadResult = {
     diagnostic?:CollectionDiagnostic;
@@ -95,11 +96,12 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
                 break;
         }
         for (const item of found.values()) {
+            if(comments>=budget.comments)throw new ReadFailure('BUDGET');
             postOrdinal++;stage='post';
-            const post = postSchema.parse(await call(s => adapter.post(item, s)));
+            const post = postSchema.parse(await call(s => adapter.post(item, s, budget.comments-comments)));
             if (post.id !== item.id)
                 throw new ReadFailure("INVALID_DATA");
-            const entry: PostRead = { post, comments: [], deletedIds: [], complete: false };
+            const entry: PostRead = { stopReason:post.boundedRead?.reason, post, comments: [], deletedIds: [], complete: false };
             result.posts.push(entry);
             await checkpoint();
             const roots: Comment[] = [];
@@ -116,6 +118,18 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
             };
             stage='received_comments';
             if(adapter.receivedComments)await add(z.array(commentSchema).max(200).parse(adapter.receivedComments(post)),[]);
+            // The bounded MCP response already contains the retained tree. Save first,
+            // then stop on terminal read failures; never issue cached-tree page calls
+            // that could mask cancellation or consume the remaining request budget.
+            if(post.boundedRead){
+                entry.windowRead=true;result.status='PARTIAL';result.reason=post.boundedRead.reason;await checkpoint();
+                const reason=post.boundedRead.reason;
+                if(reason==='PLATFORM_LIMIT')throw new ReadFailure('RESTRICTED');
+                if(reason==='CANCELLED')throw new ReadFailure('PAUSED');
+                if(reason==='TIMEOUT')throw new ReadFailure('TIMEOUT');
+                if(['READ_FAILED','INVALID_RESPONSE','IDENTITY_CONFLICT','DEPTH_LIMIT'].includes(reason)){result.status='FAILED';break;}
+                continue;
+            }
             stage='comments';
             let complete = await pages((c, s) => adapter.comments(post, c, s), commentSchema, async (items, deleted) => { roots.push(...items); await add(items, deleted); });
             const expanded = new Set<string>();
