@@ -10,7 +10,7 @@ function CheckForm(){
  <label>小红书原文链接<input aria-label="单帖原文链接" type="url" autoComplete="off" spellCheck={false} value={s.url} onChange={e=>s.setUrl(e.target.value)} disabled={s.submitted} placeholder="粘贴浏览器中可打开的完整帖子链接"/></label>
  {!s.submitted&&<label className="login-consent"><input type="checkbox" checked={s.consent} onChange={e=>s.setConsent(e.target.checked)}/>使用本机已保存会话，核验账号并只读检查这一篇。不开新采集任务，不翻页或展开回复，不下载头像。</label>}
  {s.readiness.isError?<p role="alert">无法确认本机状态，请稍后重新打开。</p>:!s.readiness.data?.device?.online&&!s.readiness.isPending&&<p role="status">请先在账号中心确认专用电脑在线。</p>}
- <Button disabled={s.submitted||s.busy||!s.consent||!s.url.trim()||!s.accountId||!s.readiness.data?.device?.online} onClick={()=>void s.check()}>{s.busy?'正在核验并读取这一篇…':s.submitted?'本次检查已提交':'只读检查这一篇'}</Button>
+ <Button disabled={s.submitted||s.busy||!s.consent||!s.url.trim()||!s.accountId||!s.readiness.data?.device?.online} onClick={()=>void s.check()}>{s.busy?'正在核验并读取这一篇…':s.error?'未取得检查结果':s.submitted?'本次检查已提交':'只读检查这一篇'}</Button>
  {s.error&&<p role="alert">{s.error}</p>}
  {s.result?.status==='LOGIN_NOT_READY'&&<p role="status">登录核验未通过，尚未读取帖子。请到账号中心查看状态；不一定需要重新扫码。</p>}
  {s.result?.status==='FAILED'&&<p role="alert">本次检查停止：{reasonLabels[s.result.reason||'']||'检查未完成，请核查账号与设备状态'}。不会自动重试。</p>}

@@ -1,6 +1,7 @@
 import {useRef,useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {api,send} from '@/lib/api';
+import {singlePostError} from './single-post-error';
 import type {ImageDiagnostics} from '@crm/contracts';
 import type {McpReadiness} from './types';
 export type SinglePostResult={status:'CHECKED'|'FAILED'|'LOGIN_NOT_READY';reason?:string;coverage?:'WINDOW_ONLY';roots?:{count:number;displayableAvatars:number};replies?:{count:number;displayableAvatars:number};imageDiagnostics?:ImageDiagnostics|null};
@@ -13,7 +14,7 @@ export function useSinglePostCheck(){
   if(inFlight.current||submitted||!consent||!selected||!url.trim()||!readiness.data?.device?.online)return;
   inFlight.current=true;setBusy(true);setSubmitted(true);setError('');const reference=url.trim();setUrl('');
   try{setResult(await send<SinglePostResult>('/collection/single-post-check','POST',{accountId:selected,url:reference,requestKey:key.current,consent:'single-post-read-v1'}));}
-  catch{setError('检查未取得结果。请求可能已经执行，请先核查，不会自动重试。');}
+  catch(error){setError(singlePostError(error));}
   finally{inFlight.current=false;setBusy(false);setConsent(false);void readiness.refetch();}
  }
  return {url,setUrl,accountId:selected,setAccountId,consent,setConsent,busy,submitted,result,error,accounts,readiness,check};
