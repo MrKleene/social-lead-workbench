@@ -65,3 +65,14 @@ node scripts/mcp-avatar-diagnostics/build-candidate.mjs /absolute/path/to/review
 候选两次离线构建一致：SHA-256 `72f9e42ecafaa905d6e11af873f2713a23ad469bfaff834053a5216e3f2566da`。产物位于 `/Users/kleene/Documents/Codex/2026-10-21/task-2/mcp-search-failure-review-1/xiaohongshu-mcp-candidate`（review-2 为第二次构建）。未安装、未执行 MCP 候选，也未请求小红书。当前已安装及两处审核哈希仍为 `53774562ae853ac7643e7556eb2cbcc54586a4f1ab565b2e250aafa054757e08`。
 
 安装需要当次确认：确认任务/扫码/检查空闲，核验候选完整哈希，保留原二进制及 `runtime/platform.cjs`、`scripts/real-mcp/core.mjs`，按既有流程原子替换 MCP 和对应两处审核哈希，然后正常重启 API/worker。无需迁移或改账号会话。回退恢复这三份对应文件并正常重启，不能只换二进制而留错误审核哈希。安装本身不执行平台请求；后续仅经批准手动有限测试，不自动重试。
+
+
+### 搜索诊断候选已批准部署（2026-10-23 16:50 UTC）
+
+用户随后批准安装上述精确候选，并把一次真实 1 轮/1 篇验证交由浏览器线程执行。已核验构建来源及 `72f9e42ecafaa905d6e11af873f2713a23ad469bfaff834053a5216e3f2566da`，原子替换本机 MCP，两处审核哈希同步；版本为 `v2.5.5-local-search-failure-reasons`。没有自行启动 MCP 平台读取。
+
+旧 `53774562…57e08` 程序保留为 `~/.local/bin/xiaohongshu-mcp.backup-53774562ae85`；原审核文件、策略快照及回退清单在独立构建目录 `mcp-search-failure-review-1/deployment-rollback/`。本次未修改读取策略。
+
+API/worker 从 43058/43057 正常退出（API SIGTERM，worker 0，supervisor CLEANUP_COMPLETE/EXIT 0），恢复为 43710/43709。原前端 PID 3438 和数据库/Redis 启动时间不变；健康与网页 200、队列空闲、worker 等待任务，17 项审核策略离线测试通过。前后均 1 条失败采集历史、0 帖/评论、2 个账号、1 份本机会话和配置，模型调用/联系记录 0；14 项既有迁移无新增执行。
+
+后续测试入口：`http://127.0.0.1:63968/work?module=runs`，教培 → 采集设置把本轮最多帖子数选为 1 → 完成设置 → 开始采集 → 选择原账号并确认本轮只读授权 → 确认并开始一次。保留 1 轮、1 评论窗口及服务端 0 次主评翻页/8 次回复尝试/15 秒预算；LLM 和外发仍关闭。测试由协调的浏览器线程执行，本部署线程未发起搜索或采集；搜索真实故障仍待该次结果验证。

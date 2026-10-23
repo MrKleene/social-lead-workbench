@@ -9,7 +9,7 @@ import { createServer } from 'node:net';
 // not a permissive fallback to an arbitrary binary or an automatic download.
 export const reviewed = {
   login: '0cd6ae3ae395521ee417652dd82366b42deb96611f462b1fbba6129f4a9bd92e',
-  mcp: '53774562ae853ac7643e7556eb2cbcc54586a4f1ab565b2e250aafa054757e08',
+  mcp: '72f9e42ecafaa905d6e11af873f2713a23ad469bfaff834053a5216e3f2566da',
 };
 export const browserVersion = '148.0.7778.215';
 export const forbiddenPorts = new Set([18060, 18061, 3100, 5173, 5432, 55432, 6379, 56379, 55976, 63444, 63445]);
