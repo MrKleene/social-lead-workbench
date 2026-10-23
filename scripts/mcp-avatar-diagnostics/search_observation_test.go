@@ -40,6 +40,9 @@ func TestSearchObservationBrowser(t *testing.T) {
 		{"raw value", `window.__INITIAL_STATE__={search:{feeds:{_value:[` + note + `]}}}`, "NOTES_AVAILABLE", "NOTES_AVAILABLE", 1},
 		{"conflicting wrappers", `window.__INITIAL_STATE__={search:{feeds:{value:[],_value:[` + note + `]}}}`, "AMBIGUOUS_FIELDS", "DEADLINE", 0},
 		{"matching wrappers", `const a=[` + note + `];window.__INITIAL_STATE__={search:{feeds:{value:a,_value:a}}}`, "NOTES_AVAILABLE", "NOTES_AVAILABLE", 1},
+		{"mixed cards filtered before parsing", `window.__INITIAL_STATE__={search:{feeds:{value:[{modelType:'hot_query',noteCard:false,index:'bad'},` + note + `,{modelType:'live_v2',index:'bad'}]}}}`, "NOTES_AVAILABLE", "NOTES_AVAILABLE", 1},
+		{"unneeded note counters not decoded", `window.__INITIAL_STATE__={search:{feeds:{value:[{modelType:'note',id:'synthetic',xsecToken:'SYNTHETIC_SECRET',index:'bad',noteCard:{displayTitle:'合成',interactInfo:{likedCount:5}}}]}}}`, "NOTES_AVAILABLE", "NOTES_AVAILABLE", 1},
+		{"title type fails with safe field", `window.__INITIAL_STATE__={search:{feeds:{value:[{modelType:'note',id:'synthetic',xsecToken:'SYNTHETIC_SECRET',noteCard:{displayTitle:5}}]}}}`, "NOTES_AVAILABLE", "DESERIALIZATION_FAILED", 0},
 		{"known non notes", `window.__INITIAL_STATE__={search:{feeds:{value:[{modelType:'live_v2'},{modelType:'hot_query'}]}}}`, "FILTERED_NON_NOTES", "DEADLINE", 0},
 		{"unknown types", `window.__INITIAL_STATE__={search:{feeds:{value:[{modelType:'SYNTHETIC_SECRET'}]}}}`, "UNKNOWN_ITEM_TYPES", "DEADLINE", 0},
 		{"direct array unsupported", `window.__INITIAL_STATE__={search:{feeds:[]}}`, "UNSUPPORTED_SHAPE", "DEADLINE", 0},
@@ -69,6 +72,9 @@ func TestSearchObservationBrowser(t *testing.T) {
 			raw := SearchFailureJSON(searchObservedFailure(searchFailure("UNKNOWN", nil), d))
 			if strings.Contains(raw, "SYNTHETIC_") {
 				t.Fatal("private string escaped diagnostic")
+			}
+			if tc.name == "title type fails with safe field" && (d.ParseIssue == nil || d.ParseIssue.Field != "noteCard.displayTitle" || d.ParseIssue.Actual != "NUMBER") {
+				t.Fatal("lost safe parsing issue")
 			}
 			if tc.name == "delayed notes" && (d.Observations < 2 || d.FirstRawCount == nil || *d.FirstRawCount != 0) {
 				t.Fatal("missed initial empty observation")

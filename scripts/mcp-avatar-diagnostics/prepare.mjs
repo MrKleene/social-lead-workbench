@@ -20,12 +20,14 @@ for(const [name,hash] of Object.entries(manifest.files)){
 }
 await mkdir(target,{recursive:false,mode:0o700});
 for(const name of Object.keys(manifest.files)){await mkdir(dirname(join(target,name)),{recursive:true});await copyFile(join(source,name),join(target,name));}
-for(const name of ['avatar_diagnostic.go','avatar_diagnostic_test.go','comment_avatar.go','comment_avatar_test.go','avatar_query.go','avatar_query_test.go','avatar-query-cases.json','coverage_diagnostic.go','coverage_diagnostic_test.go','coverage_capture.go','coverage-cases.json','bounded_comments.go','bounded_capture.go','bounded_comments_test.go','bounded_browser_test.go','search_diagnostic.go','search_diagnostic_test.go','search_observation.go','search_capture.go','search_observation_test.go'])await copyFile(join(bundle,name),join(target,'xiaohongshu',name));
+for(const name of ['avatar_diagnostic.go','avatar_diagnostic_test.go','comment_avatar.go','comment_avatar_test.go','avatar_query.go','avatar_query_test.go','avatar-query-cases.json','coverage_diagnostic.go','coverage_diagnostic_test.go','coverage_capture.go','coverage-cases.json','bounded_comments.go','bounded_capture.go','bounded_comments_test.go','bounded_browser_test.go','search_diagnostic.go','search_diagnostic_test.go','search_observation.go','search_capture.go','search_observation_test.go','search_note.go','search_note_test.go'])await copyFile(join(bundle,name),join(target,'xiaohongshu',name));
 const patched=spawnSync('/usr/bin/patch',['--batch','--forward','-p1','-i',join(bundle,'integration.patch')],{cwd:target,encoding:'utf8',env:{PATH:'/usr/bin:/bin'},timeout:10000});
 if(patched.status!==0)throw Error('Patch failed; candidate not built or installed');
 const searchPatch=spawnSync('/usr/bin/patch',['--batch','--forward','-p1','-i',join(bundle,'search-integration.patch')],{cwd:target,encoding:'utf8',env:{PATH:'/usr/bin:/bin'},timeout:10000});
 if(searchPatch.status!==0)throw Error('Search diagnostic patch failed; not built/installed');
 const readyPatch=spawnSync('/usr/bin/patch',['--batch','--forward','-p1','-i',join(bundle,'search-readiness.patch')],{cwd:target,encoding:'utf8',env:{PATH:'/usr/bin:/bin'},timeout:10000});
 if(readyPatch.status!==0)throw Error('Search readiness patch failed; not built/installed');
+const notePatch=spawnSync('/usr/bin/patch',['--batch','--forward','-p1','-i',join(bundle,'search-note.patch')],{cwd:target,encoding:'utf8',env:{PATH:'/usr/bin:/bin'},timeout:10000});
+if(notePatch.status!==0)throw Error('Search note patch failed; not built/installed');
 await writeFile(join(target,'PREPARATION.json'),JSON.stringify({source,version:manifest.candidateVersion,installedBinaryUnchanged:true},null,2)+'\n');
 console.log('Candidate prepared (not built/installed/run): '+target);

@@ -1,14 +1,24 @@
 import {z} from 'zod';
 const count=z.number().int().min(0).max(200);
 const shape=z.enum(['MISSING','NULL','ARRAY','OBJECT','STRING','NUMBER','BOOLEAN','OTHER']);
+export const searchParseIssueSchema=z.object({
+ itemOrdinal:z.number().int().min(0).max(200),
+ field:z.enum(['items','item','modelType','id','xsecToken','noteCard','noteCard.displayTitle']),
+ expected:z.enum(['ARRAY','OBJECT','STRING']),actual:z.enum(['MISSING','NULL','ARRAY','OBJECT','STRING','NUMBER','BOOLEAN','INVALID_JSON']),
+ reason:z.enum(['TYPE','MISSING','EMPTY','FORMAT','LENGTH','JSON']),
+}).strict().superRefine((d,c)=>{
+ const expected=d.field==='items'?'ARRAY':['item','noteCard'].includes(d.field)?'OBJECT':'STRING';
+ if(d.expected!==expected||(d.field==='items'?d.itemOrdinal!==0:d.itemOrdinal<1)||(d.reason==='MISSING'&&d.actual!=='MISSING')||(['EMPTY','FORMAT'].includes(d.reason)&&d.actual!=='STRING'))c.addIssue({code:'custom',message:'Inconsistent parsing evidence'});
+});
 export const searchObservationSchema=z.object({
- version:z.literal(1),state:z.enum(['NOTES_AVAILABLE','EMPTY_UNCONFIRMED','FILTERED_NON_NOTES','UNKNOWN_ITEM_TYPES','STATE_MISSING','FEEDS_MISSING','UNSUPPORTED_SHAPE','AMBIGUOUS_FIELDS','ROUTE_UNCONFIRMED','PAGE_LOADING','ACCESS_BLOCKED','INVALID_NOTE','RESULT_LIMIT']),
+ version:z.literal(1),parseIssue:searchParseIssueSchema.optional(),state:z.enum(['NOTES_AVAILABLE','EMPTY_UNCONFIRMED','FILTERED_NON_NOTES','UNKNOWN_ITEM_TYPES','STATE_MISSING','FEEDS_MISSING','UNSUPPORTED_SHAPE','AMBIGUOUS_FIELDS','ROUTE_UNCONFIRMED','PAGE_LOADING','ACCESS_BLOCKED','INVALID_NOTE','RESULT_LIMIT']),
  stop:z.enum(['NOTES_AVAILABLE','DEADLINE','BLOCKED','CANCELLED','EVALUATION_FAILED','DESERIALIZATION_FAILED']),
  initialState:z.boolean(),searchState:z.boolean(),documentReady:z.boolean(),routeMatches:z.boolean(),
  valueType:shape,rawValueType:shape,selected:z.enum(['NONE','VALUE','RAW_VALUE','BOTH']),
  rawCount:count.nullable(),noteCount:count.nullable(),knownOtherCount:count.nullable(),unknownCount:count.nullable(),malformedCount:count.nullable(),acceptedCount:count,
  observations:z.number().int().min(1).max(400),waitedMs:z.number().int().min(0).max(120000),firstRawCount:count.nullable(),completionSignal:z.literal('UNSUPPORTED'),
 }).strict().superRefine((d,ctx)=>{
+ if(d.parseIssue&&(d.stop!=='DESERIALIZATION_FAILED'||(d.rawCount!==null&&d.parseIssue.itemOrdinal>d.rawCount)))ctx.addIssue({code:'custom',message:'Unexpected parsing evidence'});
  const counts=[d.noteCount,d.knownOtherCount,d.unknownCount,d.malformedCount];
  const invalid=()=>ctx.addIssue({code:'custom',message:'Inconsistent search evidence'});
  if(d.rawCount===null){if(counts.some(n=>n!==null)||d.acceptedCount!==0)invalid();}

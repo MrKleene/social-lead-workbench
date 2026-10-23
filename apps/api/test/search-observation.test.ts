@@ -41,4 +41,30 @@ describe('search success/empty observation chain (synthetic, no network)',()=>{
   expect(tx.auditLog.create.mock.calls[0][0].data.metadata.searchAttempts).toEqual(result.searchAttempts);
   expect(JSON.stringify(tx.auditLog.create.mock.calls)).not.toContain('合成甲');
  });
+ it('carries a field-only parse failure through MCP, collector, metrics and audit without partial success',async()=>{
+  const d:SearchObservation={...observation,state:'NOTES_AVAILABLE',stop:'DESERIALIZATION_FAILED',rawCount:22,noteCount:20,knownOtherCount:2,firstRawCount:22,parseIssue:{itemOrdinal:4,field:'noteCard.displayTitle',expected:'STRING',actual:'NUMBER',reason:'TYPE'}};
+  const {result,call}=await read([envelope({crmSearchFailure:{version:1,reason:'DESERIALIZATION_FAILED'},searchObservation:d},true)]);
+  expect(result.status).toBe('FAILED');expect(result.posts).toEqual([]);expect(call).toHaveBeenCalledTimes(2);expect(result.diagnostic?.searchObservation?.parseIssue).toEqual(d.parseIssue);
+  const cfg={...config,id:'test-config',revision:1,failureCount:0,archivedAt:null},run={id:'test-run',configId:cfg.id,snapshot:config,revision:1,status:'RUNNING',cancelRequested:false};
+  const tx={$queryRaw:vi.fn().mockResolvedValue([cfg]),collectionConfig:{update:vi.fn()},collectionRun:{findUniqueOrThrow:vi.fn().mockResolvedValue(run),update:vi.fn().mockImplementation(async({data})=>({...run,...data}))},auditLog:{create:vi.fn()}};
+  await commitRead({$transaction:async(fn:(v:unknown)=>unknown)=>fn(tx)} as never,run as never,result);
+  expect(tx.collectionRun.update.mock.calls[0][0].data.metrics.searchAttempts[0].observation.parseIssue).toEqual(d.parseIssue);
+  expect(tx.auditLog.create.mock.calls[0][0].data.metadata.diagnostic.searchObservation.parseIssue).toEqual(d.parseIssue);
+ });
+ it.each([
+  {itemOrdinal:1,field:'SYNTHETIC_SECRET',expected:'STRING',actual:'NUMBER',reason:'TYPE'},
+  {itemOrdinal:1,field:'id',expected:'STRING',actual:'SYNTHETIC_SECRET',reason:'TYPE'},
+  {itemOrdinal:1,field:'id',expected:'STRING',actual:'NUMBER',reason:'TYPE',value:'SYNTHETIC_SECRET'},
+  {itemOrdinal:0,field:'id',expected:'STRING',actual:'NUMBER',reason:'TYPE'},
+  {itemOrdinal:201,field:'id',expected:'STRING',actual:'NUMBER',reason:'TYPE'},
+  {itemOrdinal:1,field:'id',expected:'OBJECT',actual:'NUMBER',reason:'TYPE'},
+ ])('rejects unsafe or contradictory parser evidence %#',issue=>{
+  expect(safeSearchObservation({...observation,stop:'DESERIALIZATION_FAILED',rawCount:2,noteCount:2,parseIssue:issue})).toBeUndefined();
+ });
+ it('ignores unrelated search fields while cover still goes through the existing safety boundary',async()=>{
+  const call=vi.fn().mockResolvedValue(envelope({feeds:[{id:'synthetic',xsecToken:'SYNTHETIC_SECRET',noteCard:{displayTitle:'合成',cover:{urlDefault:'https://evil.invalid/secret'},interactInfo:{likedCount:5}}}]}));
+  const adapter=new XhsMcpAdapter({call},true);const page=await adapter.search('合成',undefined,new AbortController().signal);
+  expect(page.items).toHaveLength(1);expect(page.items[0].coverUrl).toBeUndefined();expect(page.items[0].title).toBe('合成');
+ });
+
 });

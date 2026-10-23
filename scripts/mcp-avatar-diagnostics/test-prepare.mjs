@@ -11,6 +11,8 @@ const target=join(root,'candidate');assert.equal(run(source,target).status,0);
 assert.match(await readFile(join(target,'xiaohongshu/feed_detail.go'),'utf8'),/inspectRawAvatarSource/);
 assert.match(await readFile(join(target,'xiaohongshu/types.go'),'utf8'),/avatarSourceDiagnostic/);
 assert.match(await readFile(join(target,'xiaohongshu/search.go'),'utf8'),/observeSearch\(ctx/);
+assert.match(await readFile(join(target,'service.go'),'utf8'),/SearchFeedsResponse/);
+assert.match(await readFile(join(target,'xiaohongshu/search_capture.go'),'utf8'),/parseSearchNotes/);
 assert.match(await readFile(join(target,'mcp_handlers.go'),'utf8'),/xiaohongshu.SearchFailureJSON\(err\)/);
 assert.notEqual(run(source,target).status,0,'must not overwrite candidate');
 assert.notEqual(run(source,join(source,'unauthorized-child')).status,0,'must not edit original tree');

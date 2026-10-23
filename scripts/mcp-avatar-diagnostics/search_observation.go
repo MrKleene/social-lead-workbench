@@ -2,25 +2,26 @@ package xiaohongshu
 
 // This closed structure contains no keyword, feed ID, user value, URL or response text.
 type SearchObservation struct {
-	Version         int    `json:"version"`
-	State           string `json:"state"`
-	Stop            string `json:"stop"`
-	InitialState    bool   `json:"initialState"`
-	SearchState     bool   `json:"searchState"`
-	DocumentReady   bool   `json:"documentReady"`
-	RouteMatches    bool   `json:"routeMatches"`
-	ValueType       string `json:"valueType"`
-	RawValueType    string `json:"rawValueType"`
-	Selected        string `json:"selected"`
-	RawCount        *int   `json:"rawCount"`
-	NoteCount       *int   `json:"noteCount"`
-	KnownOtherCount *int   `json:"knownOtherCount"`
-	UnknownCount    *int   `json:"unknownCount"`
-	MalformedCount  *int   `json:"malformedCount"`
-	AcceptedCount   int    `json:"acceptedCount"`
-	Observations    int    `json:"observations"`
-	WaitedMs        int    `json:"waitedMs"`
-	FirstRawCount   *int   `json:"firstRawCount"`
+	ParseIssue      *SearchParseIssue `json:"parseIssue,omitempty"`
+	Version         int               `json:"version"`
+	State           string            `json:"state"`
+	Stop            string            `json:"stop"`
+	InitialState    bool              `json:"initialState"`
+	SearchState     bool              `json:"searchState"`
+	DocumentReady   bool              `json:"documentReady"`
+	RouteMatches    bool              `json:"routeMatches"`
+	ValueType       string            `json:"valueType"`
+	RawValueType    string            `json:"rawValueType"`
+	Selected        string            `json:"selected"`
+	RawCount        *int              `json:"rawCount"`
+	NoteCount       *int              `json:"noteCount"`
+	KnownOtherCount *int              `json:"knownOtherCount"`
+	UnknownCount    *int              `json:"unknownCount"`
+	MalformedCount  *int              `json:"malformedCount"`
+	AcceptedCount   int               `json:"acceptedCount"`
+	Observations    int               `json:"observations"`
+	WaitedMs        int               `json:"waitedMs"`
+	FirstRawCount   *int              `json:"firstRawCount"`
 	// No verified empty/completion/loading marker exists in the reviewed search source.
 	CompletionSignal string `json:"completionSignal"`
 }

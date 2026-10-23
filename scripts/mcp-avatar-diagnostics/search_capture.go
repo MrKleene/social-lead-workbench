@@ -9,12 +9,12 @@ import (
 
 // Poll only the already-open page. No reload, search retry, scroll or expansion.
 // Eight seconds is a deadline, never a readiness signal.
-func observeSearch(ctx context.Context, page *rod.Page, keyword string, timeout time.Duration) ([]Feed, *SearchObservation, error) {
+func observeSearch(ctx context.Context, page *rod.Page, keyword string, timeout time.Duration) ([]SearchFeed, *SearchObservation, error) {
 	return observeSearchAtOrigin(ctx, page, keyword, timeout, "https://www.xiaohongshu.com")
 }
 
 // Origin is injected only by loopback tests; production uses the fixed official origin above.
-func observeSearchAtOrigin(ctx context.Context, page *rod.Page, keyword string, timeout time.Duration, origin string) ([]Feed, *SearchObservation, error) {
+func observeSearchAtOrigin(ctx context.Context, page *rod.Page, keyword string, timeout time.Duration, origin string) ([]SearchFeed, *SearchObservation, error) {
 	started := time.Now()
 	deadline := started.Add(timeout)
 	var last *SearchObservation
@@ -57,23 +57,19 @@ func observeSearchAtOrigin(ctx context.Context, page *rod.Page, keyword string, 
 			return nil, last, searchFailure("PAGE_REPORTED_ERROR", nil)
 		}
 		if last.State == "NOTES_AVAILABLE" || last.State == "INVALID_NOTE" {
-			var feeds []Feed
-			if err = json.Unmarshal(sample.Feeds, &feeds); err != nil {
-				last.Stop = "DESERIALIZATION_FAILED"
-				return nil, last, searchFailure("DESERIALIZATION_FAILED", err)
-			}
-			if last.State == "INVALID_NOTE" {
+			notes, issue := parseSearchNotes(sample.Feeds)
+			if issue != nil {
+				last.ParseIssue = issue
 				last.Stop = "DESERIALIZATION_FAILED"
 				return nil, last, searchFailure("DESERIALIZATION_FAILED", nil)
 			}
-			notes := onlyNotes(feeds)
 			last.AcceptedCount = len(notes)
 			last.Stop = "NOTES_AVAILABLE"
 			return notes, last, nil
 		}
 		if !time.Now().Before(deadline) {
 			last.Stop = "DEADLINE"
-			return []Feed{}, last, nil
+			return []SearchFeed{}, last, nil
 		}
 		timer := time.NewTimer(200 * time.Millisecond)
 		select {
