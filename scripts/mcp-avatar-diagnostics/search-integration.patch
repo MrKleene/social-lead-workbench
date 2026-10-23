@@ -1,0 +1,55 @@
+--- a/xiaohongshu/search.go
++++ b/xiaohongshu/search.go
+@@ -119,9 +119,9 @@
+ 	page := s.page.Context(ctx).Timeout(60 * time.Second)
+ 
+ 	searchURL := makeSearchURL(keyword)
+-	page.MustNavigate(searchURL)
++	if err := page.Navigate(searchURL); err != nil { return nil, searchFailure("PAGE_NAVIGATION_FAILED", err) }
+ 	if err := page.Wait(rod.Eval(searchPageReadyJS)); err != nil {
+-		return nil, fmt.Errorf("等待搜索页面初始数据失败: %w", err)
++		return nil, searchFailure("PAGE_NOT_READY", err)
+ 	}
+ 	humanize.Delay(ctx, humanize.AfterNavigate)
+ 
+@@ -168,7 +168,7 @@
+ 		waitFeedsChanged(page, before, 15*time.Second)
+ 	}
+ 
+-	result := page.MustEval(`() => {
++	resultValue, evalErr := page.Eval(`() => {
+ 		if (window.__INITIAL_STATE__ &&
+ 		    window.__INITIAL_STATE__.search &&
+ 		    window.__INITIAL_STATE__.search.feeds) {
+@@ -179,15 +179,17 @@
+ 			}
+ 		}
+ 		return "";
+-	}`).String()
++	}`)
++	if evalErr != nil { return nil, searchFailure("PAGE_EVALUATION_FAILED", evalErr) }
++	result := resultValue.Value.Str()
+ 
+ 	if result == "" {
+-		return nil, errors.ErrNoFeeds
++		return nil, searchFailure("SEARCH_DATA_MISSING", errors.ErrNoFeeds)
+ 	}
+ 
+ 	var feeds []Feed
+ 	if err := json.Unmarshal([]byte(result), &feeds); err != nil {
+-		return nil, fmt.Errorf("failed to unmarshal feeds: %w", err)
++		return nil, searchFailure("DESERIALIZATION_FAILED", err)
+ 	}
+ 
+ 	return onlyNotes(feeds), nil
+--- a/mcp_handlers.go
++++ b/mcp_handlers.go
+@@ -321,7 +321,7 @@
+ 		return &MCPToolResult{
+ 			Content: []MCPContent{{
+ 				Type: "text",
+-				Text: "搜索Feeds失败: " + err.Error(),
++				Text: xiaohongshu.SearchFailureJSON(err),
+ 			}},
+ 			IsError: true,
+ 		}

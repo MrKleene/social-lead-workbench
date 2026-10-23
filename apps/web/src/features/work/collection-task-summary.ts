@@ -1,4 +1,4 @@
-import {safeCollectionDiagnostic} from '@crm/contracts';
+import {safeCollectionDiagnostic,searchFailureLabels} from '@crm/contracts';
 import {reasonLabels,type Run} from '../collection/types';
 export function savedCollectionCounts(run:Run){
  const posts=run.capturedPosts,comments=run.capturedCommentsCount;
@@ -7,7 +7,7 @@ export function savedCollectionCounts(run:Run){
 export function collectionTaskSummary(run:Run){
  const saved=run.capturedPosts===undefined&&run.capturedCommentsCount===undefined?'保存数量尚未返回':`已保存 ${savedCollectionCounts(run)}`;
  const diagnostic=safeCollectionDiagnostic(run.metrics?.diagnostic);
- const reason=diagnostic?.kind==='SCHEMA_VALIDATION'&&diagnostic.stage==='post'&&diagnostic.field==='text'?`${diagnostic.postOrdinal?`第 ${diagnostic.postOrdinal} 篇帖子的`:''}评论文本未通过校验`:reasonLabels[run.reason||'']||'结束原因未返回';
+ const reason=diagnostic?.stage==='search'&&diagnostic.kind==='UPSTREAM_ERROR'?searchFailureLabels[diagnostic.searchReason||'UNKNOWN']:diagnostic?.kind==='SCHEMA_VALIDATION'&&diagnostic.stage==='post'&&diagnostic.field==='text'?`${diagnostic.postOrdinal?`第 ${diagnostic.postOrdinal} 篇帖子的`:''}评论文本未通过校验`:reasonLabels[run.reason||'']||'结束原因未返回';
  const range=run.readPlan?`本轮计划最多 ${run.readPlan.rounds*run.readPlan.postsPerRound} 篇。`:'';
  if(run.status==='QUEUED')return '任务已排队，等待开始读取。';
  if(run.status==='RUNNING')return `正在读取。${saved}；仅显示已返回信息。`;

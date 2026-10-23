@@ -1,3 +1,4 @@
+import {searchFailureReason} from './search-failure';
 import * as commentPolicy from '../../../../../runtime/comment-read-policy.cjs';
 import {boundedReadConfigSchema,boundedReadReportSchema,type BoundedReadConfig, safeCoverageDiagnostic,savedNickname,savedPublishedAt,safeAvatarSourceDiagnostic} from '@crm/contracts';
 import { z } from "zod";
@@ -13,12 +14,14 @@ function text(input: unknown, stage:'prepare'|'search'|'post'): string {
     const value = parseSource(envelope,input,stage);
     const text = value.content.filter(c => c.type === "text").map(c => c.text || "").join("\n");
     if (value.isError) {
+        const searchReason=stage==='search'?searchFailureReason(text):undefined;
+        switch(searchReason){case 'LOGIN_EXPIRED':case 'RATE_LIMITED':case 'RESTRICTED':case 'SOURCE_UNAVAILABLE':case 'TIMEOUT':throw new ReadFailure(searchReason);}
         if (/未登录|登录失效|login/i.test(text)) throw new ReadFailure("LOGIN_EXPIRED");
         if (/频繁|限流|rate.?limit/i.test(text)) throw new ReadFailure("RATE_LIMITED");
         if (/限制|封禁|验证码|restricted/i.test(text)) throw new ReadFailure("RESTRICTED");
         if (/不存在|不可见|未找到|not found/i.test(text)) throw new ReadFailure("SOURCE_UNAVAILABLE");
         if (/超时|timeout/i.test(text)) throw new ReadFailure("TIMEOUT");
-        throw invalidSource(stage,"UPSTREAM_ERROR");
+        throw new ReadFailure("INVALID_DATA",undefined,{version:1,stage,kind:"UPSTREAM_ERROR",...(searchReason?{searchReason}:{})});
     }
     if (!text) throw invalidSource(stage,"EMPTY_RESPONSE");
     return text;

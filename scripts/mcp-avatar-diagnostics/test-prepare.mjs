@@ -10,6 +10,8 @@ const run=(src,dest)=>spawnSync(process.execPath,[join(bundle,'prepare.mjs'),src
 const target=join(root,'candidate');assert.equal(run(source,target).status,0);
 assert.match(await readFile(join(target,'xiaohongshu/feed_detail.go'),'utf8'),/inspectRawAvatarSource/);
 assert.match(await readFile(join(target,'xiaohongshu/types.go'),'utf8'),/avatarSourceDiagnostic/);
+assert.match(await readFile(join(target,'xiaohongshu/search.go'),'utf8'),/searchFailure\("PAGE_NOT_READY"/);
+assert.match(await readFile(join(target,'mcp_handlers.go'),'utf8'),/xiaohongshu.SearchFailureJSON\(err\)/);
 assert.notEqual(run(source,target).status,0,'must not overwrite candidate');
 assert.notEqual(run(source,join(source,'unauthorized-child')).status,0,'must not edit original tree');
 assert.notEqual(run(target,join(root,'changed-source')).status,0,'must reject patched/drifted source');

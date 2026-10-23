@@ -202,3 +202,18 @@ it('thumbnail metadata and format diagnostic never change semantic/hash identity
  const a=semanticSnapshot(post,c,undefined,false,true),b=semanticSnapshot(post,{...c,authorAvatarUrl:avatar},undefined,false,true);
  expect(b).toEqual(a);expect(snapshotHash(b)).toBe(snapshotHash(a));expect(JSON.stringify(b)).not.toContain('imageView2');
 });
+
+
+describe('search failure closed protocol and legacy compatibility',()=>{
+ async function searchError(text:string){const call=vi.fn(async(name:string)=>name==='check_login_status'?{content:[{type:'text',text:'✅ 已登录'}]}:{isError:true,content:[{type:'text',text}]});const result=await collect(new XhsMcpAdapter({call},true),config,async()=>false,{...limits,callMs:1000});return {result,call};}
+ it.each(['PAGE_NAVIGATION_FAILED','PAGE_NOT_READY','PAGE_EVALUATION_FAILED','SEARCH_DATA_MISSING','DESERIALIZATION_FAILED','UNKNOWN'])('preserves controlled %s through collector and safe logging',async reason=>{
+  const {result,call}=await searchError(JSON.stringify({crmSearchFailure:{version:1,reason}}));
+  expect(result).toMatchObject({status:'FAILED',reason:'INVALID_DATA',diagnostic:{stage:'search',kind:'UPSTREAM_ERROR',searchReason:reason,requestStep:2}});expect(call).toHaveBeenCalledTimes(2);expect(result.posts).toEqual([]);
+  expect(safeCollectionDiagnostic(result.diagnostic)).toEqual(result.diagnostic);
+  const log=vi.spyOn(console,'warn').mockImplementation(()=>{});try{logCollectionDiagnostic('cmvje155o000fi44p0cvv60tp',result.diagnostic);expect(JSON.stringify(log.mock.calls)).toContain(reason);}finally{log.mockRestore();}
+ });
+ it.each([['搜索Feeds失败: 没有捕获到 feeds 数据','SEARCH_DATA_MISSING'],['搜索Feeds失败: 等待搜索页面初始数据失败: '+secret,'PAGE_NOT_READY'],['搜索Feeds失败: failed to unmarshal feeds: '+secret,'DESERIALIZATION_FAILED'],[secret,'UNKNOWN']])('classifies old exact known error without retaining message',async(text,reason)=>{const {result}=await searchError(text);expect(result.diagnostic?.searchReason).toBe(reason);expect(JSON.stringify(result)).not.toContain('FAKE_');});
+ it.each([{crmSearchFailure:{version:1,reason:secret}},{crmSearchFailure:{version:2,reason:'PAGE_NOT_READY'}},{crmSearchFailure:{version:1,reason:'PAGE_NOT_READY',raw:secret}},{crmSearchFailure:{version:1,reason:'PAGE_NOT_READY'},url:secret}])('rejects unknown protocol values and extra fields',async response=>{const {result}=await searchError(JSON.stringify(response));expect(result.diagnostic?.searchReason).toBe('UNKNOWN');expect(JSON.stringify(result)).not.toContain('FAKE_');});
+ it.each(['LOGIN_EXPIRED','RATE_LIMITED','RESTRICTED','SOURCE_UNAVAILABLE','TIMEOUT'])('retains %s stop behavior',async reason=>{const {result}=await searchError(JSON.stringify({crmSearchFailure:{version:1,reason}}));expect(result.reason).toBe(reason);expect(result.status).not.toBe('COMPLETE');});
+ it('first empty search followed by failure is not three user submissions or a detail call',async()=>{let searches=0;const call=vi.fn(async(name:string)=>name==='check_login_status'?{content:[{type:'text',text:'✅ 已登录'}]}:++searches===1?envelope({feeds:[]}):{isError:true,content:[{type:'text',text:JSON.stringify({crmSearchFailure:{version:1,reason:'SEARCH_DATA_MISSING'}})}]});const result=await collect(new XhsMcpAdapter({call},true),{...config,keywords:['合成甲','合成乙','合成丙']},async()=>false);expect(result.diagnostic).toMatchObject({stage:'search',searchReason:'SEARCH_DATA_MISSING',requestStep:3});expect(call.mock.calls.map(x=>x[0])).toEqual(['check_login_status','search_feeds','search_feeds']);});
+});

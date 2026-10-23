@@ -54,3 +54,14 @@ node scripts/mcp-avatar-diagnostics/build-candidate.mjs /absolute/path/to/review
 映射缺口可以离线修补；实际受限网址是否能安全使用仍未确定。未获必要证据前保持拒绝，不能声称本轮已修好真实头像。
 
 要获得实际限制原因，仍需另行批准安装运行该候选并加载接收端，再对同一个已采帖子做一次有限只读检查；不需要整轮重采。该检查只会辨明限制组成，不保证这些组成可以安全放行。当前准备过程没有发起该请求。
+
+
+## 搜索错误原因候选（2026-10-23，仅准备）
+
+`v2.5.5-local-search-failure-reasons` 在已审核 bounded-comment-read 补丁链后增加 `search-integration.patch`。不改变搜索关键词、次数、筛选、评论读取预算或账号权限。将明确失败的页面导航、就绪等待、读取和反序列化阶段转换为封闭 JSON 原因码；无证据时 UNKNOWN。登录失效/限流/限制/超时仍保留原停止分类，不返回错误原文或地址。
+
+工作台兼容旧 MCP 的已知错误格式，新的 `searchReason` 沿既有严格 schema 进入任务指标和脱敏审计，再供任务摘要/详情展示。旧历史不回填。搜索无数据不等于没有匹配帖子；本地失败退避不等于已知平台冷却。此改动增强诊断，不能追溯证明旧任务的具体搜索失败原因。
+
+候选两次离线构建一致：SHA-256 `72f9e42ecafaa905d6e11af873f2713a23ad469bfaff834053a5216e3f2566da`。产物位于 `/Users/kleene/Documents/Codex/2026-10-21/task-2/mcp-search-failure-review-1/xiaohongshu-mcp-candidate`（review-2 为第二次构建）。未安装、未执行 MCP 候选，也未请求小红书。当前已安装及两处审核哈希仍为 `53774562ae853ac7643e7556eb2cbcc54586a4f1ab565b2e250aafa054757e08`。
+
+安装需要当次确认：确认任务/扫码/检查空闲，核验候选完整哈希，保留原二进制及 `runtime/platform.cjs`、`scripts/real-mcp/core.mjs`，按既有流程原子替换 MCP 和对应两处审核哈希，然后正常重启 API/worker。无需迁移或改账号会话。回退恢复这三份对应文件并正常重启，不能只换二进制而留错误审核哈希。安装本身不执行平台请求；后续仅经批准手动有限测试，不自动重试。

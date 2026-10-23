@@ -55,3 +55,9 @@ describe('truthful task prose',()=>{
  it('uses only this task plan and counters',()=>{const text=collectionTaskSummary({...run,status:'COMPLETE',readPlan:{rounds:1,postsPerRound:3,commentPages:1},capturedPosts:2,capturedCommentsCount:8});expect(text).toContain('最多 3 篇');expect(text).toContain('2 篇帖子 · 8 条');});
  it.each(['QUEUED','RUNNING','PAUSED','OTHER'])('keeps %s distinct from completed',status=>expect(collectionTaskSummary({...run,status})).not.toContain('批次完成'));
 });
+
+ it('search summaries distinguish known stage from unknown old errors and do not invent platform cooling',()=>{
+  const base={...run,status:'FAILED',reason:'INVALID_DATA'};
+  expect(collectionTaskSummary({...base,metrics:{diagnostic:{version:1,stage:'search',kind:'UPSTREAM_ERROR',searchReason:'SEARCH_DATA_MISSING'}} as Run['metrics']})).toContain('未取得搜索数据');
+  const old=collectionTaskSummary({...base,metrics:{diagnostic:{version:1,stage:'search',kind:'UPSTREAM_ERROR'}} as Run['metrics']});expect(old).toContain('具体原因尚未确定');expect(old).not.toContain('平台冷却');
+ });
