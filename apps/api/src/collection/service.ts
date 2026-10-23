@@ -1,3 +1,4 @@
+import {lockSinglePost,assertNoSinglePost} from './single-post-lock';
 import {diagnose,logCollectionDiagnostic} from './diagnostics';
 import type {CollectionDiagnostic} from '@crm/contracts';
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Optional, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
@@ -90,6 +91,7 @@ export class CollectionService {
         requireAdmin(actor);
         if (loginCheckOnly() && !accountReadMode()) throw new ForbiddenException("当前为登录状态验证环境，采集已禁用");
         const run = await this.db.$transaction(async (tx) => {
+            await lockSinglePost(tx);await assertNoSinglePost(tx);
             const [config] = await tx.$queryRaw<CollectionConfig[]> `SELECT * FROM "CollectionConfig" WHERE id=${id} FOR UPDATE`;
             if (!config || config.archivedAt)
                 throw new NotFoundException();

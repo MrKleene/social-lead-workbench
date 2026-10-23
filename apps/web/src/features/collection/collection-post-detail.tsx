@@ -22,7 +22,7 @@ export function CollectionPostDetail({post,id,platform,comments,hasOtherPages,pa
  useEffect(()=>{commentViewport.current?.scrollTo({top:0});setExpandedReplies(new Set());},[page]);
  const original=post?.versions[0],cover=safePostCoverUrl(post?.coverUrl),rows=commentThread(comments),count=savedCommentCount(comments);
  const groups=replyGroups(rows),hidden=new Set([...groups].flatMap(([root,replies])=>expandedReplies.has(root)?[]:replies.slice(1).map(r=>r.comment.id)));
- const sourceLink=post?postSourceLink(platform,id):undefined;
+ const sourceLink=post?postSourceLink(platform,id,original?.id,original?.sourceAvailable):undefined;
  const groupEnds=new Map([...groups].map(([root,replies])=>[replies.at(-1)!.comment.id,{root,count:replies.length}]));
  const publication=displayPublication(original?.snapshot.publishedAt);
  const coverage=[...(post?.versions.map(v=>v.coverage)||[]),...comments.map(c=>c.post.coverage)];
@@ -37,7 +37,7 @@ export function CollectionPostDetail({post,id,platform,comments,hasOtherPages,pa
    {(original?.snapshot.authorNickname||original?.snapshot.authorAvatarUrl)&&<div className="info-post-author"><SavedAvatar url={original.snapshot.authorAvatarUrl}/><span>{displayNickname(original.snapshot.authorNickname)||'昵称未采集'}</span></div>}
    <h2 ref={heading} tabIndex={-1}>{savedTitleLabel(post?.title)}</h2>
    {(publication||post?.lastSeenAt)&&<time className="info-saved-time" dateTime={publication||post?.lastSeenAt}>{publication?'发布于':'采集于'} {readingTime(publication||post!.lastSeenAt)} · 北京时间</time>}
-   <div className="info-original-action">{sourceLink?<><a className="info-original-link" href={sourceLink} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">查看原文<ArrowUpRight size={14}/></a><small>可能需登录或访问受限</small></>:<small>原文链接不可用</small>}</div></header>
+   <div className="info-original-action">{sourceLink?<><a className="info-original-link" href={sourceLink} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">查看原文<ArrowUpRight size={14}/></a><small>可能需登录或访问受限</small></>:<small>未保存有效原文链接</small>}</div></header>
    <div className="info-story-scroll" data-media={!!cover&&failedCover!==cover}>
    {cover&&failedCover!==cover&&<img className="info-detail-cover" src={cover} alt="帖子封面" loading="lazy" decoding="async" crossOrigin="anonymous" referrerPolicy="no-referrer" onError={()=>setFailedCover(cover)}/>}
    {cover&&failedCover===cover&&<small className="info-saved-time">封面暂不可用</small>}

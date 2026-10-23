@@ -3,12 +3,18 @@ import { prepareOutbound } from './semantic-redaction';
 import { semanticRulesSchema, SemanticSnapshot } from '@crm/contracts';
 import { qwenModel } from '../../../../runtime/qwen-models.cjs';
 import {readRunPostFeed} from './run-post-feed';
+import {savedPostReference,postReferenceUrl,publicPostSnapshot} from './post-reference';
 import { Db } from '../common/db';
 import { Actor, requireAdmin } from '../auth/security';
 import { enqueueCaptured, selectedSemanticModel, semanticHash } from './capture-archive';
 @Injectable()
 export class CaptureService {
  constructor(@Inject(Db) private db:Db){}
+ async source(actor:Actor,id:string){
+  requireAdmin(actor);const p=await this.db.capturedPost.findUnique({where:{id},include:{config:{select:{platform:true}}}});
+  const ref=p?.config.platform==='XHS'?savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId):undefined;
+  if(!ref)throw new NotFoundException('未保存有效原文链接');return postReferenceUrl(ref);
+ }
  async runPosts(actor:Actor,configId:string,runId:string){requireAdmin(actor);return readRunPostFeed(this.db,configId,runId);}
  async control(actor:Actor,configId:string){requireAdmin(actor);if(!await this.db.collectionConfig.findUnique({where:{id:configId}}))throw new NotFoundException();return await this.db.semanticControl.findUnique({where:{configId}})||{configId,enabled:false,version:0};}
  async toggle(actor:Actor,configId:string,input:{enabled:boolean;version:number}){
@@ -26,7 +32,7 @@ export class CaptureService {
    this.db.capturedComment.findMany({where:{configId},orderBy:[{lastSeenAt:'desc'},{id:'asc'}],skip:offset,take:50,include:{post:{select:{coverage:true,stopReason:true}},reviews:{orderBy:{createdAt:'desc'},take:20,select:{id:true,state:true,score:true,reason:true,selectedModel:true,revision:true,result:true}}}}),
    this.db.capturedComment.count({where:{configId}}),this.db.capturedPost.findMany({where:{configId},orderBy:{lastSeenAt:'desc'},take:20}),this.db.capturedPost.count({where:{configId}}),
    this.db.$queryRaw<{count:bigint}[]>`SELECT COUNT(DISTINCT o."platformCommentId") AS count FROM "CommentObservation" o JOIN "MonitorPost" p ON p.id=o."monitorId" WHERE p."configId"=${configId} AND NOT EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."configId"=p."configId" AND c."platformCommentId"=o."platformCommentId")`,this.control(actor,configId)
-  ]);return {items,total,offset,hasMore:offset+items.length<total,posts,postTotal,legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model:await selectedSemanticModel(this.db),hasRules:!!config.semanticRules};
+  ]);return {items,total,offset,hasMore:offset+items.length<total,posts:posts.map(p=>({...p,snapshot:publicPostSnapshot(p.snapshot),sourceAvailable:config.platform==='XHS'&&!!savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId)})),postTotal,legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model:await selectedSemanticModel(this.db),hasRules:!!config.semanticRules};
  }
  async preview(actor:Actor,configId:string,ids:string[]){
   requireAdmin(actor);const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config?.semanticRules)throw new ConflictException('请先保存自然语言目标');

@@ -134,5 +134,6 @@ class AccountContactController {
   imports: [AuthModule, DevicesModule],
   controllers: [AccountLoginController, AccountsController, AccountContactController],
   providers: [AccountsService, AccountLoginService, LoginRuntime],
+  exports:[AccountLoginService],
 })
 export class AccountsModule {}

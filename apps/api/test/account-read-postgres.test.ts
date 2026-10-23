@@ -28,3 +28,23 @@ it.each(['restart','role','archive','cross-device','pause'])('rejects %s before 
 it('revoke during search aborts pending call and forbids late source insertion',async()=>{const run=await start();let entered!:()=>void;const waiting=new Promise<void>(ok=>entered=ok),original=AccountFixtureTransport.prototype.call;vi.spyOn(AccountFixtureTransport.prototype,'call').mockImplementation(async function(this:AccountFixtureTransport,name,args,signal){if(name==='search_feeds'){entered();return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(new ReadFailure('PAUSED')),{once:true}));}return original.call(this,name,args,signal);});const pending=collection.execute(run.id);await waiting;const d=(await devices.status(admin)).device!;await devices.revoke(admin,id,d.version);expect(await pending).toMatchObject({status:'FAILED',observed:0});expect(await db.sourceMatch.count({where:{configId:run.configId}})).toBe(0);expect(await db.deviceExecutionLease.count({where:{accountId}})).toBe(0);});
 it('manual pause during search aborts pending call with no source insertion',async()=>{const run=await start();let entered!:()=>void;const waiting=new Promise<void>(ok=>entered=ok),original=AccountFixtureTransport.prototype.call;vi.spyOn(AccountFixtureTransport.prototype,'call').mockImplementation(async function(this:AccountFixtureTransport,name,args,signal){if(name==='search_feeds'){entered();return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(new ReadFailure('PAUSED')),{once:true}));}return original.call(this,name,args,signal);});const pending=collection.execute(run.id);await waiting;await collection.pauseRun(admin,run.id);expect(await pending).toMatchObject({status:'PAUSED',observed:0});expect(await db.sourceMatch.count({where:{configId:run.configId}})).toBe(0);});
 });
+
+describe('single-post: real device lease and synthetic saved session',()=>{
+ it('verifies once then reads one detail, no task/archive; replay and competing collection blocked',async()=>{
+  const {SinglePostService}=await import('../src/collection/single-post.service');const check=new SinglePostService(db,reads,login);
+  await db.accountSessionReference.update({where:{accountId},data:{state:'UNVERIFIED',checkedRuntimeId:null}});
+  const ref='https://www.xiaohongshu.com/explore/0123456789abcdef01234567?xsec_token=OFFLINE_REFERENCE&xsec_source=pc_feed';
+  const input={accountId,url:ref,requestKey:randomUUID(),consent:'single-post-read-v1' as const},before=[await db.collectionRun.count(),await db.capturedPost.count(),await db.capturedComment.count()];
+  const original=AccountFixtureTransport.prototype.call,seen:string[]=[];let entered!:()=>void,release!:()=>void;
+  const waiting=new Promise<void>(ok=>entered=ok),hold=new Promise<void>(ok=>release=ok);
+  vi.spyOn(AccountFixtureTransport.prototype,'call').mockImplementation(async function(this:AccountFixtureTransport,name,args,signal){seen.push(name);if(name==='get_feed_detail'){entered();await hold;}return original.call(this,name,args,signal);});
+  const c=await config(),pending=check.check(admin,input);await waiting;
+  await expect(collection.start(admin,c.id,'READ_WINDOW',randomUUID(),'XHS_FIXTURE',accountId,readConsent)).rejects.toThrow('单帖检查');
+  await expect(login.verifySaved(admin,accountId,'read-local-session-v1')).rejects.toThrow();
+  release();const out=await pending;expect(out).toMatchObject({status:'CHECKED',roots:{count:1},replies:{count:0}});expect(seen).toEqual(['get_feed_detail']);
+  expect([await db.collectionRun.count(),await db.capturedPost.count(),await db.capturedComment.count()]).toEqual(before);
+  expect(JSON.stringify(out)).not.toMatch(/OFFLINE_REFERENCE|account-read-fictional-user/);
+  await expect(check.check(admin,input)).rejects.toThrow('不会重复请求');expect(await db.deviceExecutionLease.count({where:{accountId}})).toBe(0);
+  const audit=await db.auditLog.findFirstOrThrow({where:{entityId:input.requestKey}});expect(audit.action).toBe('SINGLE_POST_CHECK_FINISHED');expect(JSON.stringify(audit)).not.toMatch(/OFFLINE_REFERENCE|xsec_token/);
+ });
+});

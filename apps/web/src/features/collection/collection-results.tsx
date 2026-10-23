@@ -9,12 +9,13 @@ import {CollectionPostCard} from './collection-post-card';
 import {useCollectionInfo} from './use-collection-info';
 import {CollectionPostDetail} from './collection-post-detail';
 import './collection-info.css';
+import {SinglePostCheck} from './single-post-check';
 export function CollectionResults({configs,initialId,onSettings}:{configs:Config[];initialId?:string;onSettings:()=>void}){
  const s=useCollectionInfo(configs,initialId),d=s.archive.data;
  const [analysis,setAnalysis]=useState(false),scroll=useRef({inner:0,outer:0}),root=useRef<HTMLElement>(null),returnTo=useRef<string>('');
  const previousPost=useRef(s.postId);
  useLayoutEffect(()=>{if(!s.active)return;if(previousPost.current&&!s.postId){root.current?.scrollTo({top:scroll.current.inner});window.scrollTo({top:scroll.current.outer});Array.from(root.current?.querySelectorAll<HTMLButtonElement>('[data-post]')||[]).find(e=>e.dataset.post===returnTo.current)?.focus({preventScroll:true});}previousPost.current=s.postId;},[s.postId,s.active]);
- return <section ref={root} className="collection-results collection-info" data-detail={!!s.postId} aria-label="独立采集信息"><header hidden={!!s.postId&&!!d&&!s.archive.isError&&!s.archive.isPending} className="list-heading"><div>{s.postId?<span className="info-detail-label">采集信息 / 帖子详情</span>:<><h1>采集信息</h1><p>已保存的帖子与评论</p></>}</div><Button variant="outline" onClick={()=>void s.archive.refetch()}>刷新</Button></header>
+ return <section ref={root} className="collection-results collection-info" data-detail={!!s.postId} aria-label="独立采集信息"><header hidden={!!s.postId&&!!d&&!s.archive.isError&&!s.archive.isPending} className="list-heading"><div>{s.postId?<span className="info-detail-label">采集信息 / 帖子详情</span>:<><h1>采集信息</h1><p>已保存的帖子与评论</p></>}</div><div className="action-row"><SinglePostCheck/><Button variant="outline" onClick={()=>void s.archive.refetch()}>刷新</Button></div></header>
  {!configs.length?<div className="empty-state"><h2>还没有采集信息</h2><Button onClick={onSettings}>配置关键词</Button></div>:<>
  <div hidden={!!s.postId} className="info-filters"><label>关键词组<select aria-label="结果搜索配置" value={s.selected?.id||''} onChange={e=>s.setConfig(e.target.value)}>{configs.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>搜索本页<input aria-label="搜索采集原文" value={s.search} onChange={e=>s.setSearch(e.target.value)} placeholder="帖子或已返回评论"/></label><details><summary>按任务筛选</summary><select aria-label="结果任务历史" value={s.runId} onChange={e=>s.setRun(e.target.value)}><option value="">全部已保存版本</option>{(s.history.data?.runs||s.selected?.runs||[]).map(r=><option key={r.id} value={r.id}>{formatDate(r.createdAt)} · {runLabels[r.status]||r.status}</option>)}</select></details></div>
  {s.archive.isPending?<Loading/>:s.archive.error instanceof ApiError&&s.archive.error.status===404?<p role="status">原文接口尚未部署。</p>:s.archive.isError?<ErrorNotice error={s.archive.error}/>:d&&<>

@@ -765,3 +765,31 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
   const page=await read(`/collection/configs/${c.id}/captures`);expect(page.body.legacyWithoutSnapshot).toBe(1);expect(page.body.total).toBe(2);
  });
 });
+
+// Synthetic reference-only records; never access the external platform.
+describe('original references: isolated persistence and HTTP boundary',()=>{
+ it('keeps references outside hashes and model context; exposes only a guarded redirect',async()=>{
+  const {checkpointCapture}=await import('../src/collection/capture-archive');
+  const postId='0123456789abcdef01234567',c=await db.collectionConfig.create({data:{...spec('synthetic-reference',{mode:'XHS_MCP'}),revision:1} as any});
+  const run=await db.collectionRun.create({data:{configId:c.id,revision:1,status:'RUNNING',scenario:'READ_WINDOW',requestKey:randomUUID(),snapshot:spec('synthetic-reference',{mode:'XHS_MCP'}) as any}});
+  const before={leads:await db.lead.count(),notices:await db.collectionNotice.count(),calls:await db.semanticModelCall.count()};
+  for(const token of ['SYNTHETIC_REF_A','SYNTHETIC_REF_B',undefined]){
+   await checkpointCapture(db,run,{status:'PARTIAL',requests:1,posts:[{post:{id:postId,title:'合成标题',body:'合成正文',...(token?{sourceReference:{postId,token,source:'pc_search'}}:{})},comments:[{id:'synthetic-reference-comment',userId:'synthetic-reference-user',nickname:'',text:'合成评论',hasReplies:false}],deletedIds:[],complete:false}]});
+   const posts=await db.capturedPost.findMany({where:{configId:c.id}}),comments=await db.capturedComment.findMany({where:{configId:c.id}});expect(posts).toHaveLength(1);expect(comments).toHaveLength(1);expect(JSON.stringify(comments)).not.toContain('SYNTHETIC_REF_');
+   const response=await read(`/collection/configs/${c.id}/captures`);expect(response.status).toBe(200);expect(response.body.posts[0].sourceAvailable).toBe(true);expect(JSON.stringify(response.body)).not.toMatch(/SYNTHETIC_REF_|sourceReference/);
+   const path=`/collection/captured-posts/${posts[0].id}/source`,link=await read(path);expect(link.status).toBe(302);const u=new URL(link.headers.location);expect(u.hostname).toBe('www.xiaohongshu.com');expect(u.searchParams.get('xsec_token')).toBe(token||'SYNTHETIC_REF_B');expect(link.headers['cache-control']).toContain('no-store');expect(link.headers['referrer-policy']).toBe('no-referrer');expect((await read(path,a)).status).toBe(403);expect((await api().get('/api'+path)).status).toBe(401);
+  }
+  expect({leads:await db.lead.count(),notices:await db.collectionNotice.count(),calls:await db.semanticModelCall.count()}).toEqual(before);
+  const p=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}});await db.capturedPost.update({where:{id:p.id},data:{snapshot:{id:postId,title:'legacy'}}});
+  expect((await read(`/collection/configs/${c.id}/captures`)).body.posts[0].sourceAvailable).toBe(false);expect((await read(`/collection/captured-posts/${p.id}/source`)).status).toBe(404);
+  await db.collectionRun.update({where:{id:run.id},data:{status:'PARTIAL'}});
+ });
+ it('single-post HTTP requires a real admin session, Origin and CSRF; malformed input does not leak',async()=>{
+  const body={accountId:'synthetic',url:'https://www.xiaohongshu.com/explore/0123456789abcdef01234567?xsec_token=SYNTHETIC_ONLY&xsec_source=pc_feed',requestKey:randomUUID(),consent:'single-post-read-v1'};
+  const path='/collection/single-post-check';expect((await api().post('/api'+path).send(body)).status).toBe(401);expect((await write('post',path,body,a)).status).toBe(403);
+  expect((await api().post('/api'+path).set('Cookie',admin.cookie).send(body)).status).toBe(403);
+  expect((await api().post('/api'+path).set('Cookie',admin.cookie).set('Origin',origin).send(body)).status).toBe(403);
+  const invalid=await write('post',path,{...body,url:'https://evil.invalid/?secret=SYNTHETIC_ONLY'});expect(invalid.status).toBe(400);expect(JSON.stringify(invalid.body)).not.toContain('SYNTHETIC_ONLY');
+  const malformed=await api().post('/api'+path).set('Content-Type','application/json').send('{"url":"SYNTHETIC_ONLY');expect(malformed.status).toBe(400);expect(JSON.stringify(malformed.body)).not.toContain('SYNTHETIC_ONLY');
+ });
+});

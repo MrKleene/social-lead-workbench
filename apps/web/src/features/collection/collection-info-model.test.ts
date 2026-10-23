@@ -53,7 +53,7 @@ it('title labels are presentation only and support historical placeholders',()=>
 import {postSourceLink} from './post-source-link';
 describe('official original link from saved platform ID',()=>{
  const id='0123456789abcdef01234567';
- it('uses a single official https note destination without any access token',()=>expect(postSourceLink('XHS',id)).toBe('https://www.xiaohongshu.com/explore/'+id));
+ it('requires a saved reference and uses an authenticated opaque redirect',()=>{expect(postSourceLink('XHS',id)).toBeUndefined();expect(postSourceLink('XHS',id,'capture1',true)).toBe('/api/collection/captured-posts/capture1/source');expect(postSourceLink('XHS',id,'../escape',true)).toBeUndefined();expect(postSourceLink('XHS',id,'capture1',false)).toBeUndefined();});
  it('rejects unsupported platforms and missing or fabricated identifiers',()=>{for(const p of ['DOUYIN','xhs',null])expect(postSourceLink(p,id)).toBeUndefined();for(const v of [null,undefined,1,{},'', 'p0','fixture-xhs-'+id, 'g'.repeat(24),id+'a',id.slice(1),id+'\n'])expect(postSourceLink('XHS',v)).toBeUndefined();});
  it('never accepts URLs, credentials, paths or query parameters as a post identifier',()=>{for(const v of ['javascript:alert(1)','https://evil.example', '//www.xiaohongshu.com/explore/'+id,id+'?xsec_token=secret',id+'#token','../'+id,encodeURIComponent('/'+id),id+'@evil.example'])expect(postSourceLink('XHS',v)).toBeUndefined();});
 });

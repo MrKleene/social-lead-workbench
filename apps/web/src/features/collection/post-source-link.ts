@@ -1,6 +1,6 @@
-/** Archives currently retain the platform ID, never the MCP request token.
- * Build an official destination only; no requests, redirects or secret lookup. */
-export function postSourceLink(platform:unknown,postId:unknown):string|undefined {
- if(platform!=='XHS'||typeof postId!=='string'||postId.length!==24||!/^[a-fA-F0-9]+$/.test(postId))return;
- return `https://www.xiaohongshu.com/explore/${postId}`;
+/** Only an authenticated archive redirect can expose a validated saved reference.
+ * Never guess a usable original link from a bare platform ID. */
+export function postSourceLink(platform:unknown,postId:unknown,captureId?:unknown,available?:boolean):string|undefined {
+ if(platform!=='XHS'||typeof postId!=='string'||!/^[a-f0-9]{24}$/.test(postId)||available!==true||typeof captureId!=='string'||!/^[A-Za-z0-9_-]{1,200}$/.test(captureId))return;
+ return `/api/collection/captured-posts/${captureId}/source`;
 }

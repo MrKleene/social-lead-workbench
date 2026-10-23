@@ -7,7 +7,7 @@ export function configure(app: INestApplication) {
   app.use(helmet());
   app.use(express.json({ limit: "32kb" }));
   app.use((error:unknown,req:Request,res:Response,next:NextFunction)=>{
-    if(/^\/api\/model-settings\/?$/i.test(req.path)){req.body=undefined;res.setHeader('Cache-Control','no-store');res.status(400).json({message:'模型设置请求格式无效；未保存'});return;}
+    if(/^\/api\/(model-settings|collection\/single-post-check)\/?$/i.test(req.path)){req.body=undefined;res.setHeader('Cache-Control','no-store');res.status(400).json({message:'请求格式无效；未执行'});return;}
     next(error);
   });
   app.use(cookieParser());

@@ -5,6 +5,7 @@ import { ReadAdapter, ReadFailure, Post, Comment, Page, commentSchema } from "..
 import { ReadOnlyMcpTransport } from "../mcp/transport";
 import { McpMode, ReadTool } from "../mcp/policy";
 import {invalidSource,parseSource} from '../diagnostics';
+import {savedPostReference,postReferenceSchema,type PostReference} from "../post-reference";
 export type { ReadOnlyMcpTransport } from "../mcp/transport";
 const envelope = z.object({ isError: z.boolean().optional(), content: z.array(z.object({ type: z.string(), text: z.string().max(2 * 1024 * 1024).optional() })).max(8) });
 function text(input: unknown, stage:'prepare'|'search'|'post'): string {
@@ -80,7 +81,15 @@ export class XhsMcpAdapter implements ReadAdapter {
         const roots = [...new Map((data.data.comments.list || []).map(c => normalize(c)).map(c=>[c.id,c])).values()];
         this.details.set(post.id, { roots, replies });
         const author=rawUser.safeParse(data.data.note.user),cover=inspectXhsDetailCover(data.data.note.imageList),avatar=inspectXhsAvatar(author.success?author.data.avatar:data.data.note.user==null?undefined:{});
-        return { ...post,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:avatar.url,imageDiagnostics:{...post.imageDiagnostics,detailCover:cover.diagnostic,authorAvatar:avatar.diagnostic,avatarSource:safeAvatarSourceDiagnostic(data.data.avatarSourceDiagnostic)},publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||cover.url, title: data.data.note.title || post.title, ...(data.data.note.desc!=null?{body:data.data.note.desc}:{}) };
+        return { ...post,sourceReference:this.mode==="XHS_MCP"&&(data.feed_id||data.data.note.noteId)?savedPostReference({postId:reference.rawId,token:reference.token,source:post.sourceReference?.source||"pc_feed"},post.id):undefined,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:avatar.url,imageDiagnostics:{...post.imageDiagnostics,detailCover:cover.diagnostic,authorAvatar:avatar.diagnostic,avatarSource:safeAvatarSourceDiagnostic(data.data.avatarSourceDiagnostic)},publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||cover.url, title: data.data.note.title || post.title, ...(data.data.note.desc!=null?{body:data.data.note.desc}:{}) };
+    }
+    /** One bounded detail call. The caller owns account authorization and the device lease. */
+    async postReference(value:PostReference,signal:AbortSignal):Promise<Post>{
+        const ref=postReferenceSchema.parse(value),id=this.id(ref.postId);
+        if(!this.allowed)throw new ReadFailure("REAL_DISABLED");
+        await this.transport.connect?.(signal);
+        this.tokens.set(id,{rawId:ref.postId,token:ref.token});
+        try{const post=await this.post({id,title:'',sourceReference:ref},signal);if(this.mode==='XHS_MCP'&&!post.sourceReference)throw invalidSource('post','IDENTITY_CONFLICT','noteId');return post;}finally{this.tokens.delete(id);}
     }
     receivedComments(post:Post):Comment[]{const d=this.details.get(post.id);return d?[...d.roots,...[...d.replies.values()].flat()]:[];}
     async comments(post: Post, cursor: string | undefined, _signal: AbortSignal): Promise<Page<Comment>> {

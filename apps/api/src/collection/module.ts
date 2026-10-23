@@ -1,4 +1,7 @@
-import { Controller, Get, Post, Patch, Delete, Param, Query, Req, Inject, Module, UseGuards, NotFoundException } from "@nestjs/common";
+import { Controller, Get, Post, Patch, Delete, Param, Query, Req, Inject, Module, UseGuards, NotFoundException, Res, Header } from "@nestjs/common";
+import type {Response} from 'express';
+import {AccountsModule} from '../accounts/accounts';
+import {SinglePostService,singlePostInput} from './single-post.service';
 import { z } from "zod";
 import { AuthModule, AuthedRequest, SessionGuard } from "../auth/auth";
 import { scope } from "../auth/security";
@@ -22,7 +25,11 @@ import { SemanticService } from './semantic.service';
 class CollectionController {
     constructor(
     @Inject(CollectionService)
-    private service: CollectionService, @Inject(SemanticService) private semantic:SemanticService, @Inject(QwenMatchingService) private qwen:QwenMatchingService, @Inject(CaptureService) private captures:CaptureService) { }
+    private service: CollectionService, @Inject(SemanticService) private semantic:SemanticService, @Inject(QwenMatchingService) private qwen:QwenMatchingService, @Inject(CaptureService) private captures:CaptureService,@Inject(SinglePostService) private singlePost:SinglePostService) { }
+    @Post("single-post-check") @Header("Cache-Control","no-store, private")
+    singlePostCheck(@Req() r:AuthedRequest){return this.singlePost.check(r.actor,parse(singlePostInput,r.body));}
+    @Get("captured-posts/:id/source") @Header("Cache-Control","no-store, private") @Header("Referrer-Policy","no-referrer")
+    async original(@Req() r:AuthedRequest,@Param("id") id:string,@Res() response:Response){response.setHeader("Cache-Control","no-store, private");response.setHeader("Referrer-Policy","no-referrer");response.redirect(302,await this.captures.source(r.actor,id));}
     @Post("configs/:id/capture-preview")
     capturePreview(@Req() r:AuthedRequest,@Param("id") id:string){const b=parse(z.object({captureIds:z.array(z.string().min(1)).min(1).max(5).refine(a=>new Set(a).size===a.length)}).strict(),r.body);return this.captures.preview(r.actor,id,b.captureIds);}
     @Get('configs/:id/runs/:runId/posts')
@@ -110,6 +117,6 @@ class NoticesController {
     id: string) { parse(z.object({}).strict(), r.body); const notice = await this.db.collectionNotice.findFirst({ where: { id, lead: scope(r.actor) } }); if (!notice)
         throw new NotFoundException(); return this.leads.locked(r.actor, notice.leadId, tx => tx.noticeRead.upsert({ where: { noticeId_userId: { noticeId: id, userId: r.actor.id } }, create: { noticeId: id, userId: r.actor.id }, update: {} })); }
 }
-@Module({ imports: [AuthModule, LeadsModule, DevicesModule,ModelSettingsModule], controllers: [CollectionController, NoticesController], providers: [CaptureService, QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService] })
+@Module({ imports: [AuthModule, LeadsModule, DevicesModule,ModelSettingsModule,AccountsModule], controllers: [CollectionController, NoticesController], providers: [SinglePostService,CaptureService, QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService] })
 export class CollectionModule {
 }
