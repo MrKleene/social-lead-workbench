@@ -1,3 +1,4 @@
+import {summarizePartial} from './run-coverage';
 import { z } from "zod";
 import {searchAttemptSchema,type SearchAttempt,type CollectionDiagnostic} from "@crm/contracts";
 import {diagnose,invalidSource} from "./diagnostics";
@@ -11,6 +12,7 @@ export type PostRead = {
     stopReason?:string;
 };
 export type ReadResult = {
+    searchIncomplete?:boolean;
     searchAttempts?:SearchAttempt[];
     diagnostic?:CollectionDiagnostic;
     discarded?:boolean;
@@ -92,6 +94,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
             const complete = await pages((c, s) => adapter.search(keyword, c, s), postSchema, async (items) => { for (const p of items)
                 if (found.size < config.batchLimit)
                     found.set(p.id, p); }, adapter.mode==="MOCK"?limits.pagesPerStream:1);
+            result.searchIncomplete=(result.searchIncomplete??false)||!complete;
             if (!complete) {
                 result.status = "PARTIAL";
                 result.reason = "SEARCH_PARTIAL";
@@ -128,7 +131,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
             // then stop on terminal read failures; never issue cached-tree page calls
             // that could mask cancellation or consume the remaining request budget.
             if(post.boundedRead){
-                entry.windowRead=true;result.status='PARTIAL';result.reason=post.boundedRead.reason;await checkpoint();
+                entry.windowRead=true;entry.complete=post.boundedRead.state==='COMPLETE';if(!entry.complete){result.status='PARTIAL';result.reason=post.boundedRead.reason;}await checkpoint();
                 const reason=post.boundedRead.reason;
                 if(reason==='PLATFORM_LIMIT')throw new ReadFailure('RESTRICTED');
                 if(reason==='CANCELLED')throw new ReadFailure('PAUSED');
@@ -180,5 +183,6 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         if (result.reason === "INVALID_DATA") {result.discarded=result.posts.length>0;result.posts = [];}
         result.status = result.reason === "PAUSED" ? "PAUSED" : result.reason === "BUDGET" ? "PARTIAL" : "FAILED";
     }
+    summarizePartial(result);
     return result;
 }

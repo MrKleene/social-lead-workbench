@@ -8,7 +8,6 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 	"regexp"
 	"strconv"
-	"time"
 )
 
 // Candidate driver: no arbitrary page links, API fetches or profile lookups.
@@ -39,7 +38,7 @@ func (p *boundedRodPage) Snapshot(ctx context.Context) ([]byte, CoverageReady, e
 	if e != nil {
 		return nil, ready, errors.New("READ_FAILED")
 	}
-	if p.refreshRoots {
+	{ // Re-resolve after every page-state snapshot; retained handles may detach.
 		p.refreshRoots = false
 		p.scopeOK = false
 		roots, err := p.page.Context(ctx).Elements(".parent-comment")
@@ -51,26 +50,16 @@ func (p *boundedRodPage) Snapshot(ctx context.Context) ([]byte, CoverageReady, e
 	}
 	return []byte(raw), ready, nil
 }
-func boundedSettle(ctx context.Context) error {
-	t := time.NewTimer(750 * time.Millisecond)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
-}
 func (p *boundedRodPage) ScrollRoots(ctx context.Context) error {
 	if e := p.guard(ctx); e != nil {
 		return e
 	}
-	v, e := p.page.Context(ctx).Eval(`() => {const e=[...document.querySelectorAll('.note-scroller,.comments-container')].find(x=>x.scrollHeight>x.clientHeight+1);if(!e)return false;e.scrollBy({top:Math.max(120,Math.min(600,e.clientHeight*.8)),behavior:'instant'});return true}`)
+	v, e := p.page.Context(ctx).Eval(`() => {const e=[...document.querySelectorAll('.note-scroller,.comments-container')].find(x=>x.scrollHeight>x.clientHeight+1);if(!e)return false;e.scrollTo({top:e.scrollHeight,behavior:'instant'});return true}`)
 	if e != nil || !v.Value.Bool() {
 		return errors.New("READ_FAILED")
 	}
 	p.refreshRoots = true
-	return boundedSettle(ctx)
+	return nil
 }
 
 var boundedReplyLabel = regexp.MustCompile(`^展开\s*(\d+)\s*条回复$`)
@@ -98,6 +87,13 @@ func (p *boundedRodPage) ExpandReply(ctx context.Context, remaining, maxPerRoot 
 			return "CLICK_FAILED", nil
 		}
 		for _, button := range buttons {
+			visible, e := button.Visible()
+			if e != nil {
+				return "CLICK_FAILED", nil
+			}
+			if !visible {
+				continue
+			}
 			label, e := button.Text()
 			if e != nil {
 				return "CLICK_FAILED", nil
@@ -126,9 +122,6 @@ func (p *boundedRodPage) ExpandReply(ctx context.Context, remaining, maxPerRoot 
 			}
 			if e = button.Click(proto.InputMouseButtonLeft, 1); e != nil {
 				return "CLICK_FAILED", nil
-			}
-			if e = boundedSettle(ctx); e != nil {
-				return "", e
 			}
 			return "CLICKED", nil
 		}

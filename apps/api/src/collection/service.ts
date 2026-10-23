@@ -167,7 +167,12 @@ export class CollectionService {
                 diagnosticStage='authorization';owned=await this.accountReads.open(run.execution,cancelled);reader=owned.reader;
             }
             else { if(run.execution)throw new ReadFailure('REAL_DISABLED'); const settings = requireMcp(spec.mode); reader = adapter || new XhsMcpAdapter(new XhsHttpTransport(settings.url, settings.mode), true, settings.mode); }
-            const result = await collect(reader, spec, async () => { if(owned)await owned.check(); else if(spec.mode!=="MOCK")requireMcp(spec.mode);return cancelled(); }, {...(owned?{requests:32,pagesPerStream:1,comments:100,callMs:40000,runMs:150000}:limits),pagesPerStream:(run.readPlan as {commentPages?:number}|null)?.commentPages??(owned?1:limits.pagesPerStream)}, async progress=>{await checkpointCapture(this.db,run,progress,owned?.commitGuard);await this.db.collectionRun.updateMany({where:{id,status:'RUNNING'},data:{requests:progress.requests,observed:progress.posts.reduce((n,p)=>n+p.comments.length,0)}});});
+            const result = await collect(reader, spec, async () => { if(owned)await owned.check(); else if(spec.mode!=="MOCK")requireMcp(spec.mode);return cancelled(); }, {...(owned?{requests:32,pagesPerStream:1,comments:100,callMs:40000,runMs:150000}:limits),pagesPerStream:(run.readPlan as {commentPages?:number}|null)?.commentPages??(owned?1:limits.pagesPerStream)}, async progress=>{
+                await checkpointCapture(this.db,run,progress,owned?.commitGuard);
+                await this.db.collectionRun.updateMany({where:{id,status:'RUNNING'},data:{
+                    requests:progress.requests,observed:progress.posts.reduce((n,p)=>n+p.comments.length,0)
+                }});
+            });
             if(result.diagnostic)logCollectionDiagnostic(run.id,result.diagnostic);
             diagnosticStage='finish_archive';
             await finishCapture(this.db,run,result);

@@ -93,6 +93,10 @@ export class XhsMcpAdapter implements ReadAdapter {
         };
         // Validate the entire received tree before exposing any of it to ingestion.
         const roots = [...new Map((data.data.comments.list || []).map(c => normalize(c)).map(c=>[c.id,c])).values()];
+        if(boundedRead?.state==='COMPLETE'){
+            const retained=boundedRead.retained.loaded;
+            if(!retained||retained.roots!==roots.length||retained.uniqueKnown!==seen.size||retained.replies!==seen.size-roots.length)throw invalidSource('post','SCHEMA_VALIDATION','data.comments.list');
+        }
         this.details.set(post.id, { roots, replies });
         const author=rawUser.safeParse(data.data.note.user),cover=inspectXhsDetailCover(data.data.note.imageList),avatar=inspectXhsAvatar(author.success?author.data.avatar:data.data.note.user==null?undefined:{});
         return { ...post,boundedRead,coverageDiagnostic:safeCoverageDiagnostic(data.data.coverageDiagnostic),sourceReference:this.mode==="XHS_MCP"&&(data.feed_id||data.data.note.noteId)?savedPostReference({postId:reference.rawId,token:reference.token,source:post.sourceReference?.source||"pc_feed"},post.id):undefined,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:avatar.url,imageDiagnostics:{...post.imageDiagnostics,detailCover:cover.diagnostic,authorAvatar:avatar.diagnostic,avatarSource:safeAvatarSourceDiagnostic(data.data.avatarSourceDiagnostic)},publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||cover.url, title: data.data.note.title || post.title, ...(data.data.note.desc!=null?{body:data.data.note.desc}:{}) };

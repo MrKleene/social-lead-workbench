@@ -8,7 +8,7 @@ const loaded=z.object({roots:n,replies:n,uniqueKnown:n,duplicateIds:n,missingIds
 const group=z.object({ordinal:z.number().int().min(1).max(200),parent:z.number().int().min(1).max(199).nullable(),depth:z.number().int().min(0).max(8),declared:count,loaded:count}).strict();
 export const coverageSampleSchema=z.object({
  status:z.enum(['OK','UNAVAILABLE','LIMIT','INVALID_JSON','FEED_MISSING']),
- ready:z.object({document:z.enum(['UNKNOWN','loading','interactive','complete']),container:z.boolean()}).strict(),
+ ready:z.object({document:z.enum(['UNKNOWN','loading','interactive','complete']),container:z.boolean(),emptyVisible:z.boolean().optional()}).strict(),
  total:count,hasMore:bool,cursor:z.enum(['MISSING','NULL','EMPTY','NONEMPTY','INVALID']),list:state,
  loaded:loaded.nullable(),groups:z.array(group).max(200),
  findings:z.array(z.enum(['INVALID_NODES','MISSING_IDS','DUPLICATE_IDS','DECLARED_GT_LOADED','DECLARED_LT_LOADED','TOTAL_LT_LOADED'])).max(6),

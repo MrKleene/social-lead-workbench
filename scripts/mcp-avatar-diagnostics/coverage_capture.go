@@ -13,7 +13,8 @@ const coveragePageScript = `() => {
  const notes = window.__INITIAL_STATE__?.note?.noteDetailMap;
  return JSON.stringify({notes: notes ?? null, ready: {
   document: document.readyState,
-  container: !!document.querySelector('.interact-container, .note-scroller')
+  container: !!document.querySelector('.interact-container, .note-scroller'),
+  emptyVisible: [...document.querySelectorAll('.note-scroller .no-comments-text,.interact-container .no-comments-text')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0&&(e.textContent||'').trim()==='这是一片荒地')
  }});
 }`
 

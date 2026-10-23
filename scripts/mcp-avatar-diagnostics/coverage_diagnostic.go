@@ -22,8 +22,9 @@ type CoverageBool struct {
 	Value *bool  `json:"value"`
 }
 type CoverageReady struct {
-	Document  string `json:"document"`
-	Container bool   `json:"container"`
+	Document     string `json:"document"`
+	Container    bool   `json:"container"`
+	EmptyVisible bool   `json:"emptyVisible,omitempty"`
 }
 type CoverageLoaded struct {
 	Roots        int `json:"roots"`

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { CapturedComment, CollectionConfig, CollectionRun, Prisma } from '@prisma/client';
 import { SemanticSnapshot, CaptureDisplay, captureDisplay, safePostCoverUrl, safeImageDiagnostics, semanticRulesSchema } from '@crm/contracts';
+import {runCoverage} from './run-coverage';
 import {savedPostReference} from './post-reference';
 import { Db } from '../common/db';
 import { configInput, ReadFailure } from './contract';
@@ -53,10 +54,18 @@ export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResul
    }
   }
   const [posts,comments]=await Promise.all([tx.capturedPost.groupBy({by:['platformPostId'],where:{configId:config.id,lastRunId:run.id}}),tx.capturedComment.groupBy({by:['platformCommentId'],where:{configId:config.id,lastRunId:run.id}})]);
-  await tx.collectionRun.update({where:{id:run.id},data:{capturedPosts:posts.length,capturedCommentsCount:comments.length}});
+  const coverage=runCoverage(result);
+  await tx.collectionRun.update({where:{id:run.id},data:{capturedPosts:posts.length,capturedCommentsCount:comments.length,...(coverage?{metrics:{coverage}}:{})}});
  },{timeout:20000});
 }
 export async function finishCapture(db:Db,run:CollectionRun,result:ReadResult){
- await db.capturedPost.updateMany({where:{configId:run.configId,lastRunId:run.id},data:{stopReason:result.reason||null,...(result.status!=='COMPLETE'?{coverage:'PARTIAL'}:{})}});
- for(const entry of result.posts){if(entry.stopReason)await db.capturedPost.updateMany({where:{configId:run.configId,lastRunId:run.id,platformPostId:entry.post.id},data:{stopReason:entry.stopReason,coverage:'PARTIAL'}});}
+ // A task's search or another post's failure cannot downgrade an independently
+ // verified post. A failure before a final result leaves checkpoints partial.
+ if(!result.posts.length){
+  await db.capturedPost.updateMany({where:{configId:run.configId,lastRunId:run.id},data:{stopReason:result.reason||null,coverage:'PARTIAL'}});
+  return;
+ }
+ for(const entry of result.posts){
+  await db.capturedPost.updateMany({where:{configId:run.configId,lastRunId:run.id,platformPostId:entry.post.id},data:{stopReason:entry.stopReason||(entry.complete?null:result.reason||'MCP_WINDOW_ONLY'),coverage:entry.complete?'COMPLETE':'PARTIAL'}});
+ }
 }

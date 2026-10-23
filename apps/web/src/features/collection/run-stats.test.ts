@@ -16,3 +16,10 @@ it('safe text validation reason/type/length are inspectable without the original
  const metrics={version:1,policy:'LEGACY',postsRead:0,rootComments:0,replies:0,highRelevant:0,needsReview:0,unmatched:0,legacyMatches:0,filterReasons:{},diagnostic:{version:1,stage:'post',kind:'SCHEMA_VALIDATION',field:'text',validationReason:'TOO_LONG',actualType:'string',textLength:10001}};
  const markup=renderToStaticMarkup(createElement(RunStats,{run:{...base,metrics:metrics as Run['metrics']}}));expect(markup).toContain('TOO_LONG');expect(markup).toContain('10001');expect(markup).toContain('UTF-16');
 });
+
+it('checkpoint coverage is readable before final classification, without a fake zero total',()=>{
+ const metrics={coverage:{version:1,search:'PARTIAL',reasons:['ROOT_PAGE_BUDGET'],posts:[{ordinal:1,saved:19,roots:10,replies:9,complete:false,reason:'ROOT_PAGE_BUDGET'}]}} as unknown as Run['metrics'];
+ const r={...base,status:'RUNNING',observed:0,metrics};
+ expect(runSummary(r)).toContain('10 条主评论 · 9 条回复');
+ const html=renderToStaticMarkup(createElement(RunStats,{run:r}));expect(html).toContain('本次任务覆盖证据');expect(html).not.toContain('读取 0 条');
+});

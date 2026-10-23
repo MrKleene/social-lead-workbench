@@ -47,3 +47,5 @@ export * from './run-post-feed';
 export * from './bounded-read';
 
 export * from './search-observation';
+
+export * from './run-coverage';

@@ -145,7 +145,9 @@ func (s *boundedStore) merge(raw []byte, c BoundedReadConfig, allowRoots bool) (
 			}
 			if !exists && parent == "" && (!allowRoots || len(roots) >= c.MaxRoots) {
 				excluded[id] = true
-				cut = "ROOT_LIMIT"
+				if allowRoots {
+					cut = "ROOT_LIMIT"
+				}
 				continue
 			}
 			if !exists && len(next) >= c.MaxComments {
@@ -158,6 +160,7 @@ func (s *boundedStore) merge(raw []byte, c BoundedReadConfig, allowRoots bool) (
 					roots = append(roots, id)
 				}
 			}
+			delete(excluded, id)
 			next[id] = boundedNode{raw: m, id: id, parent: parent, user: uid, text: text}
 			children, state := coverageArray(m["subComments"])
 			if state == "INVALID" {
@@ -313,12 +316,129 @@ func runBoundedRead(ctx context.Context, p boundedPage, id string, c BoundedRead
 		}
 		return store.merge(raw, c, allowRoots)
 	}
-	if r.Reason == "VISIBLE_WINDOW_READ" {
+	// Wait for real retained data/end-state changes, never treat a timer as completion.
+	readAfterAction := func(allowRoots bool, before int) (int, string) {
+		deadline := time.Now().Add(2200 * time.Millisecond)
 		for {
+			_, why := read(allowRoots)
+			if why != "" {
+				return 0, why
+			}
+			added := len(store.nodes) - before
+			ended := allowRoots && r.Final.HasMore.State == "EXACT" && r.Final.HasMore.Value != nil && !*r.Final.HasMore.Value
+			if added > 0 || ended {
+				return added, ""
+			}
+			if !time.Now().Before(deadline) {
+				return 0, ""
+			}
+			timer := time.NewTimer(200 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return 0, boundedError(ctx, ctx.Err())
+			case <-timer.C:
+			}
+		}
+	}
+	// Drain replies of the current admitted tree before advancing roots. Preserve
+	// every merge, including failures and DOM re-renders; never repeat a click
+	// merely because its result is delayed.
+	drainReplies := func() {
+		for {
+			if ctx.Err() != nil {
+				fatal = boundedError(ctx, ctx.Err())
+				r.ReplyStop = fatal
+				return
+			}
+			gap, unknown := boundedReplies(inspectCoverage(store.payload(), id, ready))
+			if !gap && !unknown {
+				r.ReplyStop = "DECLARED_REPLIES_LOADED"
+				return
+			}
+			if c.ReplyClicks == 0 {
+				r.ReplyStop = "REPLY_EXPANSION_DISABLED"
+				return
+			}
+			if r.ReplyActions >= c.ReplyClicks {
+				r.ReplyStop = "REPLY_CLICK_BUDGET"
+				return
+			}
+			if len(store.nodes) >= c.MaxComments {
+				r.ReplyStop = "COMMENT_LIMIT"
+				return
+			}
+			r.ReplyActions++
+			action, err := p.ExpandReply(ctx, c.MaxComments-len(store.nodes), c.MaxRepliesPerRoot)
+			if err != nil {
+				fatal = boundedError(ctx, err)
+				r.ReplyStop = fatal
+				return
+			}
+			if action != "CLICKED" {
+				switch action {
+				case "REPLY_THRESHOLD", "UNKNOWN_REPLY_COUNT", "CLICK_FAILED", "BUTTON_NOT_FOUND", "DOM_SCOPE_UNKNOWN":
+					r.ReplyStop = action
+				default:
+					r.ReplyStop = "CLICK_FAILED"
+				}
+				return
+			}
+			added, why := readAfterAction(false, len(store.nodes))
+			if why != "" {
+				fatal = why
+				r.ReplyStop = why
+				return
+			}
+			if added == 0 {
+				r.ReplyStop = "NO_PROGRESS"
+				return
+			}
+		}
+	}
+	if r.Reason != "VISIBLE_WINDOW_READ" {
+		fatal = r.Reason
+		r.RootStop = fatal
+	} else {
+		for {
+			drainReplies()
+			if fatal != "" {
+				break
+			}
 			if ctx.Err() != nil {
 				fatal = boundedError(ctx, ctx.Err())
 				r.RootStop = fatal
 				break
+			}
+			// A reply control may scroll the page and reveal additional roots.
+			// With root paging authorized, admit that already-visible page against
+			// its own budget before trusting its hasMore=false end flag.
+			if len(store.excluded) > 0 && c.RootPages > 0 {
+				if len(store.roots) >= c.MaxRoots {
+					r.RootStop = "ROOT_LIMIT"
+					break
+				}
+				if len(store.nodes) >= c.MaxComments {
+					r.RootStop = "COMMENT_LIMIT"
+					break
+				}
+				if r.RootActions >= c.RootPages {
+					r.RootStop = "ROOT_PAGE_BUDGET"
+					break
+				}
+				r.RootActions++
+				before := len(store.roots)
+				_, why := read(true)
+				if why != "" {
+					fatal = why
+					r.RootStop = why
+					break
+				}
+				if len(store.roots) == before {
+					r.RootStop = "NO_PROGRESS"
+					break
+				}
+				continue
 			}
 			if r.Final.HasMore.State != "EXACT" {
 				r.RootStop = "UNKNOWN_HAS_MORE"
@@ -336,6 +456,10 @@ func runBoundedRead(ctx context.Context, p boundedPage, id string, c BoundedRead
 				r.RootStop = "ROOT_LIMIT"
 				break
 			}
+			if len(store.nodes) >= c.MaxComments {
+				r.RootStop = "COMMENT_LIMIT"
+				break
+			}
 			if r.RootActions >= c.RootPages {
 				r.RootStop = "ROOT_PAGE_BUDGET"
 				break
@@ -346,71 +470,19 @@ func runBoundedRead(ctx context.Context, p boundedPage, id string, c BoundedRead
 				r.RootStop = fatal
 				break
 			}
-			before := len(store.roots)
-			_, why := read(true)
+			beforeRoots := len(store.roots)
+			_, why := readAfterAction(true, len(store.nodes))
 			if why != "" {
 				fatal = why
 				r.RootStop = why
 				break
 			}
-			if len(store.roots) == before {
-				r.RootStop = "NO_PROGRESS"
-				break
-			}
-		}
-	} else {
-		fatal = r.Reason
-		r.RootStop = fatal
-	}
-	if fatal == "" {
-		for {
-			if ctx.Err() != nil {
-				fatal = boundedError(ctx, ctx.Err())
-				r.ReplyStop = fatal
-				break
-			}
-			sample := inspectCoverage(store.payload(), id, ready)
-			gap, unknown := boundedReplies(sample)
-			if !gap && !unknown {
-				r.ReplyStop = "DECLARED_REPLIES_LOADED"
-				break
-			}
-			if c.ReplyClicks == 0 {
-				r.ReplyStop = "REPLY_EXPANSION_DISABLED"
-				break
-			}
-			if r.ReplyActions >= c.ReplyClicks {
-				r.ReplyStop = "REPLY_CLICK_BUDGET"
-				break
-			}
-			if len(store.nodes) >= c.MaxComments {
-				r.ReplyStop = "COMMENT_LIMIT"
-				break
-			}
-			r.ReplyActions++
-			action, err := p.ExpandReply(ctx, c.MaxComments-len(store.nodes), c.MaxRepliesPerRoot)
-			if err != nil {
-				fatal = boundedError(ctx, err)
-				r.ReplyStop = fatal
-				break
-			}
-			if action != "CLICKED" {
-				switch action {
-				case "REPLY_THRESHOLD", "UNKNOWN_REPLY_COUNT", "CLICK_FAILED", "BUTTON_NOT_FOUND", "DOM_SCOPE_UNKNOWN":
-					r.ReplyStop = action
-				default:
-					r.ReplyStop = "CLICK_FAILED"
+			if len(store.roots) == beforeRoots {
+				if r.Final.HasMore.State == "EXACT" && r.Final.HasMore.Value != nil && !*r.Final.HasMore.Value {
+					r.RootStop = "ROOT_END"
+				} else {
+					r.RootStop = "NO_PROGRESS"
 				}
-				break
-			}
-			added, why := read(false)
-			if why != "" {
-				fatal = why
-				r.ReplyStop = why
-				break
-			}
-			if added == 0 {
-				r.ReplyStop = "NO_PROGRESS"
 				break
 			}
 		}
@@ -443,9 +515,32 @@ func runBoundedRead(ctx context.Context, p boundedPage, id string, c BoundedRead
 			r.Reason = "ROOT_LIMIT"
 		}
 	}
+	if fatal == "" && r.ExcludedRoots == 0 && r.RootStop == "ROOT_END" && r.ReplyStop == "DECLARED_REPLIES_LOADED" && declaredTreeExhausted(r.Retained) && declaredTreeExhausted(r.Final) {
+		r.State = "COMPLETE"
+		r.Reason = "DECLARED_TREE_EXHAUSTED"
+	} else if fatal == "" && r.Retained.Loaded != nil && r.Retained.Loaded.UniqueKnown == 0 && r.Retained.Total.State != "EXACT" {
+		r.State = "UNKNOWN"
+		r.Reason = "EMPTY_UNCONFIRMED"
+	}
 	r.ElapsedMs = int(time.Since(start).Milliseconds())
 	if r.ElapsedMs > 60000 {
 		r.ElapsedMs = 60000
 	}
 	return store.payload(), r, nil
+}
+
+// Completion is only the explicitly declared, accessible tree at this observation.
+// Hidden/deleted/moderated content is outside this evidence. Missing is not zero.
+func declaredTreeExhausted(s CoverageSample) bool {
+	if s.Status != "OK" || s.List != "EXACT" || s.Ready.Document != "complete" || !s.Ready.Container || s.Loaded == nil || s.HasMore.Value == nil || *s.HasMore.Value || s.HasMore.State != "EXACT" {
+		return false
+	}
+	if s.Loaded.MissingIDs != 0 || s.Loaded.DuplicateIDs != 0 || s.Loaded.InvalidNodes != 0 || len(s.Findings) > 0 {
+		return false
+	}
+	if !(s.Total.State == "EXACT" && s.Total.Value != nil && *s.Total.Value == s.Loaded.UniqueKnown) && !(s.Ready.EmptyVisible && s.Loaded.UniqueKnown == 0 && s.Total.State != "EXACT") {
+		return false
+	}
+	gap, unknown := boundedReplies(s)
+	return !gap && !unknown
 }
