@@ -1,4 +1,4 @@
-# Search result readiness candidate (not deployed)
+# Search result readiness candidate and deployment
 
 Base: `582c261`. Preparation is isolated in
 `/Users/kleene/Documents/Codex/2026-10-21/task-2/search-readiness-fix`.
@@ -65,3 +65,11 @@ Current installed MCP remains `v2.5.5-local-search-failure-reasons`, SHA-256
 Rollback: restore the saved previous executable and matching two pins, rebuild the previously approved application revision and normally restart only the affected services. Do not delete locks, reset data or lower identity/network guards. The receiver also accepts the previous MCP protocol.
 
 Real search readiness and the former three-empty result cause remain unverified. After deployment approval, any platform verification is a separately bounded authorized action, not an automatic build/install side effect. This candidate does not prove the historical empty arrays were premature, nor that platform-hidden/inaccessible results can be read.
+
+## Approved deployment — 2026-10-23 17:33 UTC
+
+After explicit installation/deployment approval, production fast-forwarded from `582c261` to implementation `c7c8973`. The exact candidate above was installed; both reviewed executable pins now match. Full workspace build passed. New API PID 55073 and collector PID 55072 started after the new receiver build; API readiness and web returned HTTP 200, worker was idle and queues/leases were empty. Frontend PID 3438 remained and served the updated confirmation and search-evidence modules.
+
+Normal controller shutdown completed: API exited on the supervisor's SIGTERM, collector exited 0, supervisor cleanup and exit completed 0. No manual force-kill, lock deletion, new migration, platform request or collection was performed. PostgreSQL/Redis start times were unchanged. Before/after counts matched: 2 collection histories, 0 captured posts/comments, 2 accounts, 1 session reference, 1 collection configuration, 0 model calls/contact attempts. Read budgets remain 0 root-page advances, 8 reply-click attempts, 15 seconds per bounded read.
+
+Previous executable retained at `~/.local/bin/xiaohongshu-mcp.backup-72f9e42ecafa`. Reviewed pin/policy copies and rollback manifest are in `mcp-search-readiness-review-5/deployment-rollback` alongside the candidate. This is a deployment verification only; the historical search cause and real search behavior remain unverified. The coordinated browser test should refresh `/work`, use one round/one post and the existing consent/device checks, submit once and wait for the terminal result. No automatic test was started by deployment.
