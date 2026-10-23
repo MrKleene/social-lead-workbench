@@ -1,0 +1,20 @@
+--- a/xiaohongshu/types.go
++++ b/xiaohongshu/types.go
+@@ -112,2 +112,3 @@
+-	Note     FeedDetail  `json:"note"`
+-	Comments CommentList `json:"comments"`
++	AvatarSourceDiagnostic *AvatarSourceDiagnostic `json:"avatarSourceDiagnostic,omitempty"`
++	Note                   FeedDetail              `json:"note"`
++	Comments               CommentList             `json:"comments"`
+--- a/xiaohongshu/feed_detail.go
++++ b/xiaohongshu/feed_detail.go
+@@ -982,0 +983,3 @@
++	// 在固定结构丢弃未知字段前，仅提取无内容的类型计数。
++	avatarDiagnostic := inspectRawAvatarSource([]byte(result), feedID)
++
+@@ -998,2 +1001,3 @@
+-		Note:     noteDetail.Note,
+-		Comments: noteDetail.Comments,
++		AvatarSourceDiagnostic: avatarDiagnostic,
++		Note:                   noteDetail.Note,
++		Comments:               noteDetail.Comments,

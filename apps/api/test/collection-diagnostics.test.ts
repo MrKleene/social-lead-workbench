@@ -1,6 +1,6 @@
 import {describe,it,expect,vi} from 'vitest';
 import {z} from 'zod';
-import {safeCollectionDiagnostic} from '@crm/contracts';
+import {safeCollectionDiagnostic,safeAvatarSourceDiagnostic,safeImageDiagnostics} from '@crm/contracts';
 import {XhsMcpAdapter} from '../src/collection/adapters/xhs-mcp';
 import {collect} from '../src/collection/collector';
 import {diagnose,logCollectionDiagnostic} from '../src/collection/diagnostics';
@@ -62,4 +62,22 @@ describe('safe collection failure diagnostics',()=>{
  it('budget stays partial and does not retry',async()=>{const {adapter,call}=reader(envelope(detail([comment])));const r=await collect(adapter,config,async()=>false,{...limits,requests:2});expect(r).toMatchObject({status:'PARTIAL',reason:'BUDGET'});expect(call).toHaveBeenCalledTimes(2);});
  it('hostile error messages and schema paths never enter diagnostic logs',()=>{const err=new z.ZodError([{code:'custom',path:[secret],message:secret}]);const d=diagnose(err,'post',2,8);expect(d.field).toBe('unknown');const log=vi.spyOn(console,'warn').mockImplementation(()=>{});try{logCollectionDiagnostic(secret,d);logCollectionDiagnostic('cmvje155o000fi44p0cvv60tp',{...d,raw:secret});expect(log).toHaveBeenCalledTimes(1);expect(JSON.stringify(log.mock.calls)).not.toContain(secret);expect(JSON.parse(String(log.mock.calls[0][0]))).toMatchObject({task:'unknown',diagnostic:d});}finally{log.mockRestore();}});
  it('rejects forged diagnostic enum and extra keys',()=>{expect(safeCollectionDiagnostic({version:1,stage:secret,kind:'JSON_PARSE'})).toBeUndefined();expect(safeCollectionDiagnostic({version:1,stage:'post',kind:'JSON_PARSE',token:secret})).toBeUndefined();expect(safeCollectionDiagnostic({version:1,stage:'post',kind:'SCHEMA_VALIDATION',validationReason:secret})).toBeUndefined();expect(safeCollectionDiagnostic({version:1,stage:'post',kind:'SCHEMA_VALIDATION',textLength:Infinity})).toBeUndefined();const error=new ReadFailure('INVALID_DATA',undefined,{version:1,stage:'post',kind:secret} as never);expect(diagnose(error,'comments').kind).toBe('READ_FAILURE');});
+});
+
+
+describe('pre-serialization MCP avatar diagnostic receiver (mock only)',()=>{
+ const aggregate={version:1,status:'OK',truncated:false,roots:1,replies:0,fields:[{group:'FIXED_AVATAR',shape:'EMPTY_STRING',count:1}],conversion:[{state:'EMPTY_AFTER_DECODE',count:1}]};
+ it('retains safe counts in existing post metadata without changing content or identity',async()=>{
+  const original=detail([comment]),withDiagnostic={data:{...original.data,avatarSourceDiagnostic:aggregate}};
+  const old=await run(envelope(original)),next=await run(envelope(withDiagnostic));
+  expect(next.status).toBe(old.status);expect(next.posts[0].post.imageDiagnostics?.avatarSource).toEqual(aggregate);
+  const {imageDiagnostics:a,...textA}=old.posts[0].post,{imageDiagnostics:b,...textB}=next.posts[0].post;
+  expect(textB).toEqual(textA);expect(next.posts[0].comments).toEqual(old.posts[0].comments);
+  expect(safeImageDiagnostics(next.posts[0].post.imageDiagnostics)?.avatarSource).toEqual(aggregate);
+ });
+ it.each([undefined,null,{...aggregate,url:secret},{...aggregate,fields:[{group:secret,shape:'EMPTY_STRING',count:1}]},{...aggregate,fields:[{group:'FIXED_AVATAR',shape:'EMPTY_STRING',count:1,url:secret}]},{...aggregate,roots:1001},{...aggregate,conversion:[...aggregate.conversion,...aggregate.conversion]}])('drops absent/malformed diagnostics without rejecting valid comments (%#)',async diagnostic=>{
+  expect(safeAvatarSourceDiagnostic(diagnostic)).toBeUndefined();const original=detail([comment]);
+  const result=await run(envelope({data:{...original.data,avatarSourceDiagnostic:diagnostic}}));
+  expect(result.status).toBe('PARTIAL');expect(result.posts[0].post.imageDiagnostics?.avatarSource).toBeUndefined();expect(JSON.stringify(result)).not.toContain(secret);
+ });
 });
