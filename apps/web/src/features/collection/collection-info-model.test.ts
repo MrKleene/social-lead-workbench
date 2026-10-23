@@ -49,3 +49,11 @@ it('distinguishes an empty source string from missing original without altering 
 
 import {savedTitleLabel} from './saved-text';
 it('title labels are presentation only and support historical placeholders',()=>{for(const v of [undefined,null,'',' ','未提供标题'])expect(savedTitleLabel(v)).toBe('无标题');expect(savedTitleLabel(' 原文 👩🏽‍🎓 ')).toBe(' 原文 👩🏽‍🎓 ');expect(infoPosts([{...p,snapshot:{title:'未提供标题'}}],[])[0].versions[0].snapshot.title).toBe('未提供标题');});
+
+import {postSourceLink} from './post-source-link';
+describe('official original link from saved platform ID',()=>{
+ const id='0123456789abcdef01234567';
+ it('uses a single official https note destination without any access token',()=>expect(postSourceLink('XHS',id)).toBe('https://www.xiaohongshu.com/explore/'+id));
+ it('rejects unsupported platforms and missing or fabricated identifiers',()=>{for(const p of ['DOUYIN','xhs',null])expect(postSourceLink(p,id)).toBeUndefined();for(const v of [null,undefined,1,{},'', 'p0','fixture-xhs-'+id, 'g'.repeat(24),id+'a',id.slice(1),id+'\n'])expect(postSourceLink('XHS',v)).toBeUndefined();});
+ it('never accepts URLs, credentials, paths or query parameters as a post identifier',()=>{for(const v of ['javascript:alert(1)','https://evil.example', '//www.xiaohongshu.com/explore/'+id,id+'?xsec_token=secret',id+'#token','../'+id,encodeURIComponent('/'+id),id+'@evil.example'])expect(postSourceLink('XHS',v)).toBeUndefined();});
+});

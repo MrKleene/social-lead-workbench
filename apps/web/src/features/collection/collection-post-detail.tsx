@@ -1,11 +1,12 @@
 import {savedTitleLabel} from '@/features/collection/saved-text';
-import {useEffect,useRef,useState,type CSSProperties,type KeyboardEvent} from 'react';
-import {ArrowLeft,CornerDownRight} from 'lucide-react';
+import {Fragment,useEffect,useRef,useState,type CSSProperties,type KeyboardEvent} from 'react';
+import {ArrowLeft,ArrowUpRight,ChevronDown,ChevronUp} from 'lucide-react';
 import {safePostCoverUrl} from '@crm/contracts';
 import {Button} from '@/components/ui/button';
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import {formatDate,platformLabel,type Platform} from '@/lib/types';
 import {coverageLabel} from './archive-labels';
+import {postSourceLink} from './post-source-link';
 import {savedCommentCount,type InfoPost} from './collection-info-model';
 import type {ArchivedComment} from './archive-data';
 import {reasonLabels} from './types';
@@ -21,6 +22,8 @@ export function CollectionPostDetail({post,id,platform,comments,hasOtherPages,pa
  useEffect(()=>{commentViewport.current?.scrollTo({top:0});setExpandedReplies(new Set());},[page]);
  const original=post?.versions[0],cover=safePostCoverUrl(post?.coverUrl),rows=commentThread(comments),count=savedCommentCount(comments);
  const groups=replyGroups(rows),hidden=new Set([...groups].flatMap(([root,replies])=>expandedReplies.has(root)?[]:replies.slice(1).map(r=>r.comment.id)));
+ const sourceLink=post?postSourceLink(platform,id):undefined;
+ const groupEnds=new Map([...groups].map(([root,replies])=>[replies.at(-1)!.comment.id,{root,count:replies.length}]));
  const publication=displayPublication(original?.snapshot.publishedAt);
  const coverage=[...(post?.versions.map(v=>v.coverage)||[]),...comments.map(c=>c.post.coverage)];
  const scope=coverage.includes('PARTIAL')?'PARTIAL':!coverage.length||coverage.some(c=>c!=='COMPLETE')?'UNKNOWN':'COMPLETE';
@@ -33,7 +36,8 @@ export function CollectionPostDetail({post,id,platform,comments,hasOtherPages,pa
    <header className="info-story-heading"><div className="info-story-meta"><span>{platformLabel[platform]}</span><span>{coverageLabel(scope)}</span></div>
    {(original?.snapshot.authorNickname||original?.snapshot.authorAvatarUrl)&&<div className="info-post-author"><SavedAvatar url={original.snapshot.authorAvatarUrl}/><span>{displayNickname(original.snapshot.authorNickname)||'昵称未采集'}</span></div>}
    <h2 ref={heading} tabIndex={-1}>{savedTitleLabel(post?.title)}</h2>
-   {(publication||post?.lastSeenAt)&&<time className="info-saved-time" dateTime={publication||post?.lastSeenAt}>{publication?'发布于':'采集于'} {readingTime(publication||post!.lastSeenAt)} · 北京时间</time>}</header>
+   {(publication||post?.lastSeenAt)&&<time className="info-saved-time" dateTime={publication||post?.lastSeenAt}>{publication?'发布于':'采集于'} {readingTime(publication||post!.lastSeenAt)} · 北京时间</time>}
+   <div className="info-original-action">{sourceLink?<><a className="info-original-link" href={sourceLink} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">查看原文<ArrowUpRight size={14}/></a><small>可能需登录或访问受限</small></>:<small>原文链接不可用</small>}</div></header>
    <div className="info-story-scroll" data-media={!!cover&&failedCover!==cover}>
    {cover&&failedCover!==cover&&<img className="info-detail-cover" src={cover} alt="帖子封面" loading="lazy" decoding="async" crossOrigin="anonymous" referrerPolicy="no-referrer" onError={()=>setFailedCover(cover)}/>}
    {cover&&failedCover===cover&&<small className="info-saved-time">封面暂不可用</small>}
@@ -41,14 +45,14 @@ export function CollectionPostDetail({post,id,platform,comments,hasOtherPages,pa
    </div>
   </aside>
   <div className="info-conversation"><header className="info-conversation-heading"><div><h3>评论与回复 <span>{count}</span></h3><p>本页已保存{comments.length>count?` · ${comments.length} 个原文版本`:''}{hasOtherPages?' · 其他评论页可继续查看':''}</p></div></header>
-   <div ref={commentViewport} className="info-comments" onKeyDown={paneKeys} role="region" tabIndex={0} aria-label="已保存评论列表">{rows.map(({comment:c,depth,parent,parentAmbiguous},index)=><article hidden={hidden.has(c.id)} key={c.id} className="info-comment-row" data-comment={c.id} data-reply={!!c.snapshot.parentId} data-linked={!!parent} tabIndex={-1} ref={node=>{if(node)rowNodes.current.set(c.id,node);else rowNodes.current.delete(c.id);}} style={{'--reply-depth':depth} as CSSProperties}>
+   <div ref={commentViewport} className="info-comments" onKeyDown={paneKeys} role="region" tabIndex={0} aria-label="已保存评论列表">{rows.map(({comment:c,depth,parent,parentAmbiguous},index)=><Fragment key={c.id}><article hidden={hidden.has(c.id)} className="info-comment-row" data-comment={c.id} data-reply={!!c.snapshot.parentId} data-linked={!!parent} tabIndex={-1} ref={node=>{if(node)rowNodes.current.set(c.id,node);else rowNodes.current.delete(c.id);}} style={{'--reply-depth':depth} as CSSProperties}>
     <SavedAvatar url={c.snapshot.authorAvatarUrl}/>
-    <div className="info-comment-meta"><span className="info-comment-kind" title={displayNickname(c.snapshot.authorNickname)||'昵称未采集'}>{displayNickname(c.snapshot.authorNickname)||'昵称未采集'}{c.snapshot.parentId&&<CornerDownRight size={12}/>} {c.snapshot.isDemo&&<small>演示</small>}</span></div>
-    {c.snapshot.parentId&&<div className="info-parent-context">{parent?<button className="info-text-action" aria-label="查看父评论" title={displayNickname(parent.snapshot.authorNickname)||'父评论'} onClick={()=>focusParent(parent.id)}>回复 {displayNickname(parent.snapshot.authorNickname)||'父评论'}</button>:<><span>{parentAmbiguous?'本页父评论有多个版本':c.snapshot.parent!=null?'父评论不在本页 · 已保存上下文':'父评论原文未保存，可能位于其他页'}</span>{c.snapshot.parent!=null&&<SavedText key={c.id+'parent'} text={savedSourceText(c.snapshot.parent)} limit={85} label="父评论"/>}</>}</div>}
+    <div className="info-comment-meta"><span className="info-comment-kind" title={displayNickname(c.snapshot.authorNickname)||'昵称未采集'}>{displayNickname(c.snapshot.authorNickname)||'昵称未采集'}{c.snapshot.isDemo&&<small>演示</small>}</span>
+    {parent&&<span className="info-parent-context"><button className="info-text-action" aria-label="查看父评论" title={displayNickname(parent.snapshot.authorNickname)||'父评论'} onClick={()=>focusParent(parent.id)}>回复 {displayNickname(parent.snapshot.authorNickname)||'父评论'}</button></span>}</div>
+    {c.snapshot.parentId&&!parent&&<details className="info-parent-missing"><summary>{parentAmbiguous?'父评论有多个版本':c.snapshot.parent!=null?'父评论不在本页':'父评论未加载'}</summary><p>{parentAmbiguous?'本页父评论有多个版本':c.snapshot.parent!=null?'父评论不在本页 · 已保存上下文':'父评论原文未保存，可能位于其他页'}</p>{c.snapshot.parent!=null&&<SavedText key={c.id+'parent'} text={savedSourceText(c.snapshot.parent)} limit={85} label="父评论"/>}</details>}
     <SavedText key={c.id} text={savedSourceText(c.snapshot.comment)} limit={360} label="评论"/>
-    <div className="info-comment-footer"><time title="北京时间（UTC+8）" dateTime={displayPublication(c.snapshot.publishedAt)||c.lastSeenAt}>{displayPublication(c.snapshot.publishedAt)?'发布于':'采集于'} {readingTime(displayPublication(c.snapshot.publishedAt)||c.lastSeenAt)}</time>{c.post.coverage!==scope&&<small>{coverageLabel(c.post.coverage)}</small>}<button className="info-text-action" aria-label={`评论 ${index+1} 的来源与证据`} onClick={e=>openEvidence(c,e.currentTarget)}>来源与证据</button></div>
-    {(groups.get(c.id)?.length||0)>1&&<button className="info-replies-toggle info-text-action" aria-expanded={expandedReplies.has(c.id)} onClick={()=>setExpandedReplies(prev=>{const next=new Set(prev);if(next.has(c.id))next.delete(c.id);else next.add(c.id);return next;})}>{expandedReplies.has(c.id)?'收起回复':`展开本页其余 ${groups.get(c.id)!.length-1} 条回复记录`}</button>}
-   </article>)}</div>
+    <div className="info-comment-footer"><time title="北京时间（UTC+8）" dateTime={displayPublication(c.snapshot.publishedAt)||c.lastSeenAt}>{displayPublication(c.snapshot.publishedAt)?'发布于':'采集于'} {readingTime(displayPublication(c.snapshot.publishedAt)||c.lastSeenAt)}</time>{c.post.coverage!==scope&&<small>{coverageLabel(c.post.coverage)}</small>}<button className="info-text-action" aria-label={`评论 ${index+1} 的来源与证据`} onClick={e=>openEvidence(c,e.currentTarget)}>证据</button></div>
+   </article>{(groupEnds.get(c.id)?.count||0)>1&&<button className="info-replies-toggle info-text-action" aria-expanded={expandedReplies.has(groupEnds.get(c.id)!.root)} onClick={()=>setExpandedReplies(prev=>{const next=new Set(prev),root=groupEnds.get(c.id)!.root;if(next.has(root))next.delete(root);else next.add(root);return next;})}>{expandedReplies.has(groupEnds.get(c.id)!.root)?<ChevronUp size={13}/>:<ChevronDown size={13}/>}<span>{expandedReplies.has(groupEnds.get(c.id)!.root)?'收起回复':`展开本页其余 ${groupEnds.get(c.id)!.count-1} 条回复记录`}</span></button>}</Fragment>)}</div>
    {!comments.length&&<p className="info-comment-empty" role="status">{hasOtherPages?'本页没有该帖评论，可翻阅其他评论页。':'当前返回内容没有该帖评论原文。'} 不代表平台没有评论。</p>}
   </div></div>
   <Sheet open={evidence!==null} onOpenChange={open=>{if(!open)setEvidence(null);}}><SheetContent className="task-settings-sheet info-evidence-sheet" onCloseAutoFocus={e=>{e.preventDefault();returnFocus.current?.focus({preventScroll:true});}}><SheetHeader><SheetTitle>来源与证据</SheetTitle><SheetDescription>已保存的原始记录，不重新请求平台。</SheetDescription></SheetHeader><div className="task-settings-body">
