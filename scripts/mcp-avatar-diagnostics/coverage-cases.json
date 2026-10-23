@@ -1,0 +1,181 @@
+{
+  "synthetic": true,
+  "diagnostic": {
+    "version": 1,
+    "totalScope": "UNCONFIRMED",
+    "returnedSample": 0,
+    "samples": [
+      {
+        "status": "OK",
+        "ready": {
+          "document": "complete",
+          "container": true
+        },
+        "total": {
+          "state": "EXACT",
+          "value": 15
+        },
+        "hasMore": {
+          "state": "EXACT",
+          "value": false
+        },
+        "cursor": "EMPTY",
+        "list": "EXACT",
+        "loaded": {
+          "roots": 1,
+          "replies": 1,
+          "uniqueKnown": 2,
+          "duplicateIds": 0,
+          "missingIds": 0,
+          "invalidNodes": 0
+        },
+        "groups": [
+          {
+            "ordinal": 1,
+            "parent": null,
+            "depth": 0,
+            "declared": {
+              "state": "EXACT",
+              "value": 3
+            },
+            "loaded": {
+              "state": "EXACT",
+              "value": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "parent": 1,
+            "depth": 1,
+            "declared": {
+              "state": "MISSING",
+              "value": null
+            },
+            "loaded": {
+              "state": "EXACT",
+              "value": 0
+            }
+          }
+        ],
+        "findings": [
+          "DECLARED_GT_LOADED"
+        ]
+      },
+      {
+        "status": "OK",
+        "ready": {
+          "document": "complete",
+          "container": true
+        },
+        "total": {
+          "state": "EXACT",
+          "value": 15
+        },
+        "hasMore": {
+          "state": "EXACT",
+          "value": false
+        },
+        "cursor": "EMPTY",
+        "list": "EXACT",
+        "loaded": {
+          "roots": 1,
+          "replies": 1,
+          "uniqueKnown": 2,
+          "duplicateIds": 0,
+          "missingIds": 0,
+          "invalidNodes": 0
+        },
+        "groups": [
+          {
+            "ordinal": 1,
+            "parent": null,
+            "depth": 0,
+            "declared": {
+              "state": "EXACT",
+              "value": 3
+            },
+            "loaded": {
+              "state": "EXACT",
+              "value": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "parent": 1,
+            "depth": 1,
+            "declared": {
+              "state": "MISSING",
+              "value": null
+            },
+            "loaded": {
+              "state": "EXACT",
+              "value": 0
+            }
+          }
+        ],
+        "findings": [
+          "DECLARED_GT_LOADED"
+        ]
+      },
+      {
+        "status": "OK",
+        "ready": {
+          "document": "complete",
+          "container": true
+        },
+        "total": {
+          "state": "EXACT",
+          "value": 15
+        },
+        "hasMore": {
+          "state": "EXACT",
+          "value": false
+        },
+        "cursor": "EMPTY",
+        "list": "EXACT",
+        "loaded": {
+          "roots": 1,
+          "replies": 1,
+          "uniqueKnown": 2,
+          "duplicateIds": 0,
+          "missingIds": 0,
+          "invalidNodes": 0
+        },
+        "groups": [
+          {
+            "ordinal": 1,
+            "parent": null,
+            "depth": 0,
+            "declared": {
+              "state": "EXACT",
+              "value": 3
+            },
+            "loaded": {
+              "state": "EXACT",
+              "value": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "parent": 1,
+            "depth": 1,
+            "declared": {
+              "state": "MISSING",
+              "value": null
+            },
+            "loaded": {
+              "state": "EXACT",
+              "value": 0
+            }
+          }
+        ],
+        "findings": [
+          "DECLARED_GT_LOADED"
+        ]
+      }
+    ],
+    "observation": "COUNTS_UNCHANGED",
+    "elapsedMs": 500,
+    "rangeExpanded": false
+  }
+}

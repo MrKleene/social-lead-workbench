@@ -20,7 +20,7 @@ for(const [name,hash] of Object.entries(manifest.files)){
 }
 await mkdir(target,{recursive:false,mode:0o700});
 for(const name of Object.keys(manifest.files)){await mkdir(dirname(join(target,name)),{recursive:true});await copyFile(join(source,name),join(target,name));}
-for(const name of ['avatar_diagnostic.go','avatar_diagnostic_test.go','comment_avatar.go','comment_avatar_test.go','avatar_query.go','avatar_query_test.go','avatar-query-cases.json'])await copyFile(join(bundle,name),join(target,'xiaohongshu',name));
+for(const name of ['avatar_diagnostic.go','avatar_diagnostic_test.go','comment_avatar.go','comment_avatar_test.go','avatar_query.go','avatar_query_test.go','avatar-query-cases.json','coverage_diagnostic.go','coverage_diagnostic_test.go','coverage_capture.go','coverage-cases.json'])await copyFile(join(bundle,name),join(target,'xiaohongshu',name));
 const patched=spawnSync('/usr/bin/patch',['--batch','--forward','-p1','-i',join(bundle,'integration.patch')],{cwd:target,encoding:'utf8',env:{PATH:'/usr/bin:/bin'},timeout:10000});
 if(patched.status!==0)throw Error('Patch failed; candidate not built or installed');
 await writeFile(join(target,'PREPARATION.json'),JSON.stringify({source,version:manifest.candidateVersion,installedBinaryUnchanged:true},null,2)+'\n');

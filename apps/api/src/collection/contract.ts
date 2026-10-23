@@ -1,4 +1,4 @@
-import { commentRulesSchema, semanticRulesSchema, safePostCoverUrl, savedNickname, safeAvatarUrl, savedPublishedAt, safeImageDiagnostics, imageDiagnosticsSchema } from '@crm/contracts';
+import { coverageDiagnosticSchema, safeCoverageDiagnostic, commentRulesSchema, semanticRulesSchema, safePostCoverUrl, savedNickname, safeAvatarUrl, savedPublishedAt, safeImageDiagnostics, imageDiagnosticsSchema } from '@crm/contracts';
 import { z } from "zod";
 import {postReferenceSchema} from "./post-reference";
 const normalize = (value: string) => value.normalize("NFKC").toLowerCase();
@@ -23,7 +23,7 @@ export class ReadFailure extends Error {
 }
 const imageDiagnostics=z.preprocess(safeImageDiagnostics,imageDiagnosticsSchema.optional());
 const displayFields={imageDiagnostics,authorNickname:z.preprocess(savedNickname,z.string().optional()),authorAvatarUrl:z.preprocess(safeAvatarUrl,z.string().optional()),publishedAt:z.preprocess(savedPublishedAt,z.string().optional())};
-export const postSchema = z.object({ sourceReference:postReferenceSchema.optional(), id: z.string().min(1).max(200), title: z.string().max(500), body: z.string().max(20000).optional(), coverUrl:z.preprocess(safePostCoverUrl,z.string().optional()),...displayFields });
+export const postSchema = z.object({ coverageDiagnostic:z.preprocess(safeCoverageDiagnostic,coverageDiagnosticSchema.optional()), sourceReference:postReferenceSchema.optional(), id: z.string().min(1).max(200), title: z.string().max(500), body: z.string().max(20000).optional(), coverUrl:z.preprocess(safePostCoverUrl,z.string().optional()),...displayFields });
 export const commentSchema = z.object({
     id: z.string().min(1).max(200), userId: z.string().min(1).max(200), nickname: z.preprocess(v=>savedNickname(v)??'',z.string().max(200)),
     imageDiagnostics,authorAvatarUrl:displayFields.authorAvatarUrl,publishedAt:displayFields.publishedAt,

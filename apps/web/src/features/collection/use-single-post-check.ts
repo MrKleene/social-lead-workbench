@@ -3,9 +3,9 @@ import {useQuery} from '@tanstack/react-query';
 import {api,send} from '@/lib/api';
 import {singlePostError} from './single-post-error';
 import {inspectSinglePostLink,singlePostRequestUrl} from './single-post-link';
-import type {ImageDiagnostics} from '@crm/contracts';
+import type {CoverageDiagnostic,ImageDiagnostics} from '@crm/contracts';
 import type {McpReadiness} from './types';
-export type SinglePostResult={status:'CHECKED'|'FAILED'|'LOGIN_NOT_READY';reason?:string;coverage?:'WINDOW_ONLY';roots?:{count:number;displayableAvatars:number};replies?:{count:number;displayableAvatars:number};imageDiagnostics?:ImageDiagnostics|null};
+export type SinglePostResult={status:'CHECKED'|'FAILED'|'LOGIN_NOT_READY';reason?:string;coverage?:'WINDOW_ONLY';roots?:{count:number;displayableAvatars:number};replies?:{count:number;displayableAvatars:number};coverageDiagnostic?:CoverageDiagnostic|null;imageDiagnostics?:ImageDiagnostics|null};
 export function useSinglePostCheck(){
  const readiness=useQuery({queryKey:['mcp-readiness'],queryFn:()=>api<McpReadiness>('/collection/mcp/readiness'),retry:false});
  const [url,setUrl]=useState(''),[accountId,setAccountId]=useState(''),[consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[submitted,setSubmitted]=useState(false),[result,setResult]=useState<SinglePostResult|null>(null),[error,setError]=useState('');

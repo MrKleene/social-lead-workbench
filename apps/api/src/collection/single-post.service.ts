@@ -1,6 +1,6 @@
 import {BadRequestException,ConflictException,Inject,Injectable} from '@nestjs/common';
 import {z} from 'zod';
-import {safeImageDiagnostics} from '@crm/contracts';
+import {safeCoverageDiagnostic,safeImageDiagnostics} from '@crm/contracts';
 import {Db} from '../common/db';
 import {Actor,requireAdmin} from '../auth/security';
 import {AccountLoginService} from '../accounts/account-login.service';
@@ -14,7 +14,7 @@ export function singlePostSummary(post:Post,comments:Comment[]){
  const groups=(reply:boolean)=>{const selected=comments.filter(c=>!!c.parentId===reply),outcomes=new Map<string,number>();
   for(const c of selected)for(const o of safeImageDiagnostics(c.imageDiagnostics)?.authorAvatar?.outcomes||[])outcomes.set(o.reason,(outcomes.get(o.reason)||0)+o.count);
   return {count:selected.length,displayableAvatars:selected.filter(c=>!!c.authorAvatarUrl).length,outcomes:[...outcomes].map(([reason,count])=>({reason,count}))};};
- return {status:'CHECKED' as const,coverage:'WINDOW_ONLY' as const,roots:groups(false),replies:groups(true),imageDiagnostics:safeImageDiagnostics(post.imageDiagnostics)??null};
+ return {status:'CHECKED' as const,coverage:'WINDOW_ONLY' as const,coverageDiagnostic:safeCoverageDiagnostic(post.coverageDiagnostic)??null,roots:groups(false),replies:groups(true),imageDiagnostics:safeImageDiagnostics(post.imageDiagnostics)??null};
 }
 @Injectable()
 export class SinglePostService {

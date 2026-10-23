@@ -1,5 +1,7 @@
 import 'reflect-metadata';
 import {describe,it,expect,vi,afterEach} from 'vitest';
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {parsePostReference,savedPostReference,postReferenceUrl,publicPostSnapshot} from '../src/collection/post-reference';
 import {XhsMcpAdapter} from '../src/collection/adapters/xhs-mcp';
@@ -7,6 +9,7 @@ import {SinglePostService,singlePostSummary} from '../src/collection/single-post
 import {ReadFailure} from '../src/collection/contract';
 import {semanticSnapshot,snapshotHash} from '../src/collection/semantic-evaluator';
 import {avatarDiagnosticUrlReasons} from './fixtures/avatar-diagnostic-v2';
+const coverageFixture=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/coverage-cases.json'),'utf8')).diagnostic;
 const id='0123456789abcdef01234567',ref={postId:id,token:'SYNTHETIC_REFERENCE_ONLY=',source:'pc_feed' as const},url=postReferenceUrl(ref);
 const envelope=(v:unknown)=>({content:[{type:'text',text:JSON.stringify(v)}]});
 const comment={id:'synthetic-root',noteId:id,content:'合成评论',userInfo:{userId:'synthetic-user',avatar:'https://sns-avatar-qc.xhscdn.com/avatar/fake.jpg'},subComments:[{id:'synthetic-child',noteId:id,content:'合成回复',userInfo:{userId:'synthetic-reply'},subComments:null}]};
@@ -35,13 +38,13 @@ function setup(){
  vi.stubEnv('CRM_DEVICE_MANAGEMENT','1');vi.stubEnv('CRM_PERSISTENT','1');vi.stubEnv('CRM_ACCOUNT_READ_ENABLED','1');vi.stubEnv('XHS_ACCOUNT_LOGIN_MODE','offline');vi.stubEnv('CRM_RUNTIME_ID','synthetic-runtime');
  const audits:any[]=[];let active=false,session='UNVERIFIED';
  const db:any={$queryRaw:vi.fn().mockResolvedValue([]),user:{findUnique:async()=>({active:true,role:'ADMIN'})},collectionRun:{findFirst:async()=>active?{id:'running'}:null},accountSessionReference:{findUnique:async()=>({state:session,checkedRuntimeId:'synthetic-runtime'})},auditLog:{findFirst:async({where}:any)=>audits.find(a=>where.entityId?a.entityId===where.entityId:a.action===where.action)||null,create:async({data}:any)=>{const a={id:randomUUID(),...data};audits.push(a);return a;},update:async({where,data}:any)=>Object.assign(audits.find(a=>a.id===where.id),data)}};db.$transaction=async(fn:any)=>fn(db);
- const post={id,title:'合成',imageDiagnostics:{avatarSource:avatarDiagnosticUrlReasons}},close=vi.fn().mockResolvedValue(undefined),postReference=vi.fn().mockResolvedValue(post);
+ const post={id,title:'合成',coverageDiagnostic:coverageFixture,imageDiagnostics:{avatarSource:avatarDiagnosticUrlReasons}},close=vi.fn().mockResolvedValue(undefined),postReference=vi.fn().mockResolvedValue(post);
  const login:any={verifySaved:vi.fn().mockResolvedValue({state:'VERIFIED'})},reads:any={authorize:vi.fn().mockResolvedValue({}),open:vi.fn().mockResolvedValue({check:vi.fn(),close,reader:{postReference,receivedComments:()=>[]}}),failure:vi.fn()};
  const service=new SinglePostService(db,reads,login),actor:any={id:'admin',role:'ADMIN'},input={accountId:'account',url,requestKey:randomUUID(),consent:'single-post-read-v1' as const};
  return {db,audits,login,reads,service,actor,input,postReference,close,setActive:(v:boolean)=>active=v,setSession:(v:string)=>session=v};
 }
 describe('single post guarded execution',()=>{
- it('verifies UNVERIFIED through existing login service and never creates a task or capture',async()=>{const s=setup();expect(await s.service.check(s.actor,s.input)).toMatchObject({status:'CHECKED'});expect(s.login.verifySaved).toHaveBeenCalledWith(s.actor,'account','read-local-session-v1');expect(s.reads.authorize).toHaveBeenCalled();expect(s.postReference).toHaveBeenCalledTimes(1);expect(s.close).toHaveBeenCalledTimes(1);expect(JSON.stringify(s.audits)).not.toContain(ref.token);expect(s.audits[0].action).toBe('SINGLE_POST_CHECK_FINISHED');await expect(s.service.check(s.actor,s.input)).rejects.toThrow('不会重复请求');expect(s.postReference).toHaveBeenCalledTimes(1);});
+ it('verifies UNVERIFIED through existing login service and never creates a task or capture',async()=>{const s=setup();expect(await s.service.check(s.actor,s.input)).toMatchObject({status:'CHECKED'});expect(s.login.verifySaved).toHaveBeenCalledWith(s.actor,'account','read-local-session-v1');expect(s.reads.authorize).toHaveBeenCalled();expect(s.postReference).toHaveBeenCalledTimes(1);expect(s.close).toHaveBeenCalledTimes(1);expect(JSON.stringify(s.audits)).not.toContain(ref.token);expect(s.audits[0].action).toBe('SINGLE_POST_CHECK_FINISHED');expect(s.audits[0].metadata.summary.coverageDiagnostic).toEqual(coverageFixture);await expect(s.service.check(s.actor,s.input)).rejects.toThrow('不会重复请求');expect(s.postReference).toHaveBeenCalledTimes(1);});
  it('rejects non-admin, missing consent, unsafe URL before verification',async()=>{const s=setup();await expect(s.service.check({...s.actor,role:'SALES'},s.input)).rejects.toThrow();await expect(s.service.check(s.actor,{...s.input,consent:undefined} as any)).rejects.toThrow();await expect(s.service.check(s.actor,{...s.input,url:'https://evil.invalid/'})).rejects.toThrow();expect(s.login.verifySaved).not.toHaveBeenCalled();expect(s.audits).toHaveLength(0);});
  it('does not interrupt a queued/running task',async()=>{const s=setup();s.setActive(true);await expect(s.service.check(s.actor,s.input)).rejects.toThrow('已有采集');expect(s.reads.open).not.toHaveBeenCalled();expect(s.login.verifySaved).not.toHaveBeenCalled();});
  it('verification failure stops without a detail request',async()=>{const s=setup();s.login.verifySaved.mockResolvedValue({state:'EXPIRED'});expect(await s.service.check(s.actor,s.input)).toEqual({status:'LOGIN_NOT_READY'});expect(s.reads.open).not.toHaveBeenCalled();});

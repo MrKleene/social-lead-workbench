@@ -31,7 +31,7 @@ export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResul
   for(const entry of result.posts){
    const valid=(id:string)=>spec.mode==='MOCK'?id.startsWith('demo-collect-'):spec.mode==='XHS_FIXTURE'?id.startsWith('fixture-xhs-'):!/^(demo-|fixture-)/.test(id);
    if(!valid(entry.post.id)||entry.comments.some(c=>![c.id,c.userId,...(c.parentId?[c.parentId]:[])].every(valid)))throw new ReadFailure('INVALID_DATA');
-   const {sourceReference,coverUrl,authorNickname,authorAvatarUrl,publishedAt,imageDiagnostics,...textPost}=entry.post;
+   const {coverageDiagnostic:_coverageDiagnostic,sourceReference,coverUrl,authorNickname,authorAvatarUrl,publishedAt,imageDiagnostics,...textPost}=entry.post;
    const display=captureDisplay({authorNickname,authorAvatarUrl,publishedAt});
    const previousPost=await tx.capturedPost.findUnique({where:{configId_platformPostId_contentHash:{configId:config.id,platformPostId:entry.post.id,contentHash:semanticHash(textPost)}},select:{snapshot:true}});
    const previousSnapshot=(previousPost?.snapshot||{}) as CaptureDisplay & {coverUrl?:string;sourceReference?:unknown};
