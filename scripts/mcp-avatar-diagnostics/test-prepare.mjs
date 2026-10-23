@@ -13,6 +13,8 @@ assert.match(await readFile(join(target,'xiaohongshu/types.go'),'utf8'),/avatarS
 assert.match(await readFile(join(target,'xiaohongshu/search.go'),'utf8'),/observeSearch\(ctx/);
 assert.match(await readFile(join(target,'service.go'),'utf8'),/SearchFeedsResponse/);
 assert.match(await readFile(join(target,'xiaohongshu/search_capture.go'),'utf8'),/parseSearchNotes/);
+assert.match(await readFile(join(target,'xiaohongshu/search_capture.go'),'utf8'),/page\.Eval\(searchObservationTransportJS/);
+assert.match(await readFile(join(target,'xiaohongshu/search_observation.go'),'utf8'),/JSON\.stringify/);
 assert.match(await readFile(join(target,'mcp_handlers.go'),'utf8'),/xiaohongshu.SearchFailureJSON\(err\)/);
 assert.notEqual(run(source,target).status,0,'must not overwrite candidate');
 assert.notEqual(run(source,join(source,'unauthorized-child')).status,0,'must not edit original tree');

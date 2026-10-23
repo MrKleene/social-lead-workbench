@@ -27,7 +27,7 @@ func observeSearchAtOrigin(ctx context.Context, page *rod.Page, keyword string, 
 			}
 			return nil, last, err
 		}
-		v, err := page.Eval(searchObservationJS, keyword, origin)
+		v, err := page.Eval(searchObservationTransportJS, keyword, origin)
 		if err != nil {
 			if last != nil {
 				last.Stop = "EVALUATION_FAILED"
@@ -38,7 +38,14 @@ func observeSearchAtOrigin(ctx context.Context, page *rod.Page, keyword string, 
 			Diagnostic SearchObservation `json:"diagnostic"`
 			Feeds      json.RawMessage   `json:"feeds"`
 		}
-		if err = v.Value.Unmarshal(&sample); err != nil {
+		// Serialize inside the page: CDP returnByValue can turn Proxy arrays into
+		// objects even when Array.isArray is true. Never coerce objects to arrays.
+		var encoded string
+		err = v.Value.Unmarshal(&encoded)
+		if err == nil {
+			err = json.Unmarshal([]byte(encoded), &sample)
+		}
+		if err != nil {
 			if last != nil {
 				last.Stop = "DESERIALIZATION_FAILED"
 			}

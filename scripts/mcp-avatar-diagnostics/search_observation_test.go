@@ -39,6 +39,11 @@ func TestSearchObservationBrowser(t *testing.T) {
 		{"missing feeds", `window.__INITIAL_STATE__={search:{}}`, "FEEDS_MISSING", "DEADLINE", 0},
 		{"raw value", `window.__INITIAL_STATE__={search:{feeds:{_value:[` + note + `]}}}`, "NOTES_AVAILABLE", "NOTES_AVAILABLE", 1},
 		{"conflicting wrappers", `window.__INITIAL_STATE__={search:{feeds:{value:[],_value:[` + note + `]}}}`, "AMBIGUOUS_FIELDS", "DEADLINE", 0},
+		{"proxied array", `const raw=[` + note + `];const a=new Proxy(raw,{});window.__INITIAL_STATE__={search:{feeds:{value:a,_value:raw}}}`, "NOTES_AVAILABLE", "NOTES_AVAILABLE", 1},
+		{"proxied nested note and cover", `const card=new Proxy({displayTitle:'SYNTHETIC_PRIVATE_TEXT',cover:new Proxy({urlDefault:'https://synthetic.invalid/cover'}, {})},{});const n=new Proxy({modelType:'note',id:'fixture-note',xsecToken:'SYNTHETIC_SECRET',noteCard:card},{});const raw=[{modelType:'hot_query',noteCard:false},n];window.__INITIAL_STATE__={search:{feeds:{value:new Proxy(raw,{}),_value:raw}}}`, "NOTES_AVAILABLE", "NOTES_AVAILABLE", 1},
+		{"delayed proxy array", `window.__INITIAL_STATE__={search:{feeds:{value:[]}}};setTimeout(()=>{const a=[` + note + `];window.__INITIAL_STATE__.search.feeds={value:new Proxy(a,{}),_value:a}},150)`, "NOTES_AVAILABLE", "NOTES_AVAILABLE", 1},
+		{"proxy invalid title remains rejected", `const a=[new Proxy({modelType:'note',id:'fixture-note',xsecToken:'SYNTHETIC_SECRET',noteCard:new Proxy({displayTitle:42},{})},{})];window.__INITIAL_STATE__={search:{feeds:{value:new Proxy(a,{}),_value:a}}}`, "NOTES_AVAILABLE", "DESERIALIZATION_FAILED", 0},
+		{"array serialization cannot bypass root validation", `const a=[` + note + `];a.toJSON=()=>({fake:true});window.__INITIAL_STATE__={search:{feeds:{value:a,_value:a}}}`, "NOTES_AVAILABLE", "DESERIALIZATION_FAILED", 0},
 		{"matching wrappers", `const a=[` + note + `];window.__INITIAL_STATE__={search:{feeds:{value:a,_value:a}}}`, "NOTES_AVAILABLE", "NOTES_AVAILABLE", 1},
 		{"mixed cards filtered before parsing", `window.__INITIAL_STATE__={search:{feeds:{value:[{modelType:'hot_query',noteCard:false,index:'bad'},` + note + `,{modelType:'live_v2',index:'bad'}]}}}`, "NOTES_AVAILABLE", "NOTES_AVAILABLE", 1},
 		{"unneeded note counters not decoded", `window.__INITIAL_STATE__={search:{feeds:{value:[{modelType:'note',id:'synthetic',xsecToken:'SYNTHETIC_SECRET',index:'bad',noteCard:{displayTitle:'合成',interactInfo:{likedCount:5}}}]}}}`, "NOTES_AVAILABLE", "NOTES_AVAILABLE", 1},
@@ -69,6 +74,17 @@ func TestSearchObservationBrowser(t *testing.T) {
 			}
 			safe, _ := json.Marshal(d)
 			t.Log("SEARCH_OBSERVATION_FIXTURE " + string(safe))
+			if tc.name == "proxied nested note and cover" {
+				if notes[0].NoteCard == nil || notes[0].NoteCard.DisplayTitle == nil || *notes[0].NoteCard.DisplayTitle != "SYNTHETIC_PRIVATE_TEXT" || !strings.Contains(string(notes[0].NoteCard.Cover), "synthetic.invalid") {
+					t.Fatal("nested proxy data lost")
+				}
+			}
+			if tc.name == "array serialization cannot bypass root validation" && (d.ParseIssue == nil || d.ParseIssue.Field != "items" || d.ParseIssue.Actual != "OBJECT") {
+				t.Fatal("non-array root incorrectly accepted")
+			}
+			if tc.name == "proxy invalid title remains rejected" && (d.ParseIssue == nil || d.ParseIssue.Field != "noteCard.displayTitle" || d.ParseIssue.Actual != "NUMBER") {
+				t.Fatal("strict nested validation lost")
+			}
 			raw := SearchFailureJSON(searchObservedFailure(searchFailure("UNKNOWN", nil), d))
 			if strings.Contains(raw, "SYNTHETIC_") {
 				t.Fatal("private string escaped diagnostic")
@@ -92,4 +108,43 @@ func TestSearchObservationBrowser(t *testing.T) {
 			t.Fatal("cancellation ignored")
 		}
 	})
+}
+
+// Pin the previously untested production boundary, not merely parser fixtures.
+// Only structural categories are printed; synthetic payloads remain in memory.
+func TestSearchProxyCDPBoundary(t *testing.T) {
+	bin := os.Getenv("XHS_TEST_BROWSER")
+	if bin == "" {
+		t.Skip("loopback only")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("<html><body>synthetic</body></html>")) }))
+	defer server.Close()
+	l := launcher.New().Bin(bin).Headless(true).Leakless(false)
+	b := rod.New().ControlURL(l.MustLaunch()).MustConnect()
+	defer l.Cleanup()
+	defer b.MustClose()
+	p := b.MustPage(server.URL + "/search_result?keyword=fixture")
+	defer p.MustClose()
+	p.MustWaitLoad()
+	p.MustEval(`()=>{const raw=[{modelType:'note',id:'synthetic',xsecToken:'SYNTHETIC_SECRET'}];window.__INITIAL_STATE__={search:{feeds:{value:new Proxy(raw,{}),_value:raw}}}}`)
+	v, err := p.Eval(searchObservationJS, "fixture", server.URL)
+	if err != nil {
+		t.Fatal("legacy evaluation failed")
+	}
+	var legacy struct {
+		Diagnostic SearchObservation `json:"diagnostic"`
+		Feeds      json.RawMessage   `json:"feeds"`
+	}
+	if v.Value.Unmarshal(&legacy) != nil {
+		t.Fatal("legacy envelope failed")
+	}
+	_, issue := parseSearchNotes(legacy.Feeds)
+	if legacy.Diagnostic.ValueType != "ARRAY" || issue == nil || issue.Field != "items" || issue.Actual != "OBJECT" {
+		t.Fatal("legacy proxy failure not reproduced")
+	}
+	notes, d, err := observeSearchAtOrigin(context.Background(), p, "fixture", time.Second, server.URL)
+	if err != nil || len(notes) != 1 || d.Stop != "NOTES_AVAILABLE" {
+		t.Fatal("explicit JSON transport failed")
+	}
+	t.Log("CDP_PROXY_BOUNDARY: page ARRAY, legacy wire OBJECT; explicit JSON wire ARRAY, strict parse accepted")
 }

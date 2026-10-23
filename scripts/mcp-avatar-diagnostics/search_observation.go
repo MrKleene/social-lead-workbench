@@ -63,3 +63,8 @@ const searchObservationJS = `(keyword, expectedOrigin) => {
  // The nonempty, strictly typed note data is evidence of available records, not of exhaustive search.
  return {diagnostic:d,feeds:chosen};
 }`
+
+// A JSON string is an unambiguous CDP transport for reactive/Proxy arrays and
+// nested objects. It stays in memory, is never logged, and is strictly decoded
+// by the existing note parser. This does not widen accepted source shapes.
+const searchObservationTransportJS = `(keyword, origin) => JSON.stringify((` + searchObservationJS + `)(keyword, origin))`
