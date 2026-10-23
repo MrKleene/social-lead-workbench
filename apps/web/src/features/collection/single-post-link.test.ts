@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {inspectSinglePostLink} from './single-post-link';
+import {inspectSinglePostLink,singlePostRequestUrl} from './single-post-link';
 import {parsePostReference} from '../../../../api/src/collection/post-reference';
 const base='https://www.xiaohongshu.com/explore/0123456789abcdef01234567';
 const valid=base+'?xsec_token=SYNTHETIC_TEST_ONLY%2B%2F%3D&xsec_source=pc_feed';
@@ -29,6 +29,12 @@ const cases: [string,string,string][]=[
  ['encoded newline',valid.replace('SYNTHETIC','%0A'),'token'],
  ['malformed encoded token',valid.replace('SYNTHETIC','%ZZ'),'token'],
  ['oversize token',base+'?xsec_token='+'a'.repeat(4097)+'&xsec_source=pc_feed','token'],
+ ['fixed page source',valid+'&source=web_explore_feed','valid'],
+ ['wrong page source',valid+'&source=other','parameters'],
+ ['duplicate page source',valid+'&source=web_explore_feed&source=web_explore_feed','parameters'],
+ ['page source plus extra',valid+'&source=web_explore_feed&redirect=OTHER','parameters'],
+ ['encoded page-source key',valid+'&%73ource=web_explore_feed','parameters'],
+ ['encoded page-source value',valid+'&source=%77eb_explore_feed','parameters'],
  ['valid',valid,'valid'],['outer whitespace',' \n'+valid+'\n ','valid'],
  ['search source',valid.replace('pc_feed','pc_search'),'valid'],
  ['reordered',base+'?xsec_source=pc_feed&xsec_token=SYNTHETIC_TEST_ONLY','valid'],
@@ -37,8 +43,17 @@ describe('single-post local link validation',()=>{
  it.each(cases)('%s',(_name,input,code)=>{
   const result=inspectSinglePostLink(input);
   expect(result.code).toBe(code);
-  expect(result.valid).toBe(Boolean(parsePostReference(input.trim())));
+  expect(result.valid).toBe(Boolean(parsePostReference(singlePostRequestUrl(input))));
+  if(result.valid && !input.includes('&source=web_explore_feed')) expect(parsePostReference(input.trim())).toBeDefined();
   expect(JSON.stringify(result)).not.toMatch(/SYNTHETIC|private_key|https:|0123456789/);
+ });
+ it('removes only the fixed marker and preserves access values and note identity exactly',()=>{
+  for(const input of [valid+'&source=web_explore_feed',base+'?source=web_explore_feed&'+valid.split('?')[1],valid.replace('&xsec_source','&source=web_explore_feed&xsec_source')]){
+   expect(singlePostRequestUrl(input)).toBe(valid);
+   expect(parsePostReference(singlePostRequestUrl(input))).toEqual(parsePostReference(valid));
+   expect(parsePostReference(input)).toBeUndefined();
+  }
+  expect(singlePostRequestUrl(valid+'&redirect=OTHER')).toBeUndefined();
  });
  it('never accepts a reference rejected by the backend across synthetic components',()=>{
   for(const prefix of ['https://www.xiaohongshu.com','HTTPS://www.xiaohongshu.com','https://www.xiaohongshu.com:443','https://evil.invalid'])

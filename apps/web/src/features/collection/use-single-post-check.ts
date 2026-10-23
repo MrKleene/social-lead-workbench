@@ -2,7 +2,7 @@ import {useRef,useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {api,send} from '@/lib/api';
 import {singlePostError} from './single-post-error';
-import {inspectSinglePostLink} from './single-post-link';
+import {inspectSinglePostLink,singlePostRequestUrl} from './single-post-link';
 import type {ImageDiagnostics} from '@crm/contracts';
 import type {McpReadiness} from './types';
 export type SinglePostResult={status:'CHECKED'|'FAILED'|'LOGIN_NOT_READY';reason?:string;coverage?:'WINDOW_ONLY';roots?:{count:number;displayableAvatars:number};replies?:{count:number;displayableAvatars:number};imageDiagnostics?:ImageDiagnostics|null};
@@ -14,7 +14,8 @@ export function useSinglePostCheck(){
  const link=inspectSinglePostLink(url);
  async function check(){
   if(inFlight.current||submitted||!consent||!selected||!link.valid||!readiness.data?.device?.online)return;
-  inFlight.current=true;setBusy(true);setSubmitted(true);setError('');const reference=url.trim();setUrl('');
+  const reference=singlePostRequestUrl(url);if(!reference)return;
+  inFlight.current=true;setBusy(true);setSubmitted(true);setError('');setUrl('');
   try{setResult(await send<SinglePostResult>('/collection/single-post-check','POST',{accountId:selected,url:reference,requestKey:key.current,consent:'single-post-read-v1'}));}
   catch(error){setError(singlePostError(error));}
   finally{inFlight.current=false;setBusy(false);setConsent(false);void readiness.refetch();}

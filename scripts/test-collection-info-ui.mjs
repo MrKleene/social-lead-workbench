@@ -94,7 +94,7 @@ try{
   report.checks.push('official ID link / no credentials or referer / keyboard new tab without opener / invalid legacy ID unavailable / empty comments '+narrow);
   await page.goto(base+'/work?module=archive');let diagnosticCalls=0;
   await context.route(base+'/api/collection/mcp/readiness',route=>route.fulfill({json:{enabled:true,device:{online:true,name:'合成设备'},accounts:[{id:'fake-account',label:'合成已存账号',reason:'UNVERIFIED',eligible:false}]}}));
-  await context.route(base+'/api/collection/single-post-check',async route=>{diagnosticCalls++;assert.equal(route.request().method(),'POST');assert.equal(route.request().headers()['x-csrf-token'],'fake');const b=route.request().postDataJSON();assert.equal(b.accountId,'fake-account');assert.equal(b.consent,'single-post-read-v1');assert(b.url.includes('SYNTHETIC_TEST_ONLY'));await new Promise(r=>setTimeout(r,200));return route.fulfill({json:{status:'CHECKED',coverage:'WINDOW_ONLY',roots:{count:1,displayableAvatars:0},replies:{count:1,displayableAvatars:0},imageDiagnostics}});});
+  await context.route(base+'/api/collection/single-post-check',async route=>{diagnosticCalls++;assert.equal(route.request().method(),'POST');assert.equal(route.request().headers()['x-csrf-token'],'fake');const b=route.request().postDataJSON();assert.equal(b.accountId,'fake-account');assert.equal(b.consent,'single-post-read-v1');assert.equal(b.url,'https://www.xiaohongshu.com/explore/0123456789abcdef01234567?xsec_token=SYNTHETIC_TEST_ONLY&xsec_source=pc_feed');await new Promise(r=>setTimeout(r,200));return route.fulfill({json:{status:'CHECKED',coverage:'WINDOW_ONLY',roots:{count:1,displayableAvatars:0},replies:{count:1,displayableAvatars:0},imageDiagnostics}});});
   await page.getByRole('button',{name:'单帖检查',exact:true}).click();const dialog=page.getByRole('dialog',{name:'单帖只读检查',exact:true});await dialog.waitFor();
   const missingReference='https://www.xiaohongshu.com/explore/0123456789abcdef01234567';
   await page.getByLabel('单帖原文链接').fill(missingReference);await dialog.getByRole('checkbox').check();
@@ -108,10 +108,10 @@ try{
   await page.getByLabel('单帖原文链接').fill(missingReference+'?xsec_token=SYNTHETIC_TEST_ONLY&amp;xsec_source=pc_feed');
   await dialog.getByText('链接分隔符被转义，请从浏览器地址栏直接复制，不要复制网页代码。',{exact:true}).waitFor();assert.equal(diagnosticCalls,0);
   await dialog.getByRole('checkbox').uncheck();
-  await page.getByLabel('单帖原文链接').fill(missingReference+'?xsec_token=SYNTHETIC_TEST_ONLY&xsec_source=pc_feed');
+  await page.getByLabel('单帖原文链接').fill(missingReference+'?xsec_token=SYNTHETIC_TEST_ONLY&xsec_source=pc_feed&source=web_explore_feed');
   await dialog.getByText('链接格式有效；点击后才核验账号，尚未访问小红书。',{exact:true}).waitFor();
   assert(await page.getByRole('button',{name:'只读检查这一篇',exact:true}).isDisabled());
-  report.checks.push('local URL diagnosis / invalid input retained / zero POST on invalid+Enter / corrected without remount / no persistence '+narrow);
+  report.checks.push('local URL diagnosis / invalid input retained / zero POST on invalid+Enter / corrected without remount / fixed page source omitted from POST / no persistence '+narrow);
   await dialog.getByRole('checkbox').check();await page.getByRole('button',{name:'只读检查这一篇',exact:true}).click();
   await page.getByRole('region',{name:'单帖检查结果',exact:true}).waitFor();assert.equal(diagnosticCalls,1);assert.equal(await page.getByLabel('单帖原文链接').inputValue(),'');assert(await page.getByRole('button',{name:'本次检查已提交',exact:true}).isDisabled());
   assert(!(await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}))).includes('SYNTHETIC_TEST_ONLY'));assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
