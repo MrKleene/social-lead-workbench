@@ -5,6 +5,7 @@ import { ReadFailure } from '../contract';
 import { endpointUrl, loginCheckOnly, McpMode, ReadTool, toolArguments } from './policy';
 export interface ReadOnlyMcpTransport {
   supportsBoundedComments?():boolean;
+  supportsCommentContinuation?():boolean;
   connect?(signal: AbortSignal): Promise<void>;
   close?(): Promise<void>;
   call(name: ReadTool, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown>;
@@ -17,6 +18,8 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
   private operation?: AbortSignal;
   private connected = false;
   private boundedComments=false;
+  private commentContinuation=false;
+  supportsCommentContinuation(){return this.commentContinuation;}
   supportsBoundedComments(){return this.boundedComments;}
   private requests = 0;
   private loginOnly = loginCheckOnly();
@@ -91,7 +94,7 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
       let cursor: string | undefined;
       for (let page = 0; page < 4; page++) {
         const result = await this.client.listTools(cursor ? { cursor } : {}, { signal, timeout: 3000 });
-        for (const tool of result.tools) {names.add(tool.name);if(tool.name==='get_feed_detail'&&tool.description?.includes('crm-bounded-comments-v1')&&Object.hasOwn(tool.inputSchema.properties||{},'read_window'))this.boundedComments=true;}
+        for (const tool of result.tools) {names.add(tool.name);if(tool.name==='get_feed_detail'&&tool.description?.includes('crm-bounded-comments-v1')&&Object.hasOwn(tool.inputSchema.properties||{},'read_window'))this.boundedComments=true;if(tool.name==='get_feed_detail'&&tool.description?.includes('crm-comment-continuation-v1')&&Object.hasOwn(tool.inputSchema.properties||{},'read_continuation'))this.commentContinuation=true;}
         if (!result.nextCursor) break;
         if (cursors.has(result.nextCursor) || page === 3) throw new ReadFailure('MCP_PROTOCOL');
         cursors.add(result.nextCursor); cursor = result.nextCursor;
@@ -103,6 +106,7 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
   async call(name: ReadTool, args: Record<string, unknown>, signal: AbortSignal) {
     this.validate(name, args);
     if(name==='get_feed_detail'&&args.read_window!==undefined&&!this.boundedComments)throw new ReadFailure('UNSUPPORTED');
+    if(name==='get_feed_detail'&&args.read_continuation!==undefined&&(!this.commentContinuation||args.read_window===undefined))throw new ReadFailure('UNSUPPORTED');
     if (!this.connected) throw new ReadFailure('MCP_PROTOCOL');
     return this.bounded(signal, () => this.client.callTool({ name, arguments: args }, CallToolResultSchema, { signal, timeout: this.callMs }));
   }

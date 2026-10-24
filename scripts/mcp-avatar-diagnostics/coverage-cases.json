@@ -59,7 +59,13 @@
         ],
         "findings": [
           "DECLARED_GT_LOADED"
-        ]
+        ],
+        "relations": {
+          "version": 1,
+          "scanned": 2,
+          "limited": false,
+          "fields": []
+        }
       },
       {
         "status": "OK",
@@ -115,7 +121,13 @@
         ],
         "findings": [
           "DECLARED_GT_LOADED"
-        ]
+        ],
+        "relations": {
+          "version": 1,
+          "scanned": 2,
+          "limited": false,
+          "fields": []
+        }
       },
       {
         "status": "OK",
@@ -171,7 +183,13 @@
         ],
         "findings": [
           "DECLARED_GT_LOADED"
-        ]
+        ],
+        "relations": {
+          "version": 1,
+          "scanned": 2,
+          "limited": false,
+          "fields": []
+        }
       }
     ],
     "observation": "COUNTS_UNCHANGED",

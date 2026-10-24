@@ -106,7 +106,7 @@ func TestReadThroughBrowserPagination(t *testing.T) {
  const root={...leaf('root1'),subCommentCount:'1'},comments={hasMore:true,list:[root]};
  window.__INITIAL_STATE__={note:{noteDetailMap:{'synthetic-post':{note:{noteId:'synthetic-post',title:'synthetic',interactInfo:{commentCount:'5'}},comments}}}};
  window.events=[];let busy=false,step=0;const box=document.querySelector('.note-scroller');
- function draw(){box.innerHTML=comments.list.map((x,i)=>'<div class="parent-comment"><div class="comment-item">root</div>'+x.subComments.map(c=>'<div class="comment-item">reply</div>'+c.subComments.map(()=>'<div class="comment-item">nested</div>').join('')).join('')+(i===0&&step<2?'<button class="show-more">展开1条回复</button>':'')+'</div>').join('')+'<div style="height:600px"></div>';const b=box.querySelector('button');if(b)b.onclick=()=>{if(busy)return;busy=true;window.events.push('reply');setTimeout(()=>{if(step===0)root.subComments.push({...leaf('child'),subCommentCount:'1'});else root.subComments[0].subComments.push(leaf('grandchild'));step++;busy=false;draw()},650)}}
+ function draw(){box.innerHTML=comments.list.map((x,i)=>'<div class="parent-comment"><div class="comment-item">root</div>'+x.subComments.map(c=>'<div class="comment-item">reply</div>'+c.subComments.map(()=>'<div class="comment-item">nested</div>').join('')).join('')+(i===0&&step<2?'<button class="show-more">展开1条回复</button>':'')+'</div>').join('')+'<div style="height:600px"></div>'+(comments.hasMore?'':'<div class="end-container">THE END</div>');const b=box.querySelector('button');if(b)b.onclick=()=>{if(busy)return;busy=true;window.events.push('reply');setTimeout(()=>{if(step===0)root.subComments.push({...leaf('child'),subCommentCount:'1'});else root.subComments[0].subComments.push(leaf('grandchild'));step++;busy=false;draw()},650)}}
  box.onscroll=()=>{if(busy||step<2||!comments.hasMore||box.scrollTop+box.clientHeight<box.scrollHeight-3)return;busy=true;window.events.push('root');setTimeout(()=>{comments.list.push(leaf('root'+(comments.list.length+1)));comments.hasMore=comments.list.length<3;busy=false;draw()},900)};
  draw();</script>`))
 	}))
@@ -138,5 +138,25 @@ func TestReadThroughBrowserPagination(t *testing.T) {
 	}
 	if got := page.MustEval(`()=>window.events.join(',')`).Str(); got != "reply,reply,root,root" {
 		t.Fatalf("action order %s", got)
+	}
+	if d.Actions.ReplyClicks != 2 || d.Actions.RootScrolls != 2 || d.Final.Ready.RootEndVisible == nil || !*d.Final.Ready.RootEndVisible || d.Final.Ready.ReplyControls == nil || *d.Final.Ready.ReplyControls != 0 || d.Final.Ready.RootScopeExact == nil || !*d.Final.Ready.RootScopeExact {
+		t.Fatal("missing action/visible end evidence")
+	}
+	page.Close()
+	// The second window resumes the same live page; it must not navigate or repeat clicks.
+	page = browser.MustPage(server.URL)
+	page.MustWaitLoad()
+	session := &BoundedSession{}
+	c.RootPages = 1
+	first, e := session.Read(ctx, page, "synthetic-post", c)
+	if e != nil || first.BoundedRead.Window != 1 || first.BoundedRead.Reason != "ROOT_PAGE_BUDGET" || first.BoundedRead.Retained.Loaded.UniqueKnown != 4 {
+		t.Fatal(e, first)
+	}
+	second, e := session.Read(ctx, nil, "synthetic-post", c)
+	if e != nil || second.BoundedRead.Window != 2 || second.BoundedRead.Retained.Loaded.UniqueKnown != 5 || second.BoundedRead.Actions.ReplyClicks != 0 {
+		t.Fatal(e, second)
+	}
+	if got := page.MustEval(`()=>window.events.join(',')`).Str(); got != "reply,reply,root,root" {
+		t.Fatal("replayed actions: " + got)
 	}
 }

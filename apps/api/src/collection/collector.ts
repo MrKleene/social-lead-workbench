@@ -109,7 +109,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         for (const item of found.values()) {
             if(comments>=budget.comments)throw new ReadFailure('BUDGET');
             postOrdinal++;stage='post';
-            const post = postSchema.parse(await call(s => adapter.post(item, s, budget.comments-comments)));
+            let post = postSchema.parse(await call(s => adapter.post(item, s, budget.comments-comments)));
             if (post.id !== item.id)
                 throw new ReadFailure("INVALID_DATA");
             const entry: PostRead = { stopReason:post.boundedRead?.reason, post, comments: [], deletedIds: [], complete: false };
@@ -133,8 +133,22 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
             // then stop on terminal read failures; never issue cached-tree page calls
             // that could mask cancellation or consume the remaining request budget.
             if(post.boundedRead){
-                entry.windowRead=true;entry.complete=post.boundedRead.state==='COMPLETE';if(!entry.complete){result.status='PARTIAL';result.reason=post.boundedRead.reason;}await checkpoint();
-                const reason=post.boundedRead.reason;
+                // Checkpoint each confirmed window before continuing the SAME live page.
+                // The adapter owns opaque handles; never persist them or retry an uncertain call.
+                while(adapter.continuePost&&adapter.canContinuePost?.(post)&&comments<budget.comments){
+                    entry.windowRead=true;entry.complete=false;entry.stopReason=post.boundedRead?.reason;await checkpoint();
+                    stage='post';
+                    const next=postSchema.parse(await call(s=>adapter.continuePost!(post,s)));
+                    if(next.id!==post.id||!next.boundedRead)throw invalidSource('post','IDENTITY_CONFLICT','id');
+                    post=next;entry.post=post;entry.stopReason=post.boundedRead!.reason;
+                    stage='received_comments';
+                    const before=entry.comments.length;
+                    if(adapter.receivedComments)await add(z.array(commentSchema).max(200).parse(adapter.receivedComments(post)),[]);
+                    await checkpoint();
+                    if(entry.comments.length===before)break;
+                }
+                entry.windowRead=true;entry.complete=post.boundedRead!.state==='COMPLETE';entry.stopReason=post.boundedRead!.reason;if(!entry.complete){result.status='PARTIAL';result.reason=post.boundedRead!.reason;}await checkpoint();
+                const reason=post.boundedRead!.reason;
                 if(reason==='PLATFORM_LIMIT')throw new ReadFailure('RESTRICTED');
                 if(reason==='CANCELLED')throw new ReadFailure('PAUSED');
                 if(reason==='TIMEOUT')throw new ReadFailure('TIMEOUT');

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 export type FixtureScenario = 'BASELINE' | 'NEW' | 'LOGIN_EXPIRED' | 'RESTRICTED' | 'RATE_LIMITED' | 'TIMEOUT' | 'MALFORMED' | 'SESSION_EXPIRED' | 'REDIRECT' | 'OVERSIZED' | 'SOURCE_UNAVAILABLE';
 /** Offline JSON-RPC/Streamable HTTP fixture. It never imports platform SDKs, credentials or network clients. */
-export async function startXhsFixture(options: { sse?: boolean; name?: string; missingTool?: boolean; authToken?: string } = {}) {
+export async function startXhsFixture(options: { sse?: boolean; name?: string; missingTool?: boolean; authToken?: string; continuation?:boolean; handler?:(name:string,args:Record<string,unknown>)=>Promise<unknown> } = {}) {
     const state = { scenario: 'BASELINE' as FixtureScenario, calls: [] as { name: string; args: Record<string, unknown> }[], methods: [] as string[], sessions: new Set<string>(), closed: 0, forbidden: 0 };
     const keywords = new Map<string, string>();
     const envelope = (value: unknown) => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
@@ -26,11 +26,12 @@ export async function startXhsFixture(options: { sse?: boolean; name?: string; m
         if (message.method.startsWith('notifications/')) { res.writeHead(202).end(); return; }
         if (message.method === 'tools/list') {
             const names = ['check_login_status', 'search_feeds', ...(options.missingTool ? [] : ['get_feed_detail']), 'post_comment_to_feed', 'get_login_qrcode', 'list_notifications'];
-            reply({ tools: names.map(name => ({ name, inputSchema: { type: 'object' } })) }); return;
+            reply({ tools: names.map(name => ({ name, ...(options.continuation&&name==='get_feed_detail'?{description:'crm-bounded-comments-v1 crm-comment-continuation-v1',inputSchema:{type:'object',properties:{read_window:{type:'object'},read_continuation:{type:'object'}}}}:{inputSchema:{type:'object'}}) })) }); return;
         }
         if (message.method !== 'tools/call') { res.writeHead(400).end(); return; }
         const { name, arguments: args } = message.params; state.calls.push({ name, args });
         if (!['check_login_status', 'search_feeds', 'get_feed_detail'].includes(name)) { state.forbidden++; res.writeHead(403).end(); return; }
+        if(options.handler){reply(await options.handler(name,args));return;}
         if (state.scenario === 'SESSION_EXPIRED') { res.writeHead(404).end(); return; }
         if (state.scenario === 'RATE_LIMITED') { res.writeHead(429, { 'retry-after': '120' }).end(); return; }
         if (state.scenario === 'REDIRECT') { res.writeHead(302, { location: 'http://127.0.0.1:18060/mcp' }).end(); return; }

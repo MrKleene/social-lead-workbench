@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -347,5 +348,137 @@ func TestReadThroughIncidentalRootsRequireTheirOwnBudget(t *testing.T) {
 				t.Fatal(r)
 			}
 		}
+	}
+}
+
+// Continuation tests keep one synthetic page and store across finite windows.
+// They deliberately exceed one window's scroll/click budgets, without network.
+type continuationPage struct {
+	roots, limit, replyLimit, replies int
+	fail                              bool
+}
+
+func (p *continuationPage) Snapshot(ctx context.Context) ([]byte, CoverageReady, error) {
+	if ctx.Err() != nil {
+		return nil, CoverageReady{}, ctx.Err()
+	}
+	rows := []map[string]any{}
+	for i := 0; i < p.roots; i++ {
+		kids := []map[string]any{}
+		decl := 0
+		if i < p.replyLimit {
+			decl = 1
+		}
+		if i < p.replies {
+			kids = append(kids, bc("child"+strconv.Itoa(i), 0))
+		}
+		rows = append(rows, bc("root"+strconv.Itoa(i), decl, kids...))
+	}
+	return bs(p.roots < p.limit, rows...), CoverageReady{Document: "complete", Container: true}, nil
+}
+func (p *continuationPage) ScrollRoots(context.Context) error {
+	if p.fail {
+		return errors.New("PLATFORM_LIMIT")
+	}
+	if p.roots < p.limit {
+		p.roots++
+	}
+	return nil
+}
+func (p *continuationPage) ExpandReply(context.Context, int, int) (string, error) {
+	if p.replies < p.replyLimit && p.replies < p.roots {
+		p.replies++
+		return "CLICKED", nil
+	}
+	return "BUTTON_NOT_FOUND", nil
+}
+func TestContinuationBeyondScrollWindow(t *testing.T) {
+	p := &continuationPage{roots: 1, limit: 8}
+	store := newBoundedStore("synthetic-post")
+	c := cfg()
+	c.RootPages = 3
+	expected := []int{4, 7, 8}
+	for i, n := range expected {
+		_, r, e := runBoundedReadWindow(context.Background(), p, "synthetic-post", c, store)
+		if e != nil || r.Retained.Loaded.UniqueKnown != n {
+			t.Fatalf("window %d: %v %+v", i, e, r)
+		}
+		if i < 2 && r.Reason != "ROOT_PAGE_BUDGET" {
+			t.Fatal(r)
+		}
+		if r.Actions.RootScrolls != n-([]int{1, 4, 7}[i]) {
+			t.Fatal(r.Actions)
+		}
+	}
+	if len(store.nodes) != 8 {
+		t.Fatal("lost/repeated nodes")
+	}
+}
+func TestContinuationBeyondReplyWindow(t *testing.T) {
+	p := &continuationPage{roots: 14, limit: 14, replyLimit: 14}
+	store := newBoundedStore("synthetic-post")
+	c := cfg()
+	c.ReplyClicks = 12
+	_, a, e := runBoundedReadWindow(context.Background(), p, "synthetic-post", c, store)
+	if e != nil || a.Reason != "REPLY_CLICK_BUDGET" || a.Actions.ReplyClicks != 12 || a.Actions.AddedReplies != 12 {
+		t.Fatal(e, a)
+	}
+	_, b, e := runBoundedReadWindow(context.Background(), p, "synthetic-post", c, store)
+	if e != nil || b.Retained.Loaded.UniqueKnown != 28 || b.Actions.ReplyClicks != 2 || b.Actions.AddedReplies != 2 {
+		t.Fatal(e, b)
+	}
+}
+func TestContinuationFailurePreservesCheckpoint(t *testing.T) {
+	p := &continuationPage{roots: 1, limit: 8}
+	store := newBoundedStore("synthetic-post")
+	c := cfg()
+	c.RootPages = 1
+	_, a, e := runBoundedReadWindow(context.Background(), p, "synthetic-post", c, store)
+	if e != nil || a.Retained.Loaded.UniqueKnown != 2 {
+		t.Fatal(e)
+	}
+	p.fail = true
+	_, b, e := runBoundedReadWindow(context.Background(), p, "synthetic-post", c, store)
+	if e != nil || b.Reason != "PLATFORM_LIMIT" || len(store.nodes) != 2 {
+		t.Fatal(e, b)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, e = runBoundedReadWindow(ctx, p, "synthetic-post", c, store)
+	if e == nil || len(store.nodes) != 2 {
+		t.Fatal("cancel lost saved checkpoint")
+	}
+	_, _, e = runBoundedReadWindow(context.Background(), p, "other-post", c, store)
+	if e == nil {
+		t.Fatal("cross-post continuation accepted")
+	}
+}
+
+// Synthetic local driver: proves a 15s window yields a recoverable checkpoint,
+// rather than resetting the page and repeatedly reading its first window.
+type slowContinuationPage struct{ continuationPage }
+
+func (p *slowContinuationPage) ScrollRoots(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(5100 * time.Millisecond):
+	}
+	return p.continuationPage.ScrollRoots(ctx)
+}
+func TestContinuationAcrossTimeoutBudget(t *testing.T) {
+	p := &slowContinuationPage{continuationPage: continuationPage{roots: 1, limit: 4}}
+	store := newBoundedStore("synthetic-post")
+	c := cfg()
+	c.RootPages = 3
+	c.TimeoutMs = 15000
+	start := time.Now()
+	_, a, e := runBoundedReadWindow(context.Background(), p, "synthetic-post", c, store)
+	if e != nil || a.Reason != "TIMEOUT" || a.Retained.Loaded.UniqueKnown < 2 || !CanContinueBounded(a) {
+		t.Fatal(e, a)
+	}
+	_, b, e := runBoundedReadWindow(context.Background(), p, "synthetic-post", c, store)
+	if e != nil || b.Retained.Loaded.UniqueKnown != 4 || len(store.nodes) != 4 || time.Since(start) < 15*time.Second {
+		t.Fatal(e, b)
 	}
 }

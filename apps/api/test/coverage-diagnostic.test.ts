@@ -28,6 +28,13 @@ describe('safe same-read coverage diagnostics',()=>{
   expect(JSON.stringify(out)).not.toMatch(/SYNTHETIC_ONLY|synthetic only|childuser|DO_NOT_RETURN/);
   const {coverageDiagnostic:_,...bare}=post;expect(snapshotHash(semanticSnapshot(post,comments[0],undefined,false,false))).toBe(snapshotHash(semanticSnapshot(bare,comments[0],undefined,false,false)));
  });
+ it('preserves only controlled relation structure through adapter and single-post summary',async()=>{
+  const d=clone();for(const sample of d.samples)sample.relations={version:1,scanned:2,limited:false,fields:[{ordinal:2,path:'targetComment.userInfo.userId',shape:'STRING',commentOrdinals:[],userMatches:1}]};
+  const call=vi.fn().mockResolvedValue({content:[{type:'text',text:JSON.stringify({feed_id:id,data:{note:{noteId:id,title:'synthetic'},comments:{list:[rawComment]},coverageDiagnostic:d}})}]});
+  const a=new XhsMcpAdapter({call},true,'XHS_MCP'),p=await a.postReference({postId:id,token:'SYNTHETIC_ONLY',source:'pc_feed'},new AbortController().signal);
+  expect(singlePostSummary(p,a.receivedComments(p)).coverageDiagnostic?.samples[0].relations).toEqual(d.samples[0].relations);
+  for(const mutate of [(x:any)=>x.path='targetComment.secret',(x:any)=>x.value='SECRET',(x:any)=>x.commentOrdinals=[3],(x:any)=>x.shape='private-value']){const bad=structuredClone(d);mutate(bad.samples[0].relations.fields[0]);expect(safeCoverageDiagnostic(bad)).toBeUndefined();}
+ });
  it('normal capture excludes transient diagnostic from persisted original text and hash',async()=>{
   const config:any={id:'cfg',enabled:true,revision:1},run:any={id:'run',configId:'cfg',revision:1,snapshot:{name:'synthetic',platform:'XHS',mode:'XHS_MCP',keywords:['synthetic'],excludeWords:[],batchLimit:1,enabled:true}},posts:any[]=[];
   const tx:any={$queryRaw:async()=>[config],collectionRun:{findUniqueOrThrow:async()=>({status:'RUNNING'}),update:vi.fn()},semanticControl:{findUnique:async()=>({enabled:false})},capturedPost:{findUnique:async()=>null,upsert:async(v:any)=>{posts.push(v);return {id:'saved'};},groupBy:async()=>[]},capturedComment:{groupBy:async()=>[]}};

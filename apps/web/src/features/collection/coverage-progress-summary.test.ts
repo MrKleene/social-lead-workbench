@@ -21,3 +21,9 @@ it('unknown, invalid or decreasing counts are not fabricated as zero gains',()=>
 it('zero comment and zero actions do not claim a missing-button exhaustion proof',()=>{
  const s=sample(0,0),r=coverageProgressSummary({...report(),rootActions:0,replyActions:0,initial:s,final:s,retained:s});expect(r?.boundary).toBeUndefined();expect(r?.counts).toContain('0 条');expect(r?.actions).toContain('未提供成功点击次数');
 });
+
+it('shows acknowledged clicks only when supplied, not inferred from attempts',()=>{
+ const d={...report(),window:2,actions:{rootScrolls:1,replyClicks:2,addedRoots:3,addedReplies:4}};
+ expect(coverageProgressSummary(d)?.actions).toContain('确认点击 2 次');expect(coverageProgressSummary(d)?.actions).not.toContain('未提供成功');
+ expect(coverageProgressSummary({...d,actions:{...d.actions,replyClicks:6}})).toBeUndefined();
+});

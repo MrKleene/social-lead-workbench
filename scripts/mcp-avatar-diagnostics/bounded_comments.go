@@ -24,19 +24,28 @@ func (c BoundedReadConfig) Valid() bool {
 	return c.Version == 1 && c.RootPages >= 0 && c.RootPages <= 3 && c.ReplyClicks >= 0 && c.ReplyClicks <= 12 && c.MaxRoots >= 1 && c.MaxRoots <= 40 && c.MaxComments >= c.MaxRoots && c.MaxComments <= 100 && c.MaxRepliesPerRoot >= 1 && c.MaxRepliesPerRoot <= 30 && c.TimeoutMs >= 1000 && c.TimeoutMs <= 15000
 }
 
+type BoundedActionEvidence struct {
+	ReplyClicks  int `json:"replyClicks"`
+	RootScrolls  int `json:"rootScrolls"`
+	AddedRoots   int `json:"addedRoots"`
+	AddedReplies int `json:"addedReplies"`
+}
+
 type BoundedReadReport struct {
-	Version       int            `json:"version"`
-	State         string         `json:"state"`
-	Reason        string         `json:"reason"`
-	RootStop      string         `json:"rootStop"`
-	ReplyStop     string         `json:"replyStop"`
-	RootActions   int            `json:"rootActions"`
-	ReplyActions  int            `json:"replyActions"`
-	ExcludedRoots int            `json:"excludedRoots"`
-	ElapsedMs     int            `json:"elapsedMs"`
-	Initial       CoverageSample `json:"initial"`
-	Final         CoverageSample `json:"final"`
-	Retained      CoverageSample `json:"retained"`
+	Window        int                    `json:"window,omitempty"`
+	Actions       *BoundedActionEvidence `json:"actions,omitempty"`
+	Version       int                    `json:"version"`
+	State         string                 `json:"state"`
+	Reason        string                 `json:"reason"`
+	RootStop      string                 `json:"rootStop"`
+	ReplyStop     string                 `json:"replyStop"`
+	RootActions   int                    `json:"rootActions"`
+	ReplyActions  int                    `json:"replyActions"`
+	ExcludedRoots int                    `json:"excludedRoots"`
+	ElapsedMs     int                    `json:"elapsedMs"`
+	Initial       CoverageSample         `json:"initial"`
+	Final         CoverageSample         `json:"final"`
+	Retained      CoverageSample         `json:"retained"`
 }
 
 // Driver operates only the already-open note. No search/profile/network API client.
@@ -280,26 +289,33 @@ func boundedReplies(s CoverageSample) (gap, unknown bool) {
 // The first snapshot is captured before any optional action. Cancellation or an
 // internal timeout returns retained data; transport termination cannot guarantee delivery.
 func runBoundedRead(ctx context.Context, p boundedPage, id string, c BoundedReadConfig) ([]byte, *BoundedReadReport, error) {
-	if !c.Valid() {
+	return runBoundedReadWindow(ctx, p, id, c, newBoundedStore(id))
+}
+
+// A live continuation owns this store and the same page; never replay from a new page silently.
+func runBoundedReadWindow(ctx context.Context, p boundedPage, id string, c BoundedReadConfig, store *boundedStore) ([]byte, *BoundedReadReport, error) {
+	if !c.Valid() || store == nil || store.feedID != id {
 		return nil, nil, errors.New("INVALID_READ_WINDOW")
 	}
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(c.TimeoutMs)*time.Millisecond)
 	defer cancel()
 	r := &BoundedReadReport{Version: 1, State: "UNKNOWN", Reason: "VISIBLE_WINDOW_READ", RootStop: "NOT_RUN", ReplyStop: "NOT_RUN", Initial: coverageUnavailable(), Final: coverageUnavailable(), Retained: coverageUnavailable()}
-	store := newBoundedStore(id)
+	r.Actions = &BoundedActionEvidence{}
+	baseRoots, baseReplies := len(store.roots), len(store.nodes)-len(store.roots)
 	raw, ready, err := p.Snapshot(ctx)
 	if err != nil {
 		return nil, nil, errors.New(boundedError(ctx, err))
 	}
 	r.Initial = inspectCoverage(raw, id, ready)
 	r.Final = r.Initial
-	if _, why := store.merge(raw, c, true); why != "" {
+	if _, why := store.merge(raw, c, len(store.nodes) == 0); why != "" {
 		r.Reason = why
 		if len(store.nodes) == 0 && store.base == nil {
 			return nil, nil, errors.New(why)
 		}
 	}
+	baseRoots, baseReplies = len(store.roots), len(store.nodes)-len(store.roots)
 	fatal := ""
 	if ready.Document != "complete" || !ready.Container {
 		r.Reason = "PAGE_NOT_READY"
@@ -384,6 +400,7 @@ func runBoundedRead(ctx context.Context, p boundedPage, id string, c BoundedRead
 				}
 				return
 			}
+			r.Actions.ReplyClicks++
 			added, why := readAfterAction(false, len(store.nodes))
 			if why != "" {
 				fatal = why
@@ -470,6 +487,7 @@ func runBoundedRead(ctx context.Context, p boundedPage, id string, c BoundedRead
 				r.RootStop = fatal
 				break
 			}
+			r.Actions.RootScrolls++
 			beforeRoots := len(store.roots)
 			_, why := readAfterAction(true, len(store.nodes))
 			if why != "" {
@@ -487,6 +505,8 @@ func runBoundedRead(ctx context.Context, p boundedPage, id string, c BoundedRead
 			}
 		}
 	}
+	r.Actions.AddedRoots = len(store.roots) - baseRoots
+	r.Actions.AddedReplies = len(store.nodes) - len(store.roots) - baseReplies
 	r.Retained = inspectCoverage(store.payload(), id, ready)
 	r.ExcludedRoots = len(store.excluded)
 	if r.ExcludedRoots > 200 {

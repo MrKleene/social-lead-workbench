@@ -8,7 +8,7 @@ export function runCoverage(result:ReadResult):RunCoverage|undefined{
   const rows=[...new Map(p.comments.map(c=>[c.id,c])).values()],roots=rows.filter(c=>!c.parentId).length;
   const reason=p.stopReason||(p.complete?undefined:'MCP_WINDOW_ONLY');
   if(reason&&!p.complete)reasons.add(reason);
-  return {...(/^[A-Za-z0-9_-]{1,200}$/.test(p.post.id)?{postRef:p.post.id}:{}),ordinal:i+1,saved:rows.length,roots,replies:rows.length-roots,complete:p.complete,...(reason?{reason}:{}),...(p.post.boundedRead?{boundedRead:p.post.boundedRead}:{})};
+  return {...(/^[A-Za-z0-9_-]{1,200}$/.test(p.post.id)?{postRef:p.post.id}:{}),ordinal:i+1,saved:rows.length,roots,replies:rows.length-roots,complete:p.complete,...(reason?{reason}:{}),...(p.post.boundedRead?{boundedRead:p.post.boundedRead}:{}),...(p.post.boundedReadWindows?{boundedReadWindows:p.post.boundedReadWindows}:{})};
  });
  return safeRunCoverage({version:1,...(result.selection?{selection:result.selection}:{}),search,reasons:[...reasons],posts});
 }

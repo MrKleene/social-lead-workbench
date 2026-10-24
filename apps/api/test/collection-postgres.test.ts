@@ -737,6 +737,29 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
   expect(await db.semanticModelCall.count()).toBe(0);expect(await db.contactAttempt.count()).toBe(0);
   expect(JSON.stringify((await db.collectionRun.findUniqueOrThrow({where:{id:run.id}})).metrics)).not.toContain(ref.token);
  });
+ it('合成跨窗口逐步落盘、复读去重和续读失败保留，不存续读句柄',async()=>{
+  const {collect}=await import('../src/collection/collector');const {checkpointCapture}=await import('../src/collection/capture-archive');
+  const {fixture,window}=await import('./fixtures/comment-continuation');
+  const c=await config('合成续读'),snapshot={...spec('合成续读'),mode:'XHS_MCP' as const};
+  await db.collectionConfig.update({where:{id:c.id},data:{mode:'XHS_MCP'}});
+  const baseline={calls:await db.semanticModelCall.count(),contacts:await db.contactAttempt.count(),leads:await db.lead.count(),notices:await db.collectionNotice.count()};
+  for(const fail of [2,0,0]){
+   const run=await db.collectionRun.create({data:{configId:c.id,revision:c.revision,snapshot,scenario:'READ_WINDOW',requestKey:randomUUID(),status:'RUNNING'}});
+   const adapter=new XhsMcpAdapter(fixture(fail),true,'XHS_MCP',window),counts:number[]=[];
+   const result=await collect(adapter,snapshot,async()=>false,undefined,async progress=>{await checkpointCapture(db,run,progress);counts.push(await db.capturedComment.count({where:{configId:c.id}}));});
+   await adapter.close();await db.collectionRun.update({where:{id:run.id},data:{status:result.status}});
+   expect(result.status).toBe(fail?'FAILED':'PARTIAL');expect(await db.capturedPost.count({where:{configId:c.id}})).toBe(1);expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(fail?2:6);
+   if(fail)expect(counts).toContain(2);else expect((result.posts[0].post.boundedReadWindows||[])).toHaveLength(3);
+   const stored=await db.collectionRun.findUniqueOrThrow({where:{id:run.id}}),post=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}});
+   expect(JSON.stringify([stored.metrics,post.snapshot])).not.toContain('0000000000000000000000000000000000000000000000000000000000000001');
+   expect((post.snapshot as any).boundedReadWindows).toHaveLength(fail?1:3);
+   const feed=(await read(`/collection/configs/${c.id}/runs/${run.id}/posts`)).body;expect(feed.items[0].savedCount).toBe(fail?2:6);
+   if(!fail)expect(feed.items[0].newCount+feed.items[0].reusedCount).toBe(6);
+  }
+  const latest=await db.collectionRun.findFirstOrThrow({where:{configId:c.id},orderBy:{createdAt:'desc'}}),feed=(await read(`/collection/configs/${c.id}/runs/${latest.id}/posts`)).body;
+  expect(feed.items[0]).toMatchObject({newCount:0,reusedCount:6});
+  expect({calls:await db.semanticModelCall.count(),contacts:await db.contactAttempt.count(),leads:await db.lead.count(),notices:await db.collectionNotice.count()}).toEqual(baseline);
+ });
  it('读取顺序与存档顺序不同仍按稳定帖子ID关联，历史只补识别标题不改证据',async()=>{
   const c=await archive(),run=await db.collectionRun.findFirstOrThrow({where:{configId:c.id}}),first=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}});
   const second=await db.capturedPost.create({data:{configId:c.id,runId:run.id,lastRunId:run.id,platformPostId:'synthetic-second',contentHash:'second',snapshot:{title:'合成第二存档先读取'},createdAt:new Date(Date.now()+1000)}});

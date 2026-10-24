@@ -48,6 +48,8 @@ func (p *boundedRodPage) Snapshot(ctx context.Context) ([]byte, CoverageReady, e
 			p.scopeOK = true
 		}
 	}
+	scope := p.scopeOK
+	ready.RootScopeExact = &scope
 	return []byte(raw), ready, nil
 }
 func (p *boundedRodPage) ScrollRoots(ctx context.Context) error {
@@ -133,6 +135,9 @@ func boundedReadDetail(ctx context.Context, page *rod.Page, id string, c Bounded
 	if e != nil {
 		return nil, e
 	}
+	return decodeBoundedDetail(raw, id, report)
+}
+func decodeBoundedDetail(raw []byte, id string, report *BoundedReadReport) (*FeedDetailResponse, error) {
 	var notes map[string]struct {
 		Note     FeedDetail  `json:"note"`
 		Comments CommentList `json:"comments"`

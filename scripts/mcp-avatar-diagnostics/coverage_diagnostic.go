@@ -22,9 +22,12 @@ type CoverageBool struct {
 	Value *bool  `json:"value"`
 }
 type CoverageReady struct {
-	Document     string `json:"document"`
-	Container    bool   `json:"container"`
-	EmptyVisible bool   `json:"emptyVisible,omitempty"`
+	RootEndVisible *bool  `json:"rootEndVisible,omitempty"`
+	ReplyControls  *int   `json:"replyControls,omitempty"`
+	RootScopeExact *bool  `json:"rootScopeExact,omitempty"`
+	Document       string `json:"document"`
+	Container      bool   `json:"container"`
+	EmptyVisible   bool   `json:"emptyVisible,omitempty"`
 }
 type CoverageLoaded struct {
 	Roots        int `json:"roots"`
@@ -42,15 +45,16 @@ type CoverageReplyGroup struct {
 	Loaded   CoverageCount `json:"loaded"`
 }
 type CoverageSample struct {
-	Status   string               `json:"status"`
-	Ready    CoverageReady        `json:"ready"`
-	Total    CoverageCount        `json:"total"`
-	HasMore  CoverageBool         `json:"hasMore"`
-	Cursor   string               `json:"cursor"`
-	List     string               `json:"list"`
-	Loaded   *CoverageLoaded      `json:"loaded"`
-	Groups   []CoverageReplyGroup `json:"groups"`
-	Findings []string             `json:"findings"`
+	Relations *ReplyRelationEvidence `json:"relations,omitempty"`
+	Status    string                 `json:"status"`
+	Ready     CoverageReady          `json:"ready"`
+	Total     CoverageCount          `json:"total"`
+	HasMore   CoverageBool           `json:"hasMore"`
+	Cursor    string                 `json:"cursor"`
+	List      string                 `json:"list"`
+	Loaded    *CoverageLoaded        `json:"loaded"`
+	Groups    []CoverageReplyGroup   `json:"groups"`
+	Findings  []string               `json:"findings"`
 }
 type CoverageDiagnostic struct {
 	Version        int              `json:"version"`
@@ -177,6 +181,7 @@ func inspectCoverage(payload []byte, feedID string, ready CoverageReady) Coverag
 	}
 	d.Loaded = &CoverageLoaded{}
 	seen := map[string]bool{}
+	relationRows := []map[string]json.RawMessage{}
 	findings := map[string]bool{}
 	var visit func([]json.RawMessage, int, *int)
 	visit = func(rows []json.RawMessage, depth int, parent *int) {
@@ -192,6 +197,7 @@ func inspectCoverage(payload []byte, feedID string, ready CoverageReady) Coverag
 				d.Loaded.Replies++
 			}
 			c := coverageObject(raw)
+			relationRows = append(relationRows, c)
 			if c == nil {
 				d.Loaded.InvalidNodes++
 				findings["INVALID_NODES"] = true
@@ -232,6 +238,7 @@ func inspectCoverage(payload []byte, feedID string, ready CoverageReady) Coverag
 		}
 	}
 	visit(roots, 0, nil)
+	d.Relations = inspectReplyRelations(relationRows)
 	if d.Total.Value != nil && *d.Total.Value < d.Loaded.Roots+d.Loaded.Replies {
 		findings["TOTAL_LT_LOADED"] = true
 	}

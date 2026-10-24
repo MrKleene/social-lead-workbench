@@ -14,6 +14,7 @@ function text(input: unknown, stage:'prepare'|'search'|'post'): string {
     const value = parseSource(envelope,input,stage);
     const text = value.content.filter(c => c.type === "text").map(c => c.text || "").join("\n");
     if (value.isError) {
+        if(stage==='post'&&/^(?:获取Feed详情失败: )?CONTINUATION_(?:EXPIRED|MISMATCH|LIMIT)$/.test(text.trim()))throw new ReadFailure("MCP_SESSION_EXPIRED");
         const searchReason=stage==='search'?searchFailureReason(text):undefined;
         const observation=stage==='search'?searchFailureObservation(text):undefined;
         const searchDiagnostic=searchReason?{version:1 as const,stage:'search' as const,kind:'UPSTREAM_ERROR' as const,searchReason,...(observation?{searchObservation:observation}:{})}:undefined;
@@ -35,6 +36,8 @@ const rawComment = z.object({ id: rawId, noteId: rawId.optional(), content: z.st
 export class XhsMcpAdapter implements ReadAdapter {
     readonly platform = "XHS" as const;
     private tokens = new Map<string, { rawId: string; token: string }>();
+    private continuations=new Map<string,{token:string,window:BoundedReadConfig,ordinal:number}>();
+    private usedContinuationTokens=new Set<string>();
     private details = new Map<string, { roots: Comment[]; replies: Map<string, Comment[]> }>();
     constructor(private transport: ReadOnlyMcpTransport, private allowed = false, readonly mode: McpMode = "XHS_MCP", private readWindow:BoundedReadConfig|undefined=commentPolicy.enabled&&mode==='XHS_MCP'&&process.env.CRM_PERSISTENT==='1'&&process.env.CRM_ACCOUNT_READ_ENABLED==='1'?boundedReadConfigSchema.parse(commentPolicy.readWindow):undefined) {}
     private id(value: string) {
@@ -49,7 +52,7 @@ export class XhsMcpAdapter implements ReadAdapter {
         if (/未登录|登录失效/.test(result)) throw new ReadFailure("LOGIN_EXPIRED");
         if (!/^✅ 已登录(?:\n|$)/.test(result)) throw new ReadFailure("INVALID_DATA");
     }
-    async close() { this.tokens.clear(); this.details.clear(); await this.transport.close?.(); }
+    async close() { this.tokens.clear(); this.details.clear();this.continuations.clear();this.usedContinuationTokens.clear(); await this.transport.close?.(); }
     private async read(name: ReadTool, args: Record<string, unknown>, signal: AbortSignal) {
         if (!this.allowed) throw new ReadFailure("REAL_DISABLED");
         const stage=name==='search_feeds'?'search':'post';
@@ -65,8 +68,8 @@ export class XhsMcpAdapter implements ReadAdapter {
         const searchEvidence={evidence:consistent?'AVAILABLE' as const:data.searchObservation===undefined?'LEGACY_UNAVAILABLE' as const:'INVALID_DIAGNOSTIC' as const,returnedCount:count,...(consistent?{observation}:{})};
         return { searchEvidence,items: (data.feeds || []).map(f => { const id = this.id(f.id); this.tokens.set(id, { rawId: f.id, token: f.xsecToken }); const cover=inspectXhsCover(f.noteCard?.cover);return { id, title: f.noteCard?.displayTitle ?? "", coverUrl:cover.url,imageDiagnostics:{searchCover:cover.diagnostic} }; }), complete: false };
     }
-    async post(post: Post, signal: AbortSignal, remainingComments?:number, diagnosticOnly=false): Promise<Post> {
-        let readWindow=diagnosticOnly?undefined:this.readWindow;
+    async post(post: Post, signal: AbortSignal, remainingComments?:number, diagnosticOnly=false,resume?:{token:string,window:BoundedReadConfig,ordinal:number}): Promise<Post> {
+        let readWindow=resume?.window||(diagnosticOnly?undefined:this.readWindow);
         if(readWindow&&remainingComments!==undefined){if(!Number.isInteger(remainingComments)||remainingComments<1)throw new ReadFailure("BUDGET");readWindow={...readWindow,max_comments:Math.min(readWindow.max_comments,remainingComments),max_roots:Math.min(readWindow.max_roots,remainingComments)};}
         if(readWindow){boundedReadConfigSchema.parse(readWindow);if(!this.transport.supportsBoundedComments?.())throw new ReadFailure("UNSUPPORTED");}
         // Normal search warms tokens; a scoped saved-post run intentionally never searches.
@@ -75,10 +78,20 @@ export class XhsMcpAdapter implements ReadAdapter {
         if(this.mode==='XHS_MCP'&&post.sourceReference!==undefined&&!saved)throw invalidSource('post','IDENTITY_CONFLICT','noteId');
         const reference = this.tokens.get(post.id) || (saved?{rawId:saved.postId,token:saved.token}:undefined);
         if (!reference) throw invalidSource('post','SCHEMA_VALIDATION','xsecToken');
-        const data = parseSource(z.object({ feed_id: rawId.optional(), data: z.object({ boundedRead:z.unknown().optional(), coverageDiagnostic:z.unknown().optional(), avatarSourceDiagnostic:z.unknown().optional(), note: z.object({ noteId: rawId.optional(), title: z.string().max(500).nullish(), desc: z.string().max(20000).nullish(), imageList:z.unknown().optional(),user:z.unknown().optional(),time:z.unknown().optional() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }),await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false, ...(readWindow?{read_window:readWindow}:{}) }, signal),"post");
+        const data = parseSource(z.object({ feed_id: rawId.optional(), data: z.object({ continuation:z.unknown().optional(), boundedRead:z.unknown().optional(), coverageDiagnostic:z.unknown().optional(), avatarSourceDiagnostic:z.unknown().optional(), note: z.object({ noteId: rawId.optional(), title: z.string().max(500).nullish(), desc: z.string().max(20000).nullish(), imageList:z.unknown().optional(),user:z.unknown().optional(),time:z.unknown().optional() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }),await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false, ...(readWindow?{read_window:readWindow}:{}),...(readWindow&&this.transport.supportsCommentContinuation?.()?{read_continuation:resume?{mode:"RESUME",token:resume.token}:{mode:"START"}}:{}) }, signal),"post");
         if(saved&&!data.feed_id&&!data.data.note.noteId)throw invalidSource('post','IDENTITY_CONFLICT','noteId');
         if ((data.feed_id && data.feed_id !== reference.rawId) || (data.data.note.noteId && data.data.note.noteId !== reference.rawId)) throw invalidSource("post","IDENTITY_CONFLICT","noteId");
         const boundedRead=readWindow?parseSource(boundedReadReportSchema,data.data.boundedRead,'post'):undefined;
+        // A handle stays solely in this account-owned adapter. Never snapshot/log it.
+        this.continuations.delete(post.id);
+        if(data.data.continuation!==undefined){
+            const c=parseSource(z.discriminatedUnion('state',[z.object({state:z.literal('AVAILABLE'),token:z.string().regex(/^[a-f0-9]{64}$/)}).strict(),z.object({state:z.literal('ENDED')}).strict()]),data.data.continuation,'post');
+            if(!readWindow||!this.transport.supportsCommentContinuation?.()||!boundedRead||boundedRead.window!==(resume?resume.ordinal+1:1))throw invalidSource('post','SCHEMA_VALIDATION');
+            if(c.state==='AVAILABLE'){
+                if(!['ROOT_PAGE_BUDGET','REPLY_CLICK_BUDGET','TIMEOUT'].includes(boundedRead.reason)||boundedRead.window>=8||this.usedContinuationTokens.has(c.token))throw invalidSource('post','SCHEMA_VALIDATION');
+                this.usedContinuationTokens.add(c.token);this.continuations.set(post.id,{token:c.token,window:readWindow,ordinal:boundedRead.window});
+            }
+        }else if(resume)throw invalidSource('post','SCHEMA_VALIDATION');
         const replies = new Map<string, Comment[]>(), seen = new Map<string,{signature:string;value:Comment}>(), active=new Set<string>();
         let count = 0;
         const normalize = (input: unknown, parentId?: string, depth = 0): Comment => {
@@ -98,13 +111,13 @@ export class XhsMcpAdapter implements ReadAdapter {
         };
         // Validate the entire received tree before exposing any of it to ingestion.
         const roots = [...new Map((data.data.comments.list || []).map(c => normalize(c)).map(c=>[c.id,c])).values()];
-        if(boundedRead?.state==='COMPLETE'){
+        if(boundedRead&&(boundedRead.state==='COMPLETE'||data.data.continuation!==undefined)){
             const retained=boundedRead.retained.loaded;
             if(!retained||retained.roots!==roots.length||retained.uniqueKnown!==seen.size||retained.replies!==seen.size-roots.length)throw invalidSource('post','SCHEMA_VALIDATION','data.comments.list');
         }
         this.details.set(post.id, { roots, replies });
         const author=rawUser.safeParse(data.data.note.user),cover=inspectXhsDetailCover(data.data.note.imageList),avatar=inspectXhsAvatar(author.success?author.data.avatar:data.data.note.user==null?undefined:{});
-        return { ...post,boundedRead,coverageDiagnostic:safeCoverageDiagnostic(data.data.coverageDiagnostic),sourceReference:this.mode==="XHS_MCP"&&(data.feed_id||data.data.note.noteId)?savedPostReference({postId:reference.rawId,token:reference.token,source:post.sourceReference?.source||"pc_feed"},post.id):undefined,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:avatar.url,imageDiagnostics:{...post.imageDiagnostics,detailCover:cover.diagnostic,authorAvatar:avatar.diagnostic,avatarSource:safeAvatarSourceDiagnostic(data.data.avatarSourceDiagnostic)},publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||cover.url, title: data.data.note.title || post.title, ...(data.data.note.desc!=null?{body:data.data.note.desc}:{}) };
+        return { ...post,boundedRead,...(boundedRead?{boundedReadWindows:resume?[...(post.boundedReadWindows||[]),boundedRead]:[boundedRead]}:{}),coverageDiagnostic:safeCoverageDiagnostic(data.data.coverageDiagnostic),sourceReference:this.mode==="XHS_MCP"&&(data.feed_id||data.data.note.noteId)?savedPostReference({postId:reference.rawId,token:reference.token,source:post.sourceReference?.source||"pc_feed"},post.id):undefined,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:avatar.url,imageDiagnostics:{...post.imageDiagnostics,detailCover:cover.diagnostic,authorAvatar:avatar.diagnostic,avatarSource:safeAvatarSourceDiagnostic(data.data.avatarSourceDiagnostic)},publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||cover.url, title: data.data.note.title || post.title, ...(data.data.note.desc!=null?{body:data.data.note.desc}:{}) };
     }
     /** One bounded detail call. The caller owns account authorization and the device lease. */
     async postReference(value:PostReference,signal:AbortSignal,mode:'INITIAL_WINDOW'|'BOUNDED_REPLIES'='INITIAL_WINDOW'):Promise<Post>{
@@ -115,6 +128,8 @@ export class XhsMcpAdapter implements ReadAdapter {
         this.tokens.set(id,{rawId:ref.postId,token:ref.token});
         try{const post=await this.post({id,title:'',sourceReference:ref},signal,undefined,mode==='INITIAL_WINDOW');if(this.mode==='XHS_MCP'&&!post.sourceReference)throw invalidSource('post','IDENTITY_CONFLICT','noteId');return post;}finally{this.tokens.delete(id);}
     }
+    canContinuePost(post:Post){return this.continuations.has(post.id);}
+    async continuePost(post:Post,signal:AbortSignal):Promise<Post>{const next=this.continuations.get(post.id);if(!next)throw new ReadFailure('UNSUPPORTED');this.continuations.delete(post.id);return this.post(post,signal,undefined,false,next);}
     receivedComments(post:Post):Comment[]{const d=this.details.get(post.id);return d?[...d.roots,...[...d.replies.values()].flat()]:[];}
     async comments(post: Post, cursor: string | undefined, _signal: AbortSignal): Promise<Page<Comment>> {
         if (!this.allowed) throw new ReadFailure("REAL_DISABLED");

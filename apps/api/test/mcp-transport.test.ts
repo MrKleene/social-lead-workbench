@@ -36,6 +36,15 @@ describe('真实协议，仅离线端点', () => {
         expect(JSON.stringify(result)).not.toContain('fictional-reference');
         await f.adapter.close(); expect(f.state.sessions.size).toBe(0); expect(f.state.forbidden).toBe(0);
     });
+    it('续读能力发现及轮换句柄经真实本地HTTP协议传输，不暴露到采集结果',async()=>{
+      const {fixture,window}=await import('./fixtures/comment-continuation');const fake=fixture();
+      const f=await setup({continuation:true,handler:fake.call}),adapter=new XhsMcpAdapter(f.transport,true,'XHS_FIXTURE',window);
+      const checkpoints:any[]=[];const result=await collect(adapter,config,async()=>false,undefined,async p=>{checkpoints.push(structuredClone(p));});
+      expect(f.transport.supportsCommentContinuation()).toBe(true);expect(result.posts[0].comments).toHaveLength(6);expect(result.posts[0].post.boundedReadWindows).toHaveLength(3);
+      expect(f.state.calls.map(c=>c.name)).toEqual(['check_login_status','search_feeds','get_feed_detail','get_feed_detail','get_feed_detail']);
+      expect(JSON.stringify(checkpoints)).not.toContain('0000000000000000000000000000000000000000000000000000000000000001');
+      await adapter.close();expect(f.state.sessions.size).toBe(0);expect(f.state.forbidden).toBe(0);
+    });
     it('广告发现的工具也不能扩展调用白名单', async () => {
         const f = await setup(); await f.transport.connect(signal());
         for (const name of ['post_comment_to_feed','get_login_qrcode','list_notifications']) await expect(f.transport.call(name as ReadTool, {}, signal())).rejects.toMatchObject({ code: 'UNSUPPORTED' });

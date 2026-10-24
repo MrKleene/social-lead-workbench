@@ -16,3 +16,9 @@ it('invalid total plus zero never becomes true empty without visible empty evide
  expect(coverageReadingSummary(report(empty as any))).toContain('不能判定确实没有评论');
  expect(coverageReadingSummary(report({...empty,ready:{...empty.ready,emptyVisible:true}} as any))).toContain('页面显示空评论提示');
 });
+it('requires scoped visible end and no controls to state visible exhaustion, never explains a platform discrepancy',()=>{
+ const s={...snapshot(),ready:{...snapshot().ready,rootEndVisible:true,replyControls:0,rootScopeExact:true}};
+ expect(coverageReadingSummary(report(s))).toContain('本次可见评论区已到末尾');
+ expect(coverageReadingSummary(report(s))).toContain('不能断言属于删除、隐藏或漏读');
+ for(const ready of [{...s.ready,rootEndVisible:false},{...s.ready,replyControls:1},{...s.ready,rootScopeExact:false}])expect(coverageReadingSummary(report({...s,ready}))).not.toContain('本次可见评论区已到末尾');
+});
