@@ -84,6 +84,7 @@ try{
    }
    await page.evaluate(()=>window.scrollTo(0,0));await settled(page);await page.screenshot({path:join(out,`media-tree-${kind}-${narrow}.png`),fullPage:narrow});
   }
+  await page.locator('[data-comment=d1]').getByRole('button',{name:/来源与证据/}).click();await page.getByRole('dialog').getByText('未采集；所属讨论不等于直接回复对象。',{exact:true}).waitFor();await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});
   deepCase=false;posts[0].snapshot.body=savedBody;posts[0].snapshot.coverUrl=savedCover;report.checks.push('portrait+panorama contain / visible ordinary body / long nickname / real deep tree capped / missing parent / parent jump '+narrow);
   const linkId='0123456789abcdef01234567',oldId=posts[13].platformPostId;posts[13].platformPostId=linkId;posts[13].sourceAvailable=true;
   await page.goto(base+'/work?module=archive&post='+linkId);const originalLink=page.getByRole('link',{name:'查看原文',exact:true});await originalLink.waitFor();
