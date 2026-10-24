@@ -35,7 +35,7 @@ class CollectionController {
     @Get('configs/:id/runs/:runId/posts')
     runPosts(@Req() r:AuthedRequest,@Param('id') id:string,@Param('runId') runId:string){return this.captures.runPosts(r.actor,id,runId);}
     @Get("configs/:id/captures")
-    capturesList(@Req() r:AuthedRequest,@Param('id') id:string,@Query('offset') offset?:string){return this.captures.list(r.actor,id,parse(z.coerce.number().int().min(0).max(100000).default(0),offset));}
+    capturesList(@Req() r:AuthedRequest,@Param('id') id:string,@Query('offset') offset?:string,@Query('postId') postId?:string){return this.captures.list(r.actor,id,parse(z.coerce.number().int().min(0).max(100000).default(0),offset),parse(z.string().min(1).max(200).optional(),postId));}
     @Patch('configs/:id/semantic-control')
     semanticControl(@Req() r:AuthedRequest,@Param('id') id:string){return this.captures.toggle(r.actor,id,parse(z.object({enabled:z.boolean(),version:z.number().int().nonnegative()}).strict(),r.body));}
     @Post('configs/:id/semantic-queue')

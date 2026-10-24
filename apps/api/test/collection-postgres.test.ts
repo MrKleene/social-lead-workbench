@@ -643,6 +643,30 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
  const rules={version:1 as const,target:'寻找明确请求毕业论文选题帮助的学生',reviewThreshold:70};
  const sample:import('../src/collection/contract').ReadAdapter={mode:'MOCK',platform:'XHS',search:async()=>({items:[{id:'demo-collect-archive-post',title:'虚构毕业论文讨论'}],complete:true}),post:async p=>({...p,body:'讨论各专业选题'}),comments:async()=>({items:[{id:'demo-collect-archive-root',userId:'demo-collect-archive-a',nickname:'虚构甲',text:'护理专业如何选题',hasReplies:true}],complete:true}),replies:async()=>({items:[{id:'demo-collect-archive-reply',userId:'demo-collect-archive-b',nickname:'虚构乙',text:'同问',hasReplies:false,parentId:'demo-collect-archive-root'}],complete:true})};
  async function archive(){const c=await config('不会命中此搜索词',{semanticRules:rules});const r=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(r.id,sample);return c;}
+ it('帖子详情先按帖子分页，跨帖50条窗口不再把38条显示成31条',async()=>{
+  const c=await archive(),run=await db.collectionRun.findFirstOrThrow({where:{configId:c.id}}),post=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}});
+  await db.capturedComment.deleteMany({where:{configId:c.id}});
+  const other=await db.capturedPost.create({data:{configId:c.id,runId:run.id,lastRunId:run.id,platformPostId:'synthetic-other',contentHash:'other',snapshot:{title:'合成其他帖'}}});
+  const rows=(p:typeof post,n:number,date:string)=>Array.from({length:n},(_,i)=>({configId:c.id,runId:run.id,lastRunId:run.id,postId:p.id,platformCommentId:p.platformPostId+'-'+i,contentHash:'hash-'+i,contextVersion:'v1',snapshot:{comment:'合成',postId:p.platformPostId,commentId:p.platformPostId+'-'+i},isDemo:true,lastSeenAt:new Date(date)}));
+  await db.capturedComment.createMany({data:[...rows(post,38,'2026-01-01'),...rows(other,19,'2026-01-02')]});
+  const path=`/collection/configs/${c.id}/captures`,all=await read(path);
+  expect(all.body.items.filter((x:any)=>x.postId===post.id)).toHaveLength(31);
+  expect(all.body.posts.find((x:any)=>x.id===post.id).savedComments).toBe(38);
+  const scoped=await read(path+'?postId='+post.platformPostId);
+  expect(scoped.body).toMatchObject({total:38,hasMore:false,commentScope:{postId:post.platformPostId}});expect(scoped.body.items).toHaveLength(38);expect(scoped.body.items.every((x:any)=>x.postId===post.id)).toBe(true);
+  expect((await read(path+'?postId='+other.platformPostId)).body.total).toBe(19);
+  expect((await read(path+'?postId=absent')).body).toMatchObject({items:[],posts:[],total:0});
+  expect((await read(path+'?postId='+post.platformPostId,a)).status).toBe(403);
+  expect((await read(path+'?postId='+('x'.repeat(201)))).status).toBe(400);
+  const first=await db.capturedComment.findFirstOrThrow({where:{postId:post.id}});
+  await db.capturedComment.create({data:{...rows(post,1,'2026-01-03')[0],platformCommentId:first.platformCommentId,contentHash:'another-version',contextVersion:'v2'}});
+  await db.capturedComment.createMany({data:rows(post,22,'2026-01-03').map((x,i)=>({...x,platformCommentId:'extra-'+i,contentHash:'extra-'+i}))});
+  const page1=await read(path+'?postId='+post.platformPostId),page2=await read(path+'?postId='+post.platformPostId+'&offset=50');
+  expect(page1.body).toMatchObject({total:61,hasMore:true});expect(page1.body.items).toHaveLength(50);expect(page2.body.items).toHaveLength(11);expect(page2.body.hasMore).toBe(false);
+  expect(new Set([...page1.body.items,...page2.body.items].map((x:any)=>x.id)).size).toBe(61);
+  expect(page1.body.posts[0].savedComments).toBe(60); // one content version is not another comment
+  expect(await db.semanticModelCall.count()).toBe(0);
+ });
  it('逐篇只读接口按任务归属聚合，不借用最近20篇或全库计数',async()=>{
   const c=await archive(),first=await db.collectionRun.findFirstOrThrow({where:{configId:c.id}}),p=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}});
   await db.capturedPost.createMany({data:Array.from({length:25},(_,i)=>({configId:c.id,runId:first.id,lastRunId:'not-this-run',platformPostId:'demo-other-'+i,contentHash:'other-'+i,snapshot:{title:'非本轮帖子'},coverage:'PARTIAL'}))});
@@ -737,7 +761,7 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
   const interrupted={...sample,comments:async(_p:unknown,cursor?:string)=>{if(cursor){second++;throw new ReadFailure('TIMEOUT');}return {items:[{id:'demo-collect-page-one',userId:'demo-collect-page-user',nickname:'虚构',text:'已读取但未命中',hasReplies:false}],next:'next',complete:false};}};
   const r=await service.start(actor,c.id,'BASELINE',randomUUID(),'MOCK',undefined,undefined,{rounds:1,postsPerRound:1,commentPages:2});await service.execute(r.id,interrupted);
   expect(second).toBe(1);expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(1);expect(await db.capturedPost.findFirst({where:{configId:c.id}})).toMatchObject({coverage:'PARTIAL',stopReason:'TIMEOUT'});expect(await db.collectionRun.findUnique({where:{id:r.id}})).toMatchObject({capturedPosts:1,capturedCommentsCount:1,readPlan:{rounds:1,postsPerRound:1,commentPages:2}});
-  const limited=await config('存档一页');const once=await service.start(actor,limited.id,'BASELINE',randomUUID(),'MOCK',undefined,undefined,{rounds:1,postsPerRound:1,commentPages:1});await service.execute(once.id,interrupted);expect(second).toBe(1);expect(await db.capturedPost.findFirst({where:{configId:limited.id}})).toMatchObject({coverage:'PARTIAL',stopReason:'COMMENTS_PARTIAL'});
+  const limited=await config('存档一页');const once=await service.start(actor,limited.id,'BASELINE',randomUUID(),'MOCK',undefined,undefined,{rounds:1,postsPerRound:1,commentPages:1});await service.execute(once.id,interrupted);expect(second).toBe(1);expect(await db.capturedPost.findFirst({where:{configId:limited.id}})).toMatchObject({coverage:'PARTIAL',stopReason:'MCP_WINDOW_ONLY'});
  });
  it('第二帖数据异常保留第一帖原文并持久化受控诊断，不假成功',async()=>{
   const {parseSource}=await import('../src/collection/diagnostics');const {commentSchema}=await import('../src/collection/contract');const c=await config('合成第二帖异常',{batchLimit:2});

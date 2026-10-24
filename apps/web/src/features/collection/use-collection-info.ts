@@ -8,8 +8,9 @@ export function useCollectionInfo(configs:Config[],initialId?:string){
  const [params,setParams]=useSearchParams();
  const active=params.get('module')==='archive';
  const selected=configs.find(c=>c.id===params.get('config'))||configs.find(c=>c.id===initialId)||configs[0];
- const offset=archiveOffset(params.get('infoPage')),search=params.get('infoSearch')||'',runId=params.get('infoRun')||'',postId=params.get('post')||'';
- const archive=useArchivePage(selected?.id,offset),history=useConfig(selected?.id);
+ const listOffset=archiveOffset(params.get('infoPage')),search=params.get('infoSearch')||'',runId=params.get('infoRun')||'',postId=params.get('post')||'';
+ const offset=postId?archiveOffset(params.get('infoCommentPage')):listOffset;
+ const archive=useArchivePage(selected?.id,offset,false,postId),history=useConfig(selected?.id);
  const posts=infoPosts(archive.data?.posts||[],archive.data?.items||[],runId);
  const remembered=useRef(new Map<string,InfoPost>());
  const post=posts.find(p=>p.id===postId)||remembered.current.get(`${selected?.id}:${postId}`);
@@ -18,8 +19,8 @@ export function useCollectionInfo(configs:Config[],initialId?:string){
  const visible=posts.filter(p=>`${p.title} ${p.id} ${p.comments.map(c=>c.snapshot.comment+' '+(c.snapshot.parent||'')).join(' ')}`.toLocaleLowerCase().includes(query));
  const update=(patch:Record<string,string>)=>setParams(old=>{const next=new URLSearchParams(old);for(const [key,value]of Object.entries(patch)){if(value)next.set(key,value);else next.delete(key);}return next;},{replace:true});
  return {active,selected,offset,search,runId,postId,post,comments,visible,archive,history,
-  open:(p:InfoPost)=>{remembered.current.set(`${selected?.id}:${p.id}`,p);update({post:p.id});},
-  back:()=>update({post:''}),setSearch:(value:string)=>update({infoSearch:value}),setRun:(value:string)=>update({infoRun:value,post:''}),
-  setPage:(n:number)=>update({infoPage:n?String(n):''}),
-  setConfig:(id:string)=>update({config:id,infoPage:'',infoRun:'',post:'',infoSearch:''})};
+  open:(p:InfoPost)=>{remembered.current.set(`${selected?.id}:${p.id}`,p);update({post:p.id,infoCommentPage:''});},
+  back:()=>update({post:'',infoCommentPage:''}),setSearch:(value:string)=>update({infoSearch:value}),setRun:(value:string)=>update({infoRun:value,post:'',infoCommentPage:''}),
+  setPage:(n:number)=>update({[postId?'infoCommentPage':'infoPage']:n?String(n):''}),
+  setConfig:(id:string)=>update({config:id,infoPage:'',infoRun:'',post:'',infoSearch:'',infoCommentPage:''})};
 }

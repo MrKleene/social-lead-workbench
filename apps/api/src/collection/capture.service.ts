@@ -26,13 +26,15 @@ export class CaptureService {
    await tx.auditLog.create({data:{actorId:actor.id,entityId:configId,action:'SEMANTIC_SWITCH_CHANGED',metadata:{enabled:row.enabled,version:row.version}}});return row;
   });
  }
- async list(actor:Actor,configId:string,offset=0){
+ async list(actor:Actor,configId:string,offset=0,postId?:string){
   requireAdmin(actor);const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config)throw new NotFoundException();
-  const [items,total,posts,postTotal,missing,control]=await Promise.all([
-   this.db.capturedComment.findMany({where:{configId},orderBy:[{lastSeenAt:'desc'},{id:'asc'}],skip:offset,take:50,include:{post:{select:{coverage:true,stopReason:true}},reviews:{orderBy:{createdAt:'desc'},take:20,select:{id:true,state:true,score:true,reason:true,selectedModel:true,revision:true,result:true}}}}),
-   this.db.capturedComment.count({where:{configId}}),this.db.capturedPost.findMany({where:{configId},orderBy:{lastSeenAt:'desc'},take:20}),this.db.capturedPost.count({where:{configId}}),
-   this.db.$queryRaw<{count:bigint}[]>`SELECT COUNT(DISTINCT o."platformCommentId") AS count FROM "CommentObservation" o JOIN "MonitorPost" p ON p.id=o."monitorId" WHERE p."configId"=${configId} AND NOT EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."configId"=p."configId" AND c."platformCommentId"=o."platformCommentId")`,this.control(actor,configId)
-  ]);return {items,total,offset,hasMore:offset+items.length<total,posts:posts.map(p=>({...p,snapshot:publicPostSnapshot(p.snapshot),sourceAvailable:config.platform==='XHS'&&!!savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId)})),postTotal,legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model:await selectedSemanticModel(this.db),hasRules:!!config.semanticRules};
+  const commentWhere={configId,...(postId?{post:{platformPostId:postId}}:{})},postWhere={configId,...(postId?{platformPostId:postId}:{})};
+  const [items,total,posts,postTotal,missing,control,savedCounts]=await Promise.all([
+   this.db.capturedComment.findMany({where:commentWhere,orderBy:[{lastSeenAt:'desc'},{id:'asc'}],skip:offset,take:50,include:{post:{select:{coverage:true,stopReason:true}},reviews:{orderBy:{createdAt:'desc'},take:20,select:{id:true,state:true,score:true,reason:true,selectedModel:true,revision:true,result:true}}}}),
+   this.db.capturedComment.count({where:commentWhere}),this.db.capturedPost.findMany({where:postWhere,orderBy:{lastSeenAt:'desc'},take:20}),this.db.capturedPost.count({where:{configId}}),
+   this.db.$queryRaw<{count:bigint}[]>`SELECT COUNT(DISTINCT o."platformCommentId") AS count FROM "CommentObservation" o JOIN "MonitorPost" p ON p.id=o."monitorId" WHERE p."configId"=${configId} AND NOT EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."configId"=p."configId" AND c."platformCommentId"=o."platformCommentId")`,this.control(actor,configId),
+   this.db.$queryRaw<{platformPostId:string;count:bigint}[]>`SELECT p."platformPostId",COUNT(DISTINCT c."platformCommentId") AS count FROM "CapturedPost" p LEFT JOIN "CapturedComment" c ON c."postId"=p.id AND c."configId"=p."configId" WHERE p."configId"=${configId} GROUP BY p."platformPostId"`
+  ]);const counts=new Map(savedCounts.map(p=>[p.platformPostId,Number(p.count)]));return {items,total,offset,hasMore:offset+items.length<total,commentScope:postId?{postId}:null,posts:posts.map(p=>({...p,savedComments:counts.get(p.platformPostId)??0,snapshot:publicPostSnapshot(p.snapshot),sourceAvailable:config.platform==='XHS'&&!!savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId)})),postTotal,legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model:await selectedSemanticModel(this.db),hasRules:!!config.semanticRules};
  }
  async preview(actor:Actor,configId:string,ids:string[]){
   requireAdmin(actor);const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config?.semanticRules)throw new ConflictException('请先保存自然语言目标');

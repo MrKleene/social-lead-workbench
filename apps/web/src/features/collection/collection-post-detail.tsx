@@ -1,3 +1,4 @@
+import {postCounts} from './post-counts';
 import {BoundedReadEvidence} from './bounded-read-evidence';
 import {savedTitleLabel} from '@/features/collection/saved-text';
 import {Fragment,useEffect,useRef,useState,type CSSProperties,type KeyboardEvent} from 'react';
@@ -22,6 +23,7 @@ export function CollectionPostDetail({post,id,platform,comments,hasOtherPages,pa
  useEffect(()=>{heading.current?.focus({preventScroll:true});setEvidence(null);},[id]);
  useEffect(()=>{commentViewport.current?.scrollTo({top:0});setExpandedReplies(new Set());},[page]);
  const original=post?.versions[0],cover=safePostCoverUrl(post?.coverUrl),rows=commentThread(comments),count=savedCommentCount(comments);
+ const counts=postCounts(post);
  const groups=replyGroups(rows),hidden=new Set([...groups].flatMap(([root,replies])=>expandedReplies.has(root)?[]:replies.slice(1).map(r=>r.comment.id)));
  const sourceLink=post?postSourceLink(platform,id,original?.id,original?.sourceAvailable):undefined;
  const groupEnds=new Map([...groups].map(([root,replies])=>[replies.at(-1)!.comment.id,{root,count:replies.length}]));
@@ -45,7 +47,7 @@ export function CollectionPostDetail({post,id,platform,comments,hasOtherPages,pa
    <div className="info-story-body" onKeyDown={paneKeys} role="region" aria-label="帖子正文阅读区" tabIndex={0}>{typeof original?.snapshot.body==='string'?<SavedText key={original.id} text={savedSourceText(original.snapshot.body)} limit={400} label="帖子正文"/>:<p className="info-muted">{original?'帖子正文未获取。':'当前返回内容没有独立帖子原文，可在评论证据中查看已保存上下文。'}</p>}</div>
    </div>
   </aside>
-  <div className="info-conversation"><header className="info-conversation-heading"><div><h3>评论与回复 <span>{count}</span></h3><p>本页已保存{comments.length>count?` · ${comments.length} 个原文版本`:''}{hasOtherPages?' · 其他评论页可继续查看':''}</p></div></header>
+  <div className="info-conversation"><header className="info-conversation-heading"><div><h3>评论与回复 <span>{original?.savedComments??count}</span></h3><p>{counts.saved!==undefined?`累计已保存 ${counts.saved} 条 · `:''}本页 {count} 条{comments.length>count?` · ${comments.length} 个原文版本`:''}{hasOtherPages?' · 其他评论页可继续查看':''}</p>{counts.declared!==undefined&&counts.declared!==null&&<p>最近读取时平台声明 {counts.declared} 条{counts.different?' · 差额原因尚未确认':''}</p>}</div></header>
    <div ref={commentViewport} className="info-comments" onKeyDown={paneKeys} role="region" tabIndex={0} aria-label="已保存评论列表">{rows.map(({comment:c,depth,parent,parentAmbiguous},index)=><Fragment key={c.id}><article hidden={hidden.has(c.id)} className="info-comment-row" data-comment={c.id} data-reply={!!c.snapshot.parentId} data-linked={!!parent} tabIndex={-1} ref={node=>{if(node)rowNodes.current.set(c.id,node);else rowNodes.current.delete(c.id);}} style={{'--reply-depth':depth} as CSSProperties}>
     <SavedAvatar url={c.snapshot.authorAvatarUrl}/>
     <div className="info-comment-meta"><span className="info-comment-kind" title={displayNickname(c.snapshot.authorNickname)||'昵称未采集'}>{displayNickname(c.snapshot.authorNickname)||'昵称未采集'}{c.snapshot.isDemo&&<small>演示</small>}</span>
