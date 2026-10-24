@@ -1,7 +1,7 @@
 import {postCounts} from './post-counts';
 import {BoundedReadEvidence} from './bounded-read-evidence';
 import {savedTitleLabel} from '@/features/collection/saved-text';
-import {Fragment,useEffect,useRef,useState,type CSSProperties,type KeyboardEvent} from 'react';
+import {Fragment,useEffect,useRef,useState,type CSSProperties,type KeyboardEvent,type ReactNode} from 'react';
 import {ArrowLeft,ArrowUpRight,ChevronDown,ChevronUp} from 'lucide-react';
 import {safePostCoverUrl} from '@crm/contracts';
 import {Button} from '@/components/ui/button';
@@ -17,7 +17,7 @@ import {SavedText,savedSourceText} from './saved-text';
 import {ImageDiagnostics} from './image-diagnostics';
 import {SavedAvatar} from './saved-avatar';
 import {displayNickname,displayPublication,readingTime} from './display-metadata';
-export function CollectionPostDetail({post,id,platform,comments,hasOtherPages,page,onBack,onRefresh}:{post?:InfoPost;id:string;platform:Platform;comments:ArchivedComment[];hasOtherPages:boolean;page:number;onBack:()=>void;onRefresh:()=>void}){
+export function CollectionPostDetail({post,id,readAction,platform,comments,hasOtherPages,page,onBack,onRefresh}:{post?:InfoPost;id:string;readAction?:ReactNode;platform:Platform;comments:ArchivedComment[];hasOtherPages:boolean;page:number;onBack:()=>void;onRefresh:()=>void}){
  const heading=useRef<HTMLHeadingElement>(null),returnFocus=useRef<HTMLButtonElement|null>(null),rowNodes=useRef(new Map<string,HTMLElement>()),commentViewport=useRef<HTMLDivElement>(null);
  const [evidence,setEvidence]=useState<ArchivedComment|'post'|null>(null),[failedCover,setFailedCover]=useState(''),[expandedReplies,setExpandedReplies]=useState<Set<string>>(new Set());
  useEffect(()=>{heading.current?.focus({preventScroll:true});setEvidence(null);},[id]);
@@ -40,7 +40,7 @@ export function CollectionPostDetail({post,id,platform,comments,hasOtherPages,pa
    {(original?.snapshot.authorNickname||original?.snapshot.authorAvatarUrl)&&<div className="info-post-author"><SavedAvatar url={original.snapshot.authorAvatarUrl}/><span>{displayNickname(original.snapshot.authorNickname)||'昵称未采集'}</span></div>}
    <h2 ref={heading} tabIndex={-1}>{savedTitleLabel(post?.title)}</h2>
    {(publication||post?.lastSeenAt)&&<time className="info-saved-time" dateTime={publication||post?.lastSeenAt}>{publication?'发布于':'采集于'} {readingTime(publication||post!.lastSeenAt)} · 北京时间</time>}
-   <div className="info-original-action">{sourceLink?<><a className="info-original-link" href={sourceLink} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">查看原文<ArrowUpRight size={14}/></a><small>可能需登录或访问受限</small></>:<small>未保存有效原文链接</small>}</div></header>
+   <div className="info-original-action">{sourceLink?<><a className="info-original-link" href={sourceLink} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">查看原文<ArrowUpRight size={14}/></a><small>可能需登录或访问受限</small></>:<small>未保存有效原文链接</small>}{readAction}</div></header>
    <div className="info-story-scroll" data-media={!!cover&&failedCover!==cover}>
    {cover&&failedCover!==cover&&<img className="info-detail-cover" src={cover} alt="帖子封面" loading="lazy" decoding="async" crossOrigin="anonymous" referrerPolicy="no-referrer" onError={()=>setFailedCover(cover)}/>}
    {cover&&failedCover===cover&&<small className="info-saved-time">封面暂不可用</small>}

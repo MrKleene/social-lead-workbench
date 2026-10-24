@@ -190,3 +190,20 @@ describe('source titles and narrowly scoped cover compatibility',()=>{
   const old={authorAvatar:{version:1,truncated:false,shape:'EMPTY',fieldCount:1,outcomes:[{reason:'EMPTY',count:1}]}};expect(safeImageDiagnostics(old)).toEqual(old);expect(safeImageDiagnostics({authorAvatar:{...old.authorAvatar,urlClasses:[{protocol:'secret',host:'OTHER',count:1}]}})).toBeUndefined();
  });
 });
+
+
+describe('saved-post selection: synthetic source only',()=>{
+ it('bypasses all keyword search and keeps existing cancellation/budget/checkpoint behavior',async()=>{
+  const adapter=new MockAdapter('XHS','BASELINE'),search=vi.spyOn(adapter,'search');
+  const target=(await new MockAdapter('XHS','BASELINE').search(config.keywords[0],undefined)).items[0];
+  const seen:number[]=[];
+  const r=await collect(adapter,config,async()=>false,limits,async p=>{seen.push(p.posts[0]?.comments.length||0);},target);
+  expect(search).not.toHaveBeenCalled();expect(r.selection).toBe('SAVED_POST');expect(r.searchAttempts).toBeUndefined();expect(r.posts).toHaveLength(1);expect(r.posts[0].post.id).toBe(target.id);expect(r.posts[0].comments).toHaveLength(4);expect(seen.at(-1)).toBe(4);
+  const cancelled=await collect(adapter,config,async()=>true,limits,undefined,target);expect(cancelled.status).toBe('PAUSED');
+  const exhausted=await collect(adapter,config,async()=>false,{...limits,requests:1},undefined,target);expect(exhausted.reason).toBe('BUDGET');
+ });
+ it('rejects wrong detail identity and does not search as a fallback',async()=>{
+  const adapter=new MockAdapter('XHS','BASELINE');adapter.search=vi.fn();adapter.post=async()=>({id:'other',title:'合成'});
+  const r=await collect(adapter,config,async()=>false,limits,undefined,{id:'selected',title:'合成'});expect(r.status).toBe('FAILED');expect(r.reason).toBe('INVALID_DATA');expect(adapter.search).not.toHaveBeenCalled();
+ });
+});

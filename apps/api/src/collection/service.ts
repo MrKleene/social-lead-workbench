@@ -1,3 +1,5 @@
+import {readPlanSchema,savedReadTarget,type ReadPlan} from './saved-post-read';
+import {withCoveragePostLabels} from './run-coverage-labels';
 import {lockSinglePost,assertNoSinglePost} from './single-post-lock';
 import {diagnose,logCollectionDiagnostic} from './diagnostics';
 import type {CollectionDiagnostic} from '@crm/contracts';
@@ -60,9 +62,9 @@ export class CollectionService {
         await this.db.auditLog.create({ data: { actorId: actor.id, action: "MCP_READINESS_CHECK", entityId: "xhs-readonly", metadata: { probeId: probe.id, mode: settings.mode, reason, nextAllowedAt: new Date(Date.now() + retryAfterMs).toISOString() } } });
         return this.readiness(actor);
     }
-    list(actor: Actor) { requireAdmin(actor); return this.db.collectionConfig.findMany({ where: { archivedAt: null }, include: { runs: { take: 1, orderBy: { createdAt: "desc" } } }, orderBy: { createdAt: "desc" }, take: 100 }); }
+    async list(actor: Actor) { requireAdmin(actor); const configs=await this.db.collectionConfig.findMany({ where: { archivedAt: null }, include: { runs: { take: 1, orderBy: { createdAt: "desc" } } }, orderBy: { createdAt: "desc" }, take: 100 }); return withCoveragePostLabels(this.db,configs); }
     async detail(actor: Actor, id: string) { requireAdmin(actor); const config = await this.db.collectionConfig.findUnique({ where: { id }, include: { runs: { orderBy: { createdAt: "desc" }, take: 20 }, matches: { orderBy: { createdAt: "desc" }, take: 50, include: { comment: { include: { post: true, identity: { include: { lead: { select: { id: true } } } } } } } }, monitors: { take: 10, orderBy: { id: "desc" }, include: { observations: { take: 100, orderBy: { lastSeenAt: "desc" } } } } } }); if (!config)
-        throw new NotFoundException(); return config; }
+        throw new NotFoundException(); return (await withCoveragePostLabels(this.db,[config]))[0]; }
     async create(actor: Actor, input: ConfigInput) { requireAdmin(actor); input = configInput.parse(input); if(accountReadMode() && input.mode !== "MOCK" && input.batchLimit>3) throw new BadRequestException("本轮最多3篇帖子"); this.gate(input.mode); return this.db.$transaction(async (tx) => { const count = await tx.collectionConfig.count({ where: { archivedAt: null } }); if (count >= 100)
         throw new BadRequestException("最多100组配置"); if (input.defaultReplyTemplateId && !await tx.replyTemplate.findUnique({ where: { id: input.defaultReplyTemplateId } })) throw new BadRequestException("默认话术不存在，请重新选择"); const config = await tx.collectionConfig.create({ data: {...input,semanticRules:input.semanticRules||Prisma.DbNull,commentRules:input.commentRules||Prisma.DbNull} }); await tx.auditLog.create({ data: { actorId: actor.id, action: "COLLECTION_CONFIG_CREATED", entityId: config.id } }); return config; }); }
     async change(actor: Actor, id: string, data: Partial<ConfigInput> & {
@@ -87,8 +89,9 @@ export class CollectionService {
             return config;
         });
     }
-    async start(actor: Actor, id: string, scenario: Scenario, requestKey: string, mode: ConfigInput["mode"] = "MOCK", accountId?:string, consent?:string, readPlan?:{rounds:1;postsPerRound:number;commentPages:number}) {
+    async start(actor: Actor, id: string, scenario: Scenario, requestKey: string, mode: ConfigInput["mode"] = "MOCK", accountId?:string, consent?:string, readPlan?:ReadPlan) {
         requireAdmin(actor);
+        if(readPlan)readPlan=readPlanSchema.parse(readPlan);
         if (loginCheckOnly() && !accountReadMode()) throw new ForbiddenException("当前为登录状态验证环境，采集已禁用");
         const run = await this.db.$transaction(async (tx) => {
             await lockSinglePost(tx);await assertNoSinglePost(tx);
@@ -100,7 +103,7 @@ export class CollectionService {
             if ((mode === "MOCK") === (scenario === "READ_WINDOW")) throw new BadRequestException("场景与采集模式不一致");
             const old = await tx.collectionRun.findUnique({ where: { requestKey } });
             if (old) {
-                if (old.configId !== id || old.scenario !== scenario || (readPlan&&semanticHash(old.readPlan)!==semanticHash(readPlan)) || (old.execution as {accountId?:string;actorId?:string}|null)?.accountId !== accountId || (old.execution && (old.execution as {actorId:string}).actorId !== actor.id))
+                if (old.configId !== id || old.scenario !== scenario || ((readPlan||(old.readPlan as ReadPlan|null)?.savedPostId)&&semanticHash(old.readPlan)!==semanticHash(readPlan??null)) || (old.execution as {accountId?:string;actorId?:string}|null)?.accountId !== accountId || (old.execution && (old.execution as {actorId:string}).actorId !== actor.id))
                     throw new ConflictException("请求键冲突");
                 return { ...old, reused: true };
             }
@@ -114,6 +117,10 @@ export class CollectionService {
             const snapshot = configInput.parse({ name: config.name, platform: config.platform, mode: config.mode, semanticRules:config.semanticRules, commentRules:config.commentRules, keywords: config.keywords, excludeWords: config.excludeWords, batchLimit: config.batchLimit, enabled: config.enabled });
             if(accountReadMode() && mode !== 'MOCK' && snapshot.batchLimit>3)throw new BadRequestException('本轮最多3篇帖子');
             if(readPlan)snapshot.batchLimit=readPlan.postsPerRound;
+            if(readPlan?.savedPostId){
+                if(mode!=='MOCK'&&(!accountReadMode()||!this.accountReads))throw new ForbiddenException('定向读取必须使用本机已授权账号');
+                await savedReadTarget(tx,id,readPlan.savedPostId,mode);
+            }
             const execution=accountReadMode() && mode !== 'MOCK' ? await this.accountReads!.authorize(tx,actor,mode,accountId,consent) : undefined;
             const created = await tx.collectionRun.create({ data: { configId: id, revision: config.revision, snapshot, scenario, requestKey, readPlan:readPlan||{rounds:1,postsPerRound:snapshot.batchLimit,commentPages:mode==="MOCK"?4:1}, ...(execution?{execution}:{}) } });
             await tx.collectionConfig.update({ where: { id }, data: { activeRunId: created.id } });
@@ -159,6 +166,10 @@ export class CollectionService {
         const cancelled=async()=>{const config=await this.db.collectionConfig.findUniqueOrThrow({where:{id:run.configId}}),fresh=await this.db.collectionRun.findUniqueOrThrow({where:{id}});return !config.enabled||!!config.archivedAt||config.revision!==run.revision||fresh.cancelRequested||fresh.status!=='RUNNING';};
         try {
             const spec = configInput.parse(run.snapshot);
+            const plan=run.readPlan?readPlanSchema.parse(run.readPlan):undefined;
+            const selectedPost=plan?.savedPostId?await savedReadTarget(this.db,run.configId,plan.savedPostId,spec.mode):undefined;
+            if(selectedPost&&spec.batchLimit!==1)throw new ReadFailure('INVALID_DATA');
+            if(selectedPost&&spec.mode!=='MOCK'&&(!accountReadMode()||!run.execution))throw new ReadFailure('REAL_DISABLED');
             if (adapter && (adapter.mode !== spec.mode || adapter.platform !== spec.platform))
                 throw new ReadFailure("REAL_DISABLED");
             if (spec.mode === "MOCK") reader = adapter || new MockAdapter(spec.platform, run.scenario as Scenario);
@@ -172,7 +183,7 @@ export class CollectionService {
                 await this.db.collectionRun.updateMany({where:{id,status:'RUNNING'},data:{
                     requests:progress.requests,observed:progress.posts.reduce((n,p)=>n+p.comments.length,0)
                 }});
-            });
+            },selectedPost);
             if(result.diagnostic)logCollectionDiagnostic(run.id,result.diagnostic);
             diagnosticStage='finish_archive';
             await finishCapture(this.db,run,result);

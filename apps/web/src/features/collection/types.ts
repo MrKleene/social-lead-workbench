@@ -14,8 +14,9 @@ export type ConfigDraft = {
     defaultReplyTemplateId?: string | null;
 };
 export type Run = {
+    coveragePostLabels?:{postRef:string;title:string}[];
     snapshot?:{name?:string;keywords?:string[]};
-    capturedPosts?:number;capturedCommentsCount?:number;readPlan?:{rounds:number;postsPerRound:number;commentPages:number}|null;
+    capturedPosts?:number;capturedCommentsCount?:number;readPlan?:{rounds:number;postsPerRound:number;commentPages:number;savedPostId?:string}|null;
     metrics?:RunMetrics|null;
     id: string;
     scenario: string;

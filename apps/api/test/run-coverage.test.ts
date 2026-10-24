@@ -19,7 +19,7 @@ describe('immutable run coverage, synthetic only',()=>{
  it('retains first specific limitation when the last post returns unknown zero; never changes fatal or budget',()=>{
   const r:ReadResult={status:'PARTIAL',reason:'VISIBLE_WINDOW_READ',requests:4,searchIncomplete:true,posts:[post('ROOT_PAGE_BUDGET'),{...post('EMPTY_UNCONFIRMED'),comments:[]}]};
   summarizePartial(r);expect(r.reason).toBe('ROOT_PAGE_BUDGET');
-  expect(runCoverage(r)).toMatchObject({search:'PARTIAL',reasons:['SEARCH_PARTIAL','ROOT_PAGE_BUDGET','EMPTY_UNCONFIRMED'],posts:[{ordinal:1,saved:2,roots:1,replies:1},{ordinal:2,saved:0}]});
+  expect(runCoverage(r)).toMatchObject({search:'PARTIAL',reasons:['SEARCH_PARTIAL','ROOT_PAGE_BUDGET','EMPTY_UNCONFIRMED'],posts:[{postRef:'synthetic',ordinal:1,saved:2,roots:1,replies:1},{ordinal:2,saved:0}]});
   for(const [status,reason] of [['FAILED','TIMEOUT'],['PAUSED','PAUSED'],['PARTIAL','BUDGET']]){r.status=status;r.reason=reason;summarizePartial(r);expect(r.reason).toBe(reason);}
  });
  it('deduplicates counts and isolates each saved run from later mutable post snapshots',()=>{
@@ -28,6 +28,7 @@ describe('immutable run coverage, synthetic only',()=>{
   expect(first.posts[0].saved).toBe(2);p.comments.push({id:'later',userId:'x',text:'later',nickname:'',hasReplies:false});p.stopReason='BUTTON_NOT_FOUND';
   expect(first.posts[0]).toMatchObject({saved:2,reason:'ROOT_PAGE_BUDGET'});expect(runCoverage(r)?.posts[0].saved).toBe(3);
   expect(safeRunCoverage({...first,url:'private'})).toBeUndefined();
+  for(const postRef of ['https://example.invalid/post?access=synthetic','id?token=synthetic','身份\n内容'])expect(safeRunCoverage({...first,posts:[{...first.posts[0],postRef}]})).toBeUndefined();
   expect(safeRunCoverage({...first,posts:[{...first.posts[0],identity:'private'}]})).toBeUndefined();
  });
  it('keeps proven post completeness distinct from partial task/search coverage',async()=>{

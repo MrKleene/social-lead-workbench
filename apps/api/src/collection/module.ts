@@ -1,3 +1,4 @@
+import {readPlanSchema} from './saved-post-read';
 import { Controller, Get, Post, Patch, Delete, Param, Query, Req, Inject, Module, UseGuards, NotFoundException, Res, Header } from "@nestjs/common";
 import type {Response} from 'express';
 import {AccountsModule} from '../accounts/accounts';
@@ -89,7 +90,7 @@ class CollectionController {
     @Req()
     r: AuthedRequest, 
     @Param("id")
-    id: string) { const b = parse(z.object({ scenario: scenarioSchema, requestKey: z.string().uuid(), mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]), accountId:z.string().min(1).max(100).optional(), consent:z.literal("account-read-window-v1").optional(), readPlan:z.object({rounds:z.literal(1),postsPerRound:z.number().int().min(1).max(20),commentPages:z.number().int().min(1).max(4)}).strict().optional() }).strict(), r.body); return this.service.start(r.actor, id, b.scenario, b.requestKey, b.mode, b.accountId, b.consent, b.readPlan); }
+    id: string) { const b = parse(z.object({ scenario: scenarioSchema, requestKey: z.string().uuid(), mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]), accountId:z.string().min(1).max(100).optional(), consent:z.literal("account-read-window-v1").optional(), readPlan:readPlanSchema.optional() }).strict(), r.body); return this.service.start(r.actor, id, b.scenario, b.requestKey, b.mode, b.accountId, b.consent, b.readPlan); }
     @Post("runs/:id/pause")
     pause(
     @Req()

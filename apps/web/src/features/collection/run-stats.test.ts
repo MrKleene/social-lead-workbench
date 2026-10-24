@@ -23,3 +23,12 @@ it('checkpoint coverage is readable before final classification, without a fake 
  expect(runSummary(r)).toContain('10 条主评论 · 9 条回复');
  const html=renderToStaticMarkup(createElement(RunStats,{run:r}));expect(html).toContain('本次任务覆盖证据');expect(html).not.toContain('读取 0 条');
 });
+
+it('coverage uses stable references and title labels, never identical counts or card order',()=>{
+ const coverage={version:1,search:'PARTIAL',reasons:[],posts:[{postRef:'second',ordinal:1,saved:2,roots:1,replies:1,complete:false},{postRef:'first',ordinal:2,saved:2,roots:1,replies:1,complete:false}]};
+ const r={...base,metrics:{coverage} as unknown as Run['metrics'],coveragePostLabels:[{postRef:'first',title:'合成A'},{postRef:'second',title:'合成B'}]};
+ const html=renderToStaticMarkup(createElement(RunStats,{run:r}));expect(html.indexOf('合成B')).toBeLessThan(html.indexOf('合成A'));
+ expect(html).toContain('data-coverage-post="second"');
+ const old={...r,metrics:{coverage:{...coverage,posts:coverage.posts.map(({postRef,...p})=>p)}} as unknown as Run['metrics']};
+ const legacy=renderToStaticMarkup(createElement(RunStats,{run:old}));expect(legacy).toContain('旧任务未记录帖子关联');expect(legacy).not.toContain('合成A');expect(legacy).not.toContain('合成B');
+});

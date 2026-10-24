@@ -1,7 +1,7 @@
 import {z} from 'zod';
 const count=z.number().int().nonnegative().nullable();
 export const runPostItemSchema=z.object({
- id:z.string(),platformPostId:z.string(),title:z.string().max(500),body:z.string().max(20000).optional(),coverUrl:z.string().optional(),publishedAt:z.string().optional(),savedAt:z.string(),
+ readOrdinal:z.number().int().min(1).max(10).optional(),id:z.string(),platformPostId:z.string(),title:z.string().max(500),body:z.string().max(20000).optional(),coverUrl:z.string().optional(),publishedAt:z.string().optional(),savedAt:z.string(),
  savedCount:count,rootCount:count,replyCount:count,newCount:count,reusedCount:count,
  coverage:z.string(),stopReason:z.string().nullable(),
 });

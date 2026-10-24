@@ -10,7 +10,7 @@ export function collectionTaskSummary(run:Run){
  const attempts=safeSearchAttempts(run.metrics?.searchAttempts);
  const searchSummary=run.reason==='SEARCH_PARTIAL'&&attempts?.length?[...new Set(attempts.map(searchAttemptLabel))].slice(0,2).join('；'):undefined;
  const reason=searchSummary|| (diagnostic?.stage==='search'&&diagnostic.kind==='UPSTREAM_ERROR'?searchFailureLabels[diagnostic.searchReason||'UNKNOWN']:diagnostic?.kind==='SCHEMA_VALIDATION'&&diagnostic.stage==='post'&&diagnostic.field==='text'?`${diagnostic.postOrdinal?`第 ${diagnostic.postOrdinal} 篇帖子的`:''}评论文本未通过校验`:reasonLabels[run.reason||'']||'结束原因未返回');
- const range=run.readPlan?`本轮计划最多 ${run.readPlan.rounds*run.readPlan.postsPerRound} 篇。`:'';
+ const range=run.readPlan?.savedPostId?'本轮仅重新读取所选帖子。':run.readPlan?`本轮计划最多 ${run.readPlan.rounds*run.readPlan.postsPerRound} 篇。`:'';
  if(run.status==='QUEUED')return '任务已排队，等待开始读取。';
  if(run.status==='RUNNING')return `正在读取。${saved}；仅显示已返回信息。`;
  if(run.status==='FAILED')return `${range}本轮中途停止，尚未完成：${reason}。${saved}。可先查看采集信息，再检查异常。`;

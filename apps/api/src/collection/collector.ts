@@ -12,6 +12,7 @@ export type PostRead = {
     stopReason?:string;
 };
 export type ReadResult = {
+    selection?:'SAVED_POST';
     searchIncomplete?:boolean;
     searchAttempts?:SearchAttempt[];
     diagnostic?:CollectionDiagnostic;
@@ -29,7 +30,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     comments: number;
     callMs: number;
     runMs: number;
-} = limits, progress?: (result:ReadResult)=>Promise<void>): Promise<ReadResult> {
+} = limits, progress?: (result:ReadResult)=>Promise<void>, selectedPost?:Post): Promise<ReadResult> {
     if (adapter.mode !== config.mode || adapter.platform !== config.platform)
         throw new ReadFailure("REAL_DISABLED");
     const result: ReadResult = { posts: [], requests: 0, status: "COMPLETE" };
@@ -89,7 +90,8 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     try {
         if (adapter.prepare) await call(s => adapter.prepare!(s));
         const found = new Map<string, Post>();
-        for (const keyword of config.keywords) {
+        if(selectedPost){found.set(selectedPost.id,postSchema.parse(selectedPost));result.selection='SAVED_POST';}
+        for (const keyword of selectedPost?[]:config.keywords) {
             stage='search';keywordOrdinal++;
             const complete = await pages((c, s) => adapter.search(keyword, c, s), postSchema, async (items) => { for (const p of items)
                 if (found.size < config.batchLimit)
