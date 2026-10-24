@@ -713,6 +713,30 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
   expect((await db.collectionConfig.findUniqueOrThrow({where:{id:c.id}})).activeRunId).toBeNull();
   expect(await db.semanticModelCall.count()).toBe(0);expect(await db.contactAttempt.count()).toBe(0);
  });
+ it('真实适配器冷缓存从已存引用直接读取，合成传输经真实checkpoint新增1复用2',async()=>{
+  const {collect}=await import('../src/collection/collector');const {checkpointCapture}=await import('../src/collection/capture-archive');const {savedReadTarget}=await import('../src/collection/saved-post-read');
+  const id='0123456789abcdef01234567',ref={postId:id,token:'SYNTHETIC_REFERENCE_ONLY',source:'pc_search' as const},c=await config('仅合成传输');
+  const snapshot={...spec('仅合成传输'),mode:'XHS_MCP' as const};await db.collectionConfig.update({where:{id:c.id},data:{mode:'XHS_MCP'}});
+  const seed=await db.collectionRun.create({data:{configId:c.id,revision:c.revision,snapshot,scenario:'READ_WINDOW',requestKey:randomUUID(),status:'RUNNING'}});
+  const initial={deletedIds:[],post:{id,title:'合成帖子',body:'合成正文',sourceReference:ref},comments:[{id:'root',userId:'user-root',nickname:'',text:'合成主评',hasReplies:true},{id:'reply',userId:'user-reply',nickname:'',text:'合成回复',parentId:'root',hasReplies:false}],complete:false};
+  await checkpointCapture(db,seed,{status:'PARTIAL',requests:1,posts:[initial]});await db.collectionRun.update({where:{id:seed.id},data:{status:'PARTIAL'}});
+  const p=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}}),target=await savedReadTarget(db,c.id,p.id,'XHS_MCP');
+  const run=await db.collectionRun.create({data:{configId:c.id,revision:c.revision,snapshot,scenario:'READ_WINDOW',requestKey:randomUUID(),status:'RUNNING',readPlan:{rounds:1,postsPerRound:1,commentPages:1,savedPostId:p.id}}});
+  const call=vi.fn(async(name:string,args:Record<string,unknown>)=>{
+   if(name==='check_login_status')return {content:[{type:'text',text:'✅ 已登录'}]};
+   expect(name).toBe('get_feed_detail');expect(args.feed_id).toBe(id);expect(args.xsec_token).toBe(ref.token);
+   const raw={feed_id:id,data:{note:{noteId:id,title:'合成帖子',desc:'合成正文'},comments:{list:[{id:'root',content:'合成主评',userInfo:{userId:'user-root'},subCommentCount:'2',subComments:[{id:'reply',content:'合成回复',userInfo:{userId:'user-reply'}},{id:'new-reply',content:'新增合成回复',userInfo:{userId:'user-new'}}]}]}}};
+   return {content:[{type:'text',text:JSON.stringify(raw)}]};
+  });
+  const reader=new XhsMcpAdapter({call},true,'XHS_MCP',undefined);
+  const result=await collect(reader,snapshot,async()=>false,undefined,progress=>checkpointCapture(db,run,progress),target);await reader.close();
+  expect(result.status).toBe('PARTIAL');expect(call.mock.calls.map(c=>c[0])).toEqual(['check_login_status','get_feed_detail']);
+  expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(3);expect(await db.capturedPost.count({where:{configId:c.id}})).toBe(1);
+  await db.collectionRun.update({where:{id:run.id},data:{status:'PARTIAL'}});
+  const feed=(await read(`/collection/configs/${c.id}/runs/${run.id}/posts`)).body;expect(feed.items[0]).toMatchObject({savedCount:3,newCount:1,reusedCount:2});
+  expect(await db.semanticModelCall.count()).toBe(0);expect(await db.contactAttempt.count()).toBe(0);
+  expect(JSON.stringify((await db.collectionRun.findUniqueOrThrow({where:{id:run.id}})).metrics)).not.toContain(ref.token);
+ });
  it('读取顺序与存档顺序不同仍按稳定帖子ID关联，历史只补识别标题不改证据',async()=>{
   const c=await archive(),run=await db.collectionRun.findFirstOrThrow({where:{configId:c.id}}),first=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}});
   const second=await db.capturedPost.create({data:{configId:c.id,runId:run.id,lastRunId:run.id,platformPostId:'synthetic-second',contentHash:'second',snapshot:{title:'合成第二存档先读取'},createdAt:new Date(Date.now()+1000)}});

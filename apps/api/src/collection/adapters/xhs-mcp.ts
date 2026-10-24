@@ -69,9 +69,14 @@ export class XhsMcpAdapter implements ReadAdapter {
         let readWindow=diagnosticOnly?undefined:this.readWindow;
         if(readWindow&&remainingComments!==undefined){if(!Number.isInteger(remainingComments)||remainingComments<1)throw new ReadFailure("BUDGET");readWindow={...readWindow,max_comments:Math.min(readWindow.max_comments,remainingComments),max_roots:Math.min(readWindow.max_roots,remainingComments)};}
         if(readWindow){boundedReadConfigSchema.parse(readWindow);if(!this.transport.supportsBoundedComments?.())throw new ReadFailure("UNSUPPORTED");}
-        const reference = this.tokens.get(post.id);
-        if (!reference) throw new ReadFailure("INVALID_DATA");
+        // Normal search warms tokens; a scoped saved-post run intentionally never searches.
+        // Its server-loaded reference must independently match the exact public post ID.
+        const saved = this.mode==='XHS_MCP' ? savedPostReference(post.sourceReference,post.id) : undefined;
+        if(this.mode==='XHS_MCP'&&post.sourceReference!==undefined&&!saved)throw invalidSource('post','IDENTITY_CONFLICT','noteId');
+        const reference = this.tokens.get(post.id) || (saved?{rawId:saved.postId,token:saved.token}:undefined);
+        if (!reference) throw invalidSource('post','SCHEMA_VALIDATION','xsecToken');
         const data = parseSource(z.object({ feed_id: rawId.optional(), data: z.object({ boundedRead:z.unknown().optional(), coverageDiagnostic:z.unknown().optional(), avatarSourceDiagnostic:z.unknown().optional(), note: z.object({ noteId: rawId.optional(), title: z.string().max(500).nullish(), desc: z.string().max(20000).nullish(), imageList:z.unknown().optional(),user:z.unknown().optional(),time:z.unknown().optional() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }),await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false, ...(readWindow?{read_window:readWindow}:{}) }, signal),"post");
+        if(saved&&!data.feed_id&&!data.data.note.noteId)throw invalidSource('post','IDENTITY_CONFLICT','noteId');
         if ((data.feed_id && data.feed_id !== reference.rawId) || (data.data.note.noteId && data.data.note.noteId !== reference.rawId)) throw invalidSource("post","IDENTITY_CONFLICT","noteId");
         const boundedRead=readWindow?parseSource(boundedReadReportSchema,data.data.boundedRead,'post'):undefined;
         const replies = new Map<string, Comment[]>(), seen = new Map<string,{signature:string;value:Comment}>(), active=new Set<string>();
