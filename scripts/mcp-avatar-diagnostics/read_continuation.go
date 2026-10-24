@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"github.com/go-rod/rod"
 	"github.com/xpzouying/xiaohongshu-mcp/xiaohongshu"
 	"sync"
 	"time"
@@ -18,13 +19,17 @@ type readContinuations struct {
 	lease *readLease
 }
 type readLease struct {
-	handle  string
-	binding [32]byte
-	feed    string
-	created time.Time
-	timer   *time.Timer
-	session *xiaohongshu.BoundedSession
-	close   func()
+	chunk              *xiaohongshu.CommentChunkSession
+	page               *rod.Page
+	lastToken, lastAck string
+	lastChunk          *xiaohongshu.FeedDetailResponse
+	handle             string
+	binding            [32]byte
+	feed               string
+	created            time.Time
+	timer              *time.Timer
+	session            *xiaohongshu.BoundedSession
+	close              func()
 }
 
 func (m *readContinuations) clear() {
@@ -77,7 +82,7 @@ func (s *XiaohongshuService) continuedDetail(ctx context.Context, id, ref string
 			m.clear()
 			return nil, errors.New("CONTINUATION_EXPIRED")
 		}
-		if req.Token != l.handle || binding != l.binding || id != l.feed {
+		if l.chunk != nil || req.Token != l.handle || binding != l.binding || id != l.feed {
 			return nil, errors.New("CONTINUATION_MISMATCH")
 		}
 		l.handle = "" // Consume before execution; no blind retry after an uncertain result.

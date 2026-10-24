@@ -18,6 +18,7 @@ type boundedRodPage struct {
 	roots        rod.Elements
 	refreshRoots bool
 	scopeOK      bool
+	chunkMode    bool
 }
 
 func (p *boundedRodPage) guard(ctx context.Context) error {
@@ -43,7 +44,21 @@ func (p *boundedRodPage) Snapshot(ctx context.Context) ([]byte, CoverageReady, e
 		p.scopeOK = false
 		roots, err := p.page.Context(ctx).Elements(".parent-comment")
 		sample := inspectCoverage([]byte(raw), p.feedID, ready)
-		if err == nil && sample.Loaded != nil && len(roots) == sample.Loaded.Roots {
+		count := -1
+		if sample.Loaded != nil {
+			count = sample.Loaded.Roots
+		}
+		if p.chunkMode {
+			if _, rows, e := chunkSnapshot([]byte(raw), p.feedID); e == nil {
+				count = 0
+				for _, row := range rows {
+					if row.mark.Parent == "" {
+						count++
+					}
+				}
+			}
+		}
+		if err == nil && len(roots) == count {
 			p.roots = roots
 			p.scopeOK = true
 		}
@@ -110,7 +125,7 @@ func (p *boundedRodPage) ExpandReply(ctx context.Context, remaining, maxPerRoot 
 				reason = "UNKNOWN_REPLY_COUNT"
 				continue
 			}
-			if n > remaining || loaded+n > maxPerRoot {
+			if n > remaining || (!p.chunkMode && loaded+n > maxPerRoot) || (p.chunkMode && n > maxPerRoot) {
 				reason = "REPLY_THRESHOLD"
 				continue
 			}

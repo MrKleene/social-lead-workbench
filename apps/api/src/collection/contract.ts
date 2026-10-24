@@ -44,11 +44,16 @@ export interface ReadAdapter {
     readonly mode: "MOCK" | "XHS_FIXTURE" | "XHS_MCP";
     prepare?(signal: AbortSignal): Promise<void>;
     close?(): Promise<void>;
+    supportsChunks?():boolean;
+    restoreCheckpoint?(post:Post,checkpoint:import("@crm/contracts").CommentCheckpoint):void;
+    chunkReceipt?(post:Post):import("@crm/contracts").CommentChunkReceipt|undefined;
+    confirmCheckpoint?(post:Post):void;
+    finishChunks?(post:Post,signal:AbortSignal):Promise<void>;
     receivedComments?(post:Post):Comment[];
     search(keyword: string, cursor: string | undefined, signal: AbortSignal): Promise<Page<Post>>;
     post(post: Post, signal: AbortSignal, remainingComments?:number): Promise<Post>;
     canContinuePost?(post:Post):boolean;
-    continuePost?(post:Post,signal:AbortSignal):Promise<Post>;
+    continuePost?(post:Post,signal:AbortSignal,remainingComments?:number):Promise<Post>;
     comments(post: Post, cursor: string | undefined, signal: AbortSignal): Promise<Page<Comment>>;
     replies(post: Post, parentId: string, cursor: string | undefined, signal: AbortSignal): Promise<Page<Comment>>;
 }

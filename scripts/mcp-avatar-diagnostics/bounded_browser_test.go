@@ -160,3 +160,92 @@ func TestReadThroughBrowserPagination(t *testing.T) {
 		t.Fatal("replayed actions: " + got)
 	}
 }
+
+// Synthetic large note: delayed paging and >30 replies in one discussion.
+// ACK followed by a fresh session simulates committed data surviving process loss.
+func TestChunkBrowserLargeAndRestart(t *testing.T) {
+	binary := os.Getenv("CRM_OFFLINE_CHROMIUM")
+	if binary == "" {
+		t.Skip("local Chromium required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+	defer cancel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!doctype html><meta charset="utf-8"><style>.note-scroller{height:180px;overflow:auto}.comment-item{min-height:28px}</style><div class="note-scroller"></div><script>
+ const leaf=id=>({id,content:'synthetic',userInfo:{userId:'u'},subCommentCount:'0',subComments:[]});let busy=false;const comments={hasMore:true,list:Array.from({length:10},(_,i)=>leaf('root'+i))};comments.list[0].subCommentCount='45';
+ window.__INITIAL_STATE__={note:{noteDetailMap:{'synthetic-post':{note:{noteId:'synthetic-post',title:'synthetic',interactInfo:{commentCount:'175'}},comments}}}};window.events=[];const box=document.querySelector('.note-scroller');
+ function draw(){box.innerHTML=comments.list.map((x,i)=>'<div class="parent-comment"><div class="comment-item">root</div>'+x.subComments.map(()=>'<div class="comment-item">reply</div>').join('')+(i===0&&x.subComments.length<45?'<button class="show-more">展开15条回复</button>':'')+'</div>').join('')+'<div style="height:400px"></div>'+(comments.hasMore?'':'<div class="end-container">THE END</div>');const b=box.querySelector('button');if(b)b.onclick=()=>{if(busy)return;busy=true;window.events.push('reply');setTimeout(()=>{const root=comments.list[0],n=root.subComments.length;root.subComments.push(...Array.from({length:15},(_,j)=>leaf('child'+(n+j))));busy=false;draw()},650)}}
+ box.onscroll=()=>{if(busy||comments.list[0].subComments.length<45||!comments.hasMore||box.scrollTop+box.clientHeight<box.scrollHeight-3)return;busy=true;window.events.push('root');setTimeout(()=>{const n=comments.list.length;comments.list.push(...Array.from({length:Math.min(20,130-n)},(_,i)=>leaf('root'+(n+i))));comments.hasMore=comments.list.length<130;busy=false;draw()},600)};draw();</script>`))
+	}))
+	defer server.Close()
+	launch := launcher.New().Bin(binary).UserDataDir(t.TempDir()).Headless(true).Leakless(false).Set("disable-background-networking").Set("disable-component-update").Set("no-first-run")
+	control, e := launch.Context(ctx).Launch()
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer launch.Cleanup()
+	browser := rod.New().ControlURL(control).Context(ctx)
+	if e = browser.Connect(); e != nil {
+		t.Fatal(e)
+	}
+	defer browser.Close()
+	page := browser.MustPage(server.URL)
+	page.MustWaitLoad()
+	s, _ := NewCommentChunkSession(nil)
+	c := chunkConfig()
+	c.RootPages = 2
+	c.ReplyClicks = 2
+	c.TimeoutMs = 10000
+	seen := map[string]bool{}
+	var last *FeedDetailResponse
+	for i := 0; i < 8; i++ {
+		r, e := s.ReadPage(ctx, page, "synthetic-post", c)
+		if e != nil {
+			t.Fatal(e)
+		}
+		for _, row := range r.Chunk.Rows {
+			if seen[row.Comment.ID] {
+				t.Fatal("duplicate chunk")
+			}
+			seen[row.Comment.ID] = true
+		}
+		if e = s.Ack(r.Chunk.Hash); e != nil {
+			t.Fatal(e)
+		}
+		last = r
+		if !r.Chunk.CanContinue {
+			break
+		}
+	}
+	if len(seen) != 175 || last.BoundedRead.State != "COMPLETE" {
+		t.Fatalf("count=%d reason=%s state=%s actions=%+v reply=%s events=%s", len(seen), last.BoundedRead.Reason, last.BoundedRead.State, last.BoundedRead.Actions, last.BoundedRead.ReplyStop, page.MustEval(`()=>window.events.join(",")`).Str())
+	}
+	if page.MustEval(`()=>window.events.filter(x=>x==='reply').length`).Int() != 3 {
+		t.Fatal("reply clicks repeated or >30 blocked")
+	}
+	cp := last.Chunk.Checkpoint
+	page.Close()
+	page = browser.MustPage(server.URL)
+	page.MustWaitLoad()
+	s, _ = NewCommentChunkSession(&cp)
+	for i := 0; i < 8; i++ {
+		r, e := s.ReadPage(ctx, page, "synthetic-post", c)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if len(r.Chunk.Rows) != 0 {
+			t.Fatal("replayed stored data as new")
+		}
+		if e = s.Ack(r.Chunk.Hash); e != nil {
+			t.Fatal(e)
+		}
+		last = r
+		if !r.Chunk.CanContinue {
+			break
+		}
+	}
+	if last.Chunk.RemainingAnchors != 0 || last.BoundedRead.State != "COMPLETE" {
+		t.Fatalf("restart incomplete: %s, anchors=%d", last.BoundedRead.Reason, last.Chunk.RemainingAnchors)
+	}
+}

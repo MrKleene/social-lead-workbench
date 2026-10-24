@@ -8,7 +8,7 @@ export function BoundedReadEvidence({value}:{value:unknown}){
  {progress?.counts&&<p>{progress.counts}</p>}{progress?.growth&&<p>{progress.growth}</p>}
  <p>{progress?.actions}</p>{progress?.boundary&&<p>{progress.boundary}</p>}
  <p>主评论：{boundedReadLabels[d.rootStop]}；回复：{boundedReadLabels[d.replyStop]}。</p>
- <p>{s.loaded?`本次保留 ${s.loaded.roots} 条主评论、${s.loaded.replies} 条回复`:'保留数量未知'}{d.excludedRoots?`；${d.excludedRoots} 条范围外主评论未纳入`:''}。</p>
+ <p>{d.chunkSummary?`本次页面已加载 ${d.chunkSummary.roots} 条主评论、${d.chunkSummary.replies} 条回复` : s.loaded?`本次保留 ${s.loaded.roots} 条主评论、${s.loaded.replies} 条回复`:'保留数量未知'}{d.excludedRoots?`；${d.excludedRoots} 条范围外主评论未纳入`:''}。</p>
  {s.ready.emptyVisible&&<p>页面明确显示空评论提示；未把无效总数转换成零。</p>}
  {s.relations&&<details><summary>回复目标字段检查</summary><p>仅检查来源字段与已加载节点的对应关系，不推定直接回复对象。</p><p>检查 {s.relations.scanned} 个节点，{s.relations.fields.length} 项结构记录{s.relations.limited?'（已到诊断上限）':''}。</p>{s.relations.fields.map((f,i)=><p key={i}>节点 #{f.ordinal} · {f.path} · {f.shape}{f.commentOrdinals.length?` · 对应评论节点 ${f.commentOrdinals.map(x=>'#'+x).join('、')}`:''}{f.userMatches?` · 对应 ${f.userMatches} 个已加载作者记录`:''}</p>)}</details>}
  <details><summary>各层回复范围</summary>{s.groups.map(g=><p key={g.ordinal}>节点 #{g.ordinal}{g.parent!==null?` · 父节点 #${g.parent}`:''}：声明 {g.declared.value??'未知'}，已加载 {g.loaded.value??'未知'}</p>)}</details></details>;

@@ -61,3 +61,34 @@ func TestContinuationInputAndRandomHandle(t *testing.T) {
 		t.Fatal("bad handle")
 	}
 }
+
+func TestChunkCachedAckAndBindingsNeverOpenBrowser(t *testing.T) {
+	s := NewXiaohongshuService()
+	token := strings.Repeat("a", 64)
+	ack := strings.Repeat("b", 64)
+	chunk, _ := xiaohongshu.NewCommentChunkSession(nil)
+	cached := &xiaohongshu.FeedDetailResponse{Chunk: &xiaohongshu.CommentChunk{Version: 1}}
+	closed := 0
+	s.reads.lease = &readLease{feed: "synthetic", binding: sha256.Sum256([]byte("synthetic\x00reference")), handle: strings.Repeat("c", 64), created: time.Now(), chunk: chunk, lastToken: token, lastAck: ack, lastChunk: cached, close: func() { closed++ }}
+	c := continuationConfig("START", "")
+	c.ReadContinuation = nil
+	c.ReadChunks = &xiaohongshu.CommentChunkRequest{Mode: "RESUME", Token: token, Ack: ack}
+	r, e := s.chunkedDetail(context.Background(), "synthetic", "reference", c)
+	if e != nil || r.Data != cached {
+		t.Fatal("duplicate ACK did not return cached chunk", e)
+	}
+	_, e = s.chunkedDetail(context.Background(), "different", "reference", c)
+	if e == nil || e.Error() != "CONTINUATION_MISMATCH" || closed != 0 {
+		t.Fatal("cross target", e)
+	}
+	c.ReadChunks.Ack = strings.Repeat("d", 64)
+	_, e = s.chunkedDetail(context.Background(), "synthetic", "reference", c)
+	if e == nil {
+		t.Fatal("altered ACK")
+	}
+	s.reads.lease.created = time.Now().Add(-3 * time.Minute)
+	_, e = s.chunkedDetail(context.Background(), "synthetic", "reference", c)
+	if e == nil || closed != 1 {
+		t.Fatal("expired lease", e)
+	}
+}

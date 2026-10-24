@@ -1,3 +1,4 @@
+import {commitCheckpoint,checkpointParents,type CheckpointLease} from './comment-checkpoint';
 import { createHash } from 'node:crypto';
 import { CapturedComment, CollectionConfig, CollectionRun, Prisma } from '@prisma/client';
 import { SemanticSnapshot, CaptureDisplay, captureDisplay, safePostCoverUrl, safeImageDiagnostics, semanticRulesSchema } from '@crm/contracts';
@@ -20,14 +21,14 @@ export async function enqueueCaptured(tx:Prisma.TransactionClient,c:CapturedComm
  // The legacy unique key stays intact; new keys contain rule/model/context/content identity.
  const result=await tx.semanticReview.createMany({data:[{configId:config.id,runId:c.runId,revision:config.revision,snapshotHash:analysisKey,analysisKey,selectedModel:model,ruleHash,contextVersion:c.contextVersion,captureId:c.id,platform:config.platform,platformUserId:s.userId,snapshot:c.snapshot as Prisma.InputJsonValue,rules:rules.data,isDemo:c.isDemo,state:'UNANALYSED',reason:'已入队，未分析；需检查脱敏预览后手动评估'}],skipDuplicates:true});return result.count;
 }
-export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResult,guard?:(tx:Prisma.TransactionClient)=>Promise<void>){
+export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResult,guard?:(tx:Prisma.TransactionClient)=>Promise<void>,leases?:Map<string,CheckpointLease>){
  if(!result.posts.length)return;
  const spec=configInput.parse(run.snapshot),isDemo=spec.mode!=='XHS_MCP';
  await db.$transaction(async tx=>{
   if(guard)await guard(tx);
   const [config]=await tx.$queryRaw<CollectionConfig[]>`SELECT * FROM "CollectionConfig" WHERE id=${run.configId} FOR UPDATE`;
   const current=await tx.collectionRun.findUniqueOrThrow({where:{id:run.id}});
-  if(current.status!=='RUNNING'||current.cancelRequested||!config.enabled||config.archivedAt||config.revision!==run.revision)return;
+  if(current.status!=='RUNNING'||current.cancelRequested||!config.enabled||config.archivedAt||config.revision!==run.revision)throw new ReadFailure('PAUSED');
   const enabled=(await tx.semanticControl.findUnique({where:{configId:config.id}}))?.enabled===true;
   for(const entry of result.posts){
    const valid=(id:string)=>spec.mode==='MOCK'?id.startsWith('demo-collect-'):spec.mode==='XHS_FIXTURE'?id.startsWith('fixture-xhs-'):!/^(demo-|fixture-)/.test(id);
@@ -41,8 +42,8 @@ export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResul
    const retainedReference=spec.mode==='XHS_MCP'?savedPostReference(sourceReference,entry.post.id)||savedPostReference(previousSnapshot.sourceReference,entry.post.id):undefined;
    const postSnapshot={...textPost,...(boundedRead?{boundedRead}:{}),...(boundedReadWindows?{boundedReadWindows}:{}),...(retainedReference?{sourceReference:retainedReference}:{}),...(diagnostic?{imageDiagnostics:diagnostic}:{}),...captureDisplay(previousSnapshot),...display,...(retainedCover?{coverUrl:retainedCover}:{})};
    const postHash=semanticHash(textPost),p=await tx.capturedPost.upsert({where:{configId_platformPostId_contentHash:{configId:config.id,platformPostId:entry.post.id,contentHash:postHash}},create:{configId:config.id,runId:run.id,platformPostId:entry.post.id,contentHash:postHash,snapshot:postSnapshot,lastRunId:run.id,stopReason:entry.stopReason||null,coverage:entry.complete?'COMPLETE':'PARTIAL'},update:{snapshot:postSnapshot,lastRunId:run.id,lastSeenAt:new Date(),coverage:entry.complete?'COMPLETE':'PARTIAL',stopReason:entry.stopReason||(entry.complete?null:'WINDOW_IN_PROGRESS')}});
-   const parents=new Map(entry.comments.map(c=>[c.id,c]));
-   for(const comment of entry.comments){
+   const parents=await checkpointParents(tx,config.id,entry.post.id,entry.comments,entry.chunk);
+   for(const comment of entry.chunk?(entry.chunkComments||[]):entry.comments){
     const snapshot=semanticSnapshot(entry.post,comment,comment.parentId?parents.get(comment.parentId):undefined,entry.complete,isDemo),contentHash=snapshotHash(snapshot);
     const key={configId:config.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION};
     const previous=await tx.capturedComment.findUnique({where:{configId_platformCommentId_contentHash_contextVersion:key},select:{snapshot:true}});
@@ -52,6 +53,7 @@ export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResul
     const c=await tx.capturedComment.upsert({where:{configId_platformCommentId_contentHash_contextVersion:{configId:config.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION}},create:{configId:config.id,runId:run.id,postId:p.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION,snapshot:archived,isDemo,lastRunId:run.id},update:{snapshot:archived,lastRunId:run.id,lastSeenAt:new Date()}});
     if(enabled)await enqueueCaptured(tx,c,config);
    }
+   if(entry.chunk){const lease=leases?.get(entry.post.id);if(!lease)throw new ReadFailure('AUTHORIZATION_ENDED');await commitCheckpoint(tx,lease,entry.chunk,entry.post.id,entry.chunkComments||[],entry.complete);}
   }
   const [posts,comments]=await Promise.all([tx.capturedPost.groupBy({by:['platformPostId'],where:{configId:config.id,lastRunId:run.id}}),tx.capturedComment.groupBy({by:['platformCommentId'],where:{configId:config.id,lastRunId:run.id}})]);
   const coverage=runCoverage(result);

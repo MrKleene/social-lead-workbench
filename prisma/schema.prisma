@@ -529,3 +529,23 @@ model ModelSettings {
  encryptedKey Json?
  updatedAt DateTime @updatedAt
 }
+
+// Recovery metadata only. Public IDs/fingerprints, never cookies or access URLs.
+// No cascade into account, CRM, or source records.
+model CommentReadCheckpoint {
+ id String @id @default(cuid())
+ configId String
+ platformPostId String
+ accountId String
+ deviceId String
+ revision Int
+ fence Int @default(0)
+ ownerRunId String?
+ expiresAt DateTime?
+ sequence Int @default(0)
+ state String @default("PARTIAL")
+ checkpoint Json
+ updatedAt DateTime @updatedAt
+ @@unique([configId,platformPostId,accountId,deviceId])
+ @@index([ownerRunId])
+}

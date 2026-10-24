@@ -32,6 +32,7 @@ type BoundedActionEvidence struct {
 }
 
 type BoundedReadReport struct {
+	ChunkSummary  *ChunkCoverageSummary  `json:"chunkSummary,omitempty"`
 	Window        int                    `json:"window,omitempty"`
 	Actions       *BoundedActionEvidence `json:"actions,omitempty"`
 	Version       int                    `json:"version"`

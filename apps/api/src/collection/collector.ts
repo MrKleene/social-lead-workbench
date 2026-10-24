@@ -4,6 +4,8 @@ import {searchAttemptSchema,type SearchAttempt,type CollectionDiagnostic} from "
 import {diagnose,invalidSource} from "./diagnostics";
 import { Comment, Post, Page, ReadAdapter, ReadFailure, ConfigInput, commentSchema, postSchema, limits } from "./contract";
 export type PostRead = {
+    chunk?:import("@crm/contracts").CommentChunkReceipt;
+    chunkComments?:Comment[];
     post: Post;
     comments: Comment[];
     deletedIds: string[];
@@ -30,7 +32,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     comments: number;
     callMs: number;
     runMs: number;
-} = limits, progress?: (result:ReadResult)=>Promise<void>, selectedPost?:Post): Promise<ReadResult> {
+} = limits, progress?: (result:ReadResult)=>Promise<void>, selectedPost?:Post,beforePost?:(post:Post)=>Promise<void>): Promise<ReadResult> {
     if (adapter.mode !== config.mode || adapter.platform !== config.platform)
         throw new ReadFailure("REAL_DISABLED");
     const result: ReadResult = { posts: [], requests: 0, status: "COMPLETE" };
@@ -89,6 +91,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     }
     try {
         if (adapter.prepare) await call(s => adapter.prepare!(s));
+        if(adapter.mode==='XHS_MCP'&&!adapter.supportsChunks?.())budget={...budget,comments:Math.min(100,budget.comments)};
         const found = new Map<string, Post>();
         if(selectedPost){found.set(selectedPost.id,postSchema.parse(selectedPost));result.selection='SAVED_POST';}
         for (const keyword of selectedPost?[]:config.keywords) {
@@ -108,13 +111,13 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         }
         for (const item of found.values()) {
             if(comments>=budget.comments)throw new ReadFailure('BUDGET');
-            postOrdinal++;stage='post';
+            postOrdinal++;stage='post';await beforePost?.(item);
             let post = postSchema.parse(await call(s => adapter.post(item, s, budget.comments-comments)));
             if (post.id !== item.id)
                 throw new ReadFailure("INVALID_DATA");
             const entry: PostRead = { stopReason:post.boundedRead?.reason, post, comments: [], deletedIds: [], complete: false };
             result.posts.push(entry);
-            await checkpoint();
+            if(!adapter.chunkReceipt?.(post))await checkpoint();
             const roots: Comment[] = [];
             const add = async (items: Comment[], deleted: string[]) => {
                 for (const c of items) {
@@ -128,7 +131,9 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
                 if(comments>budget.comments)throw new ReadFailure("BUDGET");
             };
             stage='received_comments';
-            if(adapter.receivedComments)await add(z.array(commentSchema).max(200).parse(adapter.receivedComments(post)),[]);
+            entry.chunk=adapter.chunkReceipt?.(post);
+            if(adapter.receivedComments){const rows=z.array(commentSchema).max(200).parse(adapter.receivedComments(post));entry.chunkComments=entry.chunk?rows:undefined;await add(rows,[]);}
+            adapter.confirmCheckpoint?.(post);
             // The bounded MCP response already contains the retained tree. Save first,
             // then stop on terminal read failures; never issue cached-tree page calls
             // that could mask cancellation or consume the remaining request budget.
@@ -138,16 +143,19 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
                 while(adapter.continuePost&&adapter.canContinuePost?.(post)&&comments<budget.comments){
                     entry.windowRead=true;entry.complete=false;entry.stopReason=post.boundedRead?.reason;await checkpoint();
                     stage='post';
-                    const next=postSchema.parse(await call(s=>adapter.continuePost!(post,s)));
+                    const next=postSchema.parse(await call(s=>adapter.continuePost!(post,s,budget.comments-comments)));
                     if(next.id!==post.id||!next.boundedRead)throw invalidSource('post','IDENTITY_CONFLICT','id');
                     post=next;entry.post=post;entry.stopReason=post.boundedRead!.reason;
                     stage='received_comments';
                     const before=entry.comments.length;
-                    if(adapter.receivedComments)await add(z.array(commentSchema).max(200).parse(adapter.receivedComments(post)),[]);
+                    entry.chunk=adapter.chunkReceipt?.(post);
+            if(adapter.receivedComments){const rows=z.array(commentSchema).max(200).parse(adapter.receivedComments(post));entry.chunkComments=entry.chunk?rows:undefined;await add(rows,[]);}
+            adapter.confirmCheckpoint?.(post);
                     await checkpoint();
-                    if(entry.comments.length===before)break;
+                    if(entry.comments.length===before&&!entry.chunk)break;
                 }
                 entry.windowRead=true;entry.complete=post.boundedRead!.state==='COMPLETE';entry.stopReason=post.boundedRead!.reason;if(!entry.complete){result.status='PARTIAL';result.reason=post.boundedRead!.reason;}await checkpoint();
+                if(entry.chunk&&adapter.finishChunks)await call(s=>adapter.finishChunks!(post,s));
                 const reason=post.boundedRead!.reason;
                 if(reason==='PLATFORM_LIMIT')throw new ReadFailure('RESTRICTED');
                 if(reason==='CANCELLED')throw new ReadFailure('PAUSED');

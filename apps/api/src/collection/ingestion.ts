@@ -1,3 +1,4 @@
+import {checkpointParents} from './comment-checkpoint';
 import {runCoverage} from './run-coverage';
 import { RunMetrics,safeRunCoverage,safeCollectionDiagnostic,safeSearchAttempts } from '@crm/contracts';
 import { assessComment } from './comment-rules';
@@ -37,8 +38,8 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                 let observed = 0, matched = 0, added = 0, notices = 0;
                 for (const entry of result.posts) {
                     const monitor = await tx.monitorPost.upsert({ where: { configId_revision_platformPostId: { configId: config.id, revision: run.revision, platformPostId: entry.post.id } }, create: { configId: config.id, revision: run.revision, platformPostId: entry.post.id }, update: {} });
-                    const seen = new Set<string>();
-                    const contextComments=new Map(entry.comments.map(c=>[c.id,c]));
+                    const seen = new Set<string>(entry.chunk?.checkpoint.marks.map(m=>m.id)||[]);
+                    const contextComments=await checkpointParents(tx,config.id,entry.post.id,entry.comments,entry.chunk);
                     const established = spec.mode === "MOCK" ? !!monitor.baselineAt : !!monitor.lastRunId;
                     const windowSucceeded = spec.mode === "MOCK" || !!entry.windowRead;
                     for (const c of entry.comments) {

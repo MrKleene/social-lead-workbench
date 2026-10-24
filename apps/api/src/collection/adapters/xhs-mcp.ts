@@ -1,3 +1,5 @@
+import {commentChunkSchema,commentCheckpointSchema,type CommentCheckpoint,type CommentChunkReceipt} from '@crm/contracts';
+import {validateChunk} from '../comment-checkpoint';
 import {searchFailureReason,searchFailureObservation} from './search-failure';
 import * as commentPolicy from '../../../../../runtime/comment-read-policy.cjs';
 import {safeSearchObservation,boundedReadConfigSchema,boundedReadReportSchema,type BoundedReadConfig, safeCoverageDiagnostic,savedNickname,savedPublishedAt,safeAvatarSourceDiagnostic} from '@crm/contracts';
@@ -35,6 +37,18 @@ const rawComment = z.object({ id: rawId, noteId: rawId.optional(), content: z.st
 /** Pinned upstream exposes no comment cursor input. Only the returned finite window is consumed. */
 export class XhsMcpAdapter implements ReadAdapter {
     readonly platform = "XHS" as const;
+    private chunkStates=new Map<string,{token:string;receipt:CommentChunkReceipt;confirmed:boolean;window:BoundedReadConfig;ordinal:number}>();
+    private checkpoints=new Map<string,CommentCheckpoint>();
+    supportsChunks(){return !!this.readWindow&&this.transport.supportsCommentChunks?.()===true;}
+    restoreCheckpoint(post:Post,c:CommentCheckpoint){this.checkpoints.set(post.id,commentCheckpointSchema.parse(c));}
+    chunkReceipt(post:Post){return this.chunkStates.get(post.id)?.receipt;}
+    confirmCheckpoint(post:Post){const c=this.chunkStates.get(post.id);if(c){c.confirmed=true;this.checkpoints.set(post.id,c.receipt.checkpoint);}}
+    async finishChunks(post:Post,signal:AbortSignal){
+        const c=this.chunkStates.get(post.id);if(!c)return;if(!c.confirmed)throw new ReadFailure('INVALID_DATA');
+        const ref=this.tokens.get(post.id)||(()=>{const r=savedPostReference(post.sourceReference,post.id);return r?{rawId:r.postId,token:r.token}:undefined;})();if(!ref)throw new ReadFailure('INVALID_DATA');
+        const value=await this.read('get_feed_detail',{feed_id:ref.rawId,xsec_token:ref.token,load_all_comments:false,click_more_replies:false,read_window:c.window,read_chunks:{mode:'FINISH',token:c.token,ack:c.receipt.hash}},signal);
+        parseSource(z.object({feed_id:z.literal(ref.rawId),data:z.object({chunkAck:z.literal(true)})}),value,'post');this.chunkStates.delete(post.id);this.continuations.delete(post.id);
+    }
     private tokens = new Map<string, { rawId: string; token: string }>();
     private continuations=new Map<string,{token:string,window:BoundedReadConfig,ordinal:number}>();
     private usedContinuationTokens=new Set<string>();
@@ -52,7 +66,7 @@ export class XhsMcpAdapter implements ReadAdapter {
         if (/未登录|登录失效/.test(result)) throw new ReadFailure("LOGIN_EXPIRED");
         if (!/^✅ 已登录(?:\n|$)/.test(result)) throw new ReadFailure("INVALID_DATA");
     }
-    async close() { this.tokens.clear(); this.details.clear();this.continuations.clear();this.usedContinuationTokens.clear(); await this.transport.close?.(); }
+    async close() { this.chunkStates.clear();this.checkpoints.clear();this.tokens.clear(); this.details.clear();this.continuations.clear();this.usedContinuationTokens.clear(); await this.transport.close?.(); }
     private async read(name: ReadTool, args: Record<string, unknown>, signal: AbortSignal) {
         if (!this.allowed) throw new ReadFailure("REAL_DISABLED");
         const stage=name==='search_feeds'?'search':'post';
@@ -69,6 +83,8 @@ export class XhsMcpAdapter implements ReadAdapter {
         return { searchEvidence,items: (data.feeds || []).map(f => { const id = this.id(f.id); this.tokens.set(id, { rawId: f.id, token: f.xsecToken }); const cover=inspectXhsCover(f.noteCard?.cover);return { id, title: f.noteCard?.displayTitle ?? "", coverUrl:cover.url,imageDiagnostics:{searchCover:cover.diagnostic} }; }), complete: false };
     }
     async post(post: Post, signal: AbortSignal, remainingComments?:number, diagnosticOnly=false,resume?:{token:string,window:BoundedReadConfig,ordinal:number}): Promise<Post> {
+        const chunkMode=!diagnosticOnly&&this.supportsChunks(),priorChunk=this.chunkStates.get(post.id);
+        if(chunkMode&&priorChunk&&!priorChunk.confirmed)throw new ReadFailure("INVALID_DATA");
         let readWindow=resume?.window||(diagnosticOnly?undefined:this.readWindow);
         if(readWindow&&remainingComments!==undefined){if(!Number.isInteger(remainingComments)||remainingComments<1)throw new ReadFailure("BUDGET");readWindow={...readWindow,max_comments:Math.min(readWindow.max_comments,remainingComments),max_roots:Math.min(readWindow.max_roots,remainingComments)};}
         if(readWindow){boundedReadConfigSchema.parse(readWindow);if(!this.transport.supportsBoundedComments?.())throw new ReadFailure("UNSUPPORTED");}
@@ -78,7 +94,7 @@ export class XhsMcpAdapter implements ReadAdapter {
         if(this.mode==='XHS_MCP'&&post.sourceReference!==undefined&&!saved)throw invalidSource('post','IDENTITY_CONFLICT','noteId');
         const reference = this.tokens.get(post.id) || (saved?{rawId:saved.postId,token:saved.token}:undefined);
         if (!reference) throw invalidSource('post','SCHEMA_VALIDATION','xsecToken');
-        const data = parseSource(z.object({ feed_id: rawId.optional(), data: z.object({ continuation:z.unknown().optional(), boundedRead:z.unknown().optional(), coverageDiagnostic:z.unknown().optional(), avatarSourceDiagnostic:z.unknown().optional(), note: z.object({ noteId: rawId.optional(), title: z.string().max(500).nullish(), desc: z.string().max(20000).nullish(), imageList:z.unknown().optional(),user:z.unknown().optional(),time:z.unknown().optional() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }),await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false, ...(readWindow?{read_window:readWindow}:{}),...(readWindow&&this.transport.supportsCommentContinuation?.()?{read_continuation:resume?{mode:"RESUME",token:resume.token}:{mode:"START"}}:{}) }, signal),"post");
+        const data = parseSource(z.object({ feed_id: rawId.optional(), data: z.object({ chunk:z.unknown().optional(), continuation:z.unknown().optional(), boundedRead:z.unknown().optional(), coverageDiagnostic:z.unknown().optional(), avatarSourceDiagnostic:z.unknown().optional(), note: z.object({ noteId: rawId.optional(), title: z.string().max(500).nullish(), desc: z.string().max(20000).nullish(), imageList:z.unknown().optional(),user:z.unknown().optional(),time:z.unknown().optional() }), comments: z.object({ list: z.array(z.unknown()).max(100).nullable(), hasMore: z.boolean().optional(), cursor: z.string().optional() }) }) }),await this.read("get_feed_detail", { feed_id: reference.rawId, xsec_token: reference.token, load_all_comments: false, click_more_replies: false, ...(readWindow?{read_window:readWindow}:{}),...(chunkMode?{read_chunks:priorChunk?{mode:"RESUME",token:priorChunk.token,ack:priorChunk.receipt.hash}:{mode:"START",...(this.checkpoints.has(post.id)?{checkpoint:this.checkpoints.get(post.id)}:{})}}:readWindow&&this.transport.supportsCommentContinuation?.()?{read_continuation:resume?{mode:"RESUME",token:resume.token}:{mode:"START"}}:{}) }, signal),"post");
         if(saved&&!data.feed_id&&!data.data.note.noteId)throw invalidSource('post','IDENTITY_CONFLICT','noteId');
         if ((data.feed_id && data.feed_id !== reference.rawId) || (data.data.note.noteId && data.data.note.noteId !== reference.rawId)) throw invalidSource("post","IDENTITY_CONFLICT","noteId");
         const boundedRead=readWindow?parseSource(boundedReadReportSchema,data.data.boundedRead,'post'):undefined;
@@ -91,7 +107,9 @@ export class XhsMcpAdapter implements ReadAdapter {
                 if(!['ROOT_PAGE_BUDGET','REPLY_CLICK_BUDGET','TIMEOUT'].includes(boundedRead.reason)||boundedRead.window>=8||this.usedContinuationTokens.has(c.token))throw invalidSource('post','SCHEMA_VALIDATION');
                 this.usedContinuationTokens.add(c.token);this.continuations.set(post.id,{token:c.token,window:readWindow,ordinal:boundedRead.window});
             }
-        }else if(resume)throw invalidSource('post','SCHEMA_VALIDATION');
+        }else if(resume&&!chunkMode)throw invalidSource('post','SCHEMA_VALIDATION');
+        const chunk=chunkMode?parseSource(commentChunkSchema,data.data.chunk,'post'):undefined;
+        if(!chunkMode&&data.data.chunk!==undefined)throw invalidSource('post','SCHEMA_VALIDATION');
         const replies = new Map<string, Comment[]>(), seen = new Map<string,{signature:string;value:Comment}>(), active=new Set<string>();
         let count = 0;
         const normalize = (input: unknown, parentId?: string, depth = 0): Comment => {
@@ -110,14 +128,25 @@ export class XhsMcpAdapter implements ReadAdapter {
             active.delete(id);seen.set(id,{signature,value});return value;
         };
         // Validate the entire received tree before exposing any of it to ingestion.
-        const roots = [...new Map((data.data.comments.list || []).map(c => normalize(c)).map(c=>[c.id,c])).values()];
-        if(boundedRead&&(boundedRead.state==='COMPLETE'||data.data.continuation!==undefined)){
+        let roots = [...new Map((data.data.comments.list || []).map(c => normalize(c)).map(c=>[c.id,c])).values()];
+        if(chunk){
+            if(!readWindow||!boundedRead||boundedRead.window!==(priorChunk?priorChunk.ordinal+1:1)||data.data.comments.list?.length)throw invalidSource('post','SCHEMA_VALIDATION');
+            roots=[];replies.clear();const flat:Comment[]=[];
+            for(const row of chunk.rows){const c=normalize(row.comment,row.parent||undefined);flat.push(c);if(!row.parent)roots.push(c);else{const list=replies.get(row.parent)||[];list.push(c);replies.set(row.parent,list);}}
+            // normalize installs empty child arrays; rebuild parent buckets after all rows.
+            replies.clear();for(const c of flat)if(c.parentId)replies.set(c.parentId,[...(replies.get(c.parentId)||[]),c]);
+            const receipt={checkpoint:chunk.checkpoint,hash:chunk.hash,replaying:chunk.replaying,remainingAnchors:chunk.remainingAnchors};
+            validateChunk(this.checkpoints.get(post.id)||{version:1,sequence:0,marks:[]},receipt,reference.rawId,flat);
+            this.chunkStates.set(post.id,{token:chunk.token,receipt,confirmed:false,window:readWindow,ordinal:boundedRead.window!});
+            if(chunk.canContinue)this.continuations.set(post.id,{token:chunk.token,window:readWindow,ordinal:boundedRead.window!});
+        }
+        if(!chunk&&boundedRead&&(boundedRead.state==='COMPLETE'||data.data.continuation!==undefined)){
             const retained=boundedRead.retained.loaded;
             if(!retained||retained.roots!==roots.length||retained.uniqueKnown!==seen.size||retained.replies!==seen.size-roots.length)throw invalidSource('post','SCHEMA_VALIDATION','data.comments.list');
         }
         this.details.set(post.id, { roots, replies });
         const author=rawUser.safeParse(data.data.note.user),cover=inspectXhsDetailCover(data.data.note.imageList),avatar=inspectXhsAvatar(author.success?author.data.avatar:data.data.note.user==null?undefined:{});
-        return { ...post,boundedRead,...(boundedRead?{boundedReadWindows:resume?[...(post.boundedReadWindows||[]),boundedRead]:[boundedRead]}:{}),coverageDiagnostic:safeCoverageDiagnostic(data.data.coverageDiagnostic),sourceReference:this.mode==="XHS_MCP"&&(data.feed_id||data.data.note.noteId)?savedPostReference({postId:reference.rawId,token:reference.token,source:post.sourceReference?.source||"pc_feed"},post.id):undefined,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:avatar.url,imageDiagnostics:{...post.imageDiagnostics,detailCover:cover.diagnostic,authorAvatar:avatar.diagnostic,avatarSource:safeAvatarSourceDiagnostic(data.data.avatarSourceDiagnostic)},publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||cover.url, title: data.data.note.title || post.title, ...(data.data.note.desc!=null?{body:data.data.note.desc}:{}) };
+        return { ...post,boundedRead,...(boundedRead?{boundedReadWindows:(resume||priorChunk)?[...(post.boundedReadWindows||[]),boundedRead]:[boundedRead]}:{}),coverageDiagnostic:safeCoverageDiagnostic(data.data.coverageDiagnostic),sourceReference:this.mode==="XHS_MCP"&&(data.feed_id||data.data.note.noteId)?savedPostReference({postId:reference.rawId,token:reference.token,source:post.sourceReference?.source||"pc_feed"},post.id):undefined,authorNickname:author.success?savedNickname(author.data.nickname)||savedNickname(author.data.nickName):undefined,authorAvatarUrl:avatar.url,imageDiagnostics:{...post.imageDiagnostics,detailCover:cover.diagnostic,authorAvatar:avatar.diagnostic,avatarSource:safeAvatarSourceDiagnostic(data.data.avatarSourceDiagnostic)},publishedAt:savedPublishedAt(data.data.note.time), coverUrl:post.coverUrl||cover.url, title: data.data.note.title || post.title, ...(data.data.note.desc!=null?{body:data.data.note.desc}:{}) };
     }
     /** One bounded detail call. The caller owns account authorization and the device lease. */
     async postReference(value:PostReference,signal:AbortSignal,mode:'INITIAL_WINDOW'|'BOUNDED_REPLIES'='INITIAL_WINDOW'):Promise<Post>{
@@ -129,7 +158,7 @@ export class XhsMcpAdapter implements ReadAdapter {
         try{const post=await this.post({id,title:'',sourceReference:ref},signal,undefined,mode==='INITIAL_WINDOW');if(this.mode==='XHS_MCP'&&!post.sourceReference)throw invalidSource('post','IDENTITY_CONFLICT','noteId');return post;}finally{this.tokens.delete(id);}
     }
     canContinuePost(post:Post){return this.continuations.has(post.id);}
-    async continuePost(post:Post,signal:AbortSignal):Promise<Post>{const next=this.continuations.get(post.id);if(!next)throw new ReadFailure('UNSUPPORTED');this.continuations.delete(post.id);return this.post(post,signal,undefined,false,next);}
+    async continuePost(post:Post,signal:AbortSignal,remainingComments?:number):Promise<Post>{const next=this.continuations.get(post.id);if(!next)throw new ReadFailure('UNSUPPORTED');this.continuations.delete(post.id);return this.post(post,signal,this.supportsChunks()?remainingComments:undefined,false,next);}
     receivedComments(post:Post):Comment[]{const d=this.details.get(post.id);return d?[...d.roots,...[...d.replies.values()].flat()]:[];}
     async comments(post: Post, cursor: string | undefined, _signal: AbortSignal): Promise<Page<Comment>> {
         if (!this.allowed) throw new ReadFailure("REAL_DISABLED");
