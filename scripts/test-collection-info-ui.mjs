@@ -120,7 +120,7 @@ try{
   await page.getByLabel('单帖原文链接').fill(missingReference+'?xsec_token=SYNTHETIC_TEST_ONLY&amp;xsec_source=pc_feed');
   await dialog.getByText('链接分隔符被转义，请从浏览器地址栏直接复制，不要复制网页代码。',{exact:true}).waitFor();assert.equal(diagnosticCalls,0);
   await dialog.getByRole('checkbox',{name:'确认本次只读检查'}).uncheck();
-  await page.getByLabel('单帖原文链接').fill(missingReference+'?xsec_token=SYNTHETIC_TEST_ONLY&xsec_source=pc_feed&source=web_search_result_notes');
+  await page.getByLabel('单帖原文链接').fill(missingReference+'?xsec_token=SYNTHETIC_TEST_ONLY&xsec_source=pc_feed&source=web_note_detail_r10');
   await dialog.getByText('链接格式有效；点击后才核验账号，尚未访问小红书。',{exact:true}).waitFor();
   assert(await page.getByRole('button',{name:'只读检查这一篇',exact:true}).isDisabled());
   report.checks.push('local URL diagnosis / invalid input retained / zero POST on invalid+Enter / corrected without remount / fixed page source omitted from POST / no persistence '+narrow);

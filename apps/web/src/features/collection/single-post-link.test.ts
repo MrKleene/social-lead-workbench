@@ -30,6 +30,10 @@ const cases: [string,string,string][]=[
  ['malformed encoded token',valid.replace('SYNTHETIC','%ZZ'),'token'],
  ['oversize token',base+'?xsec_token='+'a'.repeat(4097)+'&xsec_source=pc_feed','token'],
  ['fixed page source',valid+'&source=web_explore_feed','valid'],
+ ['detail page source',valid+'&source=web_note_detail_r10','valid'],
+ ['unknown detail version',valid+'&source=web_note_detail_r11','parameters'],
+ ['encoded detail source',valid+'&source=web_note_detail_%7210','parameters'],
+ ['duplicate detail source',valid+'&source=web_note_detail_r10&source=web_note_detail_r10','parameters'],
  ['search page source',valid+'&source=web_search_result_notes','valid'],
  ['duplicate mixed page source',valid+'&source=web_explore_feed&source=web_search_result_notes','parameters'],
  ['encoded search marker',valid+'&source=web_search_result_%6eotes','parameters'],
@@ -52,7 +56,7 @@ describe('single-post local link validation',()=>{
   expect(JSON.stringify(result)).not.toMatch(/SYNTHETIC|private_key|https:|0123456789/);
  });
  it('removes only the known markers and preserves access values and note identity exactly',()=>{
-  for(const source of ['web_explore_feed','web_search_result_notes'])for(const input of [valid+'&source='+source,base+'?source='+source+'&'+valid.split('?')[1],valid.replace('&xsec_source','&source='+source+'&xsec_source')]){
+  for(const source of ['web_explore_feed','web_search_result_notes','web_note_detail_r10'])for(const input of [valid+'&source='+source,base+'?source='+source+'&'+valid.split('?')[1],valid.replace('&xsec_source','&source='+source+'&xsec_source')]){
    expect(singlePostRequestUrl(input)).toBe(valid);
    expect(parsePostReference(singlePostRequestUrl(input))).toEqual(parsePostReference(valid));
    expect(parsePostReference(input)).toEqual(parsePostReference(valid));

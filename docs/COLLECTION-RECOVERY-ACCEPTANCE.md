@@ -53,3 +53,48 @@ The persistence callback is idempotent because progress can report the same rece
 more than once; tests must not mistake a duplicate progress notification for a new
 chunk. Existing rollback, fence isolation, expired writer and restart recovery tests
 remain in place. Offline passing is not the real interruption acceptance.
+
+## 2026-10-25 follow-up: deterministic acceptance
+
+The real 11:11:58 UTC from-start attempt naturally finished before the operator
+could stop it. It committed 89 (48 roots + 41 replies), new 0 / reused 89 in two
+windows; checkpoint 89 matches all stored originals, with no active owner. This
+was **not** an interruption test. Database totals remained 22 tasks, 9 post
+versions, 210 comment versions, zero model calls and outgoing contacts.
+
+Run `node scripts/test-queue-isolated.mjs --recovery` for deterministic acceptance.
+It creates disposable tmpfs PostgreSQL/Redis on random loopback ports, applies
+migrations there, runs the production BullMQ consumer, CollectionService.execute,
+transactional archive/checkpoint path and supported pauseRun. Only account/platform
+I/O is synthetic, in a separate test-only child; production has no test bypass.
+After the first 40 rows and ACK commit, the synthetic next request pauses at a
+barrier. pauseRun cancels it, preserving rows/checkpoint and releasing ownership.
+The worker exits normally and a fresh OS process restores those 40 IDs from DB,
+adds 85, and finishes with 125 unique versions. Duplicate queue delivery adds
+nothing. This verifies normal cancellation plus process restart recovery; it does
+not claim an uncontrolled crash/power-loss or real platform interruption test.
+Account/device authentication and platform replay are covered elsewhere, not by
+the synthetic account I/O in this acceptance.
+
+The same runner starts the actual compiled API three times with real isolated DB
+and an authenticated synthetic SSE client. Before the fix, API shutdown remained
+blocked until the client connection was closed at 2.5 seconds (2507/2511/2522 ms).
+Normal production launcher cleanup had a 1.8 second grace, and historical lifecycle
+records show API SIGKILL around 1816–1823 ms. The exact old requests were not logged,
+so this reproduces a concrete mechanism, not proof of every historic timeout.
+EventsController now completes its streams during module destruction. Three
+post-fix runs exited in 6/6/6 ms with the SSE client still open. Worker shutdowns
+were 9/6 ms. No launcher deadlines, native supervisors, safety checks or force-kill
+policy were changed. Temporary containers are removed; no production credentials,
+platform requests or business records are involved.
+
+## Exact browser link compatibility
+
+The observed detail navigation marker `source=web_note_detail_r10` is accepted
+alongside the two previously reviewed markers. It is removed only after full URL
+validation; the original access token/source bytes and post ID are preserved.
+Unknown navigation values, duplicate parameters and encoded aliases remain
+rejected. Navigation markers are not saved, logged, or sent to the model.
+Browser acceptance requires only pasting the original copied link in 单帖检查
+and observing local validation/preview; do not submit another platform request
+just to test the link parser.

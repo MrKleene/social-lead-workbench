@@ -19,7 +19,7 @@ describe('bounded original source references',()=>{
  it('round trips only the official exact note and two allowed fields',()=>{expect(parsePostReference(url)).toEqual(ref);expect(savedPostReference(ref,'f'.repeat(24))).toBeUndefined();expect(publicPostSnapshot({id,sourceReference:ref,title:'safe'})).toEqual({id,title:'safe'});});
  it.each(['http://www.xiaohongshu.com/explore/'+id,'https://xiaohongshu.com/explore/'+id,'https://www.xiaohongshu.com.evil.invalid/explore/'+id,'https://u:p@www.xiaohongshu.com/explore/'+id,'https://www.xiaohongshu.com:443/explore/'+id,'https://www.xiaohongshu.com/explore/../explore/'+id,'https://www.xiaohongshu.com/explore/%30'+id.slice(1)])('rejects unsafe origin/path %s',base=>{expect(parsePostReference(base+'?xsec_token=FAKE&xsec_source=pc_feed')).toBeUndefined();});
  it.each(['#fragment','&redirect=https://evil.invalid','&xsec_token=again','&xsec_source=pc_search','&cookie=FAKE'])('rejects extra components %s',extra=>expect(parsePostReference(url+extra)).toBeUndefined());
- it.each(['web_explore_feed','web_search_result_notes'])('accepts only known navigation marker %s without preserving it',source=>{
+ it.each(['web_explore_feed','web_search_result_notes','web_note_detail_r10'])('accepts only known navigation marker %s without preserving it',source=>{
   for(const input of [url+'&source='+source,url.replace('?', '?source='+source+'&')]){
    expect(parsePostReference(input)).toEqual(ref);expect(postReferenceUrl(parsePostReference(input)!)).toBe(url);
   }

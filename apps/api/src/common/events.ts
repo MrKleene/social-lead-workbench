@@ -6,13 +6,18 @@ import {
   Sse,
   UseGuards,
   MessageEvent,
+  OnModuleDestroy,
 } from "@nestjs/common";
-import { interval, from, mergeMap, Observable, takeWhile, map } from "rxjs";
+import { interval, from, mergeMap, Observable, takeWhile, map, ReplaySubject, takeUntil } from "rxjs";
 import { AuthModule, AuthedRequest, SessionGuard } from "../auth/auth";
 import { Db } from "./db";
 @Controller("events")
 @UseGuards(SessionGuard)
-class EventsController {
+class EventsController implements OnModuleDestroy {
+  private readonly stopping = new ReplaySubject<void>(1);
+  // SSE responses must finish before Nest closes its HTTP server. Otherwise an
+  // open browser tab holds graceful shutdown until the launcher timeout.
+  onModuleDestroy() { this.stopping.next(); this.stopping.complete(); }
   constructor(@Inject(Db) private db: Db) {}
   @Sse() stream(@Req() req: AuthedRequest): Observable<MessageEvent> {
     // No lead payload on the stream. Client refetches through current server permissions.
@@ -28,6 +33,7 @@ class EventsController {
       ),
       takeWhile((s) => !!s && s.expiresAt > new Date() && s.user.active),
       map(() => ({ type: "refresh", data: { at: new Date().toISOString() } })),
+      takeUntil(this.stopping),
     );
   }
 }

@@ -1,6 +1,6 @@
-// Navigation markers used by the reviewed XHS search URL implementation.
+// Exact navigation markers from reviewed XHS search and browser detail URLs.
 // They are not xsec_source or an access reference. Unknown markers stay rejected.
-const navigationParts = ['source=web_explore_feed', 'source=web_search_result_notes'];
+const navigationParts = ['source=web_explore_feed', 'source=web_search_result_notes', 'source=web_note_detail_r10'];
 export function hasSupportedXhsReferenceParameters(url: URL, raw: string): boolean {
  const keys = [...url.searchParams.keys()];
  if (new Set(keys).size !== keys.length || !keys.includes('xsec_token') || !keys.includes('xsec_source')) return false;
