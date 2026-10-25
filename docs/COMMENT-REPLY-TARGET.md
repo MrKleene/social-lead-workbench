@@ -1,4 +1,4 @@
-# Direct reply targets (prepared, not installed)
+# Direct reply targets
 
 Source evidence: the authorized browser diagnostic observed `targetComment.id` and
 `targetComment.userInfo.userId` on all 41 replies of the 89-comment sample. On the
@@ -32,8 +32,8 @@ Two isolated builds produced identical SHA-256:
 
 Candidate directories (same Mac task workspace): `mcp-reply-target-review-1` and
 `mcp-reply-target-review-2`; binary `xiaohongshu-mcp-candidate`, provenance and
-compiler flags in `BUILD.json`, offline test logs alongside it. Neither binary
-was installed or executed. Current installed SHA remains
+compiler flags in `BUILD.json`, offline test logs alongside it. At preparation time neither binary
+was installed or executed. The prior installed SHA was
 `039135aa9614e9606f36a99989f68803b8a6bce30a21e42b28d5d810b787722d`.
 
 ## Installation and acceptance (requires exact candidate approval)
@@ -62,3 +62,27 @@ The prior 95-new/89-resume audit proved durable ACK consistency and no lost or
 repeated stored versions. It did not prove new target mapping, process-interruption
 recovery or platform-wide completeness. The old 41-declared/38-visible difference
 remains unresolved and is not changed by this patch.
+
+## Authorized deployment — 2026-10-25
+
+Installed the exact candidate above after explicit approval, with production source
+`2ac6472`. Both runtime review hashes now match `c82dc7a7…39516a6f1e9`.
+The old `039135aa…787722d` program is retained as an independent file at
+`~/.local/bin/xiaohongshu-mcp.backup-039135aa9614`; review settings and checks are in
+`mcp-reply-target-review-2/deployment-rollback` under the task workspace.
+
+The first installation check loaded an already cached CommonJS review value via
+workbench-control. It rejected the new bytes, automatically restored the old binary
+and review hashes, and recovered the backend. The deployment script was corrected
+to load the unchanged security checks in a fresh process; the same approved candidate
+then passed. No security check was relaxed or file lock bypassed.
+
+Final API/worker started at 10:55:08 UTC; API ready, web and frontend source returned
+200, with an idle worker, empty queue and no active lease/advisory lock. Counts stayed
+19 runs, 9 post versions, 210 comment versions, 4 checkpoints, 2 accounts and 1 saved
+session. Configuration fingerprints were unchanged; model calls/contact attempts
+remain zero. All 15 existing migrations were already applied; none was added or
+applied in this deployment. Frontend, PostgreSQL and Redis processes were preserved.
+17 offline runtime safety tests passed. No platform request was made during deployment.
+Real direct-target mapping and explicit from-start deduplication remain to be checked
+by the coordinated browser task; default checkpoint resume is not that verification.
