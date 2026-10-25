@@ -78,3 +78,11 @@ it('marks conflicting source targets within one window without changing the disc
  const a=new XhsMcpAdapter(t,true,'XHS_MCP'),signal=new AbortController().signal,found=await a.search('synthetic',undefined,signal),post=await a.post(found.items[0],signal);
  const comments=a.receivedComments(post);expect(comments).toHaveLength(2);expect(comments.find(c=>c.id==='child')).toMatchObject({parentId:'root',replyTarget:{source:'targetComment',commentId:'target-a'},replyTargetConflict:true});
 });
+it('normal cancellation after durable first chunk does not send another read; default resume keeps every confirmed ID',async()=>{
+ let saved=empty(),cancelled=false;const first=transport(125),a=new XhsMcpAdapter(first,true,'XHS_MCP',window);
+ const stopped=await collect(a,spec,async()=>cancelled,{...limits,comments:800},async result=>{const e=result.posts[0];if(e.chunk&&e.chunk.hash!==checkpointHash(saved)){saved=validateChunk(saved,e.chunk,e.post.id,e.chunkComments||[]);cancelled=true;}});
+ expect(stopped.status).toBe('PAUSED');expect(saved.marks).toHaveLength(40);expect(first.call.mock.calls.filter(c=>c[0]==='get_feed_detail')).toHaveLength(1);
+ const resumed=transport(125,saved),b=new XhsMcpAdapter(resumed,true,'XHS_MCP',window);const ids=new Set(saved.marks.map(m=>m.id));
+ const result=await collect(b,spec,async()=>false,{...limits,comments:800},async result=>{const e=result.posts[0];if(e.chunk&&e.chunk.hash!==checkpointHash(saved)){saved=validateChunk(saved,e.chunk,e.post.id,e.chunkComments||[]);for(const c of e.chunkComments||[]){expect(ids.has(c.id)).toBe(false);ids.add(c.id);}}},undefined,async p=>b.restoreCheckpoint(p,saved));
+ expect(result.status).not.toBe('FAILED');expect(result.posts[0].comments).toHaveLength(85);expect(saved.marks).toHaveLength(125);expect(ids.size).toBe(125);
+});

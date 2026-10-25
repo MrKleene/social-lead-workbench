@@ -955,6 +955,15 @@ describe('durable comment chunks: isolated transaction/lease recovery',()=>{
   const reset=await acquireCheckpoint(db,run,'synthetic-post',guard,true);expect(reset.checkpoint.marks).toEqual([]);expect(reset.fence).toBeGreaterThan(old.fence);expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(1);await releaseCheckpoints(db,new Map([['synthetic-post',reset]]));
   const other=await db.collectionRun.create({data:{configId:c.id,revision:1,status:'RUNNING',scenario:'READ_WINDOW',requestKey:randomUUID(),snapshot:run.snapshot as any,execution:{accountId:'synthetic-other',deviceId:'synthetic-other-device'}}});const isolated=await acquireCheckpoint(db,other,'synthetic-post',guard);expect(isolated.id).not.toBe(old.id);expect(isolated.checkpoint.marks).toEqual([]);expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(1);
  });
+ it('normal pause preserves the committed block and rejects later writes before lease release',async()=>{
+  const {acquireCheckpoint,releaseCheckpoints}=await import('../src/collection/comment-checkpoint'),{checkpointCapture}=await import('../src/collection/capture-archive');const {c,run}=await setup(),guard=async()=>{};
+  const lease=await acquireCheckpoint(db,run,'synthetic-post',guard),leases=new Map([['synthetic-post',lease]]),first=await receipt(lease.checkpoint,[row('root')]);
+  await checkpointCapture(db,run,result(first,[row('root')]),guard,leases);
+  const paused=await service.pauseRun(actor,run.id);expect(paused).toMatchObject({status:'PAUSED',cancelRequested:true,reason:'MANUAL_PAUSE'});
+  const next=await receipt(first.checkpoint,[row('late','root')]);await expect(checkpointCapture(db,run,result(next,[row('late','root')]),guard,leases)).rejects.toThrow();
+  expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(1);expect((await db.commentReadCheckpoint.findUniqueOrThrow({where:{id:lease.id}})).checkpoint).toEqual(first.checkpoint);
+  await releaseCheckpoints(db,leases);expect((await db.commentReadCheckpoint.findUniqueOrThrow({where:{id:lease.id}})).ownerRunId).toBeNull();
+ });
  it('active owner, expired writer, cancellation and authorization failure cannot ACK data',async()=>{
   const {acquireCheckpoint}=await import('../src/collection/comment-checkpoint'),{checkpointCapture}=await import('../src/collection/capture-archive');const {c,run}=await setup(),guard=async()=>{};const lease=await acquireCheckpoint(db,run,'synthetic-post',guard),chunk=await receipt(lease.checkpoint,[row('root')]);
   const other=await db.collectionRun.create({data:{configId:c.id,revision:1,status:'RUNNING',scenario:'READ_WINDOW',requestKey:randomUUID(),snapshot:run.snapshot as any,execution:run.execution as any}});await expect(acquireCheckpoint(db,other,'synthetic-post',guard)).rejects.toThrow();
