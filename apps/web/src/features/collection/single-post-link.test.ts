@@ -30,6 +30,10 @@ const cases: [string,string,string][]=[
  ['malformed encoded token',valid.replace('SYNTHETIC','%ZZ'),'token'],
  ['oversize token',base+'?xsec_token='+'a'.repeat(4097)+'&xsec_source=pc_feed','token'],
  ['fixed page source',valid+'&source=web_explore_feed','valid'],
+ ['search page source',valid+'&source=web_search_result_notes','valid'],
+ ['duplicate mixed page source',valid+'&source=web_explore_feed&source=web_search_result_notes','parameters'],
+ ['encoded search marker',valid+'&source=web_search_result_%6eotes','parameters'],
+ ['navigation redirect',valid+'&source=web_search_result_notes%26redirect%3Dhttps%3A%2F%2Fevil.invalid','parameters'],
  ['wrong page source',valid+'&source=other','parameters'],
  ['duplicate page source',valid+'&source=web_explore_feed&source=web_explore_feed','parameters'],
  ['page source plus extra',valid+'&source=web_explore_feed&redirect=OTHER','parameters'],
@@ -47,11 +51,11 @@ describe('single-post local link validation',()=>{
   if(result.valid && !input.includes('&source=web_explore_feed')) expect(parsePostReference(input.trim())).toBeDefined();
   expect(JSON.stringify(result)).not.toMatch(/SYNTHETIC|private_key|https:|0123456789/);
  });
- it('removes only the fixed marker and preserves access values and note identity exactly',()=>{
-  for(const input of [valid+'&source=web_explore_feed',base+'?source=web_explore_feed&'+valid.split('?')[1],valid.replace('&xsec_source','&source=web_explore_feed&xsec_source')]){
+ it('removes only the known markers and preserves access values and note identity exactly',()=>{
+  for(const source of ['web_explore_feed','web_search_result_notes'])for(const input of [valid+'&source='+source,base+'?source='+source+'&'+valid.split('?')[1],valid.replace('&xsec_source','&source='+source+'&xsec_source')]){
    expect(singlePostRequestUrl(input)).toBe(valid);
    expect(parsePostReference(singlePostRequestUrl(input))).toEqual(parsePostReference(valid));
-   expect(parsePostReference(input)).toBeUndefined();
+   expect(parsePostReference(input)).toEqual(parsePostReference(valid));
   }
   expect(singlePostRequestUrl(valid+'&redirect=OTHER')).toBeUndefined();
  });
@@ -59,7 +63,7 @@ describe('single-post local link validation',()=>{
   for(const prefix of ['https://www.xiaohongshu.com','HTTPS://www.xiaohongshu.com','https://www.xiaohongshu.com:443','https://evil.invalid'])
    for(const path of ['/explore/0123456789abcdef01234567','/explore/../explore/0123456789abcdef01234567','/explore/%30123456789abcdef01234567'])
     for(const token of ['FAKE','FAKE%2BONLY','FAKE+ONLY','','%252F','%0A','FAKE%26ONLY'])
-     for(const suffix of ['&xsec_source=pc_feed','&xsec_source=pc_search','&xsec_source=other','&xsec_source=pc_feed&extra=FAKE','#fragment']){
+     for(const suffix of ['&xsec_source=pc_feed','&xsec_source=pc_search','&xsec_source=other','&xsec_source=pc_feed&source=web_search_result_notes','&xsec_source=pc_feed&source=web_explore_feed','&xsec_source=pc_feed&extra=FAKE','#fragment']){
       const input=prefix+path+'?xsec_token='+token+suffix;
       expect(inspectSinglePostLink(input).valid).toBe(Boolean(parsePostReference(input)));
      }

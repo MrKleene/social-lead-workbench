@@ -19,6 +19,12 @@ describe('bounded original source references',()=>{
  it('round trips only the official exact note and two allowed fields',()=>{expect(parsePostReference(url)).toEqual(ref);expect(savedPostReference(ref,'f'.repeat(24))).toBeUndefined();expect(publicPostSnapshot({id,sourceReference:ref,title:'safe'})).toEqual({id,title:'safe'});});
  it.each(['http://www.xiaohongshu.com/explore/'+id,'https://xiaohongshu.com/explore/'+id,'https://www.xiaohongshu.com.evil.invalid/explore/'+id,'https://u:p@www.xiaohongshu.com/explore/'+id,'https://www.xiaohongshu.com:443/explore/'+id,'https://www.xiaohongshu.com/explore/../explore/'+id,'https://www.xiaohongshu.com/explore/%30'+id.slice(1)])('rejects unsafe origin/path %s',base=>{expect(parsePostReference(base+'?xsec_token=FAKE&xsec_source=pc_feed')).toBeUndefined();});
  it.each(['#fragment','&redirect=https://evil.invalid','&xsec_token=again','&xsec_source=pc_search','&cookie=FAKE'])('rejects extra components %s',extra=>expect(parsePostReference(url+extra)).toBeUndefined());
+ it.each(['web_explore_feed','web_search_result_notes'])('accepts only known navigation marker %s without preserving it',source=>{
+  for(const input of [url+'&source='+source,url.replace('?', '?source='+source+'&')]){
+   expect(parsePostReference(input)).toEqual(ref);expect(postReferenceUrl(parsePostReference(input)!)).toBe(url);
+  }
+ });
+ it.each(['source=unknown','source=','source=%77eb_search_result_notes','%73ource=web_search_result_notes','source=web_search_result_notes&source=web_explore_feed','source=web_search_result_notes&xsec_token=OTHER','source=web_search_result_notes&redirect=OTHER','source=web_search_result_notes%26redirect%3DOTHER'])('rejects unsafe navigation components %s',extra=>expect(parsePostReference(url+'&'+extra)).toBeUndefined());
  it('rejects missing, unknown or malformed references without echoing them',()=>{for(const u of [url.replace('pc_feed','unknown'),url.replace('xsec_token=','xsec_token=%0A'),url.replace('&xsec_source=pc_feed',''),url+'\n'])expect(parsePostReference(u)).toBeUndefined();});
  it('one detail request uses exact reference; no search/pagination; diagnostics omit all values',async()=>{
   const call=vi.fn().mockResolvedValue(envelope(detail)),connect=vi.fn(),adapter=new XhsMcpAdapter({call,connect},true,'XHS_MCP');
@@ -45,6 +51,11 @@ function setup(){
 }
 describe('single post guarded execution',()=>{
  it('verifies UNVERIFIED through existing login service and never creates a task or capture',async()=>{const s=setup();expect(await s.service.check(s.actor,s.input)).toMatchObject({status:'CHECKED'});expect(s.login.verifySaved).toHaveBeenCalledWith(s.actor,'account','read-local-session-v1');expect(s.reads.authorize).toHaveBeenCalled();expect(s.postReference).toHaveBeenCalledTimes(1);expect(s.close).toHaveBeenCalledTimes(1);expect(JSON.stringify(s.audits)).not.toContain(ref.token);expect(s.audits[0].action).toBe('SINGLE_POST_CHECK_FINISHED');expect(s.audits[0].metadata.summary.coverageDiagnostic).toEqual(coverageFixture);await expect(s.service.check(s.actor,s.input)).rejects.toThrow('不会重复请求');expect(s.postReference).toHaveBeenCalledTimes(1);});
+ it('accepts a complete search-browser URL through normal authorization without exposing its navigation/access values',async()=>{
+  const s=setup();await s.service.check(s.actor,{...s.input,url:url+'&source=web_search_result_notes'});
+  expect(s.postReference).toHaveBeenCalledWith(ref,expect.any(AbortSignal),'INITIAL_WINDOW');expect(s.reads.authorize).toHaveBeenCalledTimes(1);expect(s.postReference).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(s.audits)).not.toMatch(/SYNTHETIC_REFERENCE_ONLY|web_search_result_notes/);
+ });
  it('rejects non-admin, missing consent, unsafe URL before verification',async()=>{const s=setup();await expect(s.service.check({...s.actor,role:'SALES'},s.input)).rejects.toThrow();await expect(s.service.check(s.actor,{...s.input,consent:undefined} as any)).rejects.toThrow();await expect(s.service.check(s.actor,{...s.input,url:'https://evil.invalid/'})).rejects.toThrow();expect(s.login.verifySaved).not.toHaveBeenCalled();expect(s.audits).toHaveLength(0);});
  it('does not interrupt a queued/running task',async()=>{const s=setup();s.setActive(true);await expect(s.service.check(s.actor,s.input)).rejects.toThrow('已有采集');expect(s.reads.open).not.toHaveBeenCalled();expect(s.login.verifySaved).not.toHaveBeenCalled();});
  it('verification failure stops without a detail request',async()=>{const s=setup();s.login.verifySaved.mockResolvedValue({state:'EXPIRED'});expect(await s.service.check(s.actor,s.input)).toEqual({status:'LOGIN_NOT_READY'});expect(s.reads.open).not.toHaveBeenCalled();});

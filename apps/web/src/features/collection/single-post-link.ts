@@ -1,5 +1,5 @@
-// Mirrors the API reference parser, with one observed fixed page-source marker
-// removed before submission. Pure local validation only; never echo
+import {hasSupportedXhsReferenceParameters,withoutXhsNavigationMarker} from '@crm/contracts';
+// Shares the API query boundary; known navigation markers are removed before submission. Pure local validation only; never echo
 // the submitted address, arbitrary keys or values in a diagnostic.
 const messages = {
  empty: '粘贴浏览器地址栏中的完整帖子链接。',
@@ -35,12 +35,8 @@ export function inspectSinglePostLink(input: string): {valid: boolean; code: Sin
  const keys = [...url.searchParams.keys()];
  if (!keys.includes('xsec_token')) return result('reference');
  if (!keys.includes('xsec_source')) return result('source');
- // Only the exact, observed navigation marker is removable. Encoded aliases,
- // duplicates, unknown values and all other extra parameters remain rejected.
- const marker = 'source=web_explore_feed';
- const hasPageSource = keys.length === 3 && new Set(keys).size === 3 &&
-  keys.includes('source') && value.split('?')[1]?.split('&').includes(marker);
- if (!hasPageSource && (keys.length !== 2 || new Set(keys).size !== 2)) return result('parameters');
+ // Reject duplicate keys, arbitrary extras and encoded/unknown navigation markers.
+ if (!hasSupportedXhsReferenceParameters(url, value)) return result('parameters');
  const token = url.searchParams.get('xsec_token') || '';
  if (token.length > 4096 || !/^[A-Za-z0-9_+\/=-]+$/.test(token)) return result('token');
  if (!['pc_feed', 'pc_search'].includes(url.searchParams.get('xsec_source') || '')) return result('sourceValue');
@@ -51,7 +47,5 @@ export function inspectSinglePostLink(input: string): {valid: boolean; code: Sin
 // Preserve every original access-parameter byte; do not decode/re-encode tokens.
 export function singlePostRequestUrl(input: string): string | undefined {
  if (!inspectSinglePostLink(input).valid) return undefined;
- const value = input.trim(), boundary = value.indexOf('?');
- return value.slice(0, boundary + 1) + value.slice(boundary + 1).split('&')
-  .filter(part => part !== 'source=web_explore_feed').join('&');
+ return withoutXhsNavigationMarker(input.trim());
 }

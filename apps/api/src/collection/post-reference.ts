@@ -1,3 +1,4 @@
+import {hasSupportedXhsReferenceParameters} from '@crm/contracts';
 import {z} from 'zod';
 // A public note access reference is not an account session. Never include it in logs,
 // model input, content hashes, or general archive responses.
@@ -11,7 +12,7 @@ export function parsePostReference(value:unknown):PostReference|undefined{
  try{
   const u=new URL(value),m=/^\/explore\/([a-f0-9]{24})$/.exec(u.pathname);
   if(u.origin!=='https://www.xiaohongshu.com'||u.username||u.password||u.port||u.hash||!m||value.split('?')[0]!==`https://www.xiaohongshu.com/explore/${m[1]}`)return;
-  const keys=[...u.searchParams.keys()];if(keys.length!==2||new Set(keys).size!==2||!keys.includes('xsec_token')||!keys.includes('xsec_source'))return;
+  if(!hasSupportedXhsReferenceParameters(u,value))return;
   return savedPostReference({postId:m[1],token:u.searchParams.get('xsec_token'),source:u.searchParams.get('xsec_source')},m[1]);
  }catch{return;}
 }

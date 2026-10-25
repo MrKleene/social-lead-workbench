@@ -51,3 +51,5 @@ export * from './search-observation';
 export * from './run-coverage';
 
 export * from './comment-checkpoint';
+
+export * from './xhs-reference-parameters';
