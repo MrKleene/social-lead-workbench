@@ -1,3 +1,4 @@
+import {postFailure} from './post-failure';
 import {commentChunkSchema,commentCheckpointSchema,type CommentCheckpoint,type CommentChunkReceipt} from '@crm/contracts';
 import {validateChunk} from '../comment-checkpoint';
 import {searchFailureReason,searchFailureObservation} from './search-failure';
@@ -16,7 +17,7 @@ function text(input: unknown, stage:'prepare'|'search'|'post'): string {
     const value = parseSource(envelope,input,stage);
     const text = value.content.filter(c => c.type === "text").map(c => c.text || "").join("\n");
     if (value.isError) {
-        if(stage==='post'&&/^(?:获取Feed详情失败: )?CONTINUATION_(?:EXPIRED|MISMATCH|LIMIT)$/.test(text.trim()))throw new ReadFailure("MCP_SESSION_EXPIRED");
+        if(stage==='post'){const failure=postFailure(text.trim());if(failure)throw failure;}
         const searchReason=stage==='search'?searchFailureReason(text):undefined;
         const observation=stage==='search'?searchFailureObservation(text):undefined;
         const searchDiagnostic=searchReason?{version:1 as const,stage:'search' as const,kind:'UPSTREAM_ERROR' as const,searchReason,...(observation?{searchObservation:observation}:{})}:undefined;
@@ -26,7 +27,7 @@ function text(input: unknown, stage:'prepare'|'search'|'post'): string {
         if (/限制|封禁|验证码|restricted/i.test(text)) throw new ReadFailure("RESTRICTED");
         if (/不存在|不可见|未找到|not found/i.test(text)) throw new ReadFailure("SOURCE_UNAVAILABLE");
         if (/超时|timeout/i.test(text)) throw new ReadFailure("TIMEOUT");
-        throw new ReadFailure("INVALID_DATA",undefined,{version:1,stage,kind:"UPSTREAM_ERROR",...(searchDiagnostic||{})});
+        throw new ReadFailure("INVALID_DATA",undefined,{version:1,stage,kind:"UPSTREAM_ERROR",...(stage==='post'?{postReason:'UNKNOWN' as const}:{}),...(searchDiagnostic||{})});
     }
     if (!text) throw invalidSource(stage,"EMPTY_RESPONSE");
     return text;

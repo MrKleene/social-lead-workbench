@@ -217,3 +217,43 @@ describe('search failure closed protocol and legacy compatibility',()=>{
  it.each(['LOGIN_EXPIRED','RATE_LIMITED','RESTRICTED','SOURCE_UNAVAILABLE','TIMEOUT'])('retains %s stop behavior',async reason=>{const {result}=await searchError(JSON.stringify({crmSearchFailure:{version:1,reason}}));expect(result.reason).toBe(reason);expect(result.status).not.toBe('COMPLETE');});
  it('first empty search followed by failure is not three user submissions or a detail call',async()=>{let searches=0;const call=vi.fn(async(name:string)=>name==='check_login_status'?{content:[{type:'text',text:'✅ 已登录'}]}:++searches===1?envelope({feeds:[]}):{isError:true,content:[{type:'text',text:JSON.stringify({crmSearchFailure:{version:1,reason:'SEARCH_DATA_MISSING'}})}]});const result=await collect(new XhsMcpAdapter({call},true),{...config,keywords:['合成甲','合成乙','合成丙']},async()=>false);expect(result.diagnostic).toMatchObject({stage:'search',searchReason:'SEARCH_DATA_MISSING',requestStep:3});expect(call.mock.calls.map(x=>x[0])).toEqual(['check_login_status','search_feeds','search_feeds']);});
 });
+
+describe('reviewed detail failure wrappers (offline)',()=>{
+ it.each([
+  ['获取Feed详情失败: 笔记不可访问: 当前笔记暂时无法浏览','SOURCE_UNAVAILABLE','PAGE_UNAVAILABLE'],
+  ['获取Feed详情失败: 笔记不可访问: '+secret,'SOURCE_UNAVAILABLE','PAGE_UNAVAILABLE'],
+  ['获取Feed详情失败: INVALID_CHECKPOINT','INVALID_DATA','CHECKPOINT_REJECTED'],
+  ['INVALID_READ_WINDOW','INVALID_DATA','REQUEST_REJECTED'],
+  ['获取Feed详情失败: CONTINUATION_BUSY','DEVICE_UNAVAILABLE','READ_SESSION_BUSY'],
+  ['获取Feed详情失败: CONTINUATION_EXPIRED','MCP_SESSION_EXPIRED','READ_SESSION_EXPIRED'],
+  ['获取Feed详情失败: CONTINUATION_MISMATCH','MCP_SESSION_EXPIRED','READ_SESSION_MISMATCH'],
+  ['获取Feed详情失败: CONTINUATION_UNAVAILABLE','MCP_PROTOCOL','READ_SESSION_UNAVAILABLE'],
+  ['获取Feed详情成功，但序列化失败: '+secret,'INVALID_DATA','RESPONSE_SERIALIZATION_FAILED'],
+  ['获取Feed详情失败: context deadline exceeded','TIMEOUT','TIMEOUT'],
+  ['获取Feed详情失败: context canceled','PAUSED','CANCELLED'],
+  [secret,'INVALID_DATA','UNKNOWN'],
+  ['unrelated prefix 笔记不可访问: synthetic','INVALID_DATA','UNKNOWN'],
+  ['获取Feed详情失败: INVALID_CHECKPOINT '+secret,'INVALID_DATA','UNKNOWN'],
+ ])('preserves safe reason without raw payload or retries (%#)',async(text,code,reason)=>{
+  const {adapter,call}=reader({isError:true,content:[{type:'text',text}]});const result=await collect(adapter,config,async()=>false,{...limits,callMs:1000});
+  expect(result.reason).toBe(code);expect(result.diagnostic).toMatchObject({stage:'post',kind:'UPSTREAM_ERROR',postReason:reason,postOrdinal:1});expect(result.posts).toEqual([]);expect(call.mock.calls.filter(c=>c[0]==='get_feed_detail')).toHaveLength(1);
+  expect(JSON.stringify(result.diagnostic)).not.toContain(secret);expect(safeCollectionDiagnostic({...result.diagnostic,postReason:secret})).toBeUndefined();
+  const log=vi.spyOn(console,'warn').mockImplementation(()=>{});try{logCollectionDiagnostic('cmvnnrozd0009i44sbguybgpg',result.diagnostic);expect(JSON.stringify(log.mock.calls)).not.toContain('FAKE_SECRET');expect(JSON.stringify(log.mock.calls)).toContain(reason);}finally{log.mockRestore();}
+ });
+});
+
+import {commitRead} from '../src/collection/ingestion';
+describe('detail failure persistence and security boundary (isolated)',()=>{
+ it.each([['未登录','LOGIN_EXPIRED'],['频繁','RATE_LIMITED'],['验证码','RESTRICTED']])('page wrapper keeps %s protection',async(text,reason)=>{
+  const r=await run({isError:true,content:[{type:'text',text:'获取Feed详情失败: 笔记不可访问: '+text}]});expect(r.reason).toBe(reason);expect(r.posts).toEqual([]);expect(r.status).not.toBe('COMPLETE');
+ });
+ it('persists only the controlled unavailable-page reason to metrics and audit',async()=>{
+  const result=await run({isError:true,content:[{type:'text',text:'获取Feed详情失败: 笔记不可访问: '+secret}]});
+  const cfg={...config,id:'test-config',revision:1,failureCount:0,archivedAt:null},task={id:'test-run',configId:cfg.id,snapshot:config,revision:1,status:'RUNNING',cancelRequested:false};
+  const tx={$queryRaw:vi.fn().mockResolvedValue([cfg]),collectionConfig:{update:vi.fn()},collectionRun:{findUniqueOrThrow:vi.fn().mockResolvedValue(task),update:vi.fn().mockImplementation(async({data})=>({...task,...data}))},auditLog:{create:vi.fn()}};
+  await commitRead({$transaction:async(fn:(v:unknown)=>unknown)=>fn(tx)} as never,task as never,result);
+  expect(tx.collectionRun.update.mock.calls[0][0].data.metrics.diagnostic).toEqual(result.diagnostic);
+  expect(tx.auditLog.create.mock.calls[0][0].data.metadata.diagnostic.postReason).toBe('PAGE_UNAVAILABLE');
+  expect(JSON.stringify(tx.auditLog.create.mock.calls)).not.toContain('FAKE_SECRET');expect(result.posts).toEqual([]);
+ });
+});
