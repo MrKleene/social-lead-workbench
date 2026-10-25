@@ -265,3 +265,11 @@ func TestChunksTimeoutKeepsReturnedChunkAndNoProgressStops(t *testing.T) {
 		t.Fatal("platform restriction must stop")
 	}
 }
+
+func TestChunkReadyRetainsActualRootProgress(t *testing.T) {
+ f:=&chunkFixture{roots:60,visible:10}
+ s,_:=NewCommentChunkSession(nil)
+ r,err:=s.Read(context.Background(),f,"note",chunkConfig())
+ if err!=nil{t.Fatal(err)}
+ if r.BoundedRead.Actions.RootScrolls==0||r.BoundedRead.RootStop=="NOT_RUN"{t.Fatal("successful root action falsely reported as not run")}
+}

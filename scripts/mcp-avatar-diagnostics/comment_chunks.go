@@ -485,6 +485,7 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 			break
 		}
 		report.Actions.RootScrolls++
+		report.RootStop = "VISIBLE_WINDOW_READ"
 		awaiting = chunkObservation(records, raw, id, ready)
 		actionDeadline = time.Now().Add(2200 * time.Millisecond)
 		if !chunkWait(ctx) {

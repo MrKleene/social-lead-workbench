@@ -1,3 +1,4 @@
+import {savedReplyTarget,replyTargetSchema} from '@crm/contracts';
 import { boundedReadReportSchema, coverageDiagnosticSchema, safeCoverageDiagnostic, commentRulesSchema, semanticRulesSchema, safePostCoverUrl, savedNickname, safeAvatarUrl, savedPublishedAt, safeImageDiagnostics, imageDiagnosticsSchema } from '@crm/contracts';
 import { z } from "zod";
 import {postReferenceSchema} from "./post-reference";
@@ -26,6 +27,7 @@ const displayFields={imageDiagnostics,authorNickname:z.preprocess(savedNickname,
 export const postSchema = z.object({ boundedRead:boundedReadReportSchema.optional(), boundedReadWindows:z.array(boundedReadReportSchema).max(8).optional(), coverageDiagnostic:z.preprocess(safeCoverageDiagnostic,coverageDiagnosticSchema.optional()), sourceReference:postReferenceSchema.optional(), id: z.string().min(1).max(200), title: z.string().max(500), body: z.string().max(20000).optional(), coverUrl:z.preprocess(safePostCoverUrl,z.string().optional()),...displayFields });
 export const commentSchema = z.object({
     id: z.string().min(1).max(200), userId: z.string().min(1).max(200), nickname: z.preprocess(v=>savedNickname(v)??'',z.string().max(200)),
+    replyTarget:z.preprocess(savedReplyTarget,replyTargetSchema.optional()),replyTargetConflict:z.literal(true).optional(),
     imageDiagnostics,authorAvatarUrl:displayFields.authorAvatarUrl,publishedAt:displayFields.publishedAt,
     // A valid source comment can have no textual payload; keep it verbatim, including whitespace.
     text: z.string().max(10000), parentId: z.string().max(200).optional(), hasReplies: z.boolean().default(false),

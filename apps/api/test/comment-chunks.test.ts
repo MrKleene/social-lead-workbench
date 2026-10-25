@@ -48,3 +48,33 @@ it('accepts the actual Go serialized synthetic packet, including its checkpoint 
  const a=new XhsMcpAdapter(t,true,'XHS_MCP',window);const found=await a.search('合成',undefined,new AbortController().signal);const post=await a.post(found.items[0],new AbortController().signal);
  expect(a.receivedComments(post)).toHaveLength(5);expect(a.chunkReceipt(post)?.checkpoint.marks).toHaveLength(5);
 });
+
+// Synthetic exact upstream target shape; separate enclosing discussion and direct reply.
+it('carries targetComment through the Go-shaped wire without changing checkpoint identity',async()=>{
+ const {readFileSync}=await import('node:fs'),{resolve}=await import('node:path'),wire=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/comment-chunk-wire.json'),'utf8'));
+ const reply=wire.data.chunk.rows.find((r:any)=>r.parent),root=wire.data.chunk.rows.find((r:any)=>!r.parent);
+ reply.comment.targetComment={id:root.comment.id,userInfo:{userId:root.comment.userInfo.userId,nickname:'DO_NOT_COPY'},url:'SECRET_VALUE'};
+ const t={supportsBoundedComments:()=>true,supportsCommentChunks:()=>true,call:vi.fn(async(name:string)=>({content:[{type:'text',text:JSON.stringify(name==='search_feeds'?{feeds:[{id:'note',xsecToken:'SYNTHETIC'}]}:wire)}]}))};
+ const a=new XhsMcpAdapter(t,true,'XHS_MCP',window),signal=new AbortController().signal;
+ const found=await a.search('合成',undefined,signal),post=await a.post(found.items[0],signal),comments=a.receivedComments(post),c=comments.find(c=>c.id===reply.comment.id)!;
+ expect(c.parentId).toBe(reply.parent);expect(c.replyTarget).toEqual({source:'targetComment',commentId:root.comment.id,userId:root.comment.userInfo.userId});
+ expect(JSON.stringify(comments)).not.toMatch(/SECRET_VALUE|DO_NOT_COPY/);
+ const {replyTarget,...core}=c;expect(commentDigest('note',c)).toBe(commentDigest('note',core));
+ const {semanticSnapshot,snapshotHash}=await import('../src/collection/semantic-evaluator');expect(snapshotHash(semanticSnapshot(post,c,undefined,false,false))).toBe(snapshotHash(semanticSnapshot(post,core,undefined,false,false)));
+ expect(semanticSnapshot(post,c,undefined,false,false)).not.toHaveProperty('replyTarget');
+});
+it('rejects unknown target shapes without losing content, retains missing metadata and flags conflicts',async()=>{
+ const {sourceReplyTarget,mergeReplyTarget}=await import('@crm/contracts');
+ for(const value of [null,[],{},'bad',{id:42},{id:'self'},{id:'https://invalid'},{commentId:'other'},{ID:'other'}])expect(sourceReplyTarget(value,'self')).toBeUndefined();
+ const target=sourceReplyTarget({id:'other',userInfo:{userId:'target-user',nickname:'PRIVATE'},url:'SECRET'},'self')!;
+ expect(mergeReplyTarget({},target)).toEqual({replyTarget:target});expect(mergeReplyTarget({replyTarget:target},undefined)).toEqual({replyTarget:target});
+ expect(mergeReplyTarget({replyTarget:target},{...target,commentId:'changed'})).toEqual({replyTarget:target,replyTargetConflict:true});
+ expect(mergeReplyTarget({replyTarget:target},{...target,userId:'changed'})).toEqual({replyTarget:target,replyTargetConflict:true});
+ expect(sourceReplyTarget({id:'other',userInfo:{userId:42}},'self')).toEqual({source:'targetComment',commentId:'other'});
+});
+it('marks conflicting source targets within one window without changing the discussion or duplicating content',async()=>{
+ const entry=(target:string)=>({id:'child',content:'synthetic',userInfo:{userId:'author'},subComments:[],targetComment:{id:target}});
+ const t={call:vi.fn(async(name:string)=>({content:[{type:'text',text:JSON.stringify(name==='search_feeds'?{feeds:[{id:'note',xsecToken:'SYNTHETIC'}]}:{feed_id:'note',data:{note:{noteId:'note',title:''},comments:{list:[{id:'root',content:'synthetic',userInfo:{userId:'root-user'},subComments:[entry('target-a'),entry('target-b')]}]}}})}]}))};
+ const a=new XhsMcpAdapter(t,true,'XHS_MCP'),signal=new AbortController().signal,found=await a.search('synthetic',undefined,signal),post=await a.post(found.items[0],signal);
+ const comments=a.receivedComments(post);expect(comments).toHaveLength(2);expect(comments.find(c=>c.id==='child')).toMatchObject({parentId:'root',replyTarget:{source:'targetComment',commentId:'target-a'},replyTargetConflict:true});
+});

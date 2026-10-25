@@ -53,3 +53,5 @@ export * from './run-coverage';
 export * from './comment-checkpoint';
 
 export * from './xhs-reference-parameters';
+
+export * from './reply-target';

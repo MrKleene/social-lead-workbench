@@ -16,7 +16,7 @@ function run(binary,args,cwd=output,log){const r=spawnSync(binary,args,{cwd,env,
 const version=run(go,['version']).trim();if(version!=='go version go1.24.13 darwin/arm64')throw Error('Unreviewed compiler version');
 run(process.execPath,[join(bundle,'prepare.mjs'),source,join(output,'source')]);
 const cwd=join(output,'source'),manifest=JSON.parse(await readFile(join(bundle,'source-manifest.json'),'utf8'));
-const testFiles=['avatar_diagnostic_test.go','comment_avatar_test.go','avatar_query_test.go','coverage_diagnostic_test.go','reply_relation_test.go','bounded_comments_test.go','comment_chunks_test.go','search_note_test.go','search_observation_test.go','search_diagnostic_test.go'];
+const testFiles=['comment_reply_target_test.go','avatar_diagnostic_test.go','comment_avatar_test.go','avatar_query_test.go','coverage_diagnostic_test.go','reply_relation_test.go','bounded_comments_test.go','comment_chunks_test.go','search_note_test.go','search_observation_test.go','search_diagnostic_test.go'];
 const testNames=[];for(const name of testFiles){const source=await readFile(join(bundle,name),'utf8');for(const match of source.matchAll(/^func (Test[A-Za-z0-9_]+)\(/gm))testNames.push(match[1]);}
 await run(go,['test','-mod=readonly','-count=1','-v','-run','^('+testNames.join('|')+')$','./xiaohongshu'],cwd,'diagnostic-tests.log');
 await run(go,['test','-mod=readonly','-run','^Test(Continuation|ChunkCached)','-count=1','.'],cwd,'continuation-tests.log');

@@ -20,7 +20,7 @@ for(const [name,hash] of Object.entries(manifest.files)){
 }
 await mkdir(target,{recursive:false,mode:0o700});
 for(const name of Object.keys(manifest.files)){await mkdir(dirname(join(target,name)),{recursive:true});await copyFile(join(source,name),join(target,name));}
-for(const name of ['avatar_diagnostic.go','avatar_diagnostic_test.go','comment_avatar.go','comment_avatar_test.go','avatar_query.go','avatar_query_test.go','avatar-query-cases.json','coverage_diagnostic.go','coverage_diagnostic_test.go','reply_relation.go','reply_relation_test.go','coverage_capture.go','coverage-cases.json','bounded_comments.go','bounded_session.go','comment_chunks.go','comment_chunks_test.go','comment-chunk-wire.json','bounded_capture.go','bounded_comments_test.go','bounded_browser_test.go','search_diagnostic.go','search_diagnostic_test.go','search_observation.go','search_capture.go','search_observation_test.go','search_note.go','search_note_test.go'])await copyFile(join(bundle,name),join(target,'xiaohongshu',name));
+for(const name of ['avatar_diagnostic.go','avatar_diagnostic_test.go','comment_reply_target.go','comment_reply_target_test.go','comment_avatar.go','comment_avatar_test.go','avatar_query.go','avatar_query_test.go','avatar-query-cases.json','coverage_diagnostic.go','coverage_diagnostic_test.go','reply_relation.go','reply_relation_test.go','coverage_capture.go','coverage-cases.json','bounded_comments.go','bounded_session.go','comment_chunks.go','comment_chunks_test.go','comment-chunk-wire.json','bounded_capture.go','bounded_comments_test.go','bounded_browser_test.go','search_diagnostic.go','search_diagnostic_test.go','search_observation.go','search_capture.go','search_observation_test.go','search_note.go','search_note_test.go'])await copyFile(join(bundle,name),join(target,'xiaohongshu',name));
 const patched=spawnSync('/usr/bin/patch',['--batch','--forward','-p1','-i',join(bundle,'integration.patch')],{cwd:target,encoding:'utf8',env:{PATH:'/usr/bin:/bin'},timeout:10000});
 if(patched.status!==0)throw Error('Patch failed; candidate not built or installed');
 const searchPatch=spawnSync('/usr/bin/patch',['--batch','--forward','-p1','-i',join(bundle,'search-integration.patch')],{cwd:target,encoding:'utf8',env:{PATH:'/usr/bin:/bin'},timeout:10000});
@@ -34,5 +34,7 @@ const continuationPatch=spawnSync('/usr/bin/patch',['--batch','--forward','-p1',
 if(continuationPatch.status!==0)throw Error('Continuation patch failed; not installed');
 const chunkPatch=spawnSync('/usr/bin/patch',['--batch','--forward','-p1','-i',join(bundle,'chunk-integration.patch')],{cwd:target,encoding:'utf8',env:{PATH:'/usr/bin:/bin'},timeout:10000});
 if(chunkPatch.status!==0)throw Error('Chunk patch failed; not installed');
+const targetPatch=spawnSync('/usr/bin/patch',['--batch','--forward','-p1','-i',join(bundle,'reply-target-integration.patch')],{cwd:target,encoding:'utf8',env:{PATH:'/usr/bin:/bin'},timeout:10000});
+if(targetPatch.status!==0)throw Error('Reply target patch failed; not installed');
 await writeFile(join(target,'PREPARATION.json'),JSON.stringify({source,version:manifest.candidateVersion,installedBinaryUnchanged:true},null,2)+'\n');
 console.log('Candidate prepared (not built/installed/run): '+target);

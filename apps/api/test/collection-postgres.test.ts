@@ -821,6 +821,18 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
    expect(await db.lead.count()).toBe(leads);expect(await db.collectionNotice.count()).toBe(notices);expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(2);expect(await db.semanticModelCall.count()).toBe(calls);
   }
  });
+ it('direct reply metadata enriches existing originals without new versions, leads or model calls',async()=>{
+  const c=await archive(),before=await read(`/collection/configs/${c.id}/captures`),leads=await db.lead.count(),notices=await db.collectionNotice.count();
+  const original=before.body.items.find((x:any)=>x.snapshot.parentId),target={source:'targetComment' as const,commentId:original.snapshot.parentId,userId:before.body.items.find((x:any)=>!x.snapshot.parentId).snapshot.userId};
+  for(const next of [target,undefined,{...target,commentId:'different-source-target'}]){
+   const adapter={...sample,replies:async()=>{const p=await sample.replies({id:'demo-collect-archive-post',title:'虚构'},'demo-collect-archive-root',undefined,new AbortController().signal);return {...p,items:p.items.map(x=>({...x,replyTarget:next}))};}};
+   const run=await service.start(actor,c.id,'BASELINE',randomUUID());await service.execute(run.id,adapter);
+   const after=await read(`/collection/configs/${c.id}/captures`),reply=after.body.items.find((x:any)=>x.snapshot.parentId);
+   expect(after.body.total).toBe(before.body.total);expect(reply.id).toBe(original.id);expect(reply.contentHash).toBe(original.contentHash);expect(reply.snapshot.parentId).toBe(original.snapshot.parentId);expect(reply.snapshot.replyTarget).toEqual(target);
+   expect(reply.snapshot.replyTargetConflict).toBe(next?.commentId==='different-source-target'?true:undefined);
+  }
+  expect(await db.lead.count()).toBe(leads);expect(await db.collectionNotice.count()).toBe(notices);expect(await db.semanticModelCall.count()).toBe(0);
+ });
  it('图片诊断保存到原文API但不改变内容版本、线索或提醒，旧记录不回填',async()=>{
   const c=await archive(),before=await read(`/collection/configs/${c.id}/captures`),leads=await db.lead.count(),notices=await db.collectionNotice.count();
   expect(before.body.posts[0].snapshot.imageDiagnostics).toBeUndefined();

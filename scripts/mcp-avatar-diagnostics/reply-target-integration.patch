@@ -1,0 +1,6 @@
+--- a/xiaohongshu/types.go
++++ b/xiaohongshu/types.go
+@@ -264,2 +264,3 @@
+ type Comment struct {
++	TargetComment *CommentReplyTarget `json:"targetComment,omitempty"`
+ 	ID              string    `json:"id"`

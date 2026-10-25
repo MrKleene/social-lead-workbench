@@ -1,6 +1,7 @@
 import {commitCheckpoint,checkpointParents,type CheckpointLease} from './comment-checkpoint';
 import { createHash } from 'node:crypto';
 import { CapturedComment, CollectionConfig, CollectionRun, Prisma } from '@prisma/client';
+import {mergeReplyTarget,type ReplyTargetMetadata} from '@crm/contracts';
 import { SemanticSnapshot, CaptureDisplay, captureDisplay, safePostCoverUrl, safeImageDiagnostics, semanticRulesSchema } from '@crm/contracts';
 import {runCoverage} from './run-coverage';
 import {savedPostReference} from './post-reference';
@@ -49,7 +50,7 @@ export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResul
     const previous=await tx.capturedComment.findUnique({where:{configId_platformCommentId_contentHash_contextVersion:key},select:{snapshot:true}});
     // Preserve optional metadata when a later finite window omits it; semantic hash stays text-only.
     const commentDiagnostic=safeImageDiagnostics(comment.imageDiagnostics);
-    const archived={...snapshot,...(commentDiagnostic?{imageDiagnostics:commentDiagnostic}:{}),...captureDisplay((previous?.snapshot||{}) as CaptureDisplay),...captureDisplay({authorNickname:comment.nickname,authorAvatarUrl:comment.authorAvatarUrl,publishedAt:comment.publishedAt})};
+    const archived={...snapshot,...mergeReplyTarget((previous?.snapshot||{}) as ReplyTargetMetadata,comment.replyTarget,comment.replyTargetConflict),...(commentDiagnostic?{imageDiagnostics:commentDiagnostic}:{}),...captureDisplay((previous?.snapshot||{}) as CaptureDisplay),...captureDisplay({authorNickname:comment.nickname,authorAvatarUrl:comment.authorAvatarUrl,publishedAt:comment.publishedAt})};
     const c=await tx.capturedComment.upsert({where:{configId_platformCommentId_contentHash_contextVersion:{configId:config.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION}},create:{configId:config.id,runId:run.id,postId:p.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION,snapshot:archived,isDemo,lastRunId:run.id},update:{snapshot:archived,lastRunId:run.id,lastSeenAt:new Date()}});
     if(enabled)await enqueueCaptured(tx,c,config);
    }
