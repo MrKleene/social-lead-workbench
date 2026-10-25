@@ -15,7 +15,7 @@ export function useWorkspaceMotion() {
   },[]);
   useLayoutEffect(() => {
     const root = document.documentElement;
-    root.dataset.crmTheme = 'graphite';
+    root.dataset.crmTheme = 'mist';
     const unbindVisibility=bindWorkspaceVisibility(document,root);
     return () => {
       unbindVisibility();

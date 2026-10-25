@@ -17,18 +17,12 @@ export function usePanelExpansion(active:SpaceModule|null) {
    if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
   }
   if(!from&&!active)return;
-  const target=active||from;
-  const source=root.querySelector<HTMLElement>(target==='archive'?'.orbit-archive-satellite':target==='settings'?'.orbit-search':target==='accounts'?'.orbit-account':'.orbit-main');
-  const box=el.getBoundingClientRect(),card=source?.getBoundingClientRect();
-  const folded=card?`inset(${Math.max(0,card.top-box.top)}px ${Math.max(0,box.right-card.right)}px ${Math.max(0,box.bottom-card.bottom)}px ${Math.max(0,card.left-box.left)}px round 28px)`:'inset(35% 30% round 28px)';
-  const running=animation.current?.playState==='running';
-  const current=running?getComputedStyle(el).clipPath:undefined;
   animation.current?.cancel();
-  if(reduced||!el.animate||!!from===!!active){el.style.visibility=active?'visible':'hidden';el.style.clipPath='none';return;}
-  el.style.visibility='visible';
-  const a=el.animate([{clipPath:current||(active?folded:'inset(0px round 28px)'),opacity:active?.92:1},{clipPath:active?'inset(0px round 28px)':folded,opacity:active?1:0}],{duration:active?460:320,easing:'cubic-bezier(.2,.75,.15,1)',fill:'forwards'});
+  el.style.visibility=active?'visible':'hidden';
+  if(!active||reduced||!el.animate)return;
+  const a=el.animate([{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:180,easing:'ease-out'});
   animation.current=a;
-  a.onfinish=()=>{if(animation.current!==a)return;el.style.visibility=active?'visible':'hidden';el.style.clipPath='none';a.cancel();animation.current=null;};
+  a.onfinish=()=>{if(animation.current===a)animation.current=null;};
  },[active,reduced]);
  useLayoutEffect(()=>()=>animation.current?.cancel(),[]);
  return {stage,surface};

@@ -1,3 +1,4 @@
+import {useSearchParams} from 'react-router-dom';
 import {useCollectionTaskSession} from './use-collection-task-session';
 import {useEffect,useRef,useState} from 'react';
 import {Play,Square,Settings2} from 'lucide-react';
@@ -14,6 +15,7 @@ import {CollectionProgressFeed} from './collection-progress-feed';
 const hints={keywords:'先添加搜索关键词',account:'请登录或恢复一个可用账号',device:'请恢复执行设备连接',paused:'此配置已暂停，请检查设置',backoff:'暂时无法继续，请等待后重试',unavailable:'采集服务未就绪，请检查账号与设置'};
 export function CollectionFlow({configs,loading,error,visible,initialId,onAccounts,onSettings,onResults,onSelect}:{configs:Config[];loading:boolean;error?:unknown;visible:boolean;initialId?:string;onAccounts:()=>void;onSettings:()=>void;onResults:()=>void;onSelect:(id:string)=>void}){
  const readiness=useMcpReadiness(),mutation=useWorkspaceMutation<{id:string}>();
+ const [params,setParams]=useSearchParams();
  const [settings,setSettings]=useState(false),[editor,setEditor]=useState<'new'|'edit'|null>(null),[dirty,setDirty]=useState(false);
  const [confirm,setConfirm]=useState(false),[account,setAccount]=useState(''),[consent,setConsent]=useState(false);
  const submitting=useRef(false);
@@ -25,6 +27,7 @@ export function CollectionFlow({configs,loading,error,visible,initialId,onAccoun
  useEffect(()=>{const delay=Date.parse(selected?.nextAllowedAt||'')-Date.now();if(!visible||!(delay>0))return;const timer=setTimeout(()=>tick(n=>n+1),Math.min(delay+50,2147483647));return()=>clearTimeout(timer);},[selected?.nextAllowedAt,visible]);
  const unavailable=error||session.error||readiness.error;
  const status=collectionPreflight(selected?{...selected,activeRunId:session.activeId||null}:undefined,unavailable?undefined:readiness.data,loading||readiness.isPending||session.checking);
+ useEffect(()=>{if(visible&&params.get('panel')==='collection-settings'&&status!=='loading'){setEditor(status==='keywords'?(selected?'edit':'new'):null);setSettings(true);setParams(p=>{p.delete('panel');return p;},{replace:true});}},[visible,params,status,selected,setParams]);
  const plan=plans[selected?.id||'']||{posts:selected?.batchLimit||1,pages:4,scenario:'BASELINE'};
  const posts=Math.min(plan.posts,selected?.batchLimit||1);
  const updatePlan=(patch:Partial<typeof plan>)=>{if(selected)setPlans(old=>({...old,[selected.id]:{...plan,...patch}}));setConsent(false);};
