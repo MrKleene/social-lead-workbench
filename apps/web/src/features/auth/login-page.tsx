@@ -1,5 +1,5 @@
 import { useState, FormEvent } from "react";
-import { ArrowRight, LockKeyhole, ShieldCheck } from "lucide-react";
+import { ArrowRight, Layers, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useAuth } from "./use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,28 +19,26 @@ export function LoginPage() {
     login.mutate({ email, password }, { onSettled: () => setPassword("") });
   }
   return (
-    <main className="login-screen">
+    <main className="login-screen mist-login">
       <section className="login-story">
         <div className="brand">
-          <span className="brand-mark">L</span>
-          <strong>线索工作台</strong>
+          <span className="login-brand-mark"><Layers aria-hidden="true" /></span>
+          <span><strong>Social Lead</strong><small>AI 辅助获客工作台</small></span>
         </div>
         <div>
           <div className="story-line" />
           <h1>
-            让需求有据可查，
+            从发现需求，
             <br />
-            让跟进井然有序。
+            到有据可查的跟进。
           </h1>
           <p>
-            一个清晰的工作台，连接人工核验、
-            <br />
-            线索分配与团队协作。
+            保存帖子、评论与回复，专注每一次判断。
           </p>
         </div>
         <p className="login-foot">
           <ShieldCheck size={18} />
-          权限隔离 · 真实发送禁用
+          采集、判断、跟进，各有清晰入口
         </p>
       </section>
       <section className="login-form-wrap">
@@ -49,7 +47,7 @@ export function LoginPage() {
             <LockKeyhole />
           </div>
           <h2>欢迎回来</h2>
-          <p className="muted">登录你的工作账号，继续今天的跟进。</p>
+          <p className="muted">登录工作账号，继续今天的工作。</p>
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="email">登录邮箱</FieldLabel>
@@ -75,7 +73,7 @@ export function LoginPage() {
                 placeholder="请输入密码"
               />
               <FieldDescription>
-                使用当前工作空间的账号。账号由管理员初始化，没有默认密码。
+                使用管理员创建的账号，无默认密码。
               </FieldDescription>
             </Field>
           </FieldGroup>

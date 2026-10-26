@@ -1,0 +1,28 @@
+/* The unauthenticated entry uses the same Mist tokens as the workspace. */
+.mist-login{min-height:100dvh;max-width:1200px;margin:0 auto;padding:48px 48px;gap:72px;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);background:var(--background);align-items:center}
+.mist-login .login-story{padding:24px 0;min-height:520px;background:none;color:var(--foreground);overflow:visible}
+.mist-login .login-story:after{display:none}
+.mist-login .brand{display:flex;align-items:center;gap:12px;margin:0;color:var(--foreground)}
+.mist-login .login-brand-mark{display:grid;place-items:center;width:42px;height:42px;border-radius:10px;background:var(--accent);color:#0d735f}
+.mist-login .brand>span:last-child{display:grid;gap:4px}
+.mist-login .brand strong{font-size:22px;font-weight:650;letter-spacing:-.4px}
+.mist-login .brand small{font-size:12px;color:var(--muted-foreground)}
+.mist-login .story-line{display:block;background:var(--primary);width:36px;height:3px;margin:0 0 24px;border-radius:3px}
+.mist-login .login-story h1{font-size:clamp(28px,3.2vw,40px);font-weight:650;line-height:1.5;letter-spacing:-.5px;margin:0}
+.mist-login .login-story>div>p{display:block;color:var(--muted-foreground);font-size:14px;line-height:1.8;margin-top:20px}
+.mist-login .login-foot{display:flex;color:var(--muted-foreground);font-size:12px;line-height:1.7;margin:0}
+.mist-login .login-foot svg{color:#0d735f;flex:none}
+.mist-login .login-form-wrap{padding:0;min-width:0}
+.mist-login .login-form{width:100%;max-width:420px;padding:32px;gap:22px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--mist-shadow);animation:none}
+.mist-login .login-symbol{width:42px;height:42px;border-radius:9px;background:var(--accent);color:#0d735f}
+.mist-login .login-form h2{font-size:26px;font-weight:650;color:var(--foreground);line-height:1.4;margin:0}
+.mist-login .login-form>.muted{font-size:13px;line-height:1.7;color:var(--muted-foreground);margin:-14px 0 2px}
+.mist-login .login-form [data-slot=field-group]{gap:20px}
+.mist-login .login-form [data-slot=field-label]{font-size:13px;color:var(--foreground)}
+.mist-login .login-form [data-slot=field-description]{font-size:12px;color:var(--muted-foreground);line-height:1.7}
+.mist-login .login-form input{height:44px;border-radius:8px;border-color:var(--input);background:#fff;color:var(--foreground);font-size:14px}
+.mist-login .login-form>button{height:46px;border-radius:8px;font-size:14px;background:var(--primary);color:#fff}
+.mist-login .login-form>button:hover{background:#0d735f}
+.mist-login .login-disclaimer{font-size:12px;line-height:1.7;color:var(--muted-foreground);text-align:left;margin:0}
+@media(max-width:800px){.mist-login{grid-template-columns:1fr;max-width:520px;padding:28px 20px;gap:26px;align-content:start}.mist-login .login-story{min-height:0;padding:0;gap:28px}.mist-login .login-story .brand{margin:0}.mist-login .story-line,.mist-login .login-foot{display:none}.mist-login .login-story h1{font-size:26px;line-height:1.5}.mist-login .login-story>div>p{margin-top:12px;font-size:13px}.mist-login .login-form{max-width:none;padding:24px}.mist-login .login-form h2{font-size:24px}}
+@media(min-width:801px) and (max-height:680px){.mist-login{padding-top:24px;padding-bottom:24px}.mist-login .login-story{min-height:450px}}
