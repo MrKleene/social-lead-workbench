@@ -12,7 +12,7 @@
   "scripts": {
     "build": "npm run build -w @crm/contracts && npm run build -w @crm/api && npm run build -w @crm/web && npm run build -w @crm/worker && npm run build -w @crm/agent",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test -w @crm/api && npm run test -w @crm/agent && npm run test:workbench && node --test scripts/test-coverage-end-signal.mjs",
+    "test": "npm run test -w @crm/api && npm run test -w @crm/agent && npm run test:workbench && node --test scripts/test-coverage-end-signal.mjs && node --test scripts/test-persistent-model-wiring.mjs",
     "test:integration": "node scripts/test-db.mjs",
     "dev": "node scripts/workbench.mjs dev",
     "db:generate": "prisma generate",

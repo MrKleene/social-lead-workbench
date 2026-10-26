@@ -98,7 +98,7 @@ try{
  if(adminCount&&!fixture)console.log('已存在 CRM 管理员，跳过创建；网页使用原账号登录。启动器仅检查是否存在启用的管理员，不要求再次输入密码。');
  const checkDb=new PrismaClient({datasources:{db:{url}}});try{if(!await checkDb.user.count({where:{role:'ADMIN',active:true}}))throw Error('Administrator initialization incomplete');}finally{await checkDb.$disconnect();}
  manifest.fresh=false;await writeFile(join(directory,'instance.json'),JSON.stringify(manifest,null,2),{mode:0o600});
- stage='services';const collector=launch(process.execPath,['apps/api/dist/collection/worker.js'],env,{ipc:true,role:'collector'});
+ stage='services';const collector=launch(process.execPath,['apps/api/dist/collection/worker.js'],{...env,CRM_MODEL_VAULT_FILE:modelVault.vaultPath(manifest.id)},{ipc:true,role:'collector'});
  const api=launch(process.execPath,['apps/api/dist/main.js'],{...env,CRM_MODEL_VAULT_FILE:modelVault.vaultPath(manifest.id)},{ipc:true,role:'api'});const web=backendOnly?null:launch('npm',['run','dev','-w','@crm/web','--','--port',String(manifest.webPort),'--host','127.0.0.1','--strictPort'],env,{role:'web'});
  for(const c of [api,web,collector].filter(Boolean))c.done.then(code=>{if(!stopping){failed=true;runtimeFailure=new StartupError('SERVICE_EXITED',code);}finish();});
  await writeFile(join(directory,'running.json'),JSON.stringify({pid:process.pid,controllerPid:managed?process.ppid:process.pid,launcherPid:managed?Number(process.env.CRM_SUPERVISED_LAUNCHER):process.pid,backendOnly,launchId,lifecycleLog:journal.file,mode:manifest.mode,preview:base,api:env.API_PROXY_TARGET,deviceId:manifest.deviceId,instanceId:manifest.id,containers:[manifest.postgres.container,manifest.redis.container]},null,2),{mode:0o600});

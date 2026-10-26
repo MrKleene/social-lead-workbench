@@ -47,3 +47,10 @@
 真实模型连通性、费用与质量，真实采集自动触发，正式运行时迁移均未测；真实模型调用、采集和发送均为 0。仓库当前没有 GitHub Actions workflow；推送后须按最终 SHA 读取 check/status/workflow 结果，不能将无 CI 描述为 CI 通过。
 
 权限记录：首次远端 DNS、Docker socket 和 HTTP 临时端口操作被执行沙箱拦截，未修改正式环境；相应已授权的只读/隔离执行经受控提权后通过。没有自动审批拒绝或遗留不确定写入。临时 checkout 位于 `/tmp/social-review-20261026`；没有写本机 Codex memories。
+
+
+## 部署预检修正：worker vault 接线
+
+部署预检发现持久启动器此前只向 API 传入既有 vault 路径。已将同一实例的现有路径注入采集 worker，未读取或改写 Key，未把路径传给前端。新增 `test-persistent-model-wiring.mjs` 对实际启动声明分别验证 backend-only / full 两种模式，2 项通过，并纳入 `npm test`；启动脚本语法检查通过。这里验证的是配置接线，不是真实模型调用。
+
+同时核实 63968 为 Vite 开发服务，源码快进已使界面热更新；部署完成前曾是新前端/旧 API 与 worker 的混合状态。不能将此前“未上线”理解为前端毫无变化。正常受管服务迁移与最终数据核验结果另见部署记录。
