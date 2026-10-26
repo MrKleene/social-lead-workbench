@@ -1,3 +1,4 @@
+import {InfoSection,InfoDrawer} from '@/components/information-panel';
 import {assessmentLabels} from '@crm/contracts';
 import { useDraftGuard } from '@/features/work/draft-guard';
 import { useState, useRef, FormEvent, type ReactNode } from "react";
@@ -71,12 +72,12 @@ export function DetailForms({
     <div className="detail-sections">
       {children ?? <><p className="soft-tag">{contactLabels[lead.contactStage || "MATCHED"]}</p>
       <ContactActions lead={lead}/>
-      <details className="secondary-actions"><summary>首次联系话术预览（不发送）</summary><LeadReplyPreview id={lead.id}/></details></>}
-      <details className="secondary-actions"><summary>当前负责人和跟进时间</summary><div className="detail-facts">
+      <InfoDrawer className="secondary-actions" title={<>首次联系话术预览（不发送）</>}><LeadReplyPreview id={lead.id}/></InfoDrawer></>}
+      <InfoSection className="secondary-actions" title={<>当前负责人和跟进时间</>}><div className="detail-facts">
         <div><UserRound size={16} /><span>当前负责人<strong>{lead.owner?.name || "待分配"}</strong></span></div>
         <div><CalendarClock size={16} /><span>下次跟进<strong>{formatDate(lead.nextFollowUpAt)}</strong></span></div>
       </div>
-      </details>
+      </InfoSection>
       <ErrorNotice error={state.mutation.error} />
       {success && (
         <p role="status" key={saveCount} className="success-note">
@@ -141,7 +142,7 @@ export function DetailForms({
           </form>
         )}
       </section>
-      <details className="secondary-actions" open={lead.contactStage === "CONTACTED" || lead.contactStage === "INTERESTED"}><summary>交给销售 / 负责人分配</summary><section>
+      <InfoSection className="secondary-actions" title={<>交给销售 / 负责人分配</>}><section>
         <h3><UserRound size={16} />负责人分配</h3>
         {admin && <ErrorNotice error={state.usersError} />}
         {admin && !state.usersLoading && !state.usersError && state.users.length === 0 && <p className="helper-text">尚无可分配销售，请由管理员在本机创建销售账号。</p>}
@@ -193,9 +194,9 @@ export function DetailForms({
         <p className="helper-text">
           转交后，原负责人立即失去该线索与关联任务的访问权限。
         </p>
-      </section></details>
+      </section></InfoSection>
       </div>
-      <details className="secondary-actions"><summary>沟通记录、跟进时间线和人工任务</summary><div className="detail-panel">
+      <InfoSection className="secondary-actions" title={<>沟通记录、跟进时间线和人工任务</>}><div className="detail-panel">
       <section>
         <h3><MessageSquare size={16} />销售沟通记录</h3>
         <form onSubmit={followup}>
@@ -318,7 +319,7 @@ export function DetailForms({
           </FieldGroup>
         </form>
       </section>
-      </div></details>
+      </div></InfoSection>
     </div>
   );
 }

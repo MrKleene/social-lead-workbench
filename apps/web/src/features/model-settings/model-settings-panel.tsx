@@ -1,5 +1,6 @@
+import {InfoDrawer} from '@/components/information-panel';
 import './model-settings.css';
-import {useRef,useState} from 'react';
+import {useLayoutEffect,useRef,useState} from 'react';
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -7,10 +8,11 @@ import {ErrorNotice,Loading} from '@/components/feedback';
 import {ApiError} from '@/lib/api';
 import {useModelSettings,useModelForm,credentialTransportAllowed,type ModelSettings} from './use-model-settings';
 
-function ModelForm({value:v,onComplete}:{value:ModelSettings;onComplete:()=>void}){
+function ModelForm({value:v,onComplete,onBusyChange}:{value:ModelSettings;onComplete:()=>void;onBusyChange:(busy:boolean)=>void}){
  const [editing,setEditing]=useState(!v.configured);
  const editTrigger=useRef<HTMLButtonElement>(null),deleteTrigger=useRef<HTMLButtonElement>(null),cancelDelete=useRef<HTMLButtonElement>(null);
  const f=useModelForm(v,onComplete),transportSafe=credentialTransportAllowed(),ready=v.vault.state==='READY'&&transportSafe;
+ useLayoutEffect(()=>{onBusyChange(f.busy);return()=>onBusyChange(false);},[f.busy,onBusyChange]);
  const cancelEdit=()=>{f.reset();setEditing(false);requestAnimationFrame(()=>editTrigger.current?.focus());};
  return <>
  {!transportSafe&&<p role="alert">当前是远程 HTTP，禁止输入或提交 Key。请通过本机地址或直接 HTTPS 使用。</p>}
@@ -26,11 +28,14 @@ function ModelForm({value:v,onComplete}:{value:ModelSettings;onComplete:()=>void
  {!f.deleting&&<ErrorNotice error={f.error}/>}
  </>;
 }
-function SettingsBody(){
+function SettingsBody({onBusyChange}:{onBusyChange:(busy:boolean)=>void}){
  const q=useModelSettings(),heading=useRef<HTMLHeadingElement>(null);
  if(q.isPending)return <Loading/>;
  if(q.error instanceof ApiError&&q.error.status===404)return <p role="status">模型设置后台尚未部署；请先完成后台升级，不要在其他字段输入 Key。</p>;
  if(q.isError||!q.data)return <ErrorNotice error={q.error}/>;
- return <section className="model-settings" aria-label="管理员模型设置"><h3 ref={heading} tabIndex={-1}>评论语义匹配模型</h3><ModelForm key={q.data.version} value={q.data} onComplete={()=>heading.current?.focus()}/></section>;
+ return <section className="model-settings" aria-label="管理员模型设置"><h3 ref={heading} tabIndex={-1}>评论语义匹配模型</h3><ModelForm onBusyChange={onBusyChange} key={q.data.version} value={q.data} onComplete={()=>heading.current?.focus()}/></section>;
 }
-export function ModelSettingsPanel(){const [open,setOpen]=useState(false);return <details className="table-panel collection-body" onToggle={e=>setOpen(e.currentTarget.open)}><summary>模型设置 · 仅管理员</summary>{open&&<SettingsBody/>}</details>;}
+export function ModelSettingsPanel(){
+ const [open,setOpen]=useState(false),[busy,setBusy]=useState(false);
+ return <InfoDrawer title="模型设置 · 仅管理员" className="table-panel collection-body" open={open} onOpenChange={setOpen} busy={busy} description="保存配置与授权使用分开。这里只保存描述、模型和 Key。">{visible=>visible&&<SettingsBody onBusyChange={setBusy}/>}</InfoDrawer>;
+}

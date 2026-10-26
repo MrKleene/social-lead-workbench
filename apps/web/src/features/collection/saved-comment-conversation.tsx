@@ -1,5 +1,5 @@
 import {Fragment,useCallback,useEffect,useLayoutEffect,useRef,useState,type KeyboardEvent} from 'react';
-import {ChevronDown,MoreHorizontal,Search} from 'lucide-react';
+import {MoreHorizontal,Search} from 'lucide-react';
 import {CommentContextSheet,type ContextRequest} from './comment-context-sheet';
 import {commentThread,replyGroups} from './comment-thread';
 import {replyTargetFor} from './reply-target';
@@ -43,7 +43,7 @@ export function SavedCommentConversation({configId,postId,declared,refreshVersio
   {c.snapshot.parentId&&!parent&&<button className="info-text-action" onClick={e=>setContext({commentId:c.snapshot.parentId!,label:'父评论上下文',fallback:c.snapshot.parent,trigger:e.currentTarget})}>{parentAmbiguous?'父评论版本待核对':'父评论未保存于本次读取范围'} · 查看上下文</button>}
   {(c as StreamComment).savedVersions!>1&&<button className="info-text-action" onClick={e=>setContext({commentId:c.platformCommentId,label:'评论原文版本',trigger:e.currentTarget})}>{(c as StreamComment).savedVersions} 个保存版本</button>}</div>
  </article>
- {!filtering&&group&&group.replies.length>1&&<button className="info-replies-toggle info-text-action" aria-expanded={(expanded[group.id]||1)>1} onClick={()=>setExpanded(v=>({...v,[group.id]:(v[group.id]||1)>=group.replies.length?1:Math.min((v[group.id]||1)+5,group.replies.length)}))}><ChevronDown size={12}/>{(expanded[group.id]||1)>=group.replies.length?'收起回复':`展开更多回复（${group.replies.length-(expanded[group.id]||1)}）`}</button>}
+ {!filtering&&group&&group.replies.length>1&&<button className="info-replies-toggle info-text-action" aria-expanded={(expanded[group.id]||1)>1} onClick={()=>setExpanded(v=>({...v,[group.id]:(v[group.id]||1)>=group.replies.length?1:Math.min((v[group.id]||1)+5,group.replies.length)}))}>{(expanded[group.id]||1)>=group.replies.length?'收起回复':`展开更多回复（${group.replies.length-(expanded[group.id]||1)}）`}</button>}
  </Fragment>;})}
  {!stream.isFetching&&!stream.isError&&!comments.length&&<p className="info-comment-empty" role="status">{filtering?'没有符合筛选的已采集评论。':'暂无已保存评论。'} 不代表平台没有评论。</p>}
  <div ref={sentinel} className="info-stream-footer">{stream.isError?<div role="alert"><p>评论加载失败，已加载内容仍保留。</p><button onClick={()=>stream.isFetchNextPageError?load():void stream.refetch()}>重试加载评论</button></div>:stream.isFetching?<p role="status">正在加载已保存评论…</p>:stream.hasNextPage?<button onClick={load}>加载更多已采集评论</button>:total&&<p role="status">{filtering?'没有更多符合筛选的已采集评论':'没有更多已采集评论'}<small>仅代表本地已保存范围，不代表平台评论已采全。</small></p>}</div>

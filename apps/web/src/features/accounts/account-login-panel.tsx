@@ -1,3 +1,4 @@
+import {InfoDialog} from '@/components/information-panel';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAccountLogin } from './use-account-login';
@@ -19,7 +20,7 @@ export function AccountLoginPanel({accountId,capabilities,onDone,replacement=fal
     {login.busy&&<Button variant="outline" onClick={()=>void login.cancel()}>取消等待</Button>}
     {capabilities.mode==='offline'&&login.view?.state==='WAITING'&&<div className="action-row"><Button onClick={()=>void login.simulate('SUCCESS')}>模拟扫码成功（离线）</Button><Button variant="outline" onClick={()=>void login.simulate('EXPIRED')}>模拟过期（离线）</Button></div>}
     {login.view?.state==='VERIFIED'&&<><p>{capabilities.persistent?(login.view.localSaved?'已保存到本机，下次可恢复登录。':'本机会话已登记，保存状态待检查。'):'当前环境不支持重启后恢复。'}</p>{onDone&&<Button onClick={onDone}>返回账号</Button>}</>}
-    <details><summary>本机保存与使用范围</summary><p>登录信息保存在实际执行电脑的私有会话目录，按账号隔离；不在浏览器中保存。正常重启保留本地文件，重启后需主动检查登录状态。</p>{capabilities.device&&<p>执行电脑：{capabilities.device.name} · {capabilities.device.online?'在线':'离线'}</p>}<p>取消、关闭此窗口或隐藏页面会停止等待；已写入的本地会话可能保留。采集需另行单次授权，评论与私信发送关闭。</p></details>
+    <InfoDialog  title={<>本机保存与使用范围</>}><p>登录信息保存在实际执行电脑的私有会话目录，按账号隔离；不在浏览器中保存。正常重启保留本地文件，重启后需主动检查登录状态。</p>{capabilities.device&&<p>执行电脑：{capabilities.device.name} · {capabilities.device.online?'在线':'离线'}</p>}<p>取消、关闭此窗口或隐藏页面会停止等待；已写入的本地会话可能保留。采集需另行单次授权，评论与私信发送关闭。</p></InfoDialog>
     {login.error&&<p role="alert">{login.error}</p>}
   </section>;
 }

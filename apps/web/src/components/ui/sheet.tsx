@@ -5,8 +5,12 @@ import { cn } from "@/lib/utils";
 import { XIcon } from "lucide-react";
 import { Dialog as SheetPrimitive } from "radix-ui";
 
-function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />;
+const SheetState = React.createContext<{open:boolean;change:(open:boolean)=>void;depth:number}|null>(null);
+function Sheet({open:controlled,defaultOpen=false,onOpenChange, ...props}: React.ComponentProps<typeof SheetPrimitive.Root>) {
+  const parent=React.useContext(SheetState);
+  const [local,setLocal]=React.useState(defaultOpen),open=controlled??local,depth=(parent?.depth??0)+1;
+  const change=(next:boolean)=>{setLocal(next);onOpenChange?.(next);};
+  return <SheetState.Provider value={{open,change,depth}}><SheetPrimitive.Root data-slot="sheet" {...props} open={open} onOpenChange={change}/></SheetState.Provider>;
 }
 
 function SheetTrigger({
@@ -29,16 +33,25 @@ function SheetPortal({
 
 function SheetOverlay({
   className,
+  onPointerDown,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
+  const state=React.useContext(SheetState);
   return (
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
+      onPointerDown={event=>{
+        onPointerDown?.(event);
+        if(event.target!==event.currentTarget||event.defaultPrevented||event.button!==0)return;
+        // The clicked backdrop belongs to exactly one dialog, including nesting.
+        event.stopPropagation();event.preventDefault();state?.change(false);
+      }}
       className={cn(
         "fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
         className,
       )}
       {...props}
+      style={{...props.style,zIndex:50+(state?.depth??1)*2}}
     />
   );
 }
@@ -48,16 +61,38 @@ function SheetContent({
   children,
   side = "right",
   showCloseButton = true,
+  onEscapeKeyDown,
+  ref:forwardedRef,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left";
   showCloseButton?: boolean;
 }) {
+  const state=React.useContext(SheetState),content=React.useRef<HTMLDivElement|null>(null);
+  const setContentRef=React.useCallback((node:HTMLDivElement|null)=>{content.current=node;if(typeof forwardedRef==='function')forwardedRef(node);else if(forwardedRef)forwardedRef.current=node;},[forwardedRef]);
+  // Route Escape to the dialog containing focus. Nested portals must not let a
+  // stale parent layer listener close the whole stack during rapid transitions.
+  React.useLayoutEffect(()=>{
+    if(!state?.open)return;
+    const escape=(event:KeyboardEvent)=>{
+      if(event.key!=='Escape')return;
+      const focused=event.target instanceof Element?event.target.closest('[data-slot="sheet-content"]'):null;
+      const top=focused??Array.from(document.querySelectorAll<HTMLElement>('[data-slot="sheet-content"][data-state="open"]')).filter(node=>node.getAttribute('aria-hidden')!=='true').at(-1);
+      if(top!==content.current)return;
+      event.stopImmediatePropagation();
+      onEscapeKeyDown?.(event);
+      if(!event.defaultPrevented)state.change(false);
+      event.preventDefault();
+    };
+    window.addEventListener('keydown',escape,true);
+    return()=>window.removeEventListener('keydown',escape,true);
+  },[state,onEscapeKeyDown]);
   return (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Content
         data-slot="sheet-content"
+        ref={setContentRef}
         className={cn(
           "fixed z-50 flex flex-col gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:animate-in data-[state=open]:duration-500",
           side === "right" &&
@@ -71,6 +106,11 @@ function SheetContent({
           className,
         )}
         {...props}
+        style={{...props.style,zIndex:51+(state?.depth??1)*2}}
+        onEscapeKeyDown={(event) => {
+          // Window capture above owns dialog Escape; other overlay types keep theirs.
+          event.preventDefault();
+        }}
       >
         {children}
         {showCloseButton && (

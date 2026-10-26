@@ -1,3 +1,4 @@
+import {InfoSection} from '@/components/information-panel';
 import { sourceModeLabel } from '@/features/collection/mode';
 import { ChevronLeft, ChevronRight, Search, RefreshCw, ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -24,7 +25,7 @@ export function SpaceResults({ state:s }: { state:SpatialState }) {
       }):<div className="space-empty"><h3>当前没有符合筛选的线索</h3><p>{s.admin?'调整筛选，或前往采集信息查看已保存的评论。':'调整筛选，或等待管理员分配线索。'}</p></div>}
     </div>
     <div className="space-pagination"><button aria-label="上一页" disabled={s.page===0} onClick={()=>s.setPage(s.page-1)}><ChevronLeft size={18}/></button><span>{s.page+1} / {s.pages}</span><button aria-label="下一页" disabled={s.page+1>=s.pages} onClick={()=>s.setPage(s.page+1)}><ChevronRight size={18}/></button><small>{w.rows.length} 条 · 每页3条</small></div>
-    {s.admin&&['contacted','follow'].includes(s.view)&&<details className="space-batch"><summary>批量交给销售 · 已选 {w.chosen.length}</summary><div><Button size="sm" variant="ghost" onClick={w.selectVisible}>选择当前结果（最多50）</Button><Button size="sm" variant="ghost" onClick={w.clearSelection}>清空</Button><select aria-label="批量销售负责人" value={w.owner} onChange={e=>w.setOwner(e.target.value)}><option value="">选择销售负责人</option>{w.sales.map(u=><option value={u.id} key={u.id}>{u.name}</option>)}</select><Button disabled={!w.chosen.length||!w.owner||w.mutation.isPending} onClick={w.assign}>批量分配</Button></div></details>}
+    {s.admin&&['contacted','follow'].includes(s.view)&&<InfoSection className="space-batch" title={<>批量交给销售 · 已选 {w.chosen.length}</>}><div><Button size="sm" variant="ghost" onClick={w.selectVisible}>选择当前结果（最多50）</Button><Button size="sm" variant="ghost" onClick={w.clearSelection}>清空</Button><select aria-label="批量销售负责人" value={w.owner} onChange={e=>w.setOwner(e.target.value)}><option value="">选择销售负责人</option>{w.sales.map(u=><option value={u.id} key={u.id}>{u.name}</option>)}</select><Button disabled={!w.chosen.length||!w.owner||w.mutation.isPending} onClick={w.assign}>批量分配</Button></div></InfoSection>}
     <Link className="space-all" to="/leads">查看全部线索 <ArrowUpRight size={14}/></Link>
   </section>;
 }

@@ -1,3 +1,4 @@
+import {InfoDrawer} from '@/components/information-panel';
 import {collectionOutcome} from '@/features/collection/collection-outcome';
 
 import {RunStats} from '@/features/collection/run-stats';
@@ -50,7 +51,7 @@ export function CollectionLauncher({ configs, loading, initialId, runsOpen, onRu
           {accountBound&&<AccountReadChoice accountId={accountId} onAccount={setAccountId} consent={consent} onConsent={setConsent}/>}
           <dl className="console-terms"><div><dt>关键词</dt><dd>{selected.keywords.join(' / ')}</dd></div><div><dt>排除词</dt><dd>{selected.excludeWords.join(' / ') || '无'}<span>每轮最多 {selected.batchLimit} 帖 · 32 个内部步骤</span></dd></div></dl>
         </> : <div className="console-empty"><p>先添加关键词和排除词，再回到这里开始。</p><Button asChild><Link to={legacyWorkspacePath('settings')}>去搜索设置</Link></Button></div>}
-        <div className="console-links"><Button className="refresh-local-status" variant="ghost" size="sm" onClick={() => void refresh()}>刷新本地任务状态</Button><Button variant="ghost" size="sm" aria-expanded={runsOpen} aria-controls="run-module" onClick={onRuns}>查看运行记录</Button>{selected?.mode === 'MOCK' && <details><summary>模拟验收选项</summary><label>模拟场景<select aria-label="模拟场景" value={scenario} onChange={e => setScenario(e.target.value)}>{Object.entries(scenarios).filter(([k]) => k !== 'READ_WINDOW').map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></label></details>}</div>
+        <div className="console-links"><Button className="refresh-local-status" variant="ghost" size="sm" onClick={() => void refresh()}>刷新本地任务状态</Button><Button variant="ghost" size="sm" aria-expanded={runsOpen} aria-controls="run-module" onClick={onRuns}>查看运行记录</Button>{selected?.mode === 'MOCK' && <InfoDrawer  title={<>模拟验收选项</>}><label>模拟场景<select aria-label="模拟场景" value={scenario} onChange={e => setScenario(e.target.value)}>{Object.entries(scenarios).filter(([k]) => k !== 'READ_WINDOW').map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></label></InfoDrawer>}</div>
         <div className="console-feedback" role="status">{!archiveReady?'原文存档后台尚未就绪；完成后台升级后才能使用新采集计划。当前不会启动采集。':feedbackText}</div><ErrorNotice error={mutation.error}/>
       </div>
     </div>
@@ -58,7 +59,7 @@ export function CollectionLauncher({ configs, loading, initialId, runsOpen, onRu
     {runsOpen&&<div className="module-expansion" data-open={runsOpen} id="run-module" inert={!runsOpen} aria-hidden={!runsOpen}><div><section className="console-history">
       <h3>集中采集进度</h3><div className="run-list">{configs.filter(c => c.runs.length).map(c => { const r = c.runs[0]; return <article key={c.id}><strong>{c.name} · {collectionOutcome(r).label}</strong><RunStats run={r}/>{r.reason && <small>{reasonLabels[r.reason] || r.reason}</small>}</article>; })}</div>
       {!configs.some(c => c.runs.length) && <p>尚未运行。实际原文会保存在独立采集信息中。</p>}
-      {selected && <details><summary>所选设置的运行记录与覆盖范围</summary><ConfigDetailPanel key={selected.id} id={selected.id}/></details>}
+      {selected && <InfoDrawer  title={<>所选设置的运行记录与覆盖范围</>}><ConfigDetailPanel key={selected.id} id={selected.id}/></InfoDrawer>}
     </section></div></div>}
   </section>;
 }
