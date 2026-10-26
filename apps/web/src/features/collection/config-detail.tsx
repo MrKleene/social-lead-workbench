@@ -1,3 +1,4 @@
+import {collectionOutcome} from '@/features/collection/collection-outcome';
 import {SemanticReviewPanel} from './semantic-review-panel';
 import {assessmentLabels} from '@crm/contracts';
 import {RunStats} from './run-stats';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ErrorNotice, Loading } from '@/components/feedback';
 import { formatDate } from '@/lib/types';
 import { useConfig } from './use-collection';
-import { scenarios, runLabels, reasonLabels } from './types';
+import { scenarios, reasonLabels } from './types';
 export function ConfigDetailPanel({ id }: {
     id: string;
 }) {
@@ -23,7 +24,7 @@ export function ConfigDetailPanel({ id }: {
   {c.commentRules&&<p>目标说明（仅供人阅读）：{c.commentRules.targetDescription}</p>}<p className="helper-text">首次读取也会保存高相关/待核查候选，仅新提醒被抑制。读取上限及分页限制不变。</p>
   <SemanticReviewPanel key={c.id} configId={c.id}/>
   <h3>最近运行 <span className="muted">最多 20 轮</span></h3>
-  {c.runs.length ? <div className="run-list">{c.runs.map(r => <article key={r.id}><div><strong>{runLabels[r.status] || r.status}</strong><span>{scenarios[r.scenario]} · {formatDate(r.createdAt)}</span></div><RunStats run={r}/>{r.reason && <small>{reasonLabels[r.reason] || r.reason}</small>}</article>)}</div> : <p className="helper-text">尚未运行。先选择“初始评论快照”，再运行一轮。</p>}
+  {c.runs.length ? <div className="run-list">{c.runs.map(r => <article key={r.id}><div><strong>{collectionOutcome(r).label}</strong><span>{scenarios[r.scenario]} · {formatDate(r.createdAt)}</span></div><RunStats run={r}/>{r.reason && <small>{reasonLabels[r.reason] || r.reason}</small>}</article>)}</div> : <p className="helper-text">尚未运行。先选择“初始评论快照”，再运行一轮。</p>}
   <h3>评论覆盖与基线</h3><p className="helper-text">{c.monitors.length ? c.monitors.map(m => `${m.baselineAt ? '已有完整基线' : c.mode !== 'MOCK' && m.lastRunId ? '已有读窗口起点，未建立完整基线' : '等待基线或窗口起点'} · ${m.coverage === 'COMPLETE' ? '完整读取' : '部分读取'} · 暂缺 ${m.observations.filter(o => o.state === 'MISSING_UNCONFIRMED').length} · 明确删除 ${m.observations.filter(o => o.state === 'DELETED_CONFIRMED').length}`).join('；') : '尚无评论快照'}。暂时缺失不会当作删除，原文证据始终保留。</p>
   <h3>命中来源 <span className="muted">最近 50 条</span></h3><div className="source-list">{c.matches.map(m => <article key={m.id}><div className="source-flags"><span className="soft-tag">规则 · {assessmentLabels[m.classification]||m.classification}</span><span>{m.isBaseline ? (c.mode === 'MOCK' ? '基线记录' : '首次窗口记录') : '后续命中'}{m.comment.parentPlatformCommentId ? ' · 楼中楼' : ''}</span></div><p>{m.comment.originalText}</p><small>{m.comment.post.title} · 命中：{m.keywords.join('、')}</small><MatchExplanation assessment={m.assessment}/>{m.comment.identity.lead && <Link className="text-link" to={`/work/${m.comment.identity.lead.id}`}>查看来源与处理线索 →</Link>}</article>)}{!c.matches.length && <p className="helper-text">暂无命中来源。</p>}</div>
   </div>

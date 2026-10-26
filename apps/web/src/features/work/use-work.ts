@@ -1,3 +1,4 @@
+import {collectionOutcome} from '../collection/collection-outcome';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -23,7 +24,7 @@ export function useWork(admin: boolean, view: string) {
     const contacted = all.filter(l => ['CONTACTED', 'INTERESTED'].includes(l.contactStage || ''));
     const ignored = all.filter(l => l.contactStage === 'IGNORED');
     const follow = all.filter(l => pendingIds.has(l.id) || (l.status !== 'CLOSED' && (l.status === 'FOLLOWING' || !!l.nextFollowUpAt)));
-    const exceptions = (configs.data || []).filter(c => c.pauseReason || ['FAILED', 'PARTIAL'].includes(c.runs[0]?.status));
+    const exceptions = (configs.data || []).filter(c => c.pauseReason || (c.runs[0] && collectionOutcome(c.runs[0]).warning));
     const groups: Record<string, Lead[]> = { new: fresh, waiting, contacted, ignored, follow };
     const rows = (groups[view] || fresh).filter(l => (!unassigned || !l.owner) && `${l.identity.nickname} ${l.summary} ${l.evidence}`.includes(search));
     const chosen = rows.filter(l => Object.hasOwn(selected, l.id));

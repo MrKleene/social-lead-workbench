@@ -22,3 +22,5 @@ it('requires scoped visible end and no controls to state visible exhaustion, nev
  expect(coverageReadingSummary(report(s))).toContain('不能断言属于删除、隐藏或漏读');
  for(const ready of [{...s.ready,rootEndVisible:false},{...s.ready,replyControls:1},{...s.ready,rootScopeExact:false}])expect(coverageReadingSummary(report({...s,ready}))).not.toContain('本次可见评论区已到末尾');
 });
+
+it('does not describe response-truncated output as exhausted even with a visible bottom',()=>{const s={...snapshot(),ready:{...snapshot().ready,rootEndVisible:true,replyControls:0,rootScopeExact:true}};expect(coverageReadingSummary({...report(s),reason:'RESPONSE_LIMIT'})).toContain('尚未证明');});

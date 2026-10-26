@@ -1,3 +1,4 @@
+import {collectionOutcome} from '@/features/collection/collection-outcome';
 
 import {RunStats} from '@/features/collection/run-stats';
 import { useState,useEffect } from 'react';
@@ -55,7 +56,7 @@ export function CollectionLauncher({ configs, loading, initialId, runsOpen, onRu
     </div>
 
     {runsOpen&&<div className="module-expansion" data-open={runsOpen} id="run-module" inert={!runsOpen} aria-hidden={!runsOpen}><div><section className="console-history">
-      <h3>集中采集进度</h3><div className="run-list">{configs.filter(c => c.runs.length).map(c => { const r = c.runs[0]; return <article key={c.id}><strong>{c.name} · {runLabels[r.status]}</strong><RunStats run={r}/>{r.reason && <small>{reasonLabels[r.reason] || r.reason}</small>}</article>; })}</div>
+      <h3>集中采集进度</h3><div className="run-list">{configs.filter(c => c.runs.length).map(c => { const r = c.runs[0]; return <article key={c.id}><strong>{c.name} · {collectionOutcome(r).label}</strong><RunStats run={r}/>{r.reason && <small>{reasonLabels[r.reason] || r.reason}</small>}</article>; })}</div>
       {!configs.some(c => c.runs.length) && <p>尚未运行。实际原文会保存在独立采集信息中。</p>}
       {selected && <details><summary>所选设置的运行记录与覆盖范围</summary><ConfigDetailPanel key={selected.id} id={selected.id}/></details>}
     </section></div></div>}
