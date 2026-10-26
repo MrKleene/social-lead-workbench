@@ -1,0 +1,23 @@
+{
+  "implementationCommit": "6c0889fce961de73780cd6199260f6ba1c632ba6",
+  "testCommit": "5c2d9dbc81e9f67688476fb28907e5dd48c676df",
+  "unitPassed": 700,
+  "integrationPassed": 267,
+  "integrationSkipped": 9,
+  "uiGroupsPassed": 14,
+  "typecheck": "passed",
+  "build": "passed with existing chunk warning",
+  "lint": "not configured; git diff --check passed",
+  "modelTransport": "mock only",
+  "productionMutations": 0,
+  "productionCalls": 0,
+  "deployed": false,
+  "runtimeCommit": "cfba2f1c44ced1a50491461e03e51e6f576ea588",
+  "databaseEvidence": "/var/folders/q6/b2g8k11x23g_cf3ql0ky_v140000gn/T/crm-independent-review-pg-RAaQEe",
+  "uiEvidence": "/var/folders/q6/b2g8k11x23g_cf3ql0ky_v140000gn/T/crm-whole-post-ui-sgaAbG",
+  "resolvedTestIssues": [
+    "UI fixture must search again after reload",
+    "Existing parallel test must not assume first request wins"
+  ],
+  "ci": "query exact final SHA after push; do not equate absent checks with success"
+}

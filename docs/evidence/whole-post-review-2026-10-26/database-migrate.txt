@@ -1,0 +1,72 @@
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "crm_test", schema "public" at "127.0.0.1:60195"
+
+20 migrations found in prisma/migrations
+
+Applying migration `202610180001_initial`
+Applying migration `202610190002_collection`
+Applying migration `202610200003_contact_workflow`
+Applying migration `202610200004_reply_templates`
+Applying migration `202610200005_account_center`
+Applying migration `202610200006_account_login`
+Applying migration `202610200007_persistent_references`
+Applying migration `202610200008_execution_devices`
+Applying migration `202610200009_account_read_execution`
+Applying migration `202610210001_comment_rules`
+Applying migration `202610210002_semantic_review`
+Applying migration `202610210003_qwen_matching`
+Applying migration `202610210004_capture_archive`
+Applying migration `202610210005_model_settings`
+Applying migration `20261025180000_comment_read_checkpoint`
+Applying migration `202610260001_optional_model_request_limit`
+Applying migration `202610260002_independent_comment_review`
+Applying migration `202610260003_default_execution_account`
+Applying migration `202610260003_review_automation`
+Applying migration `202610260004_manual_post_review`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 202610180001_initial/
+    └─ migration.sql
+  └─ 202610190002_collection/
+    └─ migration.sql
+  └─ 202610200003_contact_workflow/
+    └─ migration.sql
+  └─ 202610200004_reply_templates/
+    └─ migration.sql
+  └─ 202610200005_account_center/
+    └─ migration.sql
+  └─ 202610200006_account_login/
+    └─ migration.sql
+  └─ 202610200007_persistent_references/
+    └─ migration.sql
+  └─ 202610200008_execution_devices/
+    └─ migration.sql
+  └─ 202610200009_account_read_execution/
+    └─ migration.sql
+  └─ 202610210001_comment_rules/
+    └─ migration.sql
+  └─ 202610210002_semantic_review/
+    └─ migration.sql
+  └─ 202610210003_qwen_matching/
+    └─ migration.sql
+  └─ 202610210004_capture_archive/
+    └─ migration.sql
+  └─ 202610210005_model_settings/
+    └─ migration.sql
+  └─ 20261025180000_comment_read_checkpoint/
+    └─ migration.sql
+  └─ 202610260001_optional_model_request_limit/
+    └─ migration.sql
+  └─ 202610260002_independent_comment_review/
+    └─ migration.sql
+  └─ 202610260003_default_execution_account/
+    └─ migration.sql
+  └─ 202610260003_review_automation/
+    └─ migration.sql
+  └─ 202610260004_manual_post_review/
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+
