@@ -1,3 +1,4 @@
+import {boundAccountNickname} from './account-display';
 import {sessionHealth} from './session-health';
 import {
   BadRequestException,
@@ -43,6 +44,7 @@ export class AccountsService {
       });
       const accounts = rows.map(({ usage, sessionReference, ...r }) => ({
         ...r,
+        loginNickname:boundAccountNickname({...r,sessionReference}),
         owner: owners.find((u) => u.id === r.ownerId) || null,
         day,
         occupied: usage[0]?.occupied || 0,

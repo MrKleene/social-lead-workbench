@@ -1,3 +1,4 @@
+import {accountOptionName} from '@/features/accounts/account-presentation';
 import {InfoSection} from '@/components/information-panel';
 import {useRef,useState} from 'react';
 import {Button} from '@/components/ui/button';
@@ -9,7 +10,7 @@ import {BoundedCheckResult} from './bounded-check-result';
 import {reasonLabels} from './types';
 function CheckForm(){
  const s=useSinglePostCheck();
- return <div className="task-settings-body"><label>使用账号<select aria-label="单帖检查账号" value={s.accountId} disabled={s.busy||s.submitted} onChange={e=>s.setAccountId(e.target.value)}>{!s.accounts.length&&<option value="">没有可核验的账号</option>}{s.accounts.map(a=><option key={a.id} value={a.id}>{a.label}{a.reason==='UNVERIFIED'?' · 将先检查登录':''}</option>)}</select></label>
+ return <div className="task-settings-body"><label>使用账号<select aria-label="单帖检查账号" value={s.accountId} disabled={s.busy||s.submitted} onChange={e=>s.setAccountId(e.target.value)}>{!s.accounts.length&&<option value="">没有可核验的账号</option>}{s.accounts.map(a=><option key={a.id} value={a.id}>{accountOptionName(a)}{a.reason==='UNVERIFIED'?' · 将先检查登录':''}</option>)}</select></label>
  <label>小红书原文链接<input aria-label="单帖原文链接" type="url" aria-describedby="single-post-link-status" aria-invalid={!!s.url&&!s.link.valid&&!s.submitted} autoComplete="off" spellCheck={false} value={s.url} onChange={e=>s.setUrl(e.target.value)} disabled={s.submitted} placeholder="粘贴浏览器中可打开的完整帖子链接"/></label>
  {!s.submitted&&<p id="single-post-link-status" role="status" aria-live="polite">{s.link.message}</p>}
  {!s.submitted&&<label className="login-consent"><input type="checkbox" aria-label="验证评论翻页与回复" checked={s.expandReplies} onChange={e=>{s.setExpandReplies(e.target.checked);s.setConsent(false);}}/><span>验证评论翻页与回复</span></label>}

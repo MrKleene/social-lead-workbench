@@ -39,3 +39,11 @@ describe('当前账号状态不混同历史/模拟状态',()=>{
  it('受限或设备不匹配不提供恢复执行',()=>{expect(canRecover({...saved,status:'RESTRICTED'})).toBe(false);expect(canRecover({...saved,loginStatus:'DEVICE_MISMATCH'})).toBe(false);expect(accountState({...saved,status:'RESTRICTED',loginStatus:'VERIFIED'})).toBe('平台受限');});
  it('缺少引用不伪造恢复能力',()=>expect(canRecover({...saved,sessionReference:null})).toBe(false));
 });
+
+import {accountName,accountOptionName,accountRemark} from './account-presentation';
+describe('account names are independent from login state',()=>{
+ const a={id:'account-alpha1',label:'小红书 · 待授权账号',loginNickname:'已保存昵称'};
+ it('uses the saved nickname without the initial placeholder',()=>{expect(accountName(a)).toBe('已保存昵称');expect(accountRemark(a)).toBe('');expect(accountOptionName(a)).not.toContain('待授权');});
+ it('preserves a custom remark without modifying the saved name',()=>{expect(accountOptionName({...a,label:'业务备注'})).toContain('已保存昵称（业务备注）');expect(accountName({...a,label:'业务备注',loginNickname:null})).toBe('业务备注');});
+ it('uses neutral fallback and distinguishes same nicknames by account reference',()=>{expect(accountName({...a,loginNickname:null})).toBe('昵称未获取');expect(accountOptionName(a)).not.toBe(accountOptionName({...a,id:'account-bravo2'}));});
+});

@@ -1,5 +1,10 @@
 import type {Account} from './types';
-export function accountName(a:Account){return a.loginNickname || a.label;}
+type NamedAccount={id:string;label:string;loginNickname?:string|null};
+const placeholder=/^(?:小红书|抖音)\s*[·・]?\s*待授权账号$/;
+export function accountRemark(a:NamedAccount){const label=a.label.trim();return placeholder.test(label)?'':label;}
+export function accountTag(a:NamedAccount){return `…${a.id.slice(-6)}`;}
+export function accountName(a:NamedAccount){return a.loginNickname?.trim()||accountRemark(a)||'昵称未获取';}
+export function accountOptionName(a:NamedAccount){const name=accountName(a),remark=accountRemark(a);return `${name}${remark&&remark!==name?`（${remark}）`:''} · ${accountTag(a)}`;}
 export function accountState(a:Account){
  if(a.loginProvider==='offline'||a.loginStatus==='OFFLINE_VERIFIED')return '离线演示';
  if(a.status==='RESTRICTED')return '平台受限';

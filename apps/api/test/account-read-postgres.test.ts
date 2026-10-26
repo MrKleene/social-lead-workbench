@@ -31,6 +31,12 @@ it('historical proof survives elapsed time/restart; each distinct task checks on
  expect(status).toHaveBeenCalledTimes(2);expect(transportCalls.mock.calls.filter(c=>c[0]==='check_login_status')).toHaveLength(0);
  expect(await db.auditLog.count({where:{action:'ACCOUNT_TASK_LOGIN_CHECK_STARTED',entityId:{in:[one.id,second.id]}}})).toBe(2);
 });
+it('readiness uses a nickname from the same saved identity without changing its remark or probing',async()=>{
+ const open=vi.spyOn(runtime,'openSaved');await db.platformAccount.update({where:{id:accountId},data:{label:'小红书 · 待授权账号',loginNickname:'合成登录昵称'}});
+ expect((await reads.readiness(admin)).accounts.find(a=>a.id===accountId)).toMatchObject({label:'小红书 · 待授权账号',loginNickname:'合成登录昵称'});expect(open).not.toHaveBeenCalled();
+ await db.accountSessionReference.update({where:{accountId},data:{state:'NEEDS_REVIEW'}});expect((await reads.readiness(admin)).accounts.find(a=>a.id===accountId)?.loginNickname).toBeNull();
+ expect((await db.platformAccount.findUniqueOrThrow({where:{id:accountId}})).loginNickname).toBe('合成登录昵称');
+});
 it('another config cannot queue the same account while its task is pending',async()=>{await start();const c=await config();await expect(collection.start(admin,c.id,'READ_WINDOW',randomUUID(),'XHS_FIXTURE',accountId,readConsent)).rejects.toThrow('已有排队或运行任务');});
 it.each([{name:'expired',response:{loggedIn:false},code:'LOGIN_EXPIRED'},{name:'identity',response:{loggedIn:true,userId:'other'},code:'IDENTITY_MISMATCH'},{name:'timeout',error:'TIMEOUT',code:'TIMEOUT'},{name:'unknown/401 transport',error:'PLATFORM_UNAVAILABLE',code:'MCP_PROTOCOL'},{name:'captcha/403',error:'RESTRICTED',code:'RESTRICTED'}])('task preflight $name blocks reads without duplicate checks',async test=>{
  const run=await start(),status=vi.fn(async()=>{if(test.error)throw Error(test.error);return test.response!;}),readTransport=vi.fn();vi.spyOn(runtime,'openSaved').mockResolvedValue({qr:vi.fn(),status,readTransport,stop:async()=>{}});
