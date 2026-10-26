@@ -107,10 +107,6 @@
   background: #d1b4750d;
   border-radius: 10px;
 }
-.account-card:focus-visible {
-  outline: 2px solid #e5c595;
-  outline-offset: 3px;
-}
 .node-accounts {
   --orb-delay: -3s;
 }
@@ -164,8 +160,7 @@
 /* Quiet account task surface; detailed settings live in the sheet. */
 .account-simple .account-heading,.account-detail-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .account-simple .account-heading p,.account-simple .account-hint{font-size:13px;color:var(--text-muted,#a6adb9)}
-.account-simple .account-card{border-color:#9effcc22}.account-simple .account-card[aria-pressed=true]{border-color:#91e5be88;background:#9df5c40b}
-.account-simple .account-card:focus-visible{outline-color:#a5edce}.account-simple .account-detail{border:1px solid #afffd51a;border-radius:18px;background:#111923a8;min-width:0}
+.account-simple .account-card{border-color:#9effcc22}.account-simple .account-card[aria-pressed=true]{border-color:#91e5be88;background:#9df5c40b}.account-simple .account-detail{border:1px solid #afffd51a;border-radius:18px;background:#111923a8;min-width:0}
 .account-simple .account-detail h3{font-size:21px;margin:0;overflow-wrap:anywhere}.account-current-status{color:#b6efd3;font-size:13px}.account-simple .account-detail>p{font-size:14px;line-height:1.7;margin:20px 0;max-width:42em}
 .account-empty{padding:60px 16px;text-align:center}.account-empty p{color:#acb5c4;font-size:14px}.account-issue{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:#e6c59e;margin-top:16px}
 .account-sheet{width:min(100vw,520px)!important;max-width:520px!important;background:#111b23!important;color:#e8eeec}.account-sheet-body{overflow:auto;padding:0 24px 32px;min-height:0;overflow-wrap:anywhere}.account-sheet-body>details{margin:20px 0}.account-sheet summary{cursor:pointer;font-size:13px;color:#b6c8c5}.account-sheet .account-login-panel{padding:0;margin:4px 0;border:0;background:none;border-radius:0;font-size:14px}.account-sheet .account-login-panel h3{font-size:17px}.account-sheet .account-login-panel details p{font-size:12px;color:#a7b6b5}.account-sheet .device-settings{margin:0 0 20px;padding:12px;border-color:#a9f5d52b;background:#a9f5d505}.account-sheet-body dl{font-size:13px;line-height:1.8}.account-sheet-body dd{margin:0 0 10px}.account-sheet-body dt{color:#a7b6b5}

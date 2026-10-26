@@ -23,7 +23,8 @@ export function DemoNotice() {
 }
 export function Loading() {
   return (
-    <div className="loading-stack" aria-label="加载中">
+    <div className="loading-stack" role="status" aria-live="polite" aria-label="加载中">
+      <span className="sr-only">正在加载，请稍候</span>
       <Skeleton className="h-16 w-full" />
       <Skeleton className="h-36 w-full" />
       <Skeleton className="h-36 w-full" />

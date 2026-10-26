@@ -14,6 +14,7 @@ import { Loading } from "@/components/feedback";
 import "./styles.css";
 import "./features/work/mist.css";
 import "./features/auth/login.css";
+import "./features/work/ui-consistency.css";
 
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 10000 } },

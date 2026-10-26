@@ -1,0 +1,93 @@
+/* Mist interaction contract. Import after feature styles so each control has one focus owner. */
+:root, html[data-crm-theme=mist] { --input: #82928e; --focus: #0d735f; --color-muted-foreground: var(--muted-foreground); }
+/* Text fields use a solid perimeter, joined to their border; no ring/shadow halo. */
+:root :is(input:not([type=checkbox]):not([type=radio]), textarea, select) {
+  border-color: var(--input);
+  border-radius: 8px;
+  color: var(--foreground);
+  accent-color: var(--primary);
+}
+:root :is(input, textarea, select):focus {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+  border-color: var(--focus);
+  box-shadow: none;
+}
+/* Separate action outlines from filled buttons for sufficient contrast; no ring halo. */
+:root :focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+:root :is(input, textarea, select)[aria-invalid=true] {
+  border-color: var(--destructive);
+}
+:root :is(input, textarea, select)[aria-invalid=true]:focus {
+  outline-color: var(--destructive);
+}
+/* Icon + input search fields have ONE owner: the enclosing visible field. */
+:root :is(.space-search-small, .info-comment-search) { border-color: var(--input); }
+:root :is(.space-search-small, .info-comment-search):focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+  border-color: var(--focus);
+  box-shadow: none;
+}
+:root :is(.space-search-small, .info-comment-search) input,
+html[data-crm-theme=mist] :is(.space-search-small, .info-comment-search) input:focus {
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+}
+/* Restore contrast/spacing for the standalone routes as well as workspace panels. */
+:root :is(.helper-text, .muted, .table-footer, .evidence-note, .date-cell,
+  .lead-identity p, .task-main p, .timeline time, .timeline small, .capability-head p,
+  .capability-card > p, .account-row p, .empty-state, .page-code, .list-scope,
+  .metric p, .metric small, .next-actions p, .heading-pill) { color: var(--muted-foreground); }
+:root :is(.task-panel, .capability-card, .metric, .next-actions, .detail-panel) {
+  background: var(--card);
+  border-color: var(--border);
+  border-radius: 12px;
+  box-shadow: var(--mist-shadow);
+}
+:root :is(.task-icon, .capability-icon, .heading-pill, .segmented button > span) {
+  background: var(--secondary);
+  color: var(--accent-foreground);
+}
+:root .segmented button[aria-pressed=true] { color: var(--accent-foreground); }
+:root th { color: var(--muted-foreground) !important; }
+:root .status-PENDING_REVIEW { color: #80591e !important; }
+:root .status-FOLLOWING { color: #116c5c !important; }
+:root .status-CLOSED { color: #526171 !important; }
+:root .task-done .task-main h3 { color: var(--muted-foreground); }
+:root .source-original, :root .detail-sections blockquote { overflow-wrap: anywhere; }
+:root :is(.task-main h3, .config-card h3, .account-card strong, .account-detail h3) { overflow-wrap: anywhere; }
+:root [data-slot=sheet-header] { padding-right: 64px; flex-shrink: 0; }
+:root [data-slot=sheet-content] { max-height: 100dvh; }
+:root .detail-scroll { min-height: 0; }
+:root .mist-navigation { padding: 2px; }
+:root .task-row .task-actions { padding: 0; margin: 0; border: 0; background: none; }
+:root [data-slot=button]:hover:not(:disabled) { transform: none; }
+:root [data-slot=button][data-variant=default]:hover:not(:disabled) { background: #0d735f; box-shadow: none; }
+@media (max-width: 600px) {
+  .page-heading { flex-wrap: wrap; gap: 12px; }
+  .form-pair { grid-template-columns: minmax(0, 1fr); }
+  .task-row { flex-wrap: wrap; }
+  .task-row .task-main { flex-basis: calc(100% - 60px); }
+  .task-row .task-actions { margin-left: auto; }
+  .platform-grid { grid-template-columns: minmax(0, 1fr); }
+  .capability-head { flex-wrap: wrap; gap: 10px; }
+  .owner-form { flex-wrap: wrap; }
+  .owner-form select { min-width: 0; }
+  .action-row { flex-wrap: wrap; }
+}
+@media (forced-colors: active) {
+  :root { --focus: Highlight; --input: ButtonText; }
+  :root :is(input, textarea, select)[aria-invalid=true]:focus { outline-color: Highlight; }
+}
+:root .upcoming-item { min-width: 0; }
+:root .upcoming-item > div { min-width: 0; }
+:root .upcoming-item strong { overflow-wrap: anywhere; }
+
+:root :is(.info-story,.info-story-body,.info-comments,.run-post-list):focus-visible { outline-offset: -2px; }
