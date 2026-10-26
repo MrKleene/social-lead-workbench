@@ -1,5 +1,7 @@
 # 评论自动识别与独立手动测试
 
+**当前运行状态：已获用户批准并于 2026-10-26 13:34 UTC 完成原 main 实例升级，功能提交 `61041931748a3b44427186e46ae8c373b92bbfd1`。自动识别保持关闭，真实模型调用为 0。**
+
 2026-10-26；REQ-003 / REQ-004 / REQ-009 / REQ-017。基线 `cc34c4f`，实现提交 `a3b6dfc656658900f7d47bea3e4b58b66aee39e5`。本轮只进行代码、mock、隔离测试和正式页面只读 QA。
 
 ## 使用变化
@@ -40,7 +42,7 @@
 
 截图：[桌面](evidence/review-automation-2026-10-26/ui-workspace-1440.png)、[窄屏](evidence/review-automation-2026-10-26/ui-workspace-390.png)、[持续授权](evidence/review-automation-2026-10-26/ui-first-use-390.png)、[选评论预览](evidence/review-automation-2026-10-26/ui-selected-comments-390.png)、[证据](evidence/review-automation-2026-10-26/ui-review-evidence-1440.png)。均为虚构测试数据。
 
-## 部署与剩余边界
+## 部署前边界（历史记录，后续已获批完成）
 
 本轮未对正式实例应用迁移、构建或重启。README/COMMANDS 要求在获得运行时授权后再升级；本次代码推送授权不能替代运行时授权。下一步获批后先 `npm run status` 核对受管实例，再按既有 `npm restart` 流程迁移/构建/启动 API、采集 worker 和网页。若显示 legacy-or-unmanaged，保持原实例并按项目切换流程处理，不能按 PID 强杀。
 
@@ -54,3 +56,18 @@
 部署预检发现持久启动器此前只向 API 传入既有 vault 路径。已将同一实例的现有路径注入采集 worker，未读取或改写 Key，未把路径传给前端。新增 `test-persistent-model-wiring.mjs` 对实际启动声明分别验证 backend-only / full 两种模式，2 项通过，并纳入 `npm test`；启动脚本语法检查通过。这里验证的是配置接线，不是真实模型调用。
 
 同时核实 63968 为 Vite 开发服务，源码快进已使界面热更新；部署完成前曾是新前端/旧 API 与 worker 的混合状态。不能将此前“未上线”理解为前端毫无变化。正常受管服务迁移与最终数据核验结果另见部署记录。
+
+
+## 已批准的正式部署结果
+
+用户确认更新后，先核对原实例身份与容器/卷标签，确认没有 QUEUED/RUNNING 采集或在途模型请求。生成权限 0600 的私有本地业务备份并用 pg_restore --list 验证归档目录；未在现用库执行恢复，备份不入 Git。
+
+旧 63968 前端追溯至原项目 dev-persistent-web.mjs 启动器，核对命令、工作目录及 Vite 子进程后仅发送一次 SIGINT，由它正常关闭前端，确认端口释放；没有强杀或删除锁。随后 `npm restart` 经既有控制通道正常停止 API/worker，沿用原实例生成 Prisma、部署增量迁移、构建并启动 API/worker 与受管前端。
+
+部署后 API 与前端均 running/healthy；采集 worker 在同一新后台进程下持续运行，前端不再是 legacy-or-unmanaged。迁移的数据库 checksum 与提交 SQL 一致。原 PostgreSQL/Redis 启动时间和卷身份不变。1 个用户、2 个平台账号、1 个采集批次、3 帖、68 个评论版本，以及历史配置/目标/原文/审核/联系表的数据库端摘要均与升级前相同。模型设置密文与元数据摘要不变；数据库 secret 与 vault 文件的 inode/大小/mtime/权限不变，未读取其内容。
+
+正式页面沿用已有登录，只读确认两个独立入口，选择再取消选择一个已有帖子，确认自动关闭时手动按钮可用；没有点击预览或执行。新版单条评论选择 GET 接口返回正常分页。自动 enabled=0、自动任务=0、活跃采集=0、模型调用=0，联系记录=0。前端仍按项目既有设计使用 Vite/HMR，后续源码变更仍可能热更新；本次已消除新前端/旧后端混合状态。
+
+结果见 [脱敏部署核验](evidence/review-automation-2026-10-26/deployment.json) 与 [2 项启动接线回归](evidence/review-automation-2026-10-26/vault-wiring.txt)。完整运行日志、备份路径和数据摘要仅保存在本地任务证据，不提交真实业务备份或原文截图。
+
+回滚策略：若需应用回滚，先保持自动关闭并确认空闲，通过正常控制通道停止新 API/worker，恢复此前应用版本并保留新增 schema；此次迁移仅添加列/表，旧代码不依赖这些新增字段。禁止直接删表、清卷或把备份覆盖恢复到现用库；数据恢复须另行确认目标与停写窗口。真实模型连通性、费用与语义效果仍未验收，本次没有为验证而发生真实调用。
