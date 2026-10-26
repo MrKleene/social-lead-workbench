@@ -2,7 +2,7 @@ import {prepareOutbound,outboundBatches} from '../collection/semantic-redaction'
 import type {SemanticSnapshot,SemanticRules} from '@crm/contracts';
 import {Inject,Injectable} from '@nestjs/common';
 import {randomUUID} from 'node:crypto';
-import {semanticBatchConsent,semanticInputPolicy} from '@crm/contracts';
+import {outputFailureReason,semanticBatchConsent,semanticInputPolicy} from '@crm/contracts';
 import type {CollectionRun} from '@prisma/client';
 import {Db} from '../common/db';
 import type {PostRead,ReadResult} from '../collection/collector';
@@ -51,7 +51,7 @@ export class AutoReviewService {
    const count=outboundBatches(payload)[0].length;
    const preview=await this.evaluation.preview(actor,job.policyId,rows.slice(0,count).map(r=>r.id));
    const result=await this.evaluation.evaluate(actor,job.policyId,{requestKey:randomUUID(),previewHash:preview.hash,reviewIds:preview.reviewIds,priceVersion:preview.connection.priceVersion!,consent:semanticBatchConsent},job.id);
-   await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:result.status==='COMPLETED'?'PENDING':'FAILED',processed:{increment:result.status==='COMPLETED'?count:0},reason:result.status==='COMPLETED'?'本批完成，等待下一批':`模型请求失败，不自动重试`}});
+   await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:result.status==='COMPLETED'?'PENDING':'FAILED',processed:{increment:result.status==='COMPLETED'?count:0},reason:result.status==='COMPLETED'?'本批完成，等待下一批':(outputFailureReason('errorCode' in result?result.errorCode:null)||'模型请求失败，不自动重试')+` 本批 ${count} 条未采纳，剩余评论未继续送审。`}});
   }catch{await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:'FAILED',reason:'授权、批次或输入安全检查未通过；请手动核查，不自动重试'}});}
  }
 }

@@ -1,3 +1,4 @@
+import {outputFailureReason,modelOutputFailure} from '@crm/contracts';
 import {semanticInputPolicy} from '@crm/contracts';
 import { ConflictException, Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -55,7 +56,7 @@ export class QwenMatchingService {
    const call=await tx.semanticModelCall.create({data:{requestKey:input.requestKey,previewHash:input.previewHash,configId,actorId:actor.id,status:'RESERVED',rows:b.rows.length,reservedUntil:until}});
    return {call,b};
   });
-  if('previous' in reserved)return {callId:reserved.previous!.id,status:reserved.previous!.status,reused:true};
+  if('previous' in reserved)return {callId:reserved.previous!.id,status:reserved.previous!.status,errorCode:reserved.previous!.errorCode,outputFailure:modelOutputFailure(reserved.previous!.errorCode),reused:true};
   const {call,b}=reserved;
   let outputs:ReturnType<typeof validateQwenEvidence>=[],usage:{inputTokens:number;outputTokens:number}|null=null,errorCode:string|null=null;
   try{
@@ -84,10 +85,10 @@ export class QwenMatchingService {
    await tx.$queryRaw`SELECT id FROM "CollectionConfig" WHERE id=${configId} FOR UPDATE`;
    const current=await tx.collectionConfig.findUniqueOrThrow({where:{id:configId}});
    const stale=semanticHash(current.semanticRules)!==semanticHash(b.config.semanticRules)||!!current.archivedAt;if(stale)status='STALE';
-   for(const row of b.rows){const output=outputs.find(o=>o.id===row.id);await tx.semanticReview.updateMany({where:{id:row.id,version:row.version+1,state:'PROCESSING',reviewStatus:'PENDING'},data:{state:!stale&&!errorCode?'EVALUATED':'FAILED',score:!stale&&!errorCode&&output?output.score:null,reason:stale?'规则已变化，保持待审核':errorCode?`评估失败（${errorCode}），并非低匹配；保持待审核`:output?.reason,context:!stale&&!errorCode&&output?output.context:'INSUFFICIENT',result:!stale&&!errorCode&&output?output:Prisma.DbNull,evaluationInput:b.payload,provider:'QWEN',modelVersion:b.model+':semantic-qwen-original-v2',leaseUntil:null,version:{increment:1}}});}
+   for(const row of b.rows){const output=outputs.find(o=>o.id===row.id);await tx.semanticReview.updateMany({where:{id:row.id,version:row.version+1,state:'PROCESSING',reviewStatus:'PENDING'},data:{state:!stale&&!errorCode?'EVALUATED':'FAILED',score:!stale&&!errorCode&&output?output.score:null,reason:stale?'规则已变化，保持待审核':errorCode?(outputFailureReason(errorCode)||`评估失败（${errorCode}），并非低匹配；保持待审核`):output?.reason,context:!stale&&!errorCode&&output?output.context:'INSUFFICIENT',result:!stale&&!errorCode&&output?output:Prisma.DbNull,evaluationInput:b.payload,provider:'QWEN',modelVersion:b.model+':semantic-qwen-original-v2',leaseUntil:null,version:{increment:1}}});}
    await tx.semanticModelCall.update({where:{id:call.id},data:{status:stale?'STALE':status,errorCode,finishedAt:new Date(),...usage}});
    await tx.auditLog.create({data:{actorId:actor.id,entityId:configId,action:'SEMANTIC_QWEN_MANUAL',metadata:{callId:call.id,status:stale?'STALE':status,count:b.rows.length,redactionVersion:b.payload.redactionVersion,inputPolicyVersion:b.payload.inputPolicyVersion}}});
   });
-  return {callId:call.id,status,processed:b.rows.length,errorCode,canSend:false};
+  return {callId:call.id,status,processed:b.rows.length,errorCode,outputFailure:modelOutputFailure(errorCode),canSend:false};
  }
 }

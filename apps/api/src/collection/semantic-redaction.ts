@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { semanticInputPolicy, type SemanticOutbound, type SemanticOutput } from '@crm/contracts';
+import { modelOutputFailureCode, semanticInputPolicy, type SemanticOutbound, type SemanticOutput } from '@crm/contracts';
 import type { SemanticInput } from './semantic-evaluator';
-import { qwenResultSchema, QwenError } from './qwen-provider';
+import { parseQwenResult, QwenError } from './qwen-provider';
 export const REDACTION_VERSION='contact-redaction-v1';
 const marker='[已脱敏]';
 export function redactText(text:string,identifiers:string[]=[]){
@@ -37,11 +37,25 @@ export function prepareOutbound(inputs:SemanticInput[]):SemanticOutbound{
 }
 export function previewHash(payload:SemanticOutbound,rows:{id:string;version:number}[],revision:number,modelSelection?:string){return createHash('sha256').update(JSON.stringify({payload,rows,revision,modelSelection})).digest('hex');}
 export function validateQwenEvidence(raw:unknown,payload:SemanticOutbound,inputs:SemanticInput[],contextOptional=false):SemanticOutput[]{
- const {items}=qwenResultSchema.parse(raw);if(items.length!==inputs.length||new Set(items.map(r=>r.id)).size!==items.length)throw new QwenError('INVALID_EVIDENCE');
+ const {items}=parseQwenResult(raw);
+ if(items.length!==inputs.length||payload.items.length!==inputs.length)throw new QwenError('OUTPUT_COUNT_INVALID');
+ const seen=new Set<string>();
+ items.forEach((row,i)=>{
+  if(seen.has(row.id))throw new QwenError(modelOutputFailureCode('OUTPUT_ID_DUPLICATE',i+1));
+  seen.add(row.id);
+  if(!payload.items.some(s=>s.id===row.id))throw new QwenError(modelOutputFailureCode('OUTPUT_ID_UNKNOWN',i+1));
+ });
  return inputs.map((input,i)=>{
-  const s=payload.items[i],row=items.find(x=>x.id===s.id);if(!row)throw new QwenError('INVALID_EVIDENCE');
+  const s=payload.items[i],position=items.findIndex(x=>x.id===s.id),row=items[position];
+  if(!row)throw new QwenError('OUTPUT_ID_MISSING');
+  const fail=(code:Parameters<typeof modelOutputFailureCode>[0])=>{throw new QwenError(modelOutputFailureCode(code,position+1));};
   const texts={COMMENT:s.comment,POST_TITLE:s.title,POST_BODY:s.body,PARENT_COMMENT:s.parent||''};
-  if(!row.evidence.some(e=>e.source==='COMMENT')||row.evidence.some(e=>(e.quote.includes(marker)&&!(payload.inputPolicyVersion===semanticInputPolicy&&e.source==='COMMENT'))||!texts[e.source].includes(e.quote))||redactText(row.reason)!==row.reason)throw new QwenError('INVALID_EVIDENCE');
+  if(!row.evidence.some(e=>e.source==='COMMENT'))fail('OUTPUT_COMMENT_EVIDENCE_MISSING');
+  for(const evidence of row.evidence){
+   if(evidence.quote.includes(marker)&&!(payload.inputPolicyVersion===semanticInputPolicy&&evidence.source==='COMMENT'))fail('OUTPUT_CONTEXT_REDACTION_MARKER');
+   if(!texts[evidence.source].includes(evidence.quote))fail('OUTPUT_EVIDENCE_NOT_EXACT');
+  }
+  // Reasons are bounded plain text, not a second redaction input. Never execute model text.
   const context=!contextOptional&&(s.missingParent||s.truncated||!s.title&&!s.body)?'INSUFFICIENT':row.context;
   return {...row,id:input.id,context,decision:context==='INSUFFICIENT'?'UNCERTAIN':row.decision};
  });

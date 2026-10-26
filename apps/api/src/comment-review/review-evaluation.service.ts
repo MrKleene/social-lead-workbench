@@ -1,3 +1,4 @@
+import {outputFailureReason,modelOutputFailure} from '@crm/contracts';
 import {assertManualReview} from './manual-review.guard';
 import {assertAutoReview} from './auto-review.guard';
 import {ConflictException,Inject,Injectable,NotFoundException,Optional} from '@nestjs/common';
@@ -36,7 +37,7 @@ export class ReviewEvaluationService {
    for(const row of b.rows){const claim=await tx.semanticReview.updateMany({where:{id:row.id,version:row.version,reviewStatus:'PENDING'},data:{state:'PROCESSING',leaseUntil:until,version:{increment:1}}});if(claim.count!==1)throw new ConflictException('批次已变化');}
    const call=await tx.semanticModelCall.create({data:{requestKey:input.requestKey,previewHash:input.previewHash,policyId:id,policyRevision:b.policy.revision,actorId:actor.id,trigger:autoJobId?'AUTOMATIC':'MANUAL',configurationVersion:b.settings.configurationVersion,status:'RESERVED',rows:b.rows.length,reservedUntil:until}});return {b,call};
   });
-  if('previous' in reserved)return {callId:reserved.previous!.id,status:reserved.previous!.status,reused:true};
+  if('previous' in reserved)return {callId:reserved.previous!.id,status:reserved.previous!.status,errorCode:reserved.previous!.errorCode,outputFailure:modelOutputFailure(reserved.previous!.errorCode),reused:true};
   const {b,call}=reserved;let outputs:ReturnType<typeof validateQwenEvidence>=[],usage:{inputTokens:number;outputTokens:number}|null=null,errorCode:string|null=null;
   try{let flight:Promise<{response?:Awaited<ReturnType<typeof requestQwen>>;error?:unknown}>|undefined;
    await this.db.$transaction(async tx=>{await lockReview(tx);const policy=await tx.commentReviewPolicy.findUniqueOrThrow({where:{id}});
@@ -50,8 +51,8 @@ export class ReviewEvaluationService {
    const outcome=await flight!;if(outcome.error)throw outcome.error;usage=outcome.response!.usage;outputs=validateQwenEvidence(outcome.response!.result,b.payload,b.inputs,true);
   }catch(e){errorCode=e instanceof QwenError?e.code:'INVALID_RESPONSE';}
   const status=errorCode?'FAILED':'COMPLETED';
-  await this.db.$transaction(async tx=>{for(const row of b.rows){const output=outputs.find(o=>o.id===row.id);await tx.semanticReview.updateMany({where:{id:row.id,version:row.version+1,state:'PROCESSING'},data:{state:errorCode?'FAILED':'EVALUATED',score:errorCode?null:output!.score,reason:errorCode?`评估失败（${errorCode}），原文保留，等待重新预览`:output!.reason,context:errorCode?'INSUFFICIENT':output!.context,result:errorCode?Prisma.DbNull:output as unknown as Prisma.InputJsonValue,evaluationInput:b.payload,provider:'QWEN',modelVersion:b.settings.status.model+':comment-first-original-v2',leaseUntil:null,version:{increment:1}}});}
+  await this.db.$transaction(async tx=>{for(const row of b.rows){const output=outputs.find(o=>o.id===row.id);await tx.semanticReview.updateMany({where:{id:row.id,version:row.version+1,state:'PROCESSING'},data:{state:errorCode?'FAILED':'EVALUATED',score:errorCode?null:output!.score,reason:errorCode?(outputFailureReason(errorCode)||`评估失败（${errorCode}），原文保留，等待重新预览`):output!.reason,context:errorCode?'INSUFFICIENT':output!.context,result:errorCode?Prisma.DbNull:output as unknown as Prisma.InputJsonValue,evaluationInput:b.payload,provider:'QWEN',modelVersion:b.settings.status.model+':comment-first-original-v2',leaseUntil:null,version:{increment:1}}});}
    await tx.semanticModelCall.update({where:{id:call.id},data:{status,errorCode,finishedAt:new Date(),...usage}});await tx.auditLog.create({data:{actorId:actor.id,action:'COMMENT_REVIEW_EVALUATED',entityId:id,metadata:{callId:call.id,revision:b.policy.revision,status}}});
-  });return {callId:call.id,status,errorCode,processed:b.rows.length,canSend:false};
+  });return {callId:call.id,status,errorCode,processed:b.rows.length,outputFailure:modelOutputFailure(errorCode),canSend:false};
  }
 }

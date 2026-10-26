@@ -86,7 +86,7 @@ describe('Qwen only mocked HTTP, fictional local samples',()=>{
   const promise=requestQwen(qwenSettings(env),payload,transport);const assertion=expect(promise).rejects.toThrow('TIMEOUT');await vi.advanceTimersByTimeAsync(20001);await assertion;expect(signal?.aborted).toBe(true);expect(transport).toHaveBeenCalledTimes(1);
  });
  it('invalid JSON, unexpected fields, truncated model output, oversized response fail closed',async()=>{
-  for(const body of [{choices:[{finish_reason:'length',message:{content:JSON.stringify(result)}}]},{choices:[{finish_reason:'stop',message:{content:'not JSON'}}]},{choices:[{finish_reason:'stop',message:{content:JSON.stringify({...result,send:true})}}]}])await expect(requestQwen(qwenSettings(env),payload,async()=>response(body))).rejects.toThrow('INVALID_RESPONSE');
+  for(const [body,code] of [[{choices:[{finish_reason:'length',message:{content:JSON.stringify(result)}}]},'INVALID_RESPONSE'],[{choices:[{finish_reason:'stop',message:{content:'not JSON'}}]},'OUTPUT_JSON_INVALID'],[{choices:[{finish_reason:'stop',message:{content:JSON.stringify({...result,send:true})}}]},'OUTPUT_STRUCTURE_INVALID']] as const)await expect(requestQwen(qwenSettings(env),payload,async()=>response(body))).rejects.toThrow(code);
   await expect(requestQwen(qwenSettings(env),payload,async()=>new Response('x'.repeat(100001)))).rejects.toThrow('RESPONSE_LIMIT');
  });
 });
@@ -110,8 +110,8 @@ describe('original comment policy',()=>{
  });
  it('historical markers remain invalid evidence while new literal markers are exact comment evidence',()=>{
   const source={...input,snapshot:{...input.snapshot,comment:'原文[已脱敏]'}},p=prepareOutbound([source]),evidence={items:[{...result.items[0],evidence:[{source:'COMMENT',quote:'[已脱敏]'}]}]};
-  expect(validateQwenEvidence(evidence,p,[source])).toHaveLength(1);const old={...p};delete old.inputPolicyVersion;expect(()=>validateQwenEvidence(evidence,old,[source])).toThrow('INVALID_EVIDENCE');
-  expect(()=>validateQwenEvidence({items:[{...result.items[0],reason:'微信：invented_contact',evidence:[{source:'COMMENT',quote:'原文'}]}]},p,[source])).toThrow('INVALID_EVIDENCE');
+  expect(validateQwenEvidence(evidence,p,[source])).toHaveLength(1);const old={...p};delete old.inputPolicyVersion;expect(()=>validateQwenEvidence(evidence,old,[source])).toThrow('OUTPUT_CONTEXT_REDACTION_MARKER');
+  expect(validateQwenEvidence({items:[{...result.items[0],reason:'说明原文中的字面标记，不改写 [已脱敏]',evidence:[{source:'COMMENT',quote:'原文'}]}]},p,[source])[0].reason).toContain('[已脱敏]');
  });
  it('large original comments split on bytes without truncation; individual oversize fails before confirmation',()=>{
   const text='字'.repeat(6000),p=prepareOutbound(Array.from({length:5},()=>({...input,snapshot:{...input.snapshot,comment:text}})));

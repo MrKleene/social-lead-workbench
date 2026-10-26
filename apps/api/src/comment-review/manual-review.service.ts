@@ -1,4 +1,4 @@
-import {semanticInputPolicy} from '@crm/contracts';
+import {outputFailureReason,semanticInputPolicy} from '@crm/contracts';
 import {ConflictException,Inject,Injectable,NotFoundException} from '@nestjs/common';
 import {randomUUID} from 'node:crypto';
 import {Prisma,type ManualReviewJob} from '@prisma/client';
@@ -86,7 +86,7 @@ export class ManualReviewService {
    const actor=await this.db.user.findUniqueOrThrow({where:{id:job.actorId}});await assertManualReview(this.db,job.id,job.modelVersion,job.batchIds);
    const preview=await this.evaluation.preview(actor,job.policyId,job.batchIds,true);
    const result=await this.evaluation.evaluate(actor,job.policyId,{requestKey:randomUUID(),reviewIds:job.batchIds,previewHash:preview.hash,priceVersion:job.priceVersion,consent:semanticBatchConsent},undefined,job.id);
-   success=result.status==='COMPLETED';reason=success?'本批完成，等待下一批':`本批失败（${'errorCode' in result?result.errorCode:'未知'}）；不自动重试，其余未处理`;
+   success=result.status==='COMPLETED';reason=success?'本批完成，等待下一批':(outputFailureReason('errorCode' in result?result.errorCode:null)||`本批失败（${'errorCode' in result?result.errorCode:'未知'}）；不自动重试`)+` 本批 ${job.batchIds.length} 条未采纳，剩余待处理评论尚未送审。`;
   }catch{ /* No automatic retry after an uncertain dispatch. */ }
   await this.db.$transaction(async tx=>{await lockReview(tx);const current=await tx.manualReviewJob.findUniqueOrThrow({where:{id:job.id}}),items=itemsOf(current).map(i=>job.batchIds.includes(i.reviewId)?{...i,state:success?'SUCCESS' as const:'FAILED' as const}:i);
    await tx.manualReviewJob.update({where:{id:job.id},data:{items:json(items),batchIds:[],...(current.status==='PROCESSING'?{status:success?(items.some(i=>i.state==='PENDING')?'PENDING':'COMPLETED'):'FAILED',reason}: {})}});
