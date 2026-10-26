@@ -9,7 +9,7 @@ import type { SpatialState } from './use-spatial-work';
 export function SpaceResults({ state:s }: { state:SpatialState }) {
   const {work:w}=s;
   return <section className="space-results" aria-label="当前页评论线索">
-    <div className="space-results-heading"><h2>{s.active==='follow'?'销售跟进':'评论审核'}</h2><button aria-label="刷新线索" onClick={()=>{void w.leads.refetch();void w.tasks.refetch();}}><RefreshCw size={16}/></button></div>
+    <div className="space-results-heading"><h2>{s.active==='follow'?'销售跟进':'线索池'}</h2><button aria-label="刷新线索" onClick={()=>{void w.leads.refetch();void w.tasks.refetch();}}><RefreshCw size={16}/></button></div>
     <div className="space-filters"><select aria-label="线索队列" value={s.view} onChange={e=>s.setView(e.target.value)}>{[['new','匹配评论',w.fresh.length],['waiting','待联系',w.waiting.length],['contacted','已联系 / 有意向',w.contacted.length],['ignored','已忽略',w.ignored.length],['follow','销售跟进',w.follow.length]].map(([value,label,count])=><option key={value} value={value}>{label} · {count}</option>)}</select><label className="space-search-small"><Search size={15}/><input aria-label="搜索待处理" placeholder="搜索昵称、需求或原文" value={w.search} onChange={e=>w.setSearch(e.target.value)}/></label>{s.admin&&<label className="space-check"><input type="checkbox" checked={w.unassigned} onChange={e=>w.setUnassigned(e.target.checked)}/>仅未分配</label>}</div>
     {w.sourceUpdates>0&&<button className="source-update" onClick={w.applySources}>{w.sourceUpdates} 条来源已更新 · 点击应用</button>}
     <ErrorNotice error={w.leads.error||w.tasks.error||w.mutation.error||w.users.error}/>{w.feedback&&<p role="status" className="success-note">{w.feedback}</p>}

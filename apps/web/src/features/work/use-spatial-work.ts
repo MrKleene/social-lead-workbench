@@ -3,7 +3,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/use-auth';
 import { useAccounts } from '@/features/accounts/use-accounts';
 import { useWork } from './use-work';
-export type SpaceModule = 'matches' | 'archive' | 'runs' | 'follow' | 'notices' | 'settings' | 'templates' | 'accounts';
+import {activeWorkModule,type SpaceModule} from './navigation-policy';
+export type {SpaceModule} from './navigation-policy';
 export const SPACE_PAGE_SIZE = 3;
 export function useSpatialWork() {
   const { user } = useAuth();
@@ -14,8 +15,7 @@ export function useSpatialWork() {
   const view = params.get('view') || 'new';
   const work = useWork(admin, view);
   const accounts = useAccounts();
-  const requested = params.get('module');
-  const active: SpaceModule | null = requested === 'archive' && admin ? 'archive' : requested === 'accounts' ? 'accounts' : (requested === 'settings' || requested === 'templates') && admin ? requested : requested === 'runs' && admin ? 'runs' : requested === 'notices' ? 'notices' : requested === 'follow' || view === 'follow' ? 'follow' : id || requested === 'matches' || params.has('view') ? 'matches' : null;
+  const active=activeWorkModule(params.toString(),id,admin);
   const moduleHistory=useRef<Partial<Record<SpaceModule,string>>>({});
   useEffect(()=>{if(active)moduleHistory.current[active]=`/work${id?`/${id}`:''}?${params}`;},[active,id,params]);
   const previousModule=useRef(active);

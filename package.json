@@ -62,6 +62,7 @@
     "restart": "node scripts/workbench.mjs restart",
     "status": "node scripts/workbench.mjs status",
     "test:commands": "node scripts/test-workbench-commands.mjs",
+    "test:navigation:ui": "npm run build -w @crm/web && node scripts/test-app-navigation-ui.mjs",
     "test:orbit:ui": "npm run build -w @crm/web && node scripts/test-orbit-collection-ui.mjs",
     "test:collection-task:ui": "npm run build -w @crm/web && node scripts/test-collection-task-ui.mjs",
     "test:comment-stream:ui": "npm run build -w @crm/web && node --import tsx scripts/test-comment-stream-ui.mjs",
