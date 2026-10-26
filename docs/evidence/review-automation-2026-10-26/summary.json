@@ -1,0 +1,45 @@
+{
+  "codeCommit": "a3b6dfc656658900f7d47bea3e4b58b66aee39e5",
+  "baseCommit": "cc34c4fe053cddaac12e8eebafac396be90a0f47",
+  "mode": "mock and isolated only",
+  "typecheck": "passed",
+  "build": "passed; existing chunk-size warning",
+  "lint": "not configured; git diff --check passed",
+  "unit": {
+    "api": 540,
+    "agent": 4,
+    "web": 152,
+    "endSignal": 2
+  },
+  "database": {
+    "passed": 250,
+    "skipped": 9,
+    "migration": "passed",
+    "ownedContainersRemoved": 2
+  },
+  "ui": {
+    "passedFlowGroups": 12,
+    "widths": [
+      1440,
+      390
+    ],
+    "errors": 0,
+    "unexpectedRequests": 0
+  },
+  "liveReadOnlyQA": {
+    "url": "http://127.0.0.1:63968/comment-review",
+    "capturedCommentVersions": 68,
+    "legacyControl": "enabled",
+    "results": "empty",
+    "actions": "read existing DOM only; no mutation, collection or model request"
+  },
+  "productionDeployment": "not performed; approval required",
+  "realModelCalls": 0,
+  "realPlatformCollectionOrSends": 0,
+  "permissionEvents": [
+    "Initial DNS sandbox failure resolved by authorized read-only escalation",
+    "Initial Docker socket sandbox failure created no containers; authorized isolated escalation succeeded",
+    "Initial HTTP-test sandbox port binding failure; stopped own test and authorized mock rerun passed"
+  ],
+  "ci": "to be checked against final pushed commit; repository has no workflow configuration"
+}
