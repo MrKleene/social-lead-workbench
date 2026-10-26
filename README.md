@@ -137,3 +137,6 @@ npm run test:windows:native   # 仅Windows11 x64；Mac明确跳过
 日常统一使用 `npm start` / `npm stop` / `npm restart` / `npm run status`。后台日志保存在原实例私有目录，控制请求通过当前用户专用 Unix socket 送达实际持锁进程，不依据存储的 PID 杀进程。原 `dev:persistent:*` 长命令仍兼容，新的独立启停建议见[命令说明](docs/COMMANDS.md)。
 
 Qwen 评论匹配的用户本地配置、预算、逐批脱敏预览和未接入边界见 [Qwen 接入说明](docs/QWEN-COMMENT-MATCHING.md)。自动识别默认关闭；手动批次需明确确认，真实发送保持关闭。
+
+
+评论原文输入策略已获批准部署：手动整帖、手动批次和自动审核均按保存的评论原文判断，其他上下文保持原处理。旧预览需重新确认原文外发范围，历史结果不改写；自动识别仍关闭，尚未进行真实模型调用。见[原文策略与正式验收](docs/ORIGINAL-COMMENT-INPUT-2026-10-26.md)。

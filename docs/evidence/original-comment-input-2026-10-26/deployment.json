@@ -1,0 +1,138 @@
+{
+  "checkedAt": "2026-10-26T15:23:05.518994+00:00",
+  "commit": "799e52d08481ce968770bfe3683be25d795053ae",
+  "migration": "202610260005_original_comment_input",
+  "migrationChecksumMatches": true,
+  "counts": {
+    "User": 1,
+    "PlatformAccount": 2,
+    "CollectionConfig": 1,
+    "CollectionRun": 1,
+    "CapturedPost": 3,
+    "CapturedComment": 68,
+    "SemanticReview": 6,
+    "SemanticModelCall": 0,
+    "ModelSettings": 1,
+    "CommentReviewPolicy": 1,
+    "CommentReviewPolicyVersion": 1,
+    "ContactAttempt": 0,
+    "ManualReviewJob": 1,
+    "AutoReviewJob": 0
+  },
+  "preservationFingerprintsMatch": {
+    "User": true,
+    "PlatformAccount": true,
+    "CollectionConfig": true,
+    "CollectionRun": true,
+    "CapturedPost": true,
+    "CapturedComment": true,
+    "SemanticReview": true,
+    "SemanticModelCall": true,
+    "ModelSettings": true,
+    "CommentReviewPolicy": true,
+    "CommentReviewPolicyVersion": true,
+    "ContactAttempt": true,
+    "ManualReviewJob": true,
+    "AutoReviewJob": true
+  },
+  "modelConsentInvalidatedVersionIncremented": true,
+  "oldPreviewInvalidatedNotDeleted": true,
+  "zeroChecks": {
+    "autoEnabled": 0,
+    "activeRuns": 0,
+    "calls": 0,
+    "evaluated": 0,
+    "contacts": 0,
+    "activeManual": 0,
+    "activeAuto": 0
+  },
+  "containersAndVolumesUnchanged": {
+    "postgres": true,
+    "redis": true
+  },
+  "secretAndVaultMetadataUnchanged": {
+    "databaseSecret": true,
+    "modelVault": true
+  },
+  "compiledMatchesTestedRelease": {
+    "comment-review/manual-review.service.js": true,
+    "comment-review/manual-review.guard.js": true,
+    "comment-review/auto-review.service.js": true,
+    "comment-review/auto-review.guard.js": true,
+    "comment-review/review-evaluation.service.js": true,
+    "comment-review/review-policy.service.js": true,
+    "model-settings/model-settings.service.js": true,
+    "collection/qwen-provider.js": true,
+    "collection/qwen-matching.service.js": true,
+    "collection/semantic-redaction.js": true,
+    "collection/worker.js": true
+  },
+  "runtime": {
+    "backendPid": 20980,
+    "launchId": "9d7062bf-bcaa-4f0f-8233-c7c8e7b362b8",
+    "verifiedChildren": [
+      {
+        "role": "collector",
+        "pid": 21375
+      },
+      {
+        "role": "api",
+        "pid": 21376
+      }
+    ]
+  },
+  "apiReady": {
+    "ok": true,
+    "database": "ready",
+    "platformCallsEnabled": false
+  },
+  "frontendServesOriginalCommentCopy": true,
+  "services": [
+    {
+      "role": "backend",
+      "state": "running",
+      "healthy": true,
+      "generation": "2d2847a2-a3cc-4e97-94ea-88404b524dab",
+      "pid": 20980
+    },
+    {
+      "role": "web",
+      "state": "running",
+      "healthy": true,
+      "generation": "fc8f0e20-e278-417a-a85d-9ee1327d46ba",
+      "pid": 21384
+    }
+  ],
+  "backup": {
+    "bytes": 133381,
+    "mode": "0o600",
+    "tocValidated": true,
+    "tocEntries": 230
+  },
+  "browserQA": {
+    "loggedIn": true,
+    "readOnly": true,
+    "rawCommentDisclosure": true,
+    "providerQwenBeijing": true,
+    "contextStillRedacted": true,
+    "noExtraIdentityFields": true,
+    "autoDialogCancelled": true,
+    "autoOffAfterCancel": true,
+    "focusReturned": true,
+    "postPickerCount": 3,
+    "postCommentCounts": [
+      56,
+      6,
+      6
+    ],
+    "coverageWarning": false,
+    "newPreviewCreated": false,
+    "existingPreviewInvalidatedVisible": true,
+    "consoleErrors": 0,
+    "realScoredHistoryAvailable": false,
+    "newManualConfirmation": "isolated UI verification only; not opened live because it persists a preview",
+    "historicalInputLabel": "isolated UI verification only; no live evaluated rows"
+  },
+  "realProviderValidation": "not performed; zero real calls",
+  "testedCodeUnchanged": true
+}
