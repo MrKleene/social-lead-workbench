@@ -13,8 +13,9 @@ export type SemanticReviewItem={id:string;revision:number;version:number;state:s
 export type SemanticReviewPage={configured:boolean;provider:string;connection?:SemanticConnection;control?:{enabled:boolean;version:number};usage?:SemanticUsage;total:number;items:SemanticReviewItem[];offset:number;hasMore:boolean};
 
 export type SemanticOutbound={redactionVersion:string;target:string;items:{id:string;title:string;body:string;comment:string;parent:string|null;missingParent:boolean;partial:boolean;truncated:boolean}[]};
-export type SemanticConnection={state:'DISABLED'|'UNAUTHORIZED'|'BUDGET_REQUIRED'|'UNCONFIGURED'|'INVALID_CONFIG'|'READY';message:string;model:string;region:'cn-beijing';dailyLimit:number;batchLimit:number;automaticRetries:0;timeoutSeconds:number};
-export type SemanticUsage={requests:number;dailyLimit:number;inputTokens:number;outputTokens:number;unknownUsage:number;lastStatus:string|null;canCall:boolean};
+export type SemanticConnection={state:'DISABLED'|'UNAUTHORIZED'|'BUDGET_REQUIRED'|'UNCONFIGURED'|'INVALID_CONFIG'|'READY';message:string;model:string;region:'cn-beijing';authorized?:boolean;priceVersion?:string;priceDescription?:string;dailyLimit:number|null;batchLimit:number;automaticRetries:0;timeoutSeconds:number};
+export type SemanticUsage={requests:number;dailyLimit:number|null;inputTokens:number;outputTokens:number;unknownUsage:number;lastStatus:string|null;canCall:boolean};
 export type SemanticPreview={hash:string;revision:number;payload:SemanticOutbound;count:number;reviewIds?:string[];connection:SemanticConnection;usage:SemanticUsage};
-export const semanticEvaluateRequestSchema=z.object({requestKey:z.string().uuid(),previewHash:z.string().regex(/^[a-f0-9]{64}$/),reviewIds:z.array(z.string().min(1).max(200)).min(1).max(5).optional(),consent:z.literal('send-reviewed-redacted-batch-v1')}).strict();
+export const semanticBatchConsent='send-reviewed-priced-batch-v2' as const;
+export const semanticEvaluateRequestSchema=z.object({requestKey:z.string().uuid(),previewHash:z.string().regex(/^[a-f0-9]{64}$/),reviewIds:z.array(z.string().min(1).max(200)).min(1).max(5).optional(),priceVersion:z.string().min(1).max(60),consent:z.literal(semanticBatchConsent)}).strict();
 export type SemanticEvaluateRequest=z.infer<typeof semanticEvaluateRequestSchema>;

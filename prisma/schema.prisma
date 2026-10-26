@@ -522,7 +522,7 @@ model ModelSettings {
  version Int @default(0)
  model String
  endpoint String @default("beijing-standard")
- dailyLimit Int
+ dailyLimit Int? // null means no cumulative request-count cap; existing numeric limits remain
  priceVersion String
  consent Boolean @default(false)
  note String @default("")

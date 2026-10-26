@@ -1,22 +1,23 @@
 import { ConflictException, Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { SemanticEvaluateRequest, SemanticSnapshot, semanticRulesSchema, semanticEvaluateRequestSchema } from '@crm/contracts';
+import { SemanticEvaluateRequest, SemanticSnapshot, semanticRulesSchema, semanticEvaluateRequestSchema, semanticBatchConsent } from '@crm/contracts';
 import { Db } from '../common/db';
 import { Actor, requireAdmin } from '../auth/security';
 import { QwenError, QwenSettings, QwenTransport, requestQwen } from './qwen-provider';
 import { prepareOutbound, previewHash, validateQwenEvidence } from './semantic-redaction';
 import { qwenModel } from '../../../../runtime/qwen-models.cjs';
 import { semanticHash } from './capture-archive';
-import {ModelSettingsService} from '../model-settings/model-settings.service';
+import {ModelSettingsService,MODEL_SETTINGS_ID} from '../model-settings/model-settings.service';
 export const QWEN_TEST_OPTIONS=Symbol('QWEN_TEST_OPTIONS');
 type Options={settings?:()=>QwenSettings;transport:QwenTransport};
 const startOfDay=()=>{const d=new Date();d.setUTCHours(0,0,0,0);return d;};
 @Injectable()
 export class QwenMatchingService {
  constructor(@Inject(Db) private db:Db,@Optional() @Inject(QWEN_TEST_OPTIONS) private options?:Options,@Optional() @Inject(ModelSettingsService) private modelSettings?:ModelSettingsService){}
- private async settings(db:Db|Prisma.TransactionClient=this.db,includeKey=false){return this.options?.settings?{...this.options.settings(),configurationVersion:0}:await (this.modelSettings??new ModelSettingsService(this.db)).resolve(db,includeKey);}
+ private async settings(db:Db|Prisma.TransactionClient=this.db,includeKey=false,authorization?:typeof semanticBatchConsent){return this.options?.settings?{...this.options.settings(),configurationVersion:0}:await (this.modelSettings??new ModelSettingsService(this.db)).resolve(db,includeKey,authorization);}
  async status(db:Db|Prisma.TransactionClient=this.db,configId?:string){
-  const connection=(await this.settings(db)).status;
+  const status=(await this.settings(db)).status,model=qwenModel(status.model);
+  const connection={...status,...(model?{priceVersion:model.priceVersion,priceDescription:model.priceDescription}:{})};
   const [totals,last,unknown,active]=await Promise.all([
    db.semanticModelCall.aggregate({where:{createdAt:{gte:startOfDay()}},_count:{_all:true},_sum:{inputTokens:true,outputTokens:true}}),
    db.semanticModelCall.findFirst({orderBy:{createdAt:'desc'},select:{status:true,createdAt:true}}),
@@ -24,7 +25,7 @@ export class QwenMatchingService {
    db.semanticModelCall.count({where:{status:'RESERVED',reservedUntil:{gt:new Date()}}}),
   ]);
   const control=configId?(await db.semanticControl.findUnique({where:{configId}})||{enabled:false,version:0}):{enabled:false,version:0};
-  return {connection,control,usage:{requests:totals._count._all,dailyLimit:connection.dailyLimit,inputTokens:totals._sum.inputTokens||0,outputTokens:totals._sum.outputTokens||0,unknownUsage:unknown,lastStatus:last?.status||null,canCall:control.enabled&&connection.state==='READY'&&totals._count._all<connection.dailyLimit&&!active&&(!last||Date.now()-last.createdAt.getTime()>=30000)}};
+  return {connection,control,usage:{requests:totals._count._all,dailyLimit:connection.dailyLimit,inputTokens:totals._sum.inputTokens||0,outputTokens:totals._sum.outputTokens||0,unknownUsage:unknown,lastStatus:last?.status||null,canCall:control.enabled&&connection.state==='READY'&&(connection.dailyLimit===null||totals._count._all<connection.dailyLimit)&&!active&&(!last||Date.now()-last.createdAt.getTime()>=30000)}};
  }
  private async batch(configId:string,db:Db|Prisma.TransactionClient=this.db,reviewIds?:string[]){
   const config=await db.collectionConfig.findUnique({where:{id:configId}});
@@ -44,9 +45,10 @@ export class QwenMatchingService {
    const previous=await tx.semanticModelCall.findUnique({where:{requestKey:input.requestKey}});
    if(previous){if(previous.configId!==configId||previous.actorId!==actor.id||previous.previewHash!==input.previewHash)throw new ConflictException('请求标识已被使用');return {previous};}
    await tx.$queryRaw`SELECT id FROM "CollectionConfig" WHERE id=${configId} FOR UPDATE`;
-   const {usage}=await this.status(tx,configId);if(!usage.canCall)throw new ConflictException('LLM开关关闭、模型未就绪、每日预算耗尽、已有请求或处于30秒冷却期；未外发');
+   const {usage}=await this.status(tx,configId);if(!usage.canCall)throw new ConflictException('LLM开关关闭、模型未就绪、每日次数上限已到、已有请求或处于30秒冷却期；未外发');
    const b=await this.batch(configId,tx,input.reviewIds);
    if(!b.rows.length||b.hash!==input.previewHash)throw new ConflictException('批次或规则已变化，请重新预览');
+   if(input.priceVersion!==qwenModel(b.model)?.priceVersion)throw new ConflictException('模型价格已变化，请重新预览并确认价格');
    const until=new Date(Date.now()+60000);
    for(const row of b.rows){const claim=await tx.semanticReview.updateMany({where:{id:row.id,version:row.version,reviewStatus:'PENDING'},data:{state:'PROCESSING',leaseUntil:until,version:{increment:1}}});if(claim.count!==1)throw new ConflictException('批次已变化，请刷新');}
    const call=await tx.semanticModelCall.create({data:{requestKey:input.requestKey,previewHash:input.previewHash,configId,actorId:actor.id,status:'RESERVED',rows:b.rows.length,reservedUntil:until}});
@@ -63,10 +65,15 @@ export class QwenMatchingService {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(63967,210003)::text`;
     await tx.$queryRaw`SELECT id FROM "CollectionConfig" WHERE id=${configId} FOR UPDATE`;
     if(!(await tx.semanticControl.findUnique({where:{configId}}))?.enabled)throw new QwenError('SWITCH_OFF');
-    const settings=await this.settings(tx,true);
+    let settings=await this.settings(tx);
     if(settings.configurationVersion!==b.settingsVersion||settings.status.model!==b.model)throw new QwenError('MODEL_SETTINGS_CHANGED');
     const current=await tx.collectionConfig.findUniqueOrThrow({where:{id:configId}});
     if(current.archivedAt||semanticHash(current.semanticRules)!==semanticHash(b.config.semanticRules))throw new QwenError('RULES_CHANGED');
+    settings=await this.settings(tx,true,input.consent);
+    if(settings.status.state!=='READY'||!settings.key)throw new QwenError('CONFIG_BLOCKED');
+    // Persist initial use consent only after validated batch/price consent and all dispatch guards.
+    // A saved Key alone never grants this permission. Injected test settings have no persisted record.
+    if(!this.options?.settings)await tx.modelSettings.updateMany({where:{id:MODEL_SETTINGS_ID,version:b.settingsVersion},data:{consent:true}});
     flight=requestQwen(settings,b.payload,this.options?.transport).then(response=>({response}),error=>({error}));
    });
    const outcome=await flight!;if(outcome.error)throw outcome.error;const response=outcome.response!;usage=response.usage;outputs=validateQwenEvidence(response.result,b.payload,b.inputs);

@@ -16,7 +16,7 @@ export function requireCredentialTransport(req:Pick<AuthedRequest,'secure'|'sock
 class CredentialErrorFilter implements ExceptionFilter {
  catch(error:unknown,host:ArgumentsHost){const ctx=host.switchToHttp(),req=ctx.getRequest<AuthedRequest>(),res=ctx.getResponse<Response>();if(req.body&&typeof req.body==='object')delete req.body.key;res.setHeader('Cache-Control','no-store');res.status(error instanceof HttpException?error.getStatus():500).json({message:error instanceof HttpException?error.message:'模型设置操作失败；未披露凭据，请刷新状态'});}
 }
-const input=z.object({version:z.number().int().nonnegative(),model:z.string().min(1).max(100),endpoint:z.literal('beijing-standard'),dailyLimit:z.number().int().min(1).max(100),note:z.string().trim().max(200),key:z.string().min(16).max(512).optional(),priceVersion:z.string().max(60),confirmPricing:z.literal(true),consent:z.literal(true)}).strict();
+const input=z.object({version:z.number().int().nonnegative(),model:z.string().min(1).max(100),endpoint:z.literal('beijing-standard'),dailyLimit:z.number().int().min(1).max(100).nullable().optional(),confirmUnlimited:z.boolean().optional(),note:z.string().trim().max(200),key:z.string().min(16).max(512).optional(),priceVersion:z.string().max(60),confirmPricing:z.boolean().optional(),consent:z.boolean().optional()}).strict();
 @Controller('model-settings')
 @UseGuards(SessionGuard)
 @UseFilters(CredentialErrorFilter)
