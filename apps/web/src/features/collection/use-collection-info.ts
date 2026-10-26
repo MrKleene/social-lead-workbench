@@ -9,9 +9,9 @@ export function useCollectionInfo(configs:Config[],initialId?:string){
  const active=params.get('module')==='archive';
  const selected=configs.find(c=>c.id===params.get('config'))||configs.find(c=>c.id===initialId)||configs[0];
  const listOffset=archiveOffset(params.get('infoPage')),search=params.get('infoSearch')||'',runId=params.get('infoRun')||'',postId=params.get('post')||'';
- const offset=postId?archiveOffset(params.get('infoCommentPage')):listOffset;
+ const offset=postId?0:listOffset;
  const archive=useArchivePage(selected?.id,offset,false,postId),history=useConfig(selected?.id);
- const posts=infoPosts(archive.data?.posts||[],archive.data?.items||[],runId);
+ const posts=infoPosts(archive.data?.posts||[],archive.data?.items||[],postId?'':runId);
  const remembered=useRef(new Map<string,InfoPost>());
  const post=posts.find(p=>p.id===postId)||remembered.current.get(`${selected?.id}:${postId}`);
  const comments=(posts.find(p=>p.id===postId)?.comments||[]);

@@ -20,6 +20,7 @@ import { semanticEvaluateRequestSchema } from '@crm/contracts';
 import { QwenMatchingService } from './qwen-matching.service';
 import {ModelSettingsModule} from '../model-settings/model-settings.module';
 import { CaptureService } from './capture.service';
+import {commentStreamInput} from './saved-comment-stream';
 import { SemanticService } from './semantic.service';
 @Controller("collection")
 @UseGuards(SessionGuard)
@@ -37,6 +38,8 @@ class CollectionController {
     runPosts(@Req() r:AuthedRequest,@Param('id') id:string,@Param('runId') runId:string){return this.captures.runPosts(r.actor,id,runId);}
     @Get("configs/:id/captures")
     capturesList(@Req() r:AuthedRequest,@Param('id') id:string,@Query('offset') offset?:string,@Query('postId') postId?:string){return this.captures.list(r.actor,id,parse(z.coerce.number().int().min(0).max(100000).default(0),offset),parse(z.string().min(1).max(200).optional(),postId));}
+    @Get('configs/:id/comment-stream') @Header('Cache-Control','no-store, private')
+    commentStream(@Req() r:AuthedRequest,@Param('id') id:string,@Query() query:unknown){return this.captures.commentStream(r.actor,id,parse(commentStreamInput,query));}
     @Patch('configs/:id/semantic-control')
     semanticControl(@Req() r:AuthedRequest,@Param('id') id:string){return this.captures.toggle(r.actor,id,parse(z.object({enabled:z.boolean(),version:z.number().int().nonnegative()}).strict(),r.body));}
     @Post('configs/:id/semantic-queue')

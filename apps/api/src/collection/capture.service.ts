@@ -3,6 +3,7 @@ import { prepareOutbound } from './semantic-redaction';
 import { semanticRulesSchema, SemanticSnapshot } from '@crm/contracts';
 import { qwenModel } from '../../../../runtime/qwen-models.cjs';
 import {readRunPostFeed} from './run-post-feed';
+import {readSavedCommentStream,commentStreamInput} from './saved-comment-stream';
 import {savedPostReference,postReferenceUrl,publicPostSnapshot} from './post-reference';
 import { Db } from '../common/db';
 import { Actor, requireAdmin } from '../auth/security';
@@ -16,6 +17,7 @@ export class CaptureService {
   if(!ref)throw new NotFoundException('未保存有效原文链接');return postReferenceUrl(ref);
  }
  async runPosts(actor:Actor,configId:string,runId:string){requireAdmin(actor);return readRunPostFeed(this.db,configId,runId);}
+ async commentStream(actor:Actor,configId:string,input:unknown){requireAdmin(actor);if(!await this.db.collectionConfig.findUnique({where:{id:configId}}))throw new NotFoundException();return readSavedCommentStream(this.db,configId,commentStreamInput.parse(input));}
  async control(actor:Actor,configId:string){requireAdmin(actor);if(!await this.db.collectionConfig.findUnique({where:{id:configId}}))throw new NotFoundException();return await this.db.semanticControl.findUnique({where:{configId}})||{configId,enabled:false,version:0};}
  async toggle(actor:Actor,configId:string,input:{enabled:boolean;version:number}){
   requireAdmin(actor);return this.db.$transaction(async tx=>{
