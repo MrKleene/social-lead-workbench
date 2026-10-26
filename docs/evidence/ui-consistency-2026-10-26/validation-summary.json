@@ -1,0 +1,25 @@
+{
+  "baseline": "8288690",
+  "typecheck": "PASS @crm/web",
+  "build": "PASS @crm/web",
+  "unit": {
+    "files": 17,
+    "tests": 189
+  },
+  "uiConsistency": {
+    "pages": 108,
+    "focus": 288,
+    "states": 40
+  },
+  "login": 4,
+  "workspace": 4,
+  "models": 11,
+  "collectionInfo": 42,
+  "savedRead": 2,
+  "collectionTask": 32,
+  "productionAfter": "login mouse and Tab only; protected routes require user login",
+  "warnings": [
+    "existing bundle >500kB",
+    "third-party PURE annotation warnings"
+  ]
+}
