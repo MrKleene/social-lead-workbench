@@ -79,7 +79,7 @@ describe('independent comment review: disposable database and mocked provider on
   const list=await policies.comments(actor,a.p.id,0);expect(list.items.map(c=>c.id)).toEqual([a.capture.id]);
   const selection=await policies.prepare(actor,p.id,{version:p.version,scope:{kind:'COMMENTS',commentIds:[b.capture.id]}});
   const preview=await evaluation.preview(actor,p.id,selection.reviewIds);expect(preview.usage.canCall).toBe(true);expect(preview.payload.items[0].comment).toBe('会计学');
-  await Promise.all([evaluation.evaluate(actor,p.id,input(preview)),evaluation.evaluate(actor,p.id,input(preview)).catch(()=>null)]);
+  const attempts=await Promise.allSettled([evaluation.evaluate(actor,p.id,input(preview)),evaluation.evaluate(actor,p.id,input(preview))]);expect(attempts.filter(a=>a.status==='fulfilled')).toHaveLength(1);
   expect(transport).toHaveBeenCalledTimes(1);expect(await db.commentReviewPolicy.findUnique({where:{id:p.id}})).toMatchObject({enabled:false,autoEnabled:false});
  });
  it('automatic consent is distinct even for already authorized legacy users; no missing target/key or forged scope',async()=>{
