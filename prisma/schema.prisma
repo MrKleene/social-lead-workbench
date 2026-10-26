@@ -586,6 +586,7 @@ model CommentReviewPolicy {
  autoModelVersion Int?
  autoActorId String?
  autoJobs AutoReviewJob[]
+ manualJobs ManualReviewJob[]
  id String @id
  name String
  target String
@@ -605,4 +606,29 @@ model CommentReviewPolicyVersion {
  reviews SemanticReview[]
  calls SemanticModelCall[]
  @@id([policyId,revision])
+}
+
+model ManualReviewJob {
+ id String @id @default(uuid())
+ policyId String
+ policy CommentReviewPolicy @relation(fields:[policyId],references:[id],onDelete:Cascade)
+ policyRevision Int
+ modelVersion Int
+ model String
+ priceVersion String
+ actorId String
+ postId String
+ title String
+ coverage String
+ scopeHash String
+ items Json
+ preview Json
+ status String @default("PREVIEW")
+ reason String?
+ requestKey String? @unique
+ batchIds String[] @default([])
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([status,createdAt])
+ @@index([scopeHash,actorId])
 }

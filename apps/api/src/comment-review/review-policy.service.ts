@@ -1,6 +1,7 @@
 import {BadRequestException,ConflictException,Inject,Injectable,NotFoundException} from '@nestjs/common';
 import {Prisma} from '@prisma/client';
 import {reviewAutoToggleSchema,reviewAutoConsent,reviewAuthorizationSchema,reviewPolicySaveSchema,reviewPolicyToggleSchema,reviewPrepareSchema,reviewUseConsent,SemanticSnapshot} from '@crm/contracts';
+import {safePostCoverUrl,reviewResultFilterSchema} from '@crm/contracts';
 import {z} from 'zod';
 import {Db} from '../common/db';
 import {Actor,requireAdmin} from '../auth/security';
@@ -61,7 +62,7 @@ export class ReviewPolicyService {
   });
  }
  async comments(actor:Actor,postId:string,offset:number){requireAdmin(actor);const rows=await this.db.capturedComment.findMany({where:{postId},orderBy:[{createdAt:'asc'},{id:'asc'}],skip:offset,take:21});return {items:rows.slice(0,20).map(c=>({id:c.id,comment:(c.snapshot as unknown as SemanticSnapshot).comment,coverage:(c.snapshot as unknown as SemanticSnapshot).coverage})),hasMore:rows.length>20};}
- async posts(actor:Actor,offset:number){requireAdmin(actor);const rows=await this.db.capturedPost.findMany({orderBy:[{lastSeenAt:'desc'},{id:'asc'}],skip:offset,take:21,select:{id:true,snapshot:true,_count:{select:{comments:true}}}});return {items:rows.slice(0,20).map(p=>({id:p.id,title:typeof (p.snapshot as any)?.title==='string'?(p.snapshot as any).title:'未提供标题',comments:p._count.comments})),hasMore:rows.length>20};}
+ async posts(actor:Actor,offset:number,search=''){requireAdmin(actor);const rows=await this.db.capturedPost.findMany({where:search?{snapshot:{path:['title'],string_contains:search}}:{},orderBy:[{lastSeenAt:'desc'},{id:'asc'}],skip:offset,take:21,select:{id:true,snapshot:true,coverage:true,_count:{select:{comments:true}}}});return {items:rows.slice(0,20).map(p=>({id:p.id,title:typeof (p.snapshot as any)?.title==='string'?(p.snapshot as any).title:'未提供标题',comments:p._count.comments,coverage:p.coverage,coverUrl:safePostCoverUrl((p.snapshot as any)?.coverUrl)})),hasMore:rows.length>20};}
  async prepare(actor:Actor,id:string,input:z.infer<typeof reviewPrepareSchema>,automatic=false){
   requireAdmin(actor);input=reviewPrepareSchema.parse(input);
   return this.db.$transaction(async tx=>{await lockReview(tx);const policy=await tx.commentReviewPolicy.findUnique({where:{id}});if(!policy||policy.version!==input.version)throw new ConflictException('审核需求已变化，请刷新');
@@ -80,5 +81,5 @@ export class ReviewPolicyService {
    return {reviewIds,count:reviewIds.length,scope:input.scope,revision:policy.revision};
   });
  }
- async results(actor:Actor,id:string|undefined,offset:number){requireAdmin(actor);const where=id?{policyId:id}:{policyId:null};const [items,total]=await Promise.all([this.db.semanticReview.findMany({where,orderBy:[{createdAt:'desc'},{id:'asc'}],skip:offset,take:20}),this.db.semanticReview.count({where})]);return {items:items.map(r=>({...r,eligibility:{canSend:false,blockers:['独立审核不创建销售线索或授予联系权限','真实发送关闭']}})),total,hasMore:offset+items.length<total};}
+ async results(actor:Actor,id:string|undefined,offset:number,filters:z.infer<typeof reviewResultFilterSchema>={sort:'newest'}){requireAdmin(actor);const f=reviewResultFilterSchema.parse(filters);const hashes=f.postId?await this.db.capturedComment.findMany({where:{postId:f.postId},select:{contentHash:true}}):[];const where:Prisma.SemanticReviewWhereInput={policyId:id??null,...(f.postId?{OR:[{capture:{postId:f.postId}},{sourceContentHash:{in:hashes.map(c=>c.contentHash)}}]}:{}),...(f.search?{snapshot:{path:['comment'],string_contains:f.search}}:{}),...(f.minScore!==undefined||f.maxScore!==undefined?{score:{gte:f.minScore,lte:f.maxScore}}:{}),...(f.status?{reviewStatus:f.status}:{}),...(f.state?{state:f.state}:{})};const [items,total]=await Promise.all([this.db.semanticReview.findMany({where,orderBy:f.sort==='newest'?[{createdAt:'desc'},{id:'asc'}]:[{score:{sort:f.sort==='score-desc'?'desc':'asc',nulls:'last'}},{createdAt:'desc'},{id:'asc'}],skip:offset,take:20}),this.db.semanticReview.count({where})]);return {items:items.map(r=>({...r,eligibility:{canSend:false,blockers:['独立审核不创建销售线索或授予联系权限','真实发送关闭']}})),total,hasMore:offset+items.length<total};}
 }

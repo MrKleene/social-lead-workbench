@@ -1,3 +1,4 @@
+import {ManualReviewService} from '../comment-review/manual-review.service';
 import {AutoReviewService} from '../comment-review/auto-review.service';
 import {CommentReviewController} from '../comment-review/comment-review.controller';
 import {ReviewPolicyService} from '../comment-review/review-policy.service';
@@ -128,6 +129,6 @@ class NoticesController {
     id: string) { parse(z.object({}).strict(), r.body); const notice = await this.db.collectionNotice.findFirst({ where: { id, lead: scope(r.actor) } }); if (!notice)
         throw new NotFoundException(); return this.leads.locked(r.actor, notice.leadId, tx => tx.noticeRead.upsert({ where: { noticeId_userId: { noticeId: id, userId: r.actor.id } }, create: { noticeId: id, userId: r.actor.id }, update: {} })); }
 }
-@Module({ imports: [AuthModule, LeadsModule, DevicesModule,ModelSettingsModule,AccountsModule], controllers: [CommentReviewController, CollectionController, NoticesController], providers: [AutoReviewService,ReviewPolicyService,ReviewEvaluationService,SinglePostService,CaptureService, QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService,AutoReviewService] })
+@Module({ imports: [AuthModule, LeadsModule, DevicesModule,ModelSettingsModule,AccountsModule], controllers: [CommentReviewController, CollectionController, NoticesController], providers: [ManualReviewService,AutoReviewService,ReviewPolicyService,ReviewEvaluationService,SinglePostService,CaptureService, QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService,AutoReviewService,ManualReviewService] })
 export class CollectionModule {
 }

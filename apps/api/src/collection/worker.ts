@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import {ManualReviewService} from '../comment-review/manual-review.service';
 import {AutoReviewService} from "../comment-review/auto-review.service";
 import "dotenv/config";
 import { Module } from "@nestjs/common";
@@ -14,7 +15,7 @@ async function main() {
     const app = await NestFactory.createApplicationContext(WorkerModule, { logger: ["error"] });
     const worker = createCollectionWorker(id => app.get(CollectionService).execute(id));
     let pending:Promise<unknown>|undefined,stopping=false;
-    const timer=setInterval(()=>{if(!pending&&!stopping)pending=app.get(AutoReviewService).tick().catch(()=>console.error('自动审核调度失败；未自动重试在途调用')).finally(()=>{pending=undefined;});},1000);
+    const timer=setInterval(()=>{if(!pending&&!stopping)pending=(async()=>{await app.get(ManualReviewService).tick();if(!stopping)await app.get(AutoReviewService).tick();})().catch(()=>console.error('评论审核调度失败；未自动重试在途调用')).finally(()=>{pending=undefined;});},1000);
     const close = closeCollectionWorker(worker, async () => {stopping=true;clearInterval(timer);await pending;await app.close();});
     worker.on("error", () => console.error("采集队列暂不可用"));
     worker.on("failed", () => console.error("采集任务拒绝或失败；请查看运行原因"));

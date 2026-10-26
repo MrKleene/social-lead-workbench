@@ -13,4 +13,12 @@ export type ReviewPolicy={id:string;name:string;target:string;revision:number;ve
 export type ReviewOverview={policies:ReviewPolicy[];connection:SemanticConnection;usage:SemanticUsage;modelVersion:number;capturedComments:number;autoJobs:{id:string;postId:string;title:string;status:string;reason:string|null;processed:number}[]};
 export type ReviewResults={items:(SemanticReviewItem&{policyId:string|null;policyRevision:number|null})[];total:number;hasMore:boolean};
 export type ReviewComments={items:{id:string;comment:string;coverage:string}[];hasMore:boolean};
-export type ReviewPosts={items:{id:string;title:string;comments:number}[];hasMore:boolean};
+export type ReviewPosts={items:{id:string;title:string;comments:number;coverUrl?:string;coverage?:string}[];hasMore:boolean};
+
+export const manualPostConsent='comment-review-saved-post-priced-v1' as const;
+export const manualPostPrepareSchema=z.object({postId:z.string().min(1).max(200),revision:z.number().int().positive()}).strict();
+export const manualPostConfirmSchema=z.object({hash:z.string().regex(/^[a-f0-9]{64}$/),requestKey:z.string().uuid(),consent:z.literal(manualPostConsent),providerConsent:z.literal(reviewUseConsent)}).strict();
+export type ManualReviewTask={id:string;postId:string;title:string;coverage:string;policyRevision:number;model:string;modelVersion:number;priceVersion:string;scopeHash:string;status:string;reason:string|null;total:number;pending:number;success:number;failed:number;skipped:number;maxCalls:number;target:string;priceDescription?:string;dailyLimit:number|null;authorized:boolean};
+export type ManualReviewPreview={items:import('./semantic-review').SemanticOutbound['items'];hasMore:boolean};
+
+export const reviewResultFilterSchema=z.object({postId:z.string().max(200).optional(),search:z.string().trim().max(100).optional(),minScore:z.coerce.number().min(0).max(100).optional(),maxScore:z.coerce.number().min(0).max(100).optional(),sort:z.enum(['newest','score-desc','score-asc']).default('newest'),status:z.enum(['PENDING','APPROVED','REJECTED']).optional(),state:z.enum(['EVALUATED','FAILED','UNANALYSED','PROCESSING']).optional()}).strict().refine(v=>v.minScore===undefined||v.maxScore===undefined||v.minScore<=v.maxScore,{message:'最低相关度不能超过最高相关度'});

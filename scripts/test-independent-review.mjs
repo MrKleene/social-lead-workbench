@@ -19,7 +19,7 @@ try{
  run('migrate',['node','node_modules/prisma/build/index.js','migrate','deploy'],env);
  const diff=run('schema-diff',['node','node_modules/prisma/build/index.js','migrate','diff','--from-url',url,'--to-schema-datamodel','prisma/schema.prisma','--script'],env);
  // Existing account/contact FK and checkpoint-name drift predates this migration.
- assert(!/SemanticReview|SemanticModelCall|CommentReviewPolicy|CollectionConfig/.test(diff),'independent review migration must match its schema');
+ assert(!/SemanticReview|SemanticModelCall|CommentReviewPolicy|ManualReviewJob|CollectionConfig/.test(diff),'independent review migration must match its schema');
  const sql=(database,input)=>{const r=spawnSync('docker',['exec','-i',pg.id,'psql','-X','-U','crmtest','-d',database,'-v','ON_ERROR_STOP=1'],{input,encoding:'utf8',timeout:20000});assert.equal(r.status,0,safe(r.stderr));return r.stdout;};
  sql('crm_test','CREATE DATABASE crm_migration_test;');
  const migrations=readdirSync(join(root,'prisma/migrations')).filter(n=>n!=='migration_lock.toml').sort(),last='202610260002_independent_comment_review';
@@ -36,6 +36,8 @@ try{
  END $$;`);sql('crm_migration_test',`UPDATE "CommentReviewPolicy" SET enabled=true; UPDATE "ModelSettings" SET consent=true; CREATE TABLE fixture_policy_before AS SELECT to_jsonb(p) AS snapshot FROM "CommentReviewPolicy" p;`);
  sql('crm_migration_test',readFileSync(join(root,'prisma/migrations/202610260003_review_automation/migration.sql'),'utf8'));
  sql('crm_migration_test',`DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM "CommentReviewPolicy" p,fixture_policy_before f WHERE to_jsonb(p)-'autoEnabled'-'autoModelVersion'-'autoActorId'=f.snapshot AND p.enabled AND NOT p."autoEnabled" AND p."autoModelVersion" IS NULL AND p."autoActorId" IS NULL) THEN RAISE EXCEPTION 'legacy consent became automation'; END IF; END $$;`);
+ sql('crm_migration_test',readFileSync(join(root,'prisma/migrations/202610260004_manual_post_review/migration.sql'),'utf8'));
+ sql('crm_migration_test',`DO $$ BEGIN IF (SELECT count(*) FROM "ManualReviewJob")<>0 OR EXISTS(SELECT 1 FROM "CommentReviewPolicy" WHERE "autoEnabled") THEN RAISE EXCEPTION 'manual migration changed automation'; END IF; END $$;`);
  results.push({label:'upgrade-preserves-existing-data-and-disabled-target',exit:0});console.log('upgrade preservation: 0');
  run('integration',['npm','run','test:integration','-w','@crm/api'],env);
 }finally{for(const c of containers.reverse())docker(['rm','-f',c]);writeFileSync(join(output,'checks.json'),JSON.stringify({results,isolated:true,removed:containers.length},null,2));console.log('Evidence: '+output);}
