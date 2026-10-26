@@ -11,9 +11,9 @@ function CheckForm(){
  return <div className="task-settings-body"><label>使用账号<select aria-label="单帖检查账号" value={s.accountId} disabled={s.busy||s.submitted} onChange={e=>s.setAccountId(e.target.value)}>{!s.accounts.length&&<option value="">没有可核验的账号</option>}{s.accounts.map(a=><option key={a.id} value={a.id}>{a.label}{a.reason==='UNVERIFIED'?' · 将先检查登录':''}</option>)}</select></label>
  <label>小红书原文链接<input aria-label="单帖原文链接" type="url" aria-describedby="single-post-link-status" aria-invalid={!!s.url&&!s.link.valid&&!s.submitted} autoComplete="off" spellCheck={false} value={s.url} onChange={e=>s.setUrl(e.target.value)} disabled={s.submitted} placeholder="粘贴浏览器中可打开的完整帖子链接"/></label>
  {!s.submitted&&<p id="single-post-link-status" role="status" aria-live="polite">{s.link.message}</p>}
- {!s.submitted&&<label className="login-consent"><input type="checkbox" aria-label="验证评论翻页与回复" checked={s.expandReplies} onChange={e=>{s.setExpandReplies(e.target.checked);s.setConsent(false);}}/>验证评论翻页与回复</label>}
+ {!s.submitted&&<label className="login-consent"><input type="checkbox" aria-label="验证评论翻页与回复" checked={s.expandReplies} onChange={e=>{s.setExpandReplies(e.target.checked);s.setConsent(false);}}/><span>验证评论翻页与回复</span></label>}
  {!s.submitted&&s.expandReplies&&<p>最多滚动主评论 3 次、尝试展开回复 12 次，限时 15 秒；不写入采集信息。</p>}
- {!s.submitted&&<label className="login-consent"><input type="checkbox" aria-label="确认本次只读检查" checked={s.consent} onChange={e=>s.setConsent(e.target.checked)}/>使用本机已保存会话，核验账号并只读检查这一篇。{s.expandReplies?'按上述限额展开回复；不开新采集任务，不下载头像。':'不开新采集任务，不翻页或展开回复，不下载头像。'}</label>}
+ {!s.submitted&&<label className="login-consent"><input type="checkbox" aria-label="确认本次只读检查" checked={s.consent} onChange={e=>s.setConsent(e.target.checked)}/><span>使用本机已保存会话，核验账号并只读检查这一篇。{s.expandReplies?'按上述限额展开回复；不开新采集任务，不下载头像。':'不开新采集任务，不翻页或展开回复，不下载头像。'}</span></label>}
  {s.readiness.isError?<p role="alert">无法确认本机状态，请稍后重新打开。</p>:!s.readiness.data?.device?.online&&!s.readiness.isPending&&<p role="status">请先在账号中心确认专用电脑在线。</p>}
  <Button disabled={s.submitted||s.busy||!s.consent||!s.link.valid||!s.accountId||!s.readiness.data?.device?.online} onClick={()=>void s.check()}>{s.busy?'正在核验并读取这一篇…':s.error?'未取得检查结果':s.submitted?'本次检查已提交':'只读检查这一篇'}</Button>
  {s.error&&<p role="alert">{s.error}</p>}

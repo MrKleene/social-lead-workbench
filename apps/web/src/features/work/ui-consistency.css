@@ -5,13 +5,19 @@
   border-color: var(--input);
   border-radius: 8px;
   color: var(--foreground);
-  accent-color: var(--primary);
 }
 :root :is(input, textarea, select):focus {
   outline: 2px solid var(--focus);
   outline-offset: -1px;
   border-color: var(--focus);
   box-shadow: none;
+}
+/* Native choices keep their intrinsic footprint and system forced-color behavior. */
+:root :is(input[type=checkbox], input[type=radio]) {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  accent-color: var(--primary);
 }
 /* Separate action outlines from filled buttons for sufficient contrast; no ring halo. */
 :root :focus-visible {

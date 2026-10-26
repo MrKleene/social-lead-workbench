@@ -47,7 +47,7 @@ export function ConfigEditor({ availableMode, config, onClose, onSaved, onDirty 
   <label>评论排除词<Textarea value={exclude} onChange={e => setExclude(e.target.value)} maxLength={820} placeholder="每行一个，最多 20 个" rows={3}/></label>
   <label>默认回复话术（可选）<select aria-label="默认回复话术" value={templateId} onChange={e => setTemplateId(e.target.value)} disabled={templates.isError}><option value="">不关联话术</option>{templates.data?.map(t => <option key={t.id} value={t.id}>{t.name} · {t.channel === 'DM' ? '私信' : '评论'}</option>)}</select></label><p className="helper-text">仅用于来源中的文字预览，不会发送。<Link to="/work?module=templates">管理回复话术</Link>{templates.isError && ' · 话术功能需要新版 API，请完成试用后升级。'}</p>
   <label className="check-label"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)}/>保存后启用（仅允许手动有限运行）</label>
-  <p className="helper-text">每轮最多 32 个内部读取步骤（含缓存读取，不是搜索次数）、100 条评论、{mode==='MOCK'?20:150} 秒；{mode === 'MOCK' ? '模拟分页每流最多4页。' : '当前MCP不支持游标续读，仅取返回窗口。'}没有自动轮询或发送。{mode === 'MOCK' ? '内置模拟全部为虚构。' : mode === 'XHS_FIXTURE' ? '离线MCP夹具全部为虚构，不代表真实平台连接。' : '只读有限窗口；不宣称完整覆盖，首次读取不提醒。'}</p>
+  <p className="helper-text">每轮最多 32 个内部读取步骤（含缓存读取，不是搜索次数）、100 条评论、{mode==='MOCK'?20:150} 秒；{mode === 'MOCK' ? '模拟分页每流最多4页。' : mode === 'XHS_FIXTURE' ? '离线夹具仅用于验证有限读取流程。' : '真实读取受当次限额约束；支持分块保存，并在配置、账号与设备等恢复条件满足时续读未完成进度，不代表平台全量评论。'}没有自动轮询或发送。{mode === 'MOCK' ? '内置模拟全部为虚构。' : mode === 'XHS_FIXTURE' ? '离线MCP夹具全部为虚构，不代表真实平台连接。' : '只读有限窗口；不宣称完整覆盖，首次读取不提醒。'}</p>
   <div className="action-row"><Button disabled={mutation.isPending}>{mutation.isPending ? '保存中…' : '保存配置'}</Button><Button type="button" variant="ghost" disabled={mutation.isPending} onClick={close}>取消</Button></div>
  </form></section>;
 }

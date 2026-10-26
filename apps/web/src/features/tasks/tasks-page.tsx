@@ -32,7 +32,7 @@ export function TasksPage() {
           <Badge variant="secondary">{rows.length} 项</Badge>
         </div>
         <p className="helper-text">
-          仅展示当前有权访问的线索任务。平台采集、自动评论和私信尚未启用。
+          仅展示当前有权访问的人工跟进任务。小红书只读采集请前往采集任务；真实自动评论、私信发送与收信未验收，保持关闭。
         </p>
         {query.isPending ? (
           <Loading />
