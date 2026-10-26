@@ -19,7 +19,7 @@ try{
  run('migrate',['node','node_modules/prisma/build/index.js','migrate','deploy'],env);
  const diff=run('schema-diff',['node','node_modules/prisma/build/index.js','migrate','diff','--from-url',url,'--to-schema-datamodel','prisma/schema.prisma','--script'],env);
  // Existing account/contact FK and checkpoint-name drift predates this migration.
- assert(!/SemanticReview|SemanticModelCall|CommentReviewPolicy|ManualReviewJob|CollectionConfig/.test(diff),'independent review migration must match its schema');
+ assert(!/SemanticReview|SemanticModelCall|CommentReviewPolicy|ManualReviewJob|AutoReviewJob|ModelSettings|CollectionConfig/.test(diff),'independent review migration must match its schema');
  const sql=(database,input)=>{const r=spawnSync('docker',['exec','-i',pg.id,'psql','-X','-U','crmtest','-d',database,'-v','ON_ERROR_STOP=1'],{input,encoding:'utf8',timeout:20000});assert.equal(r.status,0,safe(r.stderr));return r.stdout;};
  sql('crm_test','CREATE DATABASE crm_migration_test;');
  const migrations=readdirSync(join(root,'prisma/migrations')).filter(n=>n!=='migration_lock.toml').sort(),last='202610260002_independent_comment_review';
@@ -38,6 +38,20 @@ try{
  sql('crm_migration_test',`DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM "CommentReviewPolicy" p,fixture_policy_before f WHERE to_jsonb(p)-'autoEnabled'-'autoModelVersion'-'autoActorId'=f.snapshot AND p.enabled AND NOT p."autoEnabled" AND p."autoModelVersion" IS NULL AND p."autoActorId" IS NULL) THEN RAISE EXCEPTION 'legacy consent became automation'; END IF; END $$;`);
  sql('crm_migration_test',readFileSync(join(root,'prisma/migrations/202610260004_manual_post_review/migration.sql'),'utf8'));
  sql('crm_migration_test',`DO $$ BEGIN IF (SELECT count(*) FROM "ManualReviewJob")<>0 OR EXISTS(SELECT 1 FROM "CommentReviewPolicy" WHERE "autoEnabled") THEN RAISE EXCEPTION 'manual migration changed automation'; END IF; END $$;`);
+ sql('crm_migration_test',`UPDATE "CommentReviewPolicy" SET "autoEnabled"=true,"autoModelVersion"=1,"autoActorId"='synthetic';
+ INSERT INTO "AutoReviewJob" (id,"policyId","policyVersion","postId","runId",status,"updatedAt") VALUES ('old-auto','legacy-legacy-fixture',1,'synthetic-post','synthetic-run','PENDING',now());
+ INSERT INTO "ManualReviewJob" (id,"policyId","policyRevision","modelVersion",model,"priceVersion","actorId","postId",title,coverage,"scopeHash",items,preview,status,"updatedAt") VALUES ('old-manual','legacy-legacy-fixture',1,1,'fixture','fixture','synthetic','synthetic-post','合成帖子','PARTIAL','old-hash','[]','{"redactionVersion":"contact-redaction-v1","target":"合成目标","items":[]}','PENDING',now());
+ CREATE TABLE fixture_manual_before AS SELECT to_jsonb(m) AS snapshot FROM "ManualReviewJob" m;
+ CREATE TABLE fixture_model_raw_before AS SELECT to_jsonb(m) AS snapshot FROM "ModelSettings" m;`);
+ sql('crm_migration_test',readFileSync(join(root,'prisma/migrations/202610260005_original_comment_input/migration.sql'),'utf8'));
+ sql('crm_migration_test',`DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM "CommentReviewPolicy" WHERE "autoEnabled") THEN RAISE EXCEPTION 'raw migration enabled auto'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM "ModelSettings" m, fixture_model_raw_before f WHERE to_jsonb(m)-'consentInputPolicy'-'consent'-'version'=f.snapshot-'consent'-'version' AND NOT m.consent AND m."consentInputPolicy" IS NULL AND m.version=(f.snapshot->>'version')::int+1) THEN RAISE EXCEPTION 'key/budget changed or consent migrated'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM "ManualReviewJob" m, fixture_manual_before f WHERE m.status='INVALIDATED' AND to_jsonb(m)-'status'-'reason'-'updatedAt'=f.snapshot-'status'-'reason'-'updatedAt') THEN RAISE EXCEPTION 'old manual input changed or not invalidated'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM "AutoReviewJob" WHERE status='CANCELLED' AND "inputPolicyVersion"='contact-redaction-v1') THEN RAISE EXCEPTION 'old auto not cancelled'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM "CollectionConfig" c,fixture_before f WHERE to_jsonb(c)-'legacyMatchingEnabled'=f.snapshot) THEN RAISE EXCEPTION 'source mutated'; END IF;
+ END $$;`);
+ results.push({label:'original-input-migration-invalidates-old-consent-and-jobs-preserves-source-key-budget',exit:0});
  results.push({label:'upgrade-preserves-existing-data-and-disabled-target',exit:0});console.log('upgrade preservation: 0');
  run('integration',['npm','run','test:integration','-w','@crm/api'],env);
 }finally{for(const c of containers.reverse())docker(['rm','-f',c]);writeFileSync(join(output,'checks.json'),JSON.stringify({results,isolated:true,removed:containers.length},null,2));console.log('Evidence: '+output);}

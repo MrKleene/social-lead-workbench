@@ -598,12 +598,12 @@ describe('Qwen manual integration: isolated database and fictional HTTP only',()
   expect((await api().post(`/api/collection/configs/${c.id}/semantic-preview`).set('Cookie',admin.cookie).send({})).status).toBe(403);
   const p=await write('post',`/collection/configs/${c.id}/semantic-preview`,{});expect(p.status).toBe(201);expect(p.body.count).toBe(2);expect(p.body.connection.state).toBe('UNCONFIGURED');expect(JSON.stringify(p.body.payload)).not.toContain('fictional-post');
   expect((await write('post',`/collection/configs/${c.id}/semantic-evaluate`,{requestKey:randomUUID(),previewHash:p.body.hash})).status).toBe(400);
-  expect((await write('post',`/collection/configs/${c.id}/semantic-evaluate`,{requestKey:randomUUID(),previewHash:p.body.hash,priceVersion:'beijing-2026-10-21',consent:'send-reviewed-priced-batch-v2'})).status).toBe(409);expect(await db.semanticModelCall.count()).toBe(0);
+  expect((await write('post',`/collection/configs/${c.id}/semantic-evaluate`,{requestKey:randomUUID(),previewHash:p.body.hash,priceVersion:'beijing-2026-10-21',consent:'send-original-comments-priced-batch-v3'})).status).toBe(409);expect(await db.semanticModelCall.count()).toBe(0);
  });
  it('idempotency, parallel clicks, budget, grounded output and no send records',async()=>{
   const {QwenMatchingService}=await import('../src/collection/qwen-matching.service');const {SemanticService}=await import('../src/collection/semantic.service');const c=await fixture();
   const transport=vi.fn(async(_url:string,init:RequestInit)=>mockResponse(init));const q=new QwenMatchingService(db,{settings,transport});
-  const p=await q.preview(actor,c.id),request={requestKey:randomUUID(),previewHash:p.hash,priceVersion:'beijing-2026-10-21',consent:'send-reviewed-priced-batch-v2' as const};
+  const p=await q.preview(actor,c.id),request={requestKey:randomUUID(),previewHash:p.hash,priceVersion:'beijing-2026-10-21',consent:'send-original-comments-priced-batch-v3' as const};
   await Promise.all([q.evaluate(actor,c.id,request),q.evaluate(actor,c.id,request)]);expect(transport).toHaveBeenCalledTimes(1);expect(await db.semanticModelCall.count()).toBe(1);
   let rows=await db.semanticReview.findMany({where:{configId:c.id}});expect(rows.every(r=>r.state==='EVALUATED'&&r.reviewStatus==='PENDING'&&!!r.evaluationInput)).toBe(true);
   const missing=rows.find(r=>r.context==='INSUFFICIENT')!;expect((missing.result as any).decision).toBe('UNCERTAIN');await expect(new SemanticService(db).review(actor,missing.id,{version:missing.version,decision:'APPROVED',note:'不足不能批准'})).rejects.toThrow();
@@ -617,15 +617,15 @@ describe('Qwen manual integration: isolated database and fictional HTTP only',()
  it('stale preview never sends; HTTP failure leaves score null and pending, consumes reservation',async()=>{
   const {QwenMatchingService}=await import('../src/collection/qwen-matching.service');const c=await fixture();const transport=vi.fn(async()=>new Response('private body',{status:429}));const q=new QwenMatchingService(db,{settings,transport});
   const p=await q.preview(actor,c.id);await db.semanticReview.updateMany({where:{configId:c.id},data:{version:{increment:1}}});
-  await expect(q.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:p.hash,priceVersion:'beijing-2026-10-21',consent:'send-reviewed-priced-batch-v2'})).rejects.toThrow();expect(transport).not.toHaveBeenCalled();
-  const fresh=await q.preview(actor,c.id);const out=await q.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:fresh.hash,priceVersion:'beijing-2026-10-21',consent:'send-reviewed-priced-batch-v2'});expect(out).toMatchObject({status:'FAILED',errorCode:'RATE_LIMIT'});expect(transport).toHaveBeenCalledTimes(1);
+  await expect(q.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:p.hash,priceVersion:'beijing-2026-10-21',consent:'send-original-comments-priced-batch-v3'})).rejects.toThrow();expect(transport).not.toHaveBeenCalled();
+  const fresh=await q.preview(actor,c.id);const out=await q.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:fresh.hash,priceVersion:'beijing-2026-10-21',consent:'send-original-comments-priced-batch-v3'});expect(out).toMatchObject({status:'FAILED',errorCode:'RATE_LIMIT'});expect(transport).toHaveBeenCalledTimes(1);
   const rows=await db.semanticReview.findMany({where:{configId:c.id}});expect(rows.every(r=>r.state==='FAILED'&&r.score===null&&r.reviewStatus==='PENDING')).toBe(true);expect(JSON.stringify(rows)).not.toContain('private body');expect((await q.status()).usage).toMatchObject({requests:1,unknownUsage:1});
  });
  it('different concurrent request keys cannot double-spend; rule edit during request invalidates results',async()=>{
   const {QwenMatchingService}=await import('../src/collection/qwen-matching.service');const c=await fixture();
   const transport=vi.fn(async(_url:string,init:RequestInit)=>{await db.collectionConfig.update({where:{id:c.id},data:{revision:{increment:1},semanticRules:{...rules,target:rules.target+'并提供具体专业'}}});return mockResponse(init);});
   const q=new QwenMatchingService(db,{settings,transport}),p=await q.preview(actor,c.id);
-  const results=await Promise.allSettled([1,2].map(()=>q.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:p.hash,priceVersion:'beijing-2026-10-21',consent:'send-reviewed-priced-batch-v2'})));
+  const results=await Promise.allSettled([1,2].map(()=>q.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:p.hash,priceVersion:'beijing-2026-10-21',consent:'send-original-comments-priced-batch-v3'})));
   expect(results.filter(x=>x.status==='fulfilled')).toHaveLength(1);expect(results.filter(x=>x.status==='rejected')).toHaveLength(1);expect(transport).toHaveBeenCalledTimes(1);
   const rows=await db.semanticReview.findMany({where:{configId:c.id}});expect(rows.every(r=>r.state==='FAILED'&&r.score===null&&r.result===null&&r.reviewStatus==='PENDING')).toBe(true);
   expect((await db.semanticModelCall.findFirstOrThrow()).status).toBe('STALE');expect((results.find(x=>x.status==='fulfilled') as PromiseFulfilledResult<any>).value.status).toBe('STALE');
@@ -635,7 +635,7 @@ describe('Qwen manual integration: isolated database and fictional HTTP only',()
   const {QwenMatchingService}=await import('../src/collection/qwen-matching.service');const c=await fixture();const transport=vi.fn(async(_url:string,init:RequestInit)=>mockResponse(init));
   const flash=new QwenMatchingService(db,{settings,transport}),max=new QwenMatchingService(db,{settings:()=>({...settings(),status:{...settings().status,model:'qwen3.8-max-0902'}}),transport});
   const before=await flash.preview(actor,c.id),after=await max.preview(actor,c.id);expect(before.hash).not.toBe(after.hash);
-  await expect(max.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:before.hash,priceVersion:'beijing-2026-10-21',consent:'send-reviewed-priced-batch-v2'})).rejects.toThrow();expect(transport).not.toHaveBeenCalled();expect(await db.semanticModelCall.count()).toBe(0);
+  await expect(max.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:before.hash,priceVersion:'beijing-2026-10-21',consent:'send-original-comments-priced-batch-v3'})).rejects.toThrow();expect(transport).not.toHaveBeenCalled();expect(await db.semanticModelCall.count()).toBe(0);
  });
 
 });
@@ -894,7 +894,7 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
   await db.semanticModelCall.deleteMany();let version=1;
   const settings=()=>({status:{state:'READY' as const,message:'MOCK ONLY',model:'qwen3.8-flash',region:'cn-beijing' as const,dailyLimit:3,batchLimit:5,automaticRetries:0 as const,timeoutSeconds:20},endpoint:'https://example.invalid',key:'fictional'});
   const transport=vi.fn(async(_u:string,init:RequestInit)=>{await captures.toggle(actor,c.id,{enabled:false,version:++version});const payload=JSON.parse(JSON.parse(init.body as string).messages[1].content);return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:payload.items.map((item:any)=>({id:item.id,score:80,decision:'MATCH',reason:'虚构语义输出',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:item.comment}]}))})}}]}));});
-  const q=new QwenMatchingService(db,{settings,transport}),p=await q.preview(actor,c.id,queued.reviewIds);await captures.toggle(actor,c.id,{enabled:false,version:version++});const input={requestKey:randomUUID(),previewHash:p.hash,reviewIds:queued.reviewIds,priceVersion:'beijing-2026-10-21',consent:'send-reviewed-priced-batch-v2' as const};
+  const q=new QwenMatchingService(db,{settings,transport}),p=await q.preview(actor,c.id,queued.reviewIds);await captures.toggle(actor,c.id,{enabled:false,version:version++});const input={requestKey:randomUUID(),previewHash:p.hash,reviewIds:queued.reviewIds,priceVersion:'beijing-2026-10-21',consent:'send-original-comments-priced-batch-v3' as const};
   await expect(q.evaluate(actor,c.id,input)).rejects.toThrow();expect(transport).not.toHaveBeenCalled();await captures.toggle(actor,c.id,{enabled:true,version:version});
   await q.evaluate(actor,c.id,input);expect(transport).toHaveBeenCalledTimes(1);expect((await q.status(db,c.id)).control.enabled).toBe(false);expect(await db.semanticReview.count({where:{configId:c.id,state:'EVALUATED'}})).toBe(2);expect((await q.preview(actor,c.id,queued.reviewIds)).count).toBe(0);
  });

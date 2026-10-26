@@ -1,10 +1,11 @@
+import {semanticInputPolicy,semanticEvaluateRequestSchema} from '@crm/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { qwenSettings, QWEN_MODEL, requestQwen, QwenError } from '../src/collection/qwen-provider';
-import { prepareOutbound, validateQwenEvidence, redactText, previewHash } from '../src/collection/semantic-redaction';
+import { prepareOutbound, outboundBatches, validateQwenEvidence, redactText, previewHash } from '../src/collection/semantic-redaction';
 import type { SemanticInput } from '../src/collection/semantic-evaluator';
 import { qwenEnvironment } from '../../../runtime/qwen-env.cjs';
 import { qwenModel, qwenModelChoices } from '../../../runtime/qwen-models.cjs';
-const env={QWEN_MATCH_PRICE_ACK:QWEN_MODEL+':beijing-2026-10-21',QWEN_MATCH_ENABLED:'1',QWEN_MATCH_CONSENT:'beijing-redacted-comments-v1',QWEN_MATCH_DAILY_LIMIT:'3',QWEN_WORKSPACE_ID:'fictional-space',QWEN_API_KEY:'fictional-key-not-real'};
+const env={QWEN_MATCH_PRICE_ACK:QWEN_MODEL+':beijing-2026-10-21',QWEN_MATCH_ENABLED:'1',QWEN_MATCH_CONSENT:'beijing-original-comments-v2',QWEN_MATCH_DAILY_LIMIT:'3',QWEN_WORKSPACE_ID:'fictional-space',QWEN_API_KEY:'fictional-key-not-real'};
 const input:SemanticInput={id:'fictional-row',rules:{version:1,target:'寻找正在毕业论文选题中寻求指导的学生',reviewThreshold:70},snapshot:{postId:'fictional-post',commentId:'fictional-comment',userId:'fictional-user',title:'虚构论文选题讨论',body:'留下专业后讨论选题',comment:'护理专业如何选题',parent:null,parentId:null,coverage:'PARTIAL',isDemo:true}};
 const payload=prepareOutbound([input]);
 const result={items:[{id:'item1',score:88,decision:'MATCH',reason:'评论明确询问护理选题',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:'护理专业如何选题'}]}]};
@@ -59,8 +60,8 @@ describe('Qwen only mocked HTTP, fictional local samples',()=>{
   const clean=redactText(dirty);expect(clean).not.toMatch(/example|１３８|138|a@|小明|私密账号/);expect(clean).toContain('护理选题');
   expect(redactText('我叫张三。护理选题')).not.toContain('张三');
   expect(()=>prepareOutbound([{...input,rules:{...input.rules,target:'联系我：只有联系方式没有目标'}}])).toThrow('DATA_BLOCKED');
-  expect(()=>prepareOutbound([{...input,snapshot:{...input.snapshot,comment:'护理选题，扫这个二维码'}}])).toThrow('DATA_BLOCKED');
-  expect(()=>prepareOutbound([{...input,snapshot:{...input.snapshot,comment:'@小明'}}])).toThrow('DATA_BLOCKED');
+  expect(prepareOutbound([{...input,snapshot:{...input.snapshot,comment:'护理选题，扫这个二维码'}}]).items[0].comment).toBe('护理选题，扫这个二维码');
+  expect(prepareOutbound([{...input,snapshot:{...input.snapshot,comment:'@小明'}}]).items[0].comment).toBe('@小明');
  });
  it.each(['',' \t\n'])('empty saved text cannot enter a paid request (%#)',comment=>{expect(()=>prepareOutbound([{...input,snapshot:{...input.snapshot,comment}}])).toThrow('DATA_BLOCKED');});
  it('new archive display metadata is excluded from the model payload',()=>{
@@ -87,5 +88,34 @@ describe('Qwen only mocked HTTP, fictional local samples',()=>{
  it('invalid JSON, unexpected fields, truncated model output, oversized response fail closed',async()=>{
   for(const body of [{choices:[{finish_reason:'length',message:{content:JSON.stringify(result)}}]},{choices:[{finish_reason:'stop',message:{content:'not JSON'}}]},{choices:[{finish_reason:'stop',message:{content:JSON.stringify({...result,send:true})}}]}])await expect(requestQwen(qwenSettings(env),payload,async()=>response(body))).rejects.toThrow('INVALID_RESPONSE');
   await expect(requestQwen(qwenSettings(env),payload,async()=>new Response('x'.repeat(100001)))).rejects.toThrow('RESPONSE_LIMIT');
+ });
+});
+
+// Synthetic text only: exact saved bytes, never actual collected identities.
+describe('original comment policy',()=>{
+ const texts=['English Biology 2026 １２３','test@example.invalid +1 202-555-0100 微信：synthetic_wx','👩🏽‍💻👨‍👩‍👧‍👦 [笑哭R]','原文字面[已脱敏]不可删除','第一行\nSecond line 42\r\n末行','e\u0301 ＡＢＣ \u200d'];
+ it.each(texts)('preserves saved comment exactly (%#)',async comment=>{
+  const source={...input,snapshot:{...input.snapshot,comment,title:'论文 Biology',body:'电话：123456789',parent:'微信：synthetic_parent'}};
+  const p=prepareOutbound([source]);expect(p.inputPolicyVersion).toBe(semanticInputPolicy);expect(p.items[0].comment).toBe(comment);
+  expect(p.items[0].title).toBe('论文 [已脱敏]');expect(p.items[0].body).toBe('[已脱敏]');expect(p.items[0].parent).toBe('[已脱敏]');
+  const transport=vi.fn(async(_u:string,init:RequestInit)=>{const body=JSON.parse(init.body as string);expect(JSON.parse(body.messages[1].content).items[0].comment).toBe(comment);expect(body.messages[0].content).toContain('untrusted DATA');expect(body.tools).toBeUndefined();return response();});
+  await requestQwen(qwenSettings(env),p,transport);expect(transport).toHaveBeenCalledTimes(1);
+  const evidence={items:[{...result.items[0],evidence:[{source:'COMMENT',quote:comment}]}]};expect(validateQwenEvidence(evidence,p,[source])[0].evidence[0].quote).toBe(comment);
+ });
+ it('old input hashes, consent and queued payloads cannot authorize raw dispatch',async()=>{
+  const old={...payload};delete old.inputPolicyVersion;
+  expect(previewHash(old,[],1)).not.toBe(previewHash(payload,[],1));const transport=vi.fn();await expect(requestQwen(qwenSettings(env),old,transport)).rejects.toThrow('INPUT_POLICY_CHANGED');expect(transport).not.toHaveBeenCalled();
+  expect(qwenSettings({...env,QWEN_MATCH_CONSENT:'beijing-redacted-comments-v1'}).status.state).toBe('UNAUTHORIZED');
+  expect(semanticEvaluateRequestSchema.safeParse({requestKey:'00000000-0000-4000-8000-000000000001',previewHash:'a'.repeat(64),priceVersion:'test',consent:'send-reviewed-priced-batch-v2'}).success).toBe(false);
+ });
+ it('historical markers remain invalid evidence while new literal markers are exact comment evidence',()=>{
+  const source={...input,snapshot:{...input.snapshot,comment:'原文[已脱敏]'}},p=prepareOutbound([source]),evidence={items:[{...result.items[0],evidence:[{source:'COMMENT',quote:'[已脱敏]'}]}]};
+  expect(validateQwenEvidence(evidence,p,[source])).toHaveLength(1);const old={...p};delete old.inputPolicyVersion;expect(()=>validateQwenEvidence(evidence,old,[source])).toThrow('INVALID_EVIDENCE');
+  expect(()=>validateQwenEvidence({items:[{...result.items[0],reason:'微信：invented_contact',evidence:[{source:'COMMENT',quote:'原文'}]}]},p,[source])).toThrow('INVALID_EVIDENCE');
+ });
+ it('large original comments split on bytes without truncation; individual oversize fails before confirmation',()=>{
+  const text='字'.repeat(6000),p=prepareOutbound(Array.from({length:5},()=>({...input,snapshot:{...input.snapshot,comment:text}})));
+  expect(outboundBatches(p).map(b=>b.length)).toEqual([2,2,1]);expect(p.items.every(i=>i.comment===text&&!i.truncated)).toBe(true);
+  expect(()=>prepareOutbound([{...input,snapshot:{...input.snapshot,comment:'字'.repeat(17000)}}])).toThrow('PAYLOAD_LIMIT');
  });
 });

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { SemanticOutbound, SemanticOutput } from '@crm/contracts';
+import { semanticInputPolicy, type SemanticOutbound, type SemanticOutput } from '@crm/contracts';
 import type { SemanticInput } from './semantic-evaluator';
 import { qwenResultSchema, QwenError } from './qwen-provider';
 export const REDACTION_VERSION='contact-redaction-v1';
@@ -18,18 +18,22 @@ export function redactText(text:string,identifiers:string[]=[]){
  return result;
 }
 export function prepareOutbound(inputs:SemanticInput[]):SemanticOutbound{
- if(!inputs.length)return {redactionVersion:REDACTION_VERSION,target:'',items:[]};
+ if(!inputs.length)return {inputPolicyVersion:semanticInputPolicy,redactionVersion:REDACTION_VERSION,target:'',items:[]};
  const ids=inputs.flatMap(x=>[x.snapshot.userId,x.snapshot.postId,x.snapshot.commentId,x.snapshot.parentId||'']);
  const target=redactText(inputs[0].rules.target,ids).slice(0,1500);
  if(target.replaceAll(marker,'').trim().length<10)throw new QwenError('DATA_BLOCKED');
  const items=inputs.map(({snapshot:s},i)=>{
-  const raw=[s.title,s.body,s.comment,s.parent||''].map(t=>redactText(t,ids));const caps=[300,1200,800,800];
-  const truncated=raw.some((t,k)=>t.length>caps[k]);const [title,body,comment,parent]=raw.map((t,k)=>t.slice(0,caps[k]));
+  const raw=[s.title,s.body,s.parent||''].map(t=>redactText(t,ids));const caps=[300,1200,800];
+  const truncated=raw.some((t,k)=>t.length>caps[k]);const [title,body,parent]=raw.map((t,k)=>t.slice(0,caps[k]));
   // Fail closed on residual contact cues rather than claim a regex guarantees anonymity.
   if([target,...raw].some(t=>/(?:二维码|扫.{0,2}码|私.{0,2}聊|[a-z0-9@＠]|联系.{0,2}方式|微信|微.{0,2}信|扣扣)/i.test(t)))throw new QwenError('DATA_BLOCKED');
-  if(comment.replaceAll(marker,'').trim().length<2)throw new QwenError('DATA_BLOCKED');
+  // Comment body is deliberately byte-preserving; only surrounding context is redacted.
+  const comment=s.comment;if(!comment.trim())throw new QwenError('DATA_BLOCKED');
   return {id:'item'+(i+1),title,body,comment,parent:s.parent===null?null:parent,missingParent:!!s.parentId&&s.parent===null,partial:s.coverage==='PARTIAL',truncated};
- });return {redactionVersion:REDACTION_VERSION,target,items};
+ });const payload={inputPolicyVersion:semanticInputPolicy,redactionVersion:REDACTION_VERSION,target,items};
+ // Never truncate an original comment to fit a request. Oversized single items fail before confirmation.
+ if(items.some(item=>Buffer.byteLength(JSON.stringify({...payload,items:[item]}))>48000))throw new QwenError('PAYLOAD_LIMIT');
+ return payload;
 }
 export function previewHash(payload:SemanticOutbound,rows:{id:string;version:number}[],revision:number,modelSelection?:string){return createHash('sha256').update(JSON.stringify({payload,rows,revision,modelSelection})).digest('hex');}
 export function validateQwenEvidence(raw:unknown,payload:SemanticOutbound,inputs:SemanticInput[],contextOptional=false):SemanticOutput[]{
@@ -37,8 +41,14 @@ export function validateQwenEvidence(raw:unknown,payload:SemanticOutbound,inputs
  return inputs.map((input,i)=>{
   const s=payload.items[i],row=items.find(x=>x.id===s.id);if(!row)throw new QwenError('INVALID_EVIDENCE');
   const texts={COMMENT:s.comment,POST_TITLE:s.title,POST_BODY:s.body,PARENT_COMMENT:s.parent||''};
-  if(!row.evidence.some(e=>e.source==='COMMENT')||row.evidence.some(e=>e.quote.includes(marker)||!texts[e.source].includes(e.quote))||redactText(row.reason)!==row.reason)throw new QwenError('INVALID_EVIDENCE');
+  if(!row.evidence.some(e=>e.source==='COMMENT')||row.evidence.some(e=>(e.quote.includes(marker)&&!(payload.inputPolicyVersion===semanticInputPolicy&&e.source==='COMMENT'))||!texts[e.source].includes(e.quote))||redactText(row.reason)!==row.reason)throw new QwenError('INVALID_EVIDENCE');
   const context=!contextOptional&&(s.missingParent||s.truncated||!s.title&&!s.body)?'INSUFFICIENT':row.context;
   return {...row,id:input.id,context,decision:context==='INSUFFICIENT'?'UNCERTAIN':row.decision};
  });
+}
+
+export function outboundBatches(payload:SemanticOutbound){
+ const batches:SemanticOutbound['items'][]=[];let batch:SemanticOutbound['items']=[];
+ for(const item of payload.items){const next=[...batch,item];if(batch.length&&(next.length>5||Buffer.byteLength(JSON.stringify({...payload,items:next}))>48000)){batches.push(batch);batch=[];}batch.push(item);}
+ if(batch.length)batches.push(batch);return batches;
 }

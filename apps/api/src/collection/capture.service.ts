@@ -49,7 +49,7 @@ export class CaptureService {
  async preview(actor:Actor,configId:string,ids:string[]){
   requireAdmin(actor);const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config?.semanticRules)throw new ConflictException('请先保存自然语言目标');
   const rows=await this.db.capturedComment.findMany({where:{configId,id:{in:ids}},orderBy:{id:'asc'}});if(rows.length!==ids.length)throw new ConflictException('所选原文不存在');
-  try{return {payload:prepareOutbound(rows.map(c=>({id:c.id,snapshot:c.snapshot as unknown as SemanticSnapshot,rules:semanticRulesSchema.parse(config.semanticRules)}))),count:rows.length};}catch{throw new ConflictException('文本包含无法可靠处理的身份或联系线索，已阻止外发（DATA_BLOCKED）');}
+  try{return {payload:prepareOutbound(rows.map(c=>({id:c.id,snapshot:c.snapshot as unknown as SemanticSnapshot,rules:semanticRulesSchema.parse(config.semanticRules)}))),count:rows.length};}catch{throw new ConflictException('评论为空、输入超限或上下文安全检查未通过，已阻止外发');}
  }
  async enqueue(actor:Actor,configId:string,ids:string[]){
   requireAdmin(actor);return this.db.$transaction(async tx=>{

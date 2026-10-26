@@ -540,6 +540,7 @@ model ModelSettings {
  dailyLimit Int? // null means no cumulative request-count cap; existing numeric limits remain
  priceVersion String
  consent Boolean @default(false)
+ consentInputPolicy String?
  note String @default("")
  encryptedKey Json?
  updatedAt DateTime @updatedAt
@@ -571,6 +572,7 @@ model AutoReviewJob {
  policyId String
  policy CommentReviewPolicy @relation(fields:[policyId],references:[id],onDelete:Cascade)
  policyVersion Int
+ inputPolicyVersion String @default("contact-redaction-v1")
  postId String
  runId String
  status String @default("PENDING")

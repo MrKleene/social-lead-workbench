@@ -1,3 +1,4 @@
+import {semanticInputPolicy} from '@crm/contracts';
 import {BadRequestException,ConflictException,Inject,Injectable,NotFoundException} from '@nestjs/common';
 import {Prisma} from '@prisma/client';
 import {reviewAutoToggleSchema,reviewAutoConsent,reviewAuthorizationSchema,reviewPolicySaveSchema,reviewPolicyToggleSchema,reviewPrepareSchema,reviewUseConsent,SemanticSnapshot} from '@crm/contracts';
@@ -31,8 +32,8 @@ export class ReviewPolicyService {
   requireAdmin(actor);input=reviewPolicyToggleSchema.parse(input);
   return this.db.$transaction(async tx=>{await lockReview(tx);const old=await tx.commentReviewPolicy.findUnique({where:{id}});if(!old)throw new NotFoundException();if(old.version!==input.version)throw new ConflictException('审核开关已变化，请刷新');
    if(input.enabled){const model=await this.models.resolve(tx);if(model.status.state!=='READY')throw new ConflictException('请先保存模型设置；未启用审核');
-    if(!model.status.authorized){if(input.consent!==reviewUseConsent||input.modelVersion!==model.configurationVersion||input.priceVersion!==qwenModel(model.status.model)?.priceVersion)throw new BadRequestException('首次启用请确认当前模型费用和脱敏数据使用');
-     await tx.modelSettings.update({where:{id:MODEL_SETTINGS_ID},data:{consent:true}});
+    if(!model.status.authorized){if(input.consent!==reviewUseConsent||input.modelVersion!==model.configurationVersion||input.priceVersion!==qwenModel(model.status.model)?.priceVersion)throw new BadRequestException('首次启用请确认当前模型费用和评论原文外发范围');
+     await tx.modelSettings.update({where:{id:MODEL_SETTINGS_ID},data:{consent:true,consentInputPolicy:semanticInputPolicy}});
     }
    }
    const row=await tx.commentReviewPolicy.update({where:{id},data:{enabled:input.enabled,version:{increment:1}}});await tx.auditLog.create({data:{actorId:actor.id,action:'COMMENT_REVIEW_TOGGLED',entityId:id,metadata:{enabled:row.enabled,version:row.version}}});return row;
@@ -42,7 +43,7 @@ export class ReviewPolicyService {
   requireAdmin(actor);input=reviewAuthorizationSchema.parse(input);
   return this.db.$transaction(async tx=>{await lockReview(tx);const model=await this.models.resolve(tx);
    if(model.status.state!=='READY'||input.modelVersion!==model.configurationVersion||input.priceVersion!==qwenModel(model.status.model)?.priceVersion)throw new ConflictException('模型已变化，请重新确认');
-   await tx.modelSettings.update({where:{id:MODEL_SETTINGS_ID},data:{consent:true}});
+   await tx.modelSettings.update({where:{id:MODEL_SETTINGS_ID},data:{consent:true,consentInputPolicy:semanticInputPolicy}});
    await tx.auditLog.create({data:{actorId:actor.id,action:'COMMENT_REVIEW_MANUAL_CONSENT',entityId:MODEL_SETTINGS_ID,metadata:{modelVersion:input.modelVersion}}});return {authorized:true};
   });
  }
@@ -54,7 +55,7 @@ export class ReviewPolicyService {
    if(input.enabled){
     if(model.status.state!=='READY')throw new ConflictException('请先配置模型');
     if(input.consent!==reviewAutoConsent||input.modelVersion!==model.configurationVersion||input.priceVersion!==qwenModel(model.status.model)?.priceVersion)throw new BadRequestException('请明确确认持续调用、费用和数据范围');
-    await tx.modelSettings.update({where:{id:MODEL_SETTINGS_ID},data:{consent:true}});
+    await tx.modelSettings.update({where:{id:MODEL_SETTINGS_ID},data:{consent:true,consentInputPolicy:semanticInputPolicy}});
    }
    const row=await tx.commentReviewPolicy.update({where:{id},data:{autoEnabled:input.enabled,autoModelVersion:input.enabled?model.configurationVersion:null,autoActorId:input.enabled?actor.id:null,version:{increment:1}}});
    await tx.autoReviewJob.updateMany({where:{policyId:id,status:{in:['PENDING','PROCESSING']}},data:{status:'CANCELLED',reason:'自动设置变化，未开始的调用已取消'}});

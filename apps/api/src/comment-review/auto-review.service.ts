@@ -1,6 +1,8 @@
+import {prepareOutbound,outboundBatches} from '../collection/semantic-redaction';
+import type {SemanticSnapshot,SemanticRules} from '@crm/contracts';
 import {Inject,Injectable} from '@nestjs/common';
 import {randomUUID} from 'node:crypto';
-import {semanticBatchConsent} from '@crm/contracts';
+import {semanticBatchConsent,semanticInputPolicy} from '@crm/contracts';
 import type {CollectionRun} from '@prisma/client';
 import {Db} from '../common/db';
 import type {PostRead,ReadResult} from '../collection/collector';
@@ -16,7 +18,7 @@ export class AutoReviewService {
    const posts=await tx.capturedPost.findMany({where:{configId:run.configId,lastRunId:run.id,platformPostId:entry.post.id}});
    for(const policy of policies)for(const post of posts){
     const complete=entry.windowRead&&entry.complete&&post.coverage==='COMPLETE';
-    await tx.autoReviewJob.createMany({data:[{policyId:policy.id,policyVersion:policy.version,runId:run.id,postId:post.id,status:complete?'PENDING':'SKIPPED',reason:complete?'等待预算与调用间隔':`覆盖未通过：${entry.stopReason||'评论范围不完整'}`}],skipDuplicates:true});
+    await tx.autoReviewJob.createMany({data:[{policyId:policy.id,policyVersion:policy.version,inputPolicyVersion:semanticInputPolicy,runId:run.id,postId:post.id,status:complete?'PENDING':'SKIPPED',reason:complete?'等待预算与调用间隔':`覆盖未通过：${entry.stopReason||'评论范围不完整'}`}],skipDuplicates:true});
    }
   });
  }
@@ -44,9 +46,12 @@ export class AutoReviewService {
    if(!actor||actor.role!=='ADMIN')throw Error('自动授权管理员已失效');
    const prepared=await this.policies.prepare(actor,job.policyId,{version:job.policyVersion,scope:{kind:'POSTS',postIds:[job.postId]}},true);
    if(!prepared.count){await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:'COMPLETED',reason:'没有新的可自动送审内容；已有待处理或失败记录可手动测试'}});return;}
-   const preview=await this.evaluation.preview(actor,job.policyId,prepared.reviewIds);
+   const rows=await this.db.semanticReview.findMany({where:{id:{in:prepared.reviewIds}},orderBy:{id:'asc'}});
+   const payload=prepareOutbound(rows.map(r=>({id:r.id,snapshot:r.snapshot as unknown as SemanticSnapshot,rules:r.rules as unknown as SemanticRules})));
+   const count=outboundBatches(payload)[0].length;
+   const preview=await this.evaluation.preview(actor,job.policyId,rows.slice(0,count).map(r=>r.id));
    const result=await this.evaluation.evaluate(actor,job.policyId,{requestKey:randomUUID(),previewHash:preview.hash,reviewIds:preview.reviewIds,priceVersion:preview.connection.priceVersion!,consent:semanticBatchConsent},job.id);
-   await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:result.status==='COMPLETED'?'PENDING':'FAILED',processed:{increment:result.status==='COMPLETED'?prepared.count:0},reason:result.status==='COMPLETED'?'本批完成，等待下一批':`模型请求失败，不自动重试`}});
-  }catch{await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:'FAILED',reason:'授权、批次或脱敏检查未通过；请手动核查，不自动重试'}});}
+   await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:result.status==='COMPLETED'?'PENDING':'FAILED',processed:{increment:result.status==='COMPLETED'?count:0},reason:result.status==='COMPLETED'?'本批完成，等待下一批':`模型请求失败，不自动重试`}});
+  }catch{await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:'FAILED',reason:'授权、批次或输入安全检查未通过；请手动核查，不自动重试'}});}
  }
 }

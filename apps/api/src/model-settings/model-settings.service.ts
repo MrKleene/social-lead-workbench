@@ -1,5 +1,5 @@
 import {BadRequestException,ConflictException,Inject,Injectable,Optional} from '@nestjs/common';
-import {semanticBatchConsent} from '@crm/contracts';
+import {semanticBatchConsent,semanticInputPolicy} from '@crm/contracts';
 import {Prisma} from '@prisma/client';
 import {Db} from '../common/db';
 import {Actor,requireAdmin} from '../auth/security';
@@ -17,7 +17,7 @@ export class ModelSettingsService {
  private file(){return this.options?.file??process.env.CRM_MODEL_VAULT_FILE;}
  async resolve(db:Database=this.db,includeKey=false,authorization?:typeof semanticBatchConsent):Promise<QwenSettings&{configurationVersion:number}>{
   const row=await db.modelSettings.findUnique({where:{id:MODEL_SETTINGS_ID}}),model=row?.model??DEFAULT_QWEN_MODEL;
-  const status:QwenSettings['status']={state:'UNCONFIGURED',message:'尚未在管理员模型设置中保存Key；不会读取或回退环境变量Key',model,region:'cn-beijing',authorized:row?.consent===true,dailyLimit:row?.dailyLimit??null,batchLimit:5,automaticRetries:0,timeoutSeconds:20};
+  const status:QwenSettings['status']={state:'UNCONFIGURED',message:'尚未在管理员模型设置中保存Key；不会读取或回退环境变量Key',model,region:'cn-beijing',authorized:row?.consent===true&&row.consentInputPolicy===semanticInputPolicy,dailyLimit:row?.dailyLimit??null,batchLimit:5,automaticRetries:0,timeoutSeconds:20};
   const version=row?.version??0;
   if(!row?.encryptedKey)return {status,configurationVersion:version};
   if(row.endpoint!=='beijing-standard'||!qwenModel(model)||row.priceVersion!==qwenModel(model)?.priceVersion||(row.dailyLimit!==null&&(!Number.isInteger(row.dailyLimit)||row.dailyLimit<1||row.dailyLimit>100)))return {status:{...status,state:'INVALID_CONFIG',message:'型号、北京端点、价目版本或次数上限失效；请管理员核查'},configurationVersion:version};

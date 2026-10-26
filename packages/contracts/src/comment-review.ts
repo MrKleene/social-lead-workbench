@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import type {SemanticConnection,SemanticUsage,SemanticReviewItem} from './semantic-review';
-export const reviewAutoConsent='comment-review-continuous-priced-v1' as const;
-export const reviewUseConsent='comment-review-first-use-v1' as const;
+export const reviewAutoConsent='comment-review-continuous-original-priced-v2' as const;
+export const reviewUseConsent='comment-review-original-first-use-v2' as const;
 export const reviewPolicySaveSchema=z.object({version:z.number().int().nonnegative(),target:z.string().trim().min(10).max(1500)}).strict();
 export const reviewPolicyToggleSchema=z.object({version:z.number().int().positive(),enabled:z.boolean(),consent:z.literal(reviewUseConsent).optional(),modelVersion:z.number().int().nonnegative().optional(),priceVersion:z.string().max(60).optional()}).strict();
 export const reviewAutoToggleSchema=z.object({version:z.number().int().positive(),enabled:z.boolean(),consent:z.literal(reviewAutoConsent).optional(),modelVersion:z.number().int().nonnegative().optional(),priceVersion:z.string().max(60).optional()}).strict();
@@ -15,7 +15,7 @@ export type ReviewResults={items:(SemanticReviewItem&{policyId:string|null;polic
 export type ReviewComments={items:{id:string;comment:string;coverage:string}[];hasMore:boolean};
 export type ReviewPosts={items:{id:string;title:string;comments:number;coverUrl?:string;coverage?:string}[];hasMore:boolean};
 
-export const manualPostConsent='comment-review-saved-post-priced-v1' as const;
+export const manualPostConsent='comment-review-saved-post-original-priced-v2' as const;
 export const manualPostPrepareSchema=z.object({postId:z.string().min(1).max(200),revision:z.number().int().positive()}).strict();
 export const manualPostConfirmSchema=z.object({hash:z.string().regex(/^[a-f0-9]{64}$/),requestKey:z.string().uuid(),consent:z.literal(manualPostConsent),providerConsent:z.literal(reviewUseConsent)}).strict();
 export type ManualReviewTask={id:string;postId:string;title:string;coverage:string;policyRevision:number;model:string;modelVersion:number;priceVersion:string;scopeHash:string;status:string;reason:string|null;total:number;pending:number;success:number;failed:number;skipped:number;maxCalls:number;target:string;priceDescription?:string;dailyLimit:number|null;authorized:boolean};

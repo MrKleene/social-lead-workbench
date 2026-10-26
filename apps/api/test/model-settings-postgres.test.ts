@@ -37,7 +37,7 @@ async function batch(){
  await db.semanticReview.create({data:{configId:c.id,runId:run.id,revision:1,platform:'XHS',platformUserId:'fictional-user',snapshotHash:randomUUID(),rules,isDemo:true,selectedModel:'qwen3.8-flash',snapshot:{postId:'fictional-post',commentId:'fictional-comment',userId:'fictional-user',title:'虚构论文讨论',body:'讨论毕业选题',comment:'护理专业如何选题',parentId:null,parent:null,coverage:'PARTIAL',isDemo:true}}});return c;
 }
 const answer=(init:RequestInit)=>{const p=JSON.parse(JSON.parse(init.body as string).messages[1].content);return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:p.items.map((x:any)=>({id:x.id,score:85,decision:'MATCH',reason:'请求选题帮助',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:'护理专业如何选题'}]}))})}}],usage:{prompt_tokens:100,completion_tokens:50}}));};
-const evaluate=(q:QwenMatchingService,id:string,hash:string)=>q.evaluate(actor,id,{requestKey:randomUUID(),previewHash:hash,priceVersion:'beijing-2026-10-21',consent:'send-reviewed-priced-batch-v2'});
+const evaluate=(q:QwenMatchingService,id:string,hash:string)=>q.evaluate(actor,id,{requestKey:randomUUID(),previewHash:hash,priceVersion:'beijing-2026-10-21',consent:'send-original-comments-priced-batch-v3'});
 async function clear(){await db.modelSettings.deleteMany();await db.semanticModelCall.deleteMany();await db.semanticReview.deleteMany();await db.collectionRun.deleteMany({where:{config:{name:'虚构密钥生命周期测试'}}});await db.collectionConfig.deleteMany({where:{name:'虚构密钥生命周期测试'}});}
 beforeAll(async()=>{
  actor=await db.user.create({data:{email:randomUUID()+'@example.invalid',name:'虚构管理员',role:'ADMIN',passwordHash:'unused'}});
@@ -121,4 +121,16 @@ describe('administrator credential API, isolated DB, fake Key and mock HTTP only
   expect((await q.status(db,c.id)).connection.authorized).toBe(true);expect(transport).toHaveBeenCalledTimes(1);expect(await db.contactAttempt.count()).toBe(0);spy.mockRestore();
  });
 
+});
+
+it('legacy manual batch also confirms and sends original comment text, then freezes its input policy',async()=>{
+ await store.save(actor,payload());const c=await batch(),row=await db.semanticReview.findFirstOrThrow({where:{configId:c.id}});
+ const comment='护理专业如何选题 Biology 2026 test@example.invalid +1 202-555-0100 微信：synthetic_wx\n👩🏽‍💻 [笑哭R] [已脱敏]';
+ await db.semanticReview.update({where:{id:row.id},data:{snapshot:{...(row.snapshot as any),comment}}});
+ const transport=vi.fn(async(_u:string,init:RequestInit)=>{const p=JSON.parse(JSON.parse(init.body as string).messages[1].content);expect(p.inputPolicyVersion).toBe('comment-original-context-redacted-v2');expect(p.items[0].comment).toBe(comment);expect(JSON.stringify(p)).not.toContain('fictional-user');return answer(init);});
+ const q=new QwenMatchingService(db,{transport},store),preview=await q.preview(actor,c.id);expect(preview.payload.items[0].comment).toBe(comment);
+ await expect(q.evaluate(actor,c.id,{requestKey:randomUUID(),previewHash:preview.hash,priceVersion:'beijing-2026-10-21',consent:'send-reviewed-priced-batch-v2'} as any)).rejects.toThrow();expect(transport).not.toHaveBeenCalled();
+ expect(await evaluate(q,c.id,preview.hash)).toMatchObject({status:'COMPLETED'});expect(transport).toHaveBeenCalledTimes(1);
+ expect((await db.semanticReview.findUniqueOrThrow({where:{id:row.id}})).evaluationInput).toEqual(preview.payload);
+ expect((await db.modelSettings.findUniqueOrThrow({where:{id:MODEL_SETTINGS_ID}})).consentInputPolicy).toBe('comment-original-context-redacted-v2');
 });
