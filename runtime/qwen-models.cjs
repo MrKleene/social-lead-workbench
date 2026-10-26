@@ -15,7 +15,7 @@ function qwenModel(model){
  const tiers=catalog[model];
  if(!tiers?.length||!tiers.every(t=>t.length===3&&t.every(n=>Number.isFinite(n)&&n>0)))return null;
  const priceVersion=model==='qwen3.8-max'?'beijing-2026-10-26':QWEN_PRICE_VERSION;
- return {id:model,priceVersion,priceAck:model+':'+priceVersion,priceDescription:tiers.map(([up,input,output])=>'输入≤'+up+' token：输入/输出 '+input+'/'+output+' 元/百万token').join('；')};
+ return {id:model,maxInputTokens:991808,maxOutputTokens:131072,contextTokens:1000000,priceVersion,priceAck:model+':'+priceVersion,priceDescription:tiers.map(([up,input,output])=>'输入≤'+up+' token：输入/输出 '+input+'/'+output+' 元/百万token').join('；')};
 }
 function qwenModelChoices(savedModel){
  const ids=['qwen3.8-flash','qwen3.8-max','qwen3.8-max-0902'];

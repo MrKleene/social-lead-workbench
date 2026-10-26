@@ -1,3 +1,4 @@
+import {wholePostRequestPolicy} from '@crm/contracts';
 import {displayReviewFailure} from '@crm/contracts';
 import {semanticInputPolicy} from '@crm/contracts';
 import {BadRequestException,ConflictException,Inject,Injectable,NotFoundException} from '@nestjs/common';
@@ -60,7 +61,7 @@ export class ReviewPolicyService {
    }
    const row=await tx.commentReviewPolicy.update({where:{id},data:{autoEnabled:input.enabled,autoModelVersion:input.enabled?model.configurationVersion:null,autoActorId:input.enabled?actor.id:null,version:{increment:1}}});
    await tx.autoReviewJob.updateMany({where:{policyId:id,status:{in:['PENDING','PROCESSING']}},data:{status:'CANCELLED',reason:'自动设置变化，未开始的调用已取消'}});
-   await tx.auditLog.create({data:{actorId:actor.id,action:'COMMENT_REVIEW_AUTO_CONSENT',entityId:id,metadata:{enabled:input.enabled,modelVersion:model.configurationVersion,policyVersion:row.version}}});return row;
+   await tx.auditLog.create({data:{actorId:actor.id,action:'COMMENT_REVIEW_AUTO_CONSENT',entityId:id,metadata:{enabled:input.enabled,modelVersion:model.configurationVersion,policyVersion:row.version,requestPolicy:wholePostRequestPolicy}}});return row;
   });
  }
  async comments(actor:Actor,postId:string,offset:number){requireAdmin(actor);const rows=await this.db.capturedComment.findMany({where:{postId},orderBy:[{createdAt:'asc'},{id:'asc'}],skip:offset,take:21});return {items:rows.slice(0,20).map(c=>({id:c.id,comment:(c.snapshot as unknown as SemanticSnapshot).comment,coverage:(c.snapshot as unknown as SemanticSnapshot).coverage})),hasMore:rows.length>20};}
@@ -72,11 +73,11 @@ export class ReviewPolicyService {
    const posts=input.scope.kind==='POSTS'?input.scope.postIds:[],comments=input.scope.kind==='COMMENTS'?input.scope.commentIds:[];
    if(comments.length&&await tx.capturedComment.count({where:{id:{in:comments}}})!==comments.length)throw new ConflictException('所选评论不存在，请刷新');
    if(posts.length&&await tx.capturedPost.count({where:{id:{in:posts}}})!==posts.length)throw new ConflictException('所选帖子不存在，请刷新');
-   const existing=await tx.semanticReview.findMany({where:{policyId:id,policyRevision:policy.revision,selectedModel:model.model,reviewStatus:'PENDING',OR:automatic?[{state:{in:['UNANALYSED','UNCONFIGURED']}}]:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}],...(posts.length?{capture:{postId:{in:posts}}}:comments.length?{captureId:{in:comments}}:{})},orderBy:[{createdAt:'asc'},{id:'asc'}],take:5,select:{id:true}});
+   const existing=await tx.semanticReview.findMany({where:{policyId:id,policyRevision:policy.revision,selectedModel:model.model,reviewStatus:'PENDING',OR:automatic?[{state:{in:['UNANALYSED','UNCONFIGURED']}}]:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}],...(posts.length?{capture:{postId:{in:posts}}}:comments.length?{captureId:{in:comments}}:{})},orderBy:[{createdAt:'asc'},{id:'asc'}],...(automatic?{}:{take:5}),select:{id:true}});
    const reviewIds=existing.map(r=>r.id);
    // Complete-post scope includes earlier confirmed chunks on resume. Failed/uncertain rows never auto-retry.
    // DISTINCT content avoids duplicate copies collected through different searches.
-   const candidates=await tx.$queryRaw<{id:string}[]>(Prisma.sql`SELECT DISTINCT ON(c."contentHash") c.id FROM "CapturedComment" c WHERE ${posts.length?Prisma.sql`c."postId" IN (${Prisma.join(posts)})`:Prisma.sql`TRUE`} AND ${comments.length?Prisma.sql`c.id IN (${Prisma.join(comments)})`:Prisma.sql`TRUE`} AND NOT EXISTS (SELECT 1 FROM "SemanticReview" r WHERE r."policyId"=${id} AND r."policyRevision"=${policy.revision} AND r."selectedModel"=${model.model} AND r."sourceContentHash"=c."contentHash") ORDER BY c."contentHash",c."createdAt",c.id LIMIT ${5-reviewIds.length}`);
+   const candidates=await tx.$queryRaw<{id:string}[]>(Prisma.sql`SELECT DISTINCT ON(c."contentHash") c.id FROM "CapturedComment" c WHERE ${posts.length?Prisma.sql`c."postId" IN (${Prisma.join(posts)})`:Prisma.sql`TRUE`} AND ${comments.length?Prisma.sql`c.id IN (${Prisma.join(comments)})`:Prisma.sql`TRUE`} AND NOT EXISTS (SELECT 1 FROM "SemanticReview" r WHERE r."policyId"=${id} AND r."policyRevision"=${policy.revision} AND r."selectedModel"=${model.model} AND r."sourceContentHash"=c."contentHash") ORDER BY c."contentHash",c."createdAt",c.id ${automatic?Prisma.empty:Prisma.sql`LIMIT ${5-reviewIds.length}`}`);
    const rows=await tx.capturedComment.findMany({where:{id:{in:candidates.map(c=>c.id)}}});
    const rules={version:1, target:policy.target, reviewThreshold:0};
    for(const c of rows){const s=c.snapshot as unknown as SemanticSnapshot,hash=semanticHash({policyId:id,revision:policy.revision,content:c.contentHash,model:model.model});const row=await tx.semanticReview.create({data:{policyId:id,policyRevision:policy.revision,sourceContentHash:c.contentHash,configId:c.configId,runId:c.runId,revision:policy.revision,captureId:c.id,analysisKey:hash,snapshotHash:hash,selectedModel:model.model,ruleHash:semanticHash(rules),contextVersion:c.contextVersion,platform:(await tx.collectionConfig.findUniqueOrThrow({where:{id:c.configId},select:{platform:true}})).platform,platformUserId:s.userId,snapshot:c.snapshot as Prisma.InputJsonValue,rules,isDemo:c.isDemo,state:'UNANALYSED',reason:'独立评论审核 · 等待逐批确认'}});reviewIds.push(row.id);}

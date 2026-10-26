@@ -119,3 +119,22 @@ describe('original comment policy',()=>{
   expect(()=>prepareOutbound([{...input,snapshot:{...input.snapshot,comment:'字'.repeat(17000)}}])).toThrow('PAYLOAD_LIMIT');
  });
 });
+
+describe('whole post transport capacity and time bounds (synthetic only)',()=>{
+ it.each([6,56,68])('keeps all %i original comments in one invocation, adjusts output tokens and evidence positions',async n=>{
+  const {wholePostRequestPolicy}=await import('@crm/contracts'),{wholePostCapacity}=await import('../src/collection/whole-post-capacity');
+  const source=Array.from({length:n},(_,i)=>({...input,id:'row-'+i,snapshot:{...input.snapshot,comment:'护理专业 '+i+' 👩🏽‍💻 [笑哭R] [已脱敏]'}})),p={...prepareOutbound(source,true),requestPolicy:wholePostRequestPolicy};
+  const transport=vi.fn(async(_url:string,init:RequestInit)=>{const b=JSON.parse(init.body as string);expect(JSON.parse(b.messages[1].content).items).toEqual(p.items);expect(b.max_tokens).toBe(wholePostCapacity(p,QWEN_MODEL).outputTokens);expect(b.max_tokens).toBeGreaterThan(2500);expect(b.response_format.json_schema.schema.properties.items.maxItems).toBe(n);return response({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:p.items.map(i=>({...result.items[0],id:i.id,evidence:[{source:'COMMENT',quote:i.comment}]}))})}}]});});
+  const value=await requestQwen(qwenSettings(env),p,transport,'comment-first');expect(validateQwenEvidence(value.result,p,source,true)).toHaveLength(n);expect(transport).toHaveBeenCalledTimes(1);
+  value.result.items[n-1].evidence[0].quote='forged';expect(()=>validateQwenEvidence(value.result,p,source,true)).toThrow('OUTPUT_EVIDENCE_NOT_EXACT_ITEM_'+n);
+ });
+ it('input/output envelope overflow blocks whole request; never silently truncates or splits',async()=>{
+  const {wholePostRequestPolicy}=await import('@crm/contracts'),transport=vi.fn(async()=>response());
+  for(const p of [{...payload,requestPolicy:wholePostRequestPolicy,items:Array.from({length:200},()=>payload.items[0])},{...payload,requestPolicy:wholePostRequestPolicy,items:[{...payload.items[0],comment:'字'.repeat(400000)}]}])await expect(requestQwen(qwenSettings(env),p,transport)).rejects.toThrow('WHOLE_POST_CAPACITY');expect(transport).not.toHaveBeenCalled();
+ });
+ it('whole-post timeout exceeds legacy timeout but is bounded, aborts once and never retries',async()=>{
+  const {wholePostRequestPolicy}=await import('@crm/contracts');vi.useFakeTimers();let signal:AbortSignal|undefined;
+  const transport=vi.fn(async(_url:string,i:RequestInit)=>{signal=i.signal!;return new Promise<Response>(()=>{});});
+  const pending=requestQwen(qwenSettings(env),{...payload,requestPolicy:wholePostRequestPolicy},transport);const failed=expect(pending).rejects.toThrow('TIMEOUT');await vi.advanceTimersByTimeAsync(20001);expect(signal!.aborted).toBe(false);await vi.advanceTimersByTimeAsync(280000);await failed;expect(signal!.aborted).toBe(true);expect(transport).toHaveBeenCalledTimes(1);
+ });
+});

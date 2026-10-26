@@ -17,7 +17,7 @@ export function redactText(text:string,identifiers:string[]=[]){
  .replace(/[A-Za-z0-9][A-Za-z0-9_./:+@#%?=&~\-]*/g,marker);
  return result;
 }
-export function prepareOutbound(inputs:SemanticInput[]):SemanticOutbound{
+export function prepareOutbound(inputs:SemanticInput[],wholePost=false):SemanticOutbound{
  if(!inputs.length)return {inputPolicyVersion:semanticInputPolicy,redactionVersion:REDACTION_VERSION,target:'',items:[]};
  const ids=inputs.flatMap(x=>[x.snapshot.userId,x.snapshot.postId,x.snapshot.commentId,x.snapshot.parentId||'']);
  const target=redactText(inputs[0].rules.target,ids).slice(0,1500);
@@ -32,7 +32,7 @@ export function prepareOutbound(inputs:SemanticInput[]):SemanticOutbound{
   return {id:'item'+(i+1),title,body,comment,parent:s.parent===null?null:parent,missingParent:!!s.parentId&&s.parent===null,partial:s.coverage==='PARTIAL',truncated};
  });const payload={inputPolicyVersion:semanticInputPolicy,redactionVersion:REDACTION_VERSION,target,items};
  // Never truncate an original comment to fit a request. Oversized single items fail before confirmation.
- if(items.some(item=>Buffer.byteLength(JSON.stringify({...payload,items:[item]}))>48000))throw new QwenError('PAYLOAD_LIMIT');
+ if(!wholePost&&items.some(item=>Buffer.byteLength(JSON.stringify({...payload,items:[item]}))>48000))throw new QwenError('PAYLOAD_LIMIT');
  return payload;
 }
 export function previewHash(payload:SemanticOutbound,rows:{id:string;version:number}[],revision:number,modelSelection?:string){return createHash('sha256').update(JSON.stringify({payload,rows,revision,modelSelection})).digest('hex');}

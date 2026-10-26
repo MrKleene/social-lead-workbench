@@ -54,4 +54,4 @@ try{
  results.push({label:'original-input-migration-invalidates-old-consent-and-jobs-preserves-source-key-budget',exit:0});
  results.push({label:'upgrade-preserves-existing-data-and-disabled-target',exit:0});console.log('upgrade preservation: 0');
  run('integration',['npm','run','test:integration','-w','@crm/api'],env);
-}finally{for(const c of containers.reverse())docker(['rm','-f',c]);writeFileSync(join(output,'checks.json'),JSON.stringify({results,isolated:true,removed:containers.length},null,2));console.log('Evidence: '+output);}
+}finally{for(const c of containers.reverse())docker(['stop',c]);writeFileSync(join(output,'checks.json'),JSON.stringify({results,isolated:true,removed:containers.length},null,2));console.log('Evidence: '+output);}

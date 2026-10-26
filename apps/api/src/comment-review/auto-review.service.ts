@@ -1,4 +1,4 @@
-import {prepareOutbound,outboundBatches} from '../collection/semantic-redaction';
+import {prepareOutbound} from '../collection/semantic-redaction';
 import type {SemanticSnapshot,SemanticRules} from '@crm/contracts';
 import {Inject,Injectable} from '@nestjs/common';
 import {randomUUID} from 'node:crypto';
@@ -9,6 +9,7 @@ import type {PostRead,ReadResult} from '../collection/collector';
 import {ReviewPolicyService,lockReview} from './review-policy.service';
 import {ReviewEvaluationService} from './review-evaluation.service';
 import {assertAutoReview} from './auto-review.guard';
+import {WHOLE_POST_STALE} from '../collection/whole-post-capacity';
 @Injectable()
 export class AutoReviewService {
  constructor(@Inject(Db) private db:Db,@Inject(ReviewPolicyService) private policies:ReviewPolicyService,@Inject(ReviewEvaluationService) private evaluation:ReviewEvaluationService){}
@@ -30,7 +31,7 @@ export class AutoReviewService {
  }
  async tick(){
   // No replay after an uncertain worker exit. Unstarted jobs can resume; claimed work requires manual review.
-  await this.db.autoReviewJob.updateMany({where:{status:'PROCESSING',updatedAt:{lt:new Date(Date.now()-120000)}},data:{status:'FAILED',reason:'执行中断，调用结果可能未知；请手动核查，不自动重试'}});
+  await this.db.autoReviewJob.updateMany({where:{status:'PROCESSING',updatedAt:{lt:new Date(Date.now()-WHOLE_POST_STALE)}},data:{status:'FAILED',reason:'执行中断，调用结果可能未知；请手动核查，不自动重试'}});
   const job=await this.db.$transaction(async tx=>{await lockReview(tx);
    const next=await tx.autoReviewJob.findFirst({where:{status:'PENDING'},orderBy:{createdAt:'asc'}});if(!next)return null;
    const model=await this.policies.models.resolve(tx);
@@ -47,11 +48,10 @@ export class AutoReviewService {
    const prepared=await this.policies.prepare(actor,job.policyId,{version:job.policyVersion,scope:{kind:'POSTS',postIds:[job.postId]}},true);
    if(!prepared.count){await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:'COMPLETED',reason:'没有新的可自动送审内容；已有待处理或失败记录可手动测试'}});return;}
    const rows=await this.db.semanticReview.findMany({where:{id:{in:prepared.reviewIds}},orderBy:{id:'asc'}});
-   const payload=prepareOutbound(rows.map(r=>({id:r.id,snapshot:r.snapshot as unknown as SemanticSnapshot,rules:r.rules as unknown as SemanticRules})));
-   const count=outboundBatches(payload)[0].length;
-   const preview=await this.evaluation.preview(actor,job.policyId,rows.slice(0,count).map(r=>r.id));
+   const count=rows.length;
+   const preview=await this.evaluation.preview(actor,job.policyId,rows.map(r=>r.id),false,true);
    const result=await this.evaluation.evaluate(actor,job.policyId,{requestKey:randomUUID(),previewHash:preview.hash,reviewIds:preview.reviewIds,priceVersion:preview.connection.priceVersion!,consent:semanticBatchConsent},job.id);
-   await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:result.status==='COMPLETED'?'PENDING':'FAILED',processed:{increment:result.status==='COMPLETED'?count:0},reason:result.status==='COMPLETED'?'本批完成，等待下一批':(outputFailureReason('errorCode' in result?result.errorCode:null)||'模型请求失败，不自动重试')+` 本批 ${count} 条未采纳，剩余评论未继续送审。`}});
+   await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:result.status==='COMPLETED'?'COMPLETED':'FAILED',processed:{increment:result.status==='COMPLETED'?count:0},reason:result.status==='COMPLETED'?'本次整帖处理完成':(outputFailureReason('errorCode' in result?result.errorCode:null)||'模型请求失败，不自动重试')+` 本批 ${count} 条未采纳，剩余评论未继续送审。`}});
   }catch{await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:'FAILED',reason:'授权、批次或输入安全检查未通过；请手动核查，不自动重试'}});}
  }
 }

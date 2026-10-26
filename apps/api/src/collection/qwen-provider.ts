@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { modelOutputFailureCode, type ModelOutputFailureCode, semanticInputPolicy, type SemanticConnection, type SemanticOutbound } from '@crm/contracts';
+import { modelOutputFailureCode, type ModelOutputFailureCode, semanticInputPolicy, wholePostRequestPolicy, type SemanticConnection, type SemanticOutbound } from '@crm/contracts';
 import { DEFAULT_QWEN_MODEL, qwenModel } from '../../../../runtime/qwen-models.cjs';
+import {wholePostCapacity,WHOLE_POST_TIMEOUT,WHOLE_POST_RESPONSE_BYTES} from './whole-post-capacity';
 export const QWEN_MODEL=DEFAULT_QWEN_MODEL;
 export const QWEN_CONSENT='beijing-original-comments-v2';
 export const QWEN_TIMEOUT=20000;
@@ -24,7 +25,7 @@ export function qwenSettings(env:Record<string,string|undefined>):QwenSettings{
  return {status:{...status,state:'READY',message:'Qwen本地配置就绪；官方文档支持非思考JSON Schema，实际连通性和质量未验收。仅逐批确认后调用。'+model.priceVersion+' 原价：'+model.priceDescription+'；费用以账单为准'},endpoint,key:env.QWEN_API_KEY};
 }
 export class QwenError extends Error{constructor(public code:string){super(code);}}
-export const qwenResultSchema=z.object({items:z.array(z.object({id:z.string().min(1).max(20),score:z.number().int().min(0).max(100),decision:z.enum(['MATCH','NO_MATCH','UNCERTAIN']),reason:z.string().min(1).max(1000).refine(value=>value.trim().length>0),context:z.enum(['SUFFICIENT','INSUFFICIENT']),evidence:z.array(z.object({source:z.enum(['COMMENT','POST_TITLE','POST_BODY','PARENT_COMMENT']),quote:z.string().min(1).max(500)}).strict()).min(1).max(8)}).strict()).min(1).max(5)}).strict();
+export const qwenResultSchema=z.object({items:z.array(z.object({id:z.string().min(1).max(20),score:z.number().int().min(0).max(100),decision:z.enum(['MATCH','NO_MATCH','UNCERTAIN']),reason:z.string().min(1).max(1000).refine(value=>value.trim().length>0),context:z.enum(['SUFFICIENT','INSUFFICIENT']),evidence:z.array(z.object({source:z.enum(['COMMENT','POST_TITLE','POST_BODY','PARENT_COMMENT']),quote:z.string().min(1).max(500)}).strict()).min(1).max(8)}).strict()).min(1)}).strict();
 export function parseQwenResult(raw:unknown){
  const parsed=qwenResultSchema.safeParse(raw);if(parsed.success)return parsed.data;
  const issue=parsed.error.issues[0],path=issue.path,index=path[0]==='items'&&typeof path[1]==='number'?path[1]+1:undefined;
@@ -44,19 +45,27 @@ export async function requestQwen(settings:QwenSettings,payload:SemanticOutbound
  if(settings.status.state!=='READY'||!settings.endpoint||!settings.key)throw new QwenError('NOT_READY');
  if(!qwenModel(settings.status.model))throw new QwenError('MODEL_OR_PRICE_UNVERIFIED');
  if(payload.inputPolicyVersion!==semanticInputPolicy)throw new QwenError('INPUT_POLICY_CHANGED');
- if(payload.items.length<1||payload.items.length>5||Buffer.byteLength(JSON.stringify(payload))>48000)throw new QwenError('PAYLOAD_LIMIT');
+ const whole=payload.requestPolicy===wholePostRequestPolicy,capacity=wholePostCapacity(payload,settings.status.model);
+ if(payload.requestPolicy&&!whole)throw new QwenError('INPUT_POLICY_CHANGED');
+ if(payload.items.length<1||(whole?!capacity.fits:payload.items.length>5||Buffer.byteLength(JSON.stringify(payload))>48000))throw new QwenError(whole?'WHOLE_POST_CAPACITY':'PAYLOAD_LIMIT');
+ const responseSchema=structuredClone(schema);if(whole){const item=responseSchema.properties.items.items;Object.assign(responseSchema.properties.items,{minItems:payload.items.length,maxItems:payload.items.length});item.properties.reason={...item.properties.reason};Object.assign(item.properties.reason,{maxLength:120});Object.assign(item.properties.evidence,{minItems:1,maxItems:1});item.properties.evidence.items.properties.quote={...item.properties.evidence.items.properties.quote};Object.assign(item.properties.evidence.items.properties.quote,{maxLength:120});item.properties.evidence.items.properties.source.enum=['COMMENT'];}
+ const systemSuffix=whole?' Return every supplied item exactly once. Use a concise reason of at most 120 characters and exactly one exact COMMENT evidence quote of at most 120 characters per item. Never omit items to fit.':'';
  const abort=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
  try{return await Promise.race([(async()=>{
-  const response=await transport(settings.endpoint!,{method:'POST',redirect:'error',credentials:'omit',signal:abort.signal,headers:{'Content-Type':'application/json',Authorization:`Bearer ${settings.key}`},body:JSON.stringify({model:settings.status.model,enable_thinking:false,stream:false,max_tokens:2500,temperature:0,response_format:{type:'json_schema',json_schema:{name:'comment_relevance',strict:true,schema}},messages:[{role:'system',content:contextMode==='comment-first'?qwenSystem.replace('Missing or truncated context must be INSUFFICIENT; never invent evidence.','Judge the current comment against target. Post and parent text are optional evidence, never required keyword matches. If the comment alone is sufficient, missing post/parent context does not invalidate it. Use UNCERTAIN and INSUFFICIENT only when the available evidence cannot support a decision; never invent evidence.'):qwenSystem},{role:'user',content:JSON.stringify(payload)}]})});
+  const response=await transport(settings.endpoint!,{method:'POST',redirect:'error',credentials:'omit',signal:abort.signal,headers:{'Content-Type':'application/json',Authorization:`Bearer ${settings.key}`},body:JSON.stringify({model:settings.status.model,enable_thinking:false,stream:false,max_tokens:whole?capacity.outputTokens:2500,temperature:0,response_format:{type:'json_schema',json_schema:{name:'comment_relevance',strict:true,schema:responseSchema}},messages:[{role:'system',content:(contextMode==='comment-first'?qwenSystem.replace('Missing or truncated context must be INSUFFICIENT; never invent evidence.','Judge the current comment against target. Post and parent text are optional evidence, never required keyword matches. If the comment alone is sufficient, missing post/parent context does not invalidate it. Use UNCERTAIN and INSUFFICIENT only when the available evidence cannot support a decision; never invent evidence.'):qwenSystem)+systemSuffix},{role:'user',content:JSON.stringify(payload)}]})});
   if(!response.ok){await response.body?.cancel();throw new QwenError(response.status===429?'RATE_LIMIT':response.status===401||response.status===403?'AUTH_FAILED':'UPSTREAM_FAILED');}
   const reader=response.body?.getReader();if(!reader)throw new QwenError('INVALID_RESPONSE');let size=0;const chunks:Uint8Array[]=[];
-  try{while(true){const next=await reader.read();if(next.done)break;size+=next.value.length;if(size>100000)throw new QwenError('RESPONSE_LIMIT');chunks.push(next.value);}}finally{await reader.cancel();}
+  try{while(true){const next=await reader.read();if(next.done)break;size+=next.value.length;if(size>(whole?WHOLE_POST_RESPONSE_BYTES:100000))throw new QwenError('RESPONSE_LIMIT');chunks.push(next.value);}}finally{await reader.cancel();}
   const data=JSON.parse(Buffer.concat(chunks).toString('utf8')) as {choices?:{finish_reason?:string;message?:{content?:string;refusal?:string}}[];usage?:unknown};
   if(data.choices?.length!==1||data.choices[0].finish_reason!=='stop'||data.choices[0].message?.refusal||typeof data.choices[0].message?.content!=='string')throw new QwenError('INVALID_RESPONSE');
   let raw:unknown;try{raw=JSON.parse(data.choices[0].message.content);}catch{throw new QwenError('OUTPUT_JSON_INVALID');}
   const result=parseQwenResult(raw);
+  if(whole){
+   if(result.items.length!==payload.items.length)throw new QwenError('OUTPUT_COUNT_INVALID');
+   result.items.forEach((item,index)=>{if([...item.reason].length>120)throw new QwenError(modelOutputFailureCode('OUTPUT_REASON_INVALID',index+1));if(item.evidence.length!==1)throw new QwenError(modelOutputFailureCode('OUTPUT_EVIDENCE_INVALID',index+1));if([...item.evidence[0].quote].length>120)throw new QwenError(modelOutputFailureCode('OUTPUT_EVIDENCE_QUOTE_INVALID',index+1));});
+  }
   const parsed=z.object({prompt_tokens:z.number().int().min(0).max(1000000),completion_tokens:z.number().int().min(0).max(1000000)}).safeParse(data.usage);
   return {result,usage:parsed.success?{inputTokens:parsed.data.prompt_tokens,outputTokens:parsed.data.completion_tokens}:null};
- })(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>{abort.abort();reject(new QwenError('TIMEOUT'));},QWEN_TIMEOUT);})]);
+ })(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>{abort.abort();reject(new QwenError('TIMEOUT'));},whole?WHOLE_POST_TIMEOUT:QWEN_TIMEOUT);})]);
  }catch(e){throw e instanceof QwenError?e:new QwenError('INVALID_RESPONSE');}finally{clearTimeout(timer);abort.abort();}
 }

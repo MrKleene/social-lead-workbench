@@ -13,10 +13,11 @@ export type SemanticReviewItem={policyId?:string|null;policyRevision?:number|nul
 export type SemanticReviewPage={configured:boolean;provider:string;connection?:SemanticConnection;control?:{enabled:boolean;version:number};usage?:SemanticUsage;total:number;items:SemanticReviewItem[];offset:number;hasMore:boolean};
 
 export const semanticInputPolicy='comment-original-context-redacted-v2' as const;
-export type SemanticOutbound={inputPolicyVersion?:string;redactionVersion:string;target:string;items:{id:string;title:string;body:string;comment:string;parent:string|null;missingParent:boolean;partial:boolean;truncated:boolean}[]};
+export const wholePostRequestPolicy='whole-post-single-request-v1' as const;
+export type SemanticOutbound={requestPolicy?:string;inputPolicyVersion?:string;redactionVersion:string;target:string;items:{id:string;title:string;body:string;comment:string;parent:string|null;missingParent:boolean;partial:boolean;truncated:boolean}[]};
 export type SemanticConnection={state:'DISABLED'|'UNAUTHORIZED'|'BUDGET_REQUIRED'|'UNCONFIGURED'|'INVALID_CONFIG'|'READY';message:string;model:string;region:'cn-beijing';authorized?:boolean;priceVersion?:string;priceDescription?:string;dailyLimit:number|null;batchLimit:number;automaticRetries:0;timeoutSeconds:number};
 export type SemanticUsage={requests:number;dailyLimit:number|null;inputTokens:number;outputTokens:number;unknownUsage:number;lastStatus:string|null;canCall:boolean};
 export type SemanticPreview={hash:string;revision:number;payload:SemanticOutbound;count:number;reviewIds?:string[];connection:SemanticConnection;usage:SemanticUsage};
 export const semanticBatchConsent='send-original-comments-priced-batch-v3' as const;
-export const semanticEvaluateRequestSchema=z.object({requestKey:z.string().uuid(),previewHash:z.string().regex(/^[a-f0-9]{64}$/),reviewIds:z.array(z.string().min(1).max(200)).min(1).max(5).optional(),priceVersion:z.string().min(1).max(60),consent:z.literal(semanticBatchConsent)}).strict();
+export const semanticEvaluateRequestSchema=z.object({requestKey:z.string().uuid(),previewHash:z.string().regex(/^[a-f0-9]{64}$/),reviewIds:z.array(z.string().min(1).max(200)).min(1).optional(),priceVersion:z.string().min(1).max(60),consent:z.literal(semanticBatchConsent)}).strict();
 export type SemanticEvaluateRequest=z.infer<typeof semanticEvaluateRequestSchema>;

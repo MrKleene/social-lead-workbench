@@ -17,10 +17,10 @@ const messages={
 } as const;
 export type ModelOutputFailureCode=keyof typeof messages;
 export function modelOutputFailureCode(code:ModelOutputFailureCode,itemIndex?:number){
- return code+(typeof itemIndex==='number'&&Number.isInteger(itemIndex)&&itemIndex>=1&&itemIndex<=5?`_ITEM_${itemIndex}`:'');
+ return code+(typeof itemIndex==='number'&&Number.isInteger(itemIndex)&&itemIndex>=1&&itemIndex<=999999?`_ITEM_${itemIndex}`:'');
 }
 export function modelOutputFailure(code:string|null|undefined){
- const match=/^(OUTPUT_[A-Z_]+?)(?:_ITEM_([1-5]))?$/.exec(code||'');
+ const match=/^(OUTPUT_[A-Z_]+?)(?:_ITEM_([1-9][0-9]{0,5}))?$/.exec(code||'');
  if(!match||match[0]!==code||!Object.hasOwn(messages,match[1]))return null;
  return {code:match[1] as ModelOutputFailureCode,itemIndex:match[2]?Number(match[2]):null,message:messages[match[1] as ModelOutputFailureCode]};
 }
@@ -28,7 +28,7 @@ export function outputFailureReason(code:string|null|undefined){
  const failure=modelOutputFailure(code);if(!failure)return null;
  return `模型输出校验未通过（${code}）：${failure.itemIndex?`模型返回第 ${failure.itemIndex} 条：`:''}${failure.message}。本批整体未采纳，不代表每条评论均独立校验失败；未生成评分，不自动重试。`;
 }
-export function isBatchOutputFailure(reason:string|null|undefined){return /\bINVALID_EVIDENCE\b/.test(reason||'')||!!modelOutputFailure(reason?.match(/\bOUTPUT_[A-Z_]+(?:[1-5])?\b/)?.[0]);}
+export function isBatchOutputFailure(reason:string|null|undefined){return /\bINVALID_EVIDENCE\b/.test(reason||'')||!!modelOutputFailure(reason?.match(/\bOUTPUT_[A-Z_]+(?:[1-9][0-9]{0,5})?\b/)?.[0]);}
 export function displayReviewFailure(reason:string|null|undefined){
  if(/\bINVALID_EVIDENCE\b/.test(reason||''))return '模型输出校验未通过（INVALID_EVIDENCE）。旧记录未保存具体原因，无法确定失败条目或校验分支。本批整体未采纳，不代表每条评论均独立校验失败。';
  return reason||'未获得可用评估结果。';

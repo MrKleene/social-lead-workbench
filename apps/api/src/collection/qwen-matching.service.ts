@@ -31,6 +31,7 @@ export class QwenMatchingService {
  }
  private async batch(configId:string,db:Db|Prisma.TransactionClient=this.db,reviewIds?:string[]){
   const config=await db.collectionConfig.findUnique({where:{id:configId}});
+  if(reviewIds&&reviewIds.length>5)throw new ConflictException('旧批次入口最多选择 5 条；整帖请使用评论审核的手动测试');
   if(!config?.semanticRules||config.archivedAt)throw new ConflictException('语义审核未启用；不会自动改写配置');
   const rules=semanticRulesSchema.parse(config.semanticRules),settings=await this.settings(db);
   const rows=await db.semanticReview.findMany({where:{configId,policyId:null,...(reviewIds?{id:{in:reviewIds}}:{}),AND:[{OR:[{selectedModel:null},{selectedModel:settings.status.model}]},{OR:[{ruleHash:semanticHash(rules)},{ruleHash:null,revision:config.revision}]}],reviewStatus:'PENDING',OR:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:[{createdAt:'asc'},{id:'asc'}],take:5});

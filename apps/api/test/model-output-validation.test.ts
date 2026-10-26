@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import {describe,it,expect,vi} from 'vitest';
-import {semanticBatchConsent,semanticInputPolicy,modelOutputFailure,outputFailureReason,displayReviewFailure,isBatchOutputFailure} from '@crm/contracts';
+import {semanticBatchConsent,semanticInputPolicy,wholePostRequestPolicy,modelOutputFailure,outputFailureReason,displayReviewFailure,isBatchOutputFailure} from '@crm/contracts';
 import {parseQwenResult,QwenError,requestQwen,qwenSettings,QWEN_MODEL} from '../src/collection/qwen-provider';
 import {prepareOutbound,validateQwenEvidence} from '../src/collection/semantic-redaction';
 import {ReviewEvaluationService} from '../src/comment-review/review-evaluation.service';
@@ -50,7 +50,7 @@ describe('bounded plain-text reasons and exact grounded evidence (synthetic only
   expect(modelOutputFailure('OUTPUT_REASON_INVALID_ITEM_2')).toMatchObject({code:'OUTPUT_REASON_INVALID',itemIndex:2});
   expect(outputFailureReason('OUTPUT_EVIDENCE_NOT_EXACT_ITEM_2')).toContain('模型返回第 2 条');
   expect(outputFailureReason('OUTPUT_EVIDENCE_NOT_EXACT_ITEM_2')).toContain('不代表每条评论均独立校验失败');
-  expect(outputFailureReason('OUTPUT_PRIVATE_REASON_ITEM_2')).toBeNull();expect(modelOutputFailure('OUTPUT_REASON_INVALID_ITEM_99')).toBeNull();expect(modelOutputFailure('OUTPUT_REASON_INVALID_ITEM_2\n')).toBeNull();
+  expect(outputFailureReason('OUTPUT_PRIVATE_REASON_ITEM_2')).toBeNull();expect(modelOutputFailure('OUTPUT_REASON_INVALID_ITEM_99')).toMatchObject({itemIndex:99});expect(modelOutputFailure('OUTPUT_REASON_INVALID_ITEM_2\n')).toBeNull();
   const old='评估失败（INVALID_EVIDENCE），原文保留';expect(displayReviewFailure(old)).toContain('旧记录未保存具体原因');expect(old).toBe('评估失败（INVALID_EVIDENCE），原文保留');
   expect(isBatchOutputFailure(old)).toBe(true);expect(isBatchOutputFailure(outputFailureReason('OUTPUT_REASON_INVALID_ITEM_2'))).toBe(true);
  });
@@ -68,11 +68,11 @@ function harness(bad:boolean){
   collectionConfig:{findUnique:async()=>config,findUniqueOrThrow:async()=>config},semanticControl:{findUnique:async()=>({enabled:true,version:1})},
   semanticReview:{findMany:async()=>rows,updateMany:vi.fn(async()=>({count:1})),count:async()=>rows.length},
   semanticModelCall:{findUnique:async()=>call,aggregate:async()=>({_count:{_all:0},_sum:{}}),findFirst:async()=>null,count:async()=>0,create:vi.fn(async({data}:any)=>{call={id:'call',...data};return call;}),update:vi.fn(async({data}:any)=>Object.assign(call,data))},
-  auditLog:{create:vi.fn(async()=>({}))},user:{findUnique:async()=>({role:'ADMIN'})},
+  auditLog:{findFirst:async()=>({metadata:{requestPolicy:wholePostRequestPolicy}}),create:vi.fn(async()=>({}))},user:{findUnique:async()=>({role:'ADMIN'})},
   autoReviewJob:{findUnique:async()=>({id:'auto',policyId:'workspace',policyVersion:1,status:'PROCESSING',inputPolicyVersion:semanticInputPolicy,postId:'post',runId:'run'})},
   collectionRun:{findUnique:async()=>({id:'run',status:'COMPLETE',revision:1,config,cancelRequested:false,snapshot:{mode:'MOCK'}})},
   capturedPost:{findUnique:async()=>({coverage:'COMPLETE',lastRunId:'run',snapshot:{}})},
-  manualReviewJob:{findUnique:async()=>({id:'manual',status:'PROCESSING',policy,policyRevision:1,modelVersion:1,actorId:'admin',batchIds:rows.map(r=>r.id),preview:{...payload,items:payload.items.map((item,i)=>({...item,id:rows[i].id}))}})},
+  manualReviewJob:{findUnique:async()=>({id:'manual',status:'PROCESSING',policy,policyRevision:1,modelVersion:1,actorId:'admin',batchIds:rows.map(r=>r.id),items:rows.map(r=>({reviewId:r.id,reviewVersion:r.version})),preview:{...payload,requestPolicy:wholePostRequestPolicy,items:payload.items.map((item,i)=>({...item,id:rows[i].id}))}})},
  };
  const settings={...qwenSettings(env),status:{...qwenSettings(env).status,authorized:true},configurationVersion:1};
  const policies:any={models:{resolve:async()=>settings},qwen:{status:async()=>({usage:{canCall:true},connection:{priceVersion:env.QWEN_MATCH_PRICE_ACK.split(':')[1]}})}};
@@ -84,7 +84,7 @@ describe('all paid entry points share output validation without a real provider'
   const {db,policies,transport}=harness(bad),actor={id:'admin',name:'Synthetic admin',email:'admin@example.invalid',role:'ADMIN' as const};
   const service=mode==='legacy'?new QwenMatchingService(db,{settings:()=>qwenSettings(env),transport}):new ReviewEvaluationService(db,policies,{transport});
   const id=mode==='legacy'?'config':'workspace';
-  const preview=mode==='legacy'?await (service as QwenMatchingService).preview(actor,id):await (service as ReviewEvaluationService).preview(actor,id,inputs.map(r=>r.id),mode==='manual-post');
+  const preview=mode==='legacy'?await (service as QwenMatchingService).preview(actor,id):await (service as ReviewEvaluationService).preview(actor,id,inputs.map(r=>r.id),mode==='manual-post',mode==='manual-post'||mode==='automatic');
   const request={requestKey:'00000000-0000-4000-8000-000000000001',previewHash:preview.hash,reviewIds:inputs.map(r=>r.id),priceVersion:'beijing-2026-10-21',consent:semanticBatchConsent};
   const run=()=>mode==='legacy'?(service as QwenMatchingService).evaluate(actor,id,request):(service as ReviewEvaluationService).evaluate(actor,id,request,mode==='automatic'?'auto':undefined,mode==='manual-post'?'manual':undefined);
   const result=await run();expect(result.status).toBe(bad?'FAILED':'COMPLETED');expect(transport).toHaveBeenCalledTimes(1);

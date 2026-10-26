@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import type {SemanticConnection,SemanticUsage,SemanticReviewItem} from './semantic-review';
-export const reviewAutoConsent='comment-review-continuous-original-priced-v2' as const;
+export const reviewAutoConsent='comment-review-continuous-single-post-v3' as const;
 export const reviewUseConsent='comment-review-original-first-use-v2' as const;
 export const reviewPolicySaveSchema=z.object({version:z.number().int().nonnegative(),target:z.string().trim().min(10).max(1500)}).strict();
 export const reviewPolicyToggleSchema=z.object({version:z.number().int().positive(),enabled:z.boolean(),consent:z.literal(reviewUseConsent).optional(),modelVersion:z.number().int().nonnegative().optional(),priceVersion:z.string().max(60).optional()}).strict();
@@ -15,10 +15,10 @@ export type ReviewResults={items:(SemanticReviewItem&{policyId:string|null;polic
 export type ReviewComments={items:{id:string;comment:string;coverage:string}[];hasMore:boolean};
 export type ReviewPosts={items:{id:string;title:string;comments:number;coverUrl?:string;coverage?:string}[];hasMore:boolean};
 
-export const manualPostConsent='comment-review-saved-post-original-priced-v2' as const;
+export const manualPostConsent='comment-review-saved-post-single-request-v3' as const;
 export const manualPostPrepareSchema=z.object({postId:z.string().min(1).max(200),revision:z.number().int().positive()}).strict();
 export const manualPostConfirmSchema=z.object({hash:z.string().regex(/^[a-f0-9]{64}$/),requestKey:z.string().uuid(),consent:z.literal(manualPostConsent),providerConsent:z.literal(reviewUseConsent)}).strict();
-export type ManualReviewTask={id:string;postId:string;title:string;coverage:string;policyRevision:number;model:string;modelVersion:number;priceVersion:string;scopeHash:string;status:string;reason:string|null;total:number;pending:number;success:number;failed:number;skipped:number;maxCalls:number;target:string;priceDescription?:string;dailyLimit:number|null;authorized:boolean};
+export type ManualReviewTask={id:string;postId:string;title:string;coverage:string;policyRevision:number;model:string;modelVersion:number;priceVersion:string;scopeHash:string;status:string;reason:string|null;total:number;pending:number;success:number;failed:number;skipped:number;maxCalls:number;retrying:number;capacityError:string|null;target:string;priceDescription?:string;dailyLimit:number|null;authorized:boolean};
 export type ManualReviewPreview={items:import('./semantic-review').SemanticOutbound['items'];hasMore:boolean};
 
 export const reviewResultFilterSchema=z.object({postId:z.string().max(200).optional(),search:z.string().trim().max(100).optional(),minScore:z.coerce.number().min(0).max(100).optional(),maxScore:z.coerce.number().min(0).max(100).optional(),sort:z.enum(['newest','score-desc','score-asc']).default('newest'),status:z.enum(['PENDING','APPROVED','REJECTED']).optional(),state:z.enum(['EVALUATED','FAILED','UNANALYSED','PROCESSING']).optional()}).strict().refine(v=>v.minScore===undefined||v.maxScore===undefined||v.minScore<=v.maxScore,{message:'最低相关度不能超过最高相关度'});
