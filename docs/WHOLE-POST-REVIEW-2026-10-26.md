@@ -36,7 +36,7 @@
 
 桌面/窄屏截图均为虚构数据：[预览](evidence/whole-post-review-2026-10-26/whole-preview-390.png)、[相关度](evidence/whole-post-review-2026-10-26/relevance-1440.png)。首次 UI 失败是测试在 reload 后未重新搜索第 23 篇帖子，修正测试选择后 14 组通过，不修改真实数据。最后一轮曾发现旧并发测试只接受第一个请求获胜，改为接受任一请求获胜但严格断言只有一个 fulfilled、一个 transport 后，267 项全部通过。
 
-## 正式状态与待批准部署
+## 部署前状态与批准步骤（历史记录，下节为最终状态）
 
 本轮仅在 `/tmp/social-review-20261026` 开发、测试和推送；没有快进 `/Users/kleene/projects/social-lead-workbench`。正式目录仍为 `cfba2f1c44ced1a50491461e03e51e6f576ea588`，干净，API/backend 与 web 受管健康。已有登录页只读确认仍为旧单批界面，自动关闭，68 条已保存评论，模型 READY、授权已存在、调用 0、审核结果 0。汇总数据库核验：1 用户、2 平台账号、1 run、3 posts、68 comments，审核/调用/联系/活跃采集/在途请求/自动任务均 0；新增 `ManualReviewJob` 表尚不存在。见 `runtime-readonly.json`。没有读取 Key、secret 内容，或修改登录保护、凭据、MCP 补丁与 Codex memories。
 
@@ -49,3 +49,16 @@
 5. 核验服务健康、实际运行 SHA、迁移 checksum、数据基线/Key 元数据、自动 OFF、调用数不变。已登录页面只读查看新入口与真实空结果，不确认付费任务。
 
 回滚：正常停止新应用，恢复之前应用版本并保留新增兼容表，再正常启动；不删表、不覆盖恢复现用数据库，不丢弃已产生审核记录。数据恢复若必要需另行确认目标与停写窗口。真实模型质量/费用、真实采集联动及新正式部署均未测。推送后的确切 commit CI 查询另存本地任务证据；没有 CI 不能报告通过。
+
+
+## 已批准完成正式部署
+
+用户批准后，重新核对 main 实例及原卷，业务库生成权限 0600 的本地私有备份并通过 `pg_restore --list` 检查（223 个目录项）。无活跃采集、在途模型请求或待处理自动任务，自动 OFF。上线前针对确切发布代码重新运行隔离回归：267 通过 / 9 原有跳过，桌面与窄屏 UI 14 组通过。
+
+使用现有 `npm stop` 先正常停止 Vite，再停止 API/worker，确认两者 stopped 后才快进至 `ac0a1247352cb72813ecfd56f62d646e17962e64`；随后 `npm start` 沿用原实例完成兼容迁移、构建及后台启动，没有强杀、删锁、替换凭据或重建数据卷。API/backend 与 web 均 running/healthy，collector/API 进程身份核对通过，manual service/guard/evaluator/worker 的编译产物与已测试隔离发布文件逐项哈希一致，迁移 checksum 与仓库 SQL 一致。
+
+部署后与正式只读 QA 后再次核验：用户 1、平台账号 2、采集配置/批次各 1、帖子 3、已保存评论 68；所有既有业务表及模型密文/配置的数据库端摘要不变。数据库 secret 与模型 vault 文件的 inode/大小/mtime/权限不变，未读取其内容。PostgreSQL/Redis 启动时间与原卷身份不变。审核结果、模型调用、联系记录、手动任务、自动任务、活跃采集均为 0，自动 OFF。
+
+正式页面沿用已有登录，以临时标签只读打开新版手动入口与选帖弹窗，看到 56 / 6 / 6 条存档及覆盖不足标识；验证标题搜索、关闭返回焦点、相关度排序/分数范围和按帖子筛选后的真实空结果，页面 error 日志为空。只在结果筛选器中选帖，不提交会创建 SemanticReview 的手动准备接口，不生成预览任务、不确认付费或修改人工状态。验收标签已关闭，未改动用户原标签。一次精确 label 定位未匹配，检查 DOM 后用页面实际 combobox 角色定位成功；没有权限拒绝或服务缺陷。
+
+脱敏证据见 [deployment.json](evidence/whole-post-review-2026-10-26/deployment.json)、[部署前数据库复验](evidence/whole-post-review-2026-10-26/deployment-recheck-integration.txt)、[UI 复验](evidence/whole-post-review-2026-10-26/deployment-recheck-ui.json)。完整基线摘要、备份位置及正常启停日志仅保存在本地任务证据。此节和 README 更新为文档提交，不改变已验收应用代码，无需额外停启。真实模型调用、费用和效果仍未测试；没有启用或实现真实发送。
