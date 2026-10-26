@@ -5,7 +5,7 @@ import { Db } from '../common/db';
 import { Actor, requireAdmin } from '../auth/security';
 import { QwenError, QwenSettings, QwenTransport, requestQwen } from './qwen-provider';
 import { prepareOutbound, previewHash, validateQwenEvidence } from './semantic-redaction';
-import { QWEN_PRICE_VERSION } from '../../../../runtime/qwen-models.cjs';
+import { qwenModel } from '../../../../runtime/qwen-models.cjs';
 import { semanticHash } from './capture-archive';
 import {ModelSettingsService} from '../model-settings/model-settings.service';
 export const QWEN_TEST_OPTIONS=Symbol('QWEN_TEST_OPTIONS');
@@ -33,7 +33,7 @@ export class QwenMatchingService {
   const rows=await db.semanticReview.findMany({where:{configId,...(reviewIds?{id:{in:reviewIds}}:{}),AND:[{OR:[{selectedModel:null},{selectedModel:settings.status.model}]},{OR:[{ruleHash:semanticHash(rules)},{ruleHash:null,revision:config.revision}]}],reviewStatus:'PENDING',OR:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:[{createdAt:'asc'},{id:'asc'}],take:5});
   const inputs=rows.map(r=>({id:r.id,snapshot:r.snapshot as unknown as SemanticSnapshot,rules}));
   let payload;try{payload=prepareOutbound(inputs);}catch{throw new ConflictException('文本包含无法可靠处理的身份/联系线索，已阻止外发（DATA_BLOCKED）');}
-  return {config,rows,inputs,payload,settingsVersion:settings.configurationVersion,model:settings.status.model,hash:previewHash(payload,rows,config.revision,settings.status.model+':'+settings.configurationVersion+':'+QWEN_PRICE_VERSION)};
+  return {config,rows,inputs,payload,settingsVersion:settings.configurationVersion,model:settings.status.model,hash:previewHash(payload,rows,config.revision,settings.status.model+':'+settings.configurationVersion+':'+qwenModel(settings.status.model)?.priceVersion)};
  }
  async preview(actor:Actor,configId:string,reviewIds?:string[]){requireAdmin(actor);const b=await this.batch(configId,this.db,reviewIds);return {hash:b.hash,revision:b.config.revision,payload:b.payload,count:b.rows.length,...(reviewIds?{reviewIds}:{}),...await this.status(this.db,configId)};}
  async evaluate(actor:Actor,configId:string,input:SemanticEvaluateRequest){

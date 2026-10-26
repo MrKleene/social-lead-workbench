@@ -2,7 +2,7 @@ import {BadRequestException,ConflictException,Inject,Injectable,Optional} from '
 import {Prisma} from '@prisma/client';
 import {Db} from '../common/db';
 import {Actor,requireAdmin} from '../auth/security';
-import {DEFAULT_QWEN_MODEL,QWEN_PRICE_VERSION,qwenModel} from '../../../../runtime/qwen-models.cjs';
+import {DEFAULT_QWEN_MODEL,QWEN_PRICE_VERSION,qwenModel,qwenModelChoices} from '../../../../runtime/qwen-models.cjs';
 import {encrypt,decrypt,probe,VaultError} from '../../../../runtime/model-vault.cjs';
 import type {QwenSettings} from '../collection/qwen-provider';
 export const MODEL_SETTINGS_ID='qwen-comment-matching';
@@ -19,18 +19,18 @@ export class ModelSettingsService {
   const status:QwenSettings['status']={state:'UNCONFIGURED',message:'尚未在管理员模型设置中保存Key；不会读取或回退环境变量Key',model,region:'cn-beijing',dailyLimit:row?.dailyLimit??0,batchLimit:5,automaticRetries:0,timeoutSeconds:20};
   const version=row?.version??0;
   if(!row?.encryptedKey)return {status,configurationVersion:version};
-  if(row.endpoint!=='beijing-standard'||!qwenModel(model)||row.priceVersion!==QWEN_PRICE_VERSION||!row.consent||row.dailyLimit<1||row.dailyLimit>100)return {status:{...status,state:'INVALID_CONFIG',message:'型号、北京端点、价格确认或预算失效；请管理员核查'},configurationVersion:version};
+  if(row.endpoint!=='beijing-standard'||!qwenModel(model)||row.priceVersion!==qwenModel(model)?.priceVersion||!row.consent||row.dailyLimit<1||row.dailyLimit>100)return {status:{...status,state:'INVALID_CONFIG',message:'型号、北京端点、价格确认或预算失效；请管理员核查'},configurationVersion:version};
   try{const key=decrypt(this.file(),MODEL_SETTINGS_ID,row.encryptedKey);return {status:{...status,state:'READY',message:'Key已配置（不显示）；实际连通性和质量未验收。仅逐批确认后调用。'+qwenModel(model)!.priceDescription},endpoint:'https://cn-beijing.maas.qianwenaiapi.com/compatible-mode/v1/chat/completions',...(includeKey?{key}:{}),configurationVersion:version};}
   catch(e){const code=e instanceof VaultError?e.code:'MASTER_UNAVAILABLE';return {status:{...status,state:'INVALID_CONFIG',message:vaultMessages[code]||vaultMessages.MASTER_UNAVAILABLE},configurationVersion:version};}
  }
  async status(actor:Actor){
   requireAdmin(actor);const row=await this.db.modelSettings.findUnique({where:{id:MODEL_SETTINGS_ID}});let vault=probe(this.file());
   if(vault==='READY'&&row?.encryptedKey)try{decrypt(this.file(),MODEL_SETTINGS_ID,row.encryptedKey);}catch(e){vault=e instanceof VaultError?e.code:'MASTER_UNAVAILABLE';}
-  return {configured:!!row?.encryptedKey,note:row?.note||'',updatedAt:row?.updatedAt??null,version:row?.version??0,model:row?.model??DEFAULT_QWEN_MODEL,endpoint:'beijing-standard',dailyLimit:row?.dailyLimit??1,vault:{state:vault,message:vaultMessages[vault]||vaultMessages.MASTER_UNAVAILABLE},priceVersion:QWEN_PRICE_VERSION,models:['qwen3.8-flash','qwen3.7-flash-2026-07-15','qwen3.7-plus-2026-05-26','qwen3.8-max-0902'].map(m=>{const x=qwenModel(m)!;return {id:x.id,priceDescription:x.priceDescription};}),automaticTest:false};
+  return {configured:!!row?.encryptedKey,note:row?.note||'',updatedAt:row?.updatedAt??null,version:row?.version??0,model:row?.model??DEFAULT_QWEN_MODEL,endpoint:'beijing-standard',dailyLimit:row?.dailyLimit??1,vault:{state:vault,message:vaultMessages[vault]||vaultMessages.MASTER_UNAVAILABLE},priceVersion:qwenModel(row?.model??DEFAULT_QWEN_MODEL)?.priceVersion??QWEN_PRICE_VERSION,models:qwenModelChoices(row?.model),automaticTest:false};
  }
  async save(actor:Actor,input:ModelSave){
   requireAdmin(actor);
-  if(!qwenModel(input.model)||input.endpoint!=='beijing-standard'||input.priceVersion!==QWEN_PRICE_VERSION||input.confirmPricing!==true||input.consent!==true||!Number.isInteger(input.dailyLimit)||input.dailyLimit<1||input.dailyLimit>100)throw new BadRequestException('请确认受控型号、北京处理范围、最新价格和调用上限');
+  if(!qwenModel(input.model)||input.endpoint!=='beijing-standard'||input.priceVersion!==qwenModel(input.model)?.priceVersion||input.confirmPricing!==true||input.consent!==true||!Number.isInteger(input.dailyLimit)||input.dailyLimit<1||input.dailyLimit>100)throw new BadRequestException('请确认受控型号、北京处理范围、最新价格和调用上限');
   if(input.key!==undefined&&!/^[\x21-\x7e]{16,512}$/.test(input.key))throw new BadRequestException('Key格式无效；未保存');
   if(input.key&&input.note.includes(input.key)||/sk-[a-z0-9_-]{8,}|(?:api[_ -]?key|密钥)\s*[:=]/i.test(input.note))throw new BadRequestException('备注不能包含密钥，请仅描述用途');
   try{await this.db.$transaction(async tx=>{
