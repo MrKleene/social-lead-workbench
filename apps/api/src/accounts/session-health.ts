@@ -1,4 +1,4 @@
-export const sessionTtlMs=5*60_000;
+export const sessionTtlMs=30*60_000;
 type Reference={state:string;checkedRuntimeId:string|null;verifiedAt:Date|null;checkingUntil?:Date|null};
 export function sessionFresh(ref:Reference|null|undefined,runtimeId:string|undefined,now=Date.now()){
  return !!ref&&ref.state==='VERIFIED'&&!!runtimeId&&ref.checkedRuntimeId===runtimeId&&!!ref.verifiedAt&&ref.verifiedAt.getTime()<=now&&now-ref.verifiedAt.getTime()<sessionTtlMs;

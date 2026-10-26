@@ -32,13 +32,29 @@ it.each([{response:{loggedIn:false},state:'EXPIRED'},{response:{loggedIn:true},s
  const before=await db.platformAccount.findUniqueOrThrow({where:{id:accountId}});status.mockResolvedValue(response);expect((await check()).state).toBe(state);await check();expect(status).toHaveBeenCalledOnce();const after=await db.platformAccount.findUniqueOrThrow({where:{id:accountId}});expect(after.loginSessionKey).toBe(before.loginSessionKey);expect(after.version).toBe(before.version);
 });
 it.each(['PLATFORM_UNAVAILABLE','INVALID_STATUS','TIMEOUT'])('network/unknown %s remains unconfirmed, preserves last verification and backs off',async code=>{
- const past=new Date(Date.now()-sessionTtlMs-1000);await db.accountSessionReference.update({where:{accountId},data:{state:'VERIFIED',verifiedAt:past,checkedRuntimeId:runtimeId}});status.mockRejectedValue(Error(code));expect((await check()).state).toBe('CONNECTION_ERROR');await check();expect(status).toHaveBeenCalledOnce();const ref=await db.accountSessionReference.findUniqueOrThrow({where:{accountId}});expect(ref.verifiedAt).toEqual(past);expect(sessionFresh(ref,runtimeId)).toBe(false);expect(sessionHealth(ref,runtimeId).checkable).toBe(false);
+ const past=new Date(Date.now()-sessionTtlMs-1000);await db.accountSessionReference.update({where:{accountId},data:{state:'VERIFIED',verifiedAt:past,checkedRuntimeId:runtimeId}});status.mockRejectedValue(Error(code));expect((await check()).state).toBe('CONNECTION_ERROR');await check();expect(status).toHaveBeenCalledOnce();const ref=await db.accountSessionReference.findUniqueOrThrow({where:{accountId}});expect(ref.verifiedAt).toEqual(past);expect(sessionFresh(ref,runtimeId)).toBe(false);expect(sessionHealth(ref,runtimeId).checkable).toBe(false);expect(ref.checkingUntil!.getTime()-Date.now()).toBeLessThanOrEqual(30_000);
 });
-it.each(['RATE_LIMITED','RESTRICTED'])('platform %s stops without changing accounts or retrying',async code=>{status.mockRejectedValue(Error(code));expect((await check()).state).toBe(code);await check();expect(status).toHaveBeenCalledOnce();expect((await db.accountSessionReference.findUniqueOrThrow({where:{accountId}})).checkingUntil!.getTime()-Date.now()).toBeGreaterThan(290_000);});
+it.each(['RATE_LIMITED','RESTRICTED'])('platform %s stops without changing accounts or retrying',async code=>{status.mockRejectedValue(Error(code));expect((await check()).state).toBe(code);await check();expect(status).toHaveBeenCalledOnce();expect((await db.accountSessionReference.findUniqueOrThrow({where:{accountId}})).checkingUntil!.getTime()-Date.now()).toBeGreaterThan(290_000);expect((await db.accountSessionReference.findUniqueOrThrow({where:{accountId}})).checkingUntil!.getTime()-Date.now()).toBeLessThanOrEqual(300_000);});
 it('restart preserves historical proof but requires one new bounded probe',async()=>{
  await check();await db.accountSessionReference.update({where:{accountId},data:{checkingUntil:null}});await service.onModuleInit();const ref=await db.accountSessionReference.findUniqueOrThrow({where:{accountId}});expect(ref.state).toBe('VERIFIED');expect(ref.verifiedAt).not.toBeNull();expect(sessionFresh(ref,runtimeId)).toBe(false);expect(status).toHaveBeenCalledOnce();expect((await check()).state).toBe('VERIFIED');expect(status).toHaveBeenCalledTimes(2);
 });
-it('TTL expiry rechecks while a fresh same-runtime proof does not',async()=>{await check();await db.accountSessionReference.update({where:{accountId},data:{verifiedAt:new Date(Date.now()-sessionTtlMs-1),checkingUntil:null}});expect((await check()).state).toBe('VERIFIED');expect(status).toHaveBeenCalledTimes(2);});
+it('reuses a 29-minute proof and rechecks at the 30-minute boundary',async()=>{
+ const verifiedAt=new Date('2026-01-01T00:00:00.000Z'),ref={state:'VERIFIED',checkedRuntimeId:runtimeId,verifiedAt};
+ expect(sessionFresh(ref,runtimeId,verifiedAt.getTime()+29*60_000)).toBe(true);
+ expect(sessionFresh(ref,runtimeId,verifiedAt.getTime()+30*60_000-1)).toBe(true);
+ expect(sessionFresh(ref,runtimeId,verifiedAt.getTime()+30*60_000)).toBe(false);
+ expect(sessionHealth(ref,runtimeId,verifiedAt.getTime()+29*60_000).freshUntil?.toISOString()).toBe('2026-01-01T00:30:00.000Z');
+ await db.accountSessionReference.update({where:{accountId},data:{state:'VERIFIED',checkedRuntimeId:runtimeId,verifiedAt:new Date(Date.now()-29*60_000),checkingUntil:null}});
+ expect(await check()).toMatchObject({state:'VERIFIED',cached:true});expect(status).not.toHaveBeenCalled();
+ await db.accountSessionReference.update({where:{accountId},data:{verifiedAt:new Date(Date.now()-30*60_000)}});
+ expect((await check()).state).toBe('VERIFIED');expect(status).toHaveBeenCalledOnce();
+ const saved=await db.accountSessionReference.findUniqueOrThrow({where:{accountId}});expect(saved.checkingUntil!.getTime()-Date.now()).toBeLessThanOrEqual(10_000);
+});
+it.each(['EXPIRED','NEEDS_REVIEW','RESTRICTED'])('known %s immediately invalidates a recent proof instead of waiting 30 minutes',async state=>{
+ await db.accountSessionReference.update({where:{accountId},data:{state,checkedRuntimeId:runtimeId,verifiedAt:new Date(),checkingUntil:null}});
+ expect(sessionFresh(await db.accountSessionReference.findUnique({where:{accountId}}),runtimeId)).toBe(false);
+ expect((await check()).state).toBe(state);expect(status).not.toHaveBeenCalled();
+});
 it('queued collection prevents probing and leaves session metadata unchanged',async()=>{
  const c=await db.collectionConfig.create({data:{name:'合成配置',platform:'XHS',mode:'XHS_FIXTURE',keywords:['test'],excludeWords:[],batchLimit:1}});configs.push(c.id);await db.collectionRun.create({data:{configId:c.id,revision:1,snapshot:{},scenario:'READ_WINDOW',requestKey:randomUUID(),execution:{accountId},status:'QUEUED'}});
  const before=await db.accountSessionReference.findUnique({where:{accountId}});expect((await check()).state).toBe('BUSY');expect(status).not.toHaveBeenCalled();expect(await db.accountSessionReference.findUnique({where:{accountId}})).toEqual(before);
