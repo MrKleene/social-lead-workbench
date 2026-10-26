@@ -13,3 +13,5 @@ export function infoPosts(posts:ArchivedPost[],comments:ArchivedComment[],runId=
 export function savedCommentCount(comments:ArchivedComment[]){return new Set(comments.map(c=>c.platformCommentId||c.snapshot.commentId)).size;}
 export function replyDepth(comment:ArchivedComment,items:ArchivedComment[]){let parent=comment.snapshot.parentId,depth=0;const seen=new Set([comment.snapshot.commentId]);while(parent&&!seen.has(parent)&&depth<3){seen.add(parent);depth++;parent=items.find(c=>c.snapshot.commentId===parent)?.snapshot.parentId||null;}return depth;}
 export function archiveOffset(value:string|null){const n=Number(value);return Number.isSafeInteger(n)&&n>=0&&n<=100000?Math.floor(n/50)*50:0;}
+
+export function postListOffset(value:string|null){const n=Number(value);return Number.isSafeInteger(n)&&n>=0&&n<=100000?Math.floor(n/20)*20:0;}

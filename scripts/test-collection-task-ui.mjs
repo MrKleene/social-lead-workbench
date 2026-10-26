@@ -34,7 +34,7 @@ try{
    if(p==='/collection/configs/fixture-other')return route.fulfill({json:{...other,monitors:[],matches:[]}});
    if(p==='/events')return route.fulfill({contentType:'text/event-stream',body:': fixture\n\n'});
    if(/^\/collection\/configs\/fixture-config\/runs\/[^/]+\/posts$/.test(p))return route.fulfill({json:{version:1,runId:p.split('/')[5],configId:'fixture-config',availability:'AVAILABLE',status:run?.status||'COMPLETE',limited:false,items:outcomePosts}});
-   if(p.endsWith('/captures')){captureReads++;return route.fulfill({json:captures()});}
+   if((p.endsWith('/captures')||/^\/collection\/configs\/[^/]+\/posts$/.test(p))){captureReads++;return route.fulfill({json:captures()});}
    const data=p==='/auth/me'?{user:{id:'fake',name:'虚构测试',role:'ADMIN'},csrfToken:'fixture-csrf'}:p==='/health'?{contactWorkflow:true}:p==='/collection/configs'?[configuration(),other]:p==='/collection/configs/fixture-config'?{...configuration(),runs:run?[run,{...makeRun('COMPLETE'),id:'older-run',createdAt:'2026-10-20T00:00:00Z',capturedPosts:2,capturedCommentsCount:7}]:[],monitors:[],matches:[]}:p==='/accounts'?{accounts:[],summary:{available:0,attention:0}}:p==='/accounts/login-capabilities'?{supported:false,mode:'offline'}:p==='/collection/mcp/readiness'?{enabled:true,mode:'XHS_MCP',captureArchiveVersion:1,accountBound:true,automaticPolling:false,device:{name:'虚构设备',online:true},accounts:[{id:'fixture-account',label:'虚构账号',platformUserId:'fictional',eligible}]}:[];
    return route.fulfill({json:data});
   });

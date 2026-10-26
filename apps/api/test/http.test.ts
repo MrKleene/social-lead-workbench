@@ -36,6 +36,7 @@ describe("未认证 HTTP 边界", () => {
     "auth/me",
     "collection/configs",
     "collection/configs/fixture/comment-stream?postId=fixture",
+    "collection/configs/fixture/posts?offset=0",
     "notices",
   ])
     it(`匿名无法读取 ${route}`, async () => {

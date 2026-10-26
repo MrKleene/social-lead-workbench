@@ -27,7 +27,7 @@ try{
     report.unexpected.push(req.method()+' '+p);return route.abort();
    }
    if(p==='/events')return route.fulfill({contentType:'text/event-stream',body:':fixture\n\n'});
-   const data=p==='/auth/me'?{user:{id:'fixture',name:'虚构验收',role:'ADMIN'},csrfToken:'fake-test-csrf'}:p==='/health'?{contactWorkflow:true}:p==='/collection/configs'?configs:p==='/collection/configs/fictional-config'?{...configs[0],monitors:[],matches:[]}:p.endsWith('/captures')?captures:p==='/accounts'?{accounts:[],summary:{available:0,attention:0}}:p==='/collection/mcp/readiness'?{enabled:true,mode:'XHS_MCP',captureArchiveVersion:1,accountBound:true,accounts:[],device:{name:'虚构设备',online:true},automaticPolling:false}:p==='/accounts/login-capabilities'?{supported:false,mode:'offline'}:[];
+   const data=p==='/auth/me'?{user:{id:'fixture',name:'虚构验收',role:'ADMIN'},csrfToken:'fake-test-csrf'}:p==='/health'?{contactWorkflow:true}:p==='/collection/configs'?configs:p==='/collection/configs/fictional-config'?{...configs[0],monitors:[],matches:[]}:(p.endsWith('/captures')||/^\/collection\/configs\/[^/]+\/posts$/.test(p))?captures:p==='/accounts'?{accounts:[],summary:{available:0,attention:0}}:p==='/collection/mcp/readiness'?{enabled:true,mode:'XHS_MCP',captureArchiveVersion:1,accountBound:true,accounts:[],device:{name:'虚构设备',online:true},automaticPolling:false}:p==='/accounts/login-capabilities'?{supported:false,mode:'offline'}:[];
    return route.fulfill({json:data});
   });
   const page=await context.newPage();currentPage=page;page.on('pageerror',e=>report.errors.push(e.message));await page.goto(base+'/work');

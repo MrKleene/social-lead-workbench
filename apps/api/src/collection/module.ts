@@ -1,3 +1,4 @@
+import {savedPostPageInput} from './saved-post-page';
 import {readPlanSchema} from './saved-post-read';
 import { Controller, Get, Post, Patch, Delete, Param, Query, Req, Inject, Module, UseGuards, NotFoundException, Res, Header } from "@nestjs/common";
 import type {Response} from 'express';
@@ -36,6 +37,8 @@ class CollectionController {
     capturePreview(@Req() r:AuthedRequest,@Param("id") id:string){const b=parse(z.object({captureIds:z.array(z.string().min(1)).min(1).max(5).refine(a=>new Set(a).size===a.length)}).strict(),r.body);return this.captures.preview(r.actor,id,b.captureIds);}
     @Get('configs/:id/runs/:runId/posts')
     runPosts(@Req() r:AuthedRequest,@Param('id') id:string,@Param('runId') runId:string){return this.captures.runPosts(r.actor,id,runId);}
+    @Get('configs/:id/posts') @Header('Cache-Control','no-store, private')
+    savedPosts(@Req() r:AuthedRequest,@Param('id') id:string,@Query() query:unknown){return this.captures.posts(r.actor,id,parse(savedPostPageInput,query));}
     @Get("configs/:id/captures")
     capturesList(@Req() r:AuthedRequest,@Param('id') id:string,@Query('offset') offset?:string,@Query('postId') postId?:string){return this.captures.list(r.actor,id,parse(z.coerce.number().int().min(0).max(100000).default(0),offset),parse(z.string().min(1).max(200).optional(),postId));}
     @Get('configs/:id/comment-stream') @Header('Cache-Control','no-store, private')

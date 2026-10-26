@@ -1,3 +1,4 @@
+import {readSavedPostPage,savedPostPageInput} from './saved-post-page';
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { prepareOutbound } from './semantic-redaction';
 import { semanticRulesSchema, SemanticSnapshot } from '@crm/contracts';
@@ -18,6 +19,13 @@ export class CaptureService {
  }
  async runPosts(actor:Actor,configId:string,runId:string){requireAdmin(actor);return readRunPostFeed(this.db,configId,runId);}
  async commentStream(actor:Actor,configId:string,input:unknown){requireAdmin(actor);if(!await this.db.collectionConfig.findUnique({where:{id:configId}}))throw new NotFoundException();return readSavedCommentStream(this.db,configId,commentStreamInput.parse(input));}
+ async posts(actor:Actor,configId:string,input:unknown){
+  requireAdmin(actor);const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config)throw new NotFoundException();
+  const [page,total,postVersions,missing,control,model]=await Promise.all([
+   readSavedPostPage(this.db,configId,config.platform,savedPostPageInput.parse(input)),this.db.capturedComment.count({where:{configId}}),this.db.capturedPost.count({where:{configId}}),
+   this.db.$queryRaw<{count:bigint}[]>`SELECT COUNT(DISTINCT o."platformCommentId") AS count FROM "CommentObservation" o JOIN "MonitorPost" p ON p.id=o."monitorId" WHERE p."configId"=${configId} AND NOT EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."configId"=p."configId" AND c."platformCommentId"=o."platformCommentId")`,this.control(actor,configId),selectedSemanticModel(this.db)
+  ]);return {...page,total,postVersions,items:[],legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model,hasRules:!!config.semanticRules};
+ }
  async control(actor:Actor,configId:string){requireAdmin(actor);if(!await this.db.collectionConfig.findUnique({where:{id:configId}}))throw new NotFoundException();return await this.db.semanticControl.findUnique({where:{configId}})||{configId,enabled:false,version:0};}
  async toggle(actor:Actor,configId:string,input:{enabled:boolean;version:number}){
   requireAdmin(actor);return this.db.$transaction(async tx=>{
