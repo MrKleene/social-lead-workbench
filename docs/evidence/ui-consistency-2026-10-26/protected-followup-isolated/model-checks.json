@@ -1,0 +1,18 @@
+{
+  "checks": [
+    "missing master fail-closed; lazy/no auto init false",
+    "model/cap/price consent; fake save never calls model; no echo/storage false",
+    "reload safe DTO, failed replace clears input, cancel and explicit delete false",
+    "close clears input and pending backend never accepts Key false",
+    "sales role has no model UI or status request false",
+    "missing master fail-closed; lazy/no auto init true",
+    "model/cap/price consent; fake save never calls model; no echo/storage true",
+    "reload safe DTO, failed replace clears input, cancel and explicit delete true",
+    "close clears input and pending backend never accepts Key true",
+    "sales role has no model UI or status request true",
+    "remote HTTP blocks credential input before any submission"
+  ],
+  "errors": [],
+  "unexpected": [],
+  "writes": 6
+}

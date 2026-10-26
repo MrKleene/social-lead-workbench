@@ -1,0 +1,249 @@
+{
+  "diagnostic": [
+    {
+      "accent": "rgb(18, 133, 111)",
+      "height": 16,
+      "label": "验证评论翻页与回复",
+      "layout": "flex",
+      "width": 16
+    },
+    {
+      "accent": "rgb(18, 133, 111)",
+      "height": 16,
+      "label": "确认本次只读检查",
+      "layout": "flex",
+      "width": 16
+    }
+  ],
+  "focus": {
+    "label": "确认本次只读检查",
+    "outline": "rgb(13, 115, 95) solid 2px",
+    "shadow": "none"
+  },
+  "config": {
+    "accent": "rgb(18, 133, 111)",
+    "checked": true,
+    "width": 16
+  },
+  "model": [
+    {
+      "label": "模型",
+      "layout": "grid"
+    },
+    {
+      "label": "处理地域",
+      "layout": "grid"
+    },
+    {
+      "label": "每日最多请求次数",
+      "layout": "grid"
+    },
+    {
+      "label": "新的 API Key",
+      "layout": "grid"
+    },
+    {
+      "label": "用途备注",
+      "layout": "grid"
+    }
+  ],
+  "platforms": {
+    "url": "http://127.0.0.1:63968/platforms",
+    "title": "线索工作台",
+    "text": "平台能力",
+    "disabled": 6,
+    "overflow": false
+  },
+  "tasks": {
+    "empty": true,
+    "copy": "仅展示当前有权访问的人工跟进任务。小红书只读采集请前往采集任务；真实自动评论、私信发送与收信未验收，保持关闭。",
+    "overflow": false
+  },
+  "logs": [
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:32.857Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:32.857Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:36.826Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:36.826Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:37.863Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:37.863Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:37.981Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:37.982Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:42.066Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:42.067Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:42.112Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:42.112Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:42.809Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:42.809Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:42.848Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:42.848Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:42.873Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:42.873Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:52.130Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:52.130Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:52.865Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:52.865Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:52.899Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:52.899Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:52.937Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:52.937Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:57.814Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:57.814Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:57.854Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    },
+    {
+      "level": "error",
+      "message": "[[\"collection\",\"cmvhp9k8k000pi48v046zwww4\",\"run-posts\",\"none\"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function",
+      "timestamp": "2026-10-26T01:57:57.854Z",
+      "url": "http://127.0.0.1:63968/node_modules/.vite/deps/@tanstack_react-query.js?v=6c99b1f4"
+    }
+  ],
+  "viewport": {
+    "height": 883,
+    "width": 1920
+  },
+  "time": "2026-10-26T01:58:15.179Z"
+}

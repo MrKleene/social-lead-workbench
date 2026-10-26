@@ -17,9 +17,37 @@
   "collectionInfo": 42,
   "savedRead": 2,
   "collectionTask": 32,
-  "productionAfter": "login mouse and Tab only; protected routes require user login",
+  "productionAfter": "login plus 12 protected main views; real empty states do not cover populated details",
   "warnings": [
     "existing bundle >500kB",
     "third-party PURE annotation warnings"
-  ]
+  ],
+  "followup": {
+    "codeCommit": "15c734d",
+    "protectedMainViews": 12,
+    "productionAuditScreenshots": 31,
+    "productionAfterScreenshots": 6,
+    "isolatedWidths": [
+      1440,
+      390,
+      320
+    ],
+    "isolatedFlows": 9,
+    "checkboxLayoutFocusChecks": 15,
+    "modelFieldLayoutChecks": 15,
+    "typecheck": "PASS @crm/web",
+    "build": "PASS @crm/web",
+    "unit": {
+      "files": 17,
+      "tests": 189
+    },
+    "existingConsistencyRerun": {
+      "renders": 108,
+      "focus": 288,
+      "states": 40
+    },
+    "existingModelRerun": 11,
+    "productionConsole": "existing disabled useRunPostSnapshot queryFn warning remains; see production-followup/checks.json",
+    "limits": "No real reads, saves, sends, LLM calls or credential changes; empty lead/task/sales/review states do not validate populated details"
+  }
 }

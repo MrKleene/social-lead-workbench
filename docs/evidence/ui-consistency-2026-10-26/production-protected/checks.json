@@ -1,0 +1,836 @@
+[
+  {
+    "name": "10-home",
+    "at": "2026-10-26T01:41:19.707Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 1086,
+      "scrollWidth": 1905,
+      "width": 1920
+    }
+  },
+  {
+    "name": "11-runs",
+    "at": "2026-10-26T01:41:30.480Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 969,
+      "scrollWidth": 1905,
+      "width": 1920
+    }
+  },
+  {
+    "name": "config-select-tab",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": "本轮最多帖子数",
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "SELECT"
+    }
+  },
+  {
+    "name": "12-config-drawer",
+    "at": "2026-10-26T01:41:37.580Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 969,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "config-close-focus",
+    "styles": {
+      "border": "0px solid rgb(226, 232, 239)",
+      "label": null,
+      "offset": "3px",
+      "outline": "rgb(20, 34, 56) none 3px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.1) 0px 4px 6px -4px"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "BUTTON"
+    }
+  },
+  {
+    "name": "13-history",
+    "at": "2026-10-26T01:41:45.596Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 969,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "14-history-detail",
+    "at": "2026-10-26T01:41:51.925Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 969,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "history-escape-return",
+    "styles": {
+      "border": "0px solid rgb(226, 232, 239)",
+      "label": null,
+      "offset": "2px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "BUTTON"
+    }
+  },
+  {
+    "name": "archive-search-mouse",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": "搜索采集原文",
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(93, 109, 132) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "15-archive",
+    "at": "2026-10-26T01:42:19.088Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 2103,
+      "scrollWidth": 1905,
+      "width": 1920
+    }
+  },
+  {
+    "name": "archive-select-tab",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": "结果搜索配置",
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(93, 109, 132) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "SELECT"
+    }
+  },
+  {
+    "name": "diagnostic-link-mouse",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": "单帖原文链接",
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "16-diagnostic-drawer",
+    "at": "2026-10-26T01:42:29.151Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 2103,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "comment-search-mouse",
+    "styles": {
+      "border": "0px none rgb(130, 146, 142)",
+      "label": "搜索本页评论或昵称",
+      "offset": "-1px",
+      "outline": "rgb(20, 34, 56) none 3px",
+      "parent": {
+        "offset": "-1px",
+        "outline": "rgb(13, 115, 95) solid 2px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "17-post-detail",
+    "at": "2026-10-26T01:42:51.562Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "comment-region-tab",
+    "styles": {
+      "border": "0px solid rgb(226, 232, 239)",
+      "label": "已保存评论列表",
+      "offset": "-2px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "rgba(49, 79, 113, 0.25) 0px 4px 24px -18px"
+      },
+      "role": "region",
+      "shadow": "none",
+      "tag": "DIV"
+    }
+  },
+  {
+    "name": "18-reply-context",
+    "at": "2026-10-26T01:43:12.047Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "context-escape-return",
+    "styles": {
+      "border": "0px solid rgb(226, 232, 239)",
+      "label": null,
+      "offset": "2px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "BUTTON"
+    }
+  },
+  {
+    "name": "19-source-evidence",
+    "at": "2026-10-26T01:43:25.636Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "20-comments-page2",
+    "at": "2026-10-26T01:43:44.234Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "matches-search-mouse",
+    "styles": {
+      "border": "0px none rgb(130, 146, 142)",
+      "label": "搜索待处理",
+      "offset": "-1px",
+      "outline": "rgb(20, 34, 56) none 3px",
+      "parent": {
+        "offset": "-1px",
+        "outline": "rgb(13, 115, 95) solid 2px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "matches-select-tab",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": "线索队列",
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "SELECT"
+    }
+  },
+  {
+    "name": "21-matches",
+    "at": "2026-10-26T01:43:57.927Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "template-name-mouse",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": null,
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(102, 117, 142) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "template-channel-tab",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": "使用渠道",
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(102, 117, 142) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "SELECT"
+    }
+  },
+  {
+    "name": "template-textarea-tab",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": null,
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(102, 117, 142) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "TEXTAREA"
+    }
+  },
+  {
+    "name": "22-templates",
+    "at": "2026-10-26T01:44:11.278Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "sales-search-mouse",
+    "styles": {
+      "border": "0px none rgb(130, 146, 142)",
+      "label": "搜索待处理",
+      "offset": "-1px",
+      "outline": "rgb(20, 34, 56) none 3px",
+      "parent": {
+        "offset": "-1px",
+        "outline": "rgb(13, 115, 95) solid 2px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "sales-checkbox-tab",
+    "styles": {
+      "border": "0px none rgb(93, 109, 132)",
+      "label": null,
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(93, 109, 132) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "23-sales",
+    "at": "2026-10-26T01:44:25.032Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "24-accounts",
+    "at": "2026-10-26T01:44:43.004Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "account-alias-mouse",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": null,
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "account-owner-tab",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": "负责人",
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "SELECT"
+    }
+  },
+  {
+    "name": "25-account-settings",
+    "at": "2026-10-26T01:44:56.589Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "26-account-more",
+    "at": "2026-10-26T01:45:03.741Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "26-account-more",
+    "at": "2026-10-26T01:45:09.910Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "27-settings",
+    "at": "2026-10-26T01:45:21.608Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "settings-name-mouse",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": null,
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(102, 117, 142) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "settings-platform-tab",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": null,
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(102, 117, 142) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "SELECT"
+    }
+  },
+  {
+    "name": "28-config-edit",
+    "at": "2026-10-26T01:45:44.692Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 1557,
+      "scrollWidth": 1905,
+      "width": 1920
+    }
+  },
+  {
+    "name": "29-config-lower",
+    "at": "2026-10-26T01:45:50.980Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 1557,
+      "scrollWidth": 1905,
+      "width": 1920
+    }
+  },
+  {
+    "name": "30-model-settings",
+    "at": "2026-10-26T01:46:12.125Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 1327,
+      "scrollWidth": 1905,
+      "width": 1920
+    }
+  },
+  {
+    "name": "model-note-mouse",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": "Key 用途备注",
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "model-consent-tab",
+    "styles": {
+      "border": "0px none rgb(20, 34, 56)",
+      "label": null,
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "31-model-lower",
+    "at": "2026-10-26T01:46:23.612Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 1327,
+      "scrollWidth": 1905,
+      "width": 1920
+    }
+  },
+  {
+    "name": "32-notices",
+    "at": "2026-10-26T01:46:45.069Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "leads-search-mouse",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": "搜索昵称或需求",
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "INPUT"
+    }
+  },
+  {
+    "name": "leads-platform-tab",
+    "styles": {
+      "border": "1px solid rgb(130, 146, 142)",
+      "label": "来源平台",
+      "offset": "-1px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "SELECT"
+    }
+  },
+  {
+    "name": "33-leads",
+    "at": "2026-10-26T01:47:10.894Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 1041,
+      "scrollWidth": 1905,
+      "width": 1920
+    }
+  },
+  {
+    "name": "34-tasks",
+    "at": "2026-10-26T01:47:23.329Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "tasks-segment-tab",
+    "styles": {
+      "border": "0px none rgb(123, 135, 158)",
+      "label": null,
+      "offset": "2px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "BUTTON"
+    }
+  },
+  {
+    "name": "35-platforms",
+    "at": "2026-10-26T01:47:39.099Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 912,
+      "scrollWidth": 1905,
+      "width": 1920
+    }
+  },
+  {
+    "name": "platform-tab-navigation",
+    "styles": {
+      "border": "0px solid rgb(226, 232, 239)",
+      "label": null,
+      "offset": "0px",
+      "outline": "rgb(20, 34, 56) none 3px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "BODY"
+    }
+  },
+  {
+    "name": "diagnostic-checkbox-layout",
+    "evidence": [
+      {
+        "ariaLabel": "验证评论翻页与回复",
+        "input": {
+          "accentColor": "auto",
+          "display": "block",
+          "height": 13,
+          "margin": "5px 0px 0px",
+          "width": 511,
+          "x": 1385,
+          "y": 351.65625
+        },
+        "parent": {
+          "class": "login-consent",
+          "display": "grid",
+          "flexDirection": "row",
+          "gap": "8px",
+          "height": 48.09375,
+          "tag": "LABEL",
+          "text": "验证评论翻页与回复",
+          "width": 511,
+          "x": 1385,
+          "y": 346.65625
+        },
+        "type": "checkbox"
+      },
+      {
+        "ariaLabel": "确认本次只读检查",
+        "input": {
+          "accentColor": "auto",
+          "display": "block",
+          "height": 13,
+          "margin": "5px 0px 0px",
+          "width": 511,
+          "x": 1385,
+          "y": 417.75
+        },
+        "parent": {
+          "class": "login-consent",
+          "display": "grid",
+          "flexDirection": "row",
+          "gap": "8px",
+          "height": 70.1875,
+          "tag": "LABEL",
+          "text": "使用本机已保存会话，核验账号并只读检查这一篇。不开新采集任务，不翻页或展开回复，不下载头像。",
+          "width": 511,
+          "x": 1385,
+          "y": 412.75
+        },
+        "type": "checkbox"
+      }
+    ]
+  },
+  {
+    "name": "36-diagnostic-checkbox-issue",
+    "at": "2026-10-26T01:48:19.460Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 2103,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "37-reread-confirm",
+    "at": "2026-10-26T01:48:55.442Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "38-long-post-empty-comments",
+    "at": "2026-10-26T01:49:26.574Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "39-long-post-bottom",
+    "at": "2026-10-26T01:49:47.348Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 827,
+      "scrollWidth": 1920,
+      "width": 1920
+    }
+  },
+  {
+    "name": "home-action-tab",
+    "styles": {
+      "border": "0px solid rgb(226, 232, 239)",
+      "label": null,
+      "offset": "2px",
+      "outline": "rgb(13, 115, 95) solid 2px",
+      "parent": {
+        "offset": "0px",
+        "outline": "rgb(20, 34, 56) none 3px",
+        "shadow": "none"
+      },
+      "role": null,
+      "shadow": "none",
+      "tag": "BUTTON"
+    }
+  },
+  {
+    "name": "40-home-final",
+    "at": "2026-10-26T01:49:58.019Z",
+    "layout": {
+      "height": 827,
+      "scrollHeight": 1086,
+      "scrollWidth": 1905,
+      "width": 1920
+    }
+  }
+]

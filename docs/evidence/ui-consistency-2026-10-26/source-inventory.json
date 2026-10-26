@@ -1,12 +1,12 @@
 {
   "note": "静态源码清单；reachable 表示从 main.tsx 静态 import 可达，不代表该组件已在浏览器渲染。动态 className、条件分支与 Tailwind 工具类不能据此认定已验证。颜色数量是声明频次，不是最终像素或规范错误数。",
   "summary": {
-    "sourceFiles": 148,
-    "reachableFiles": 131,
+    "sourceFiles": 149,
+    "reachableFiles": 132,
     "tsxFiles": 83,
     "reachableTsx": 71,
-    "cssFiles": 14,
-    "reachableCss": 9
+    "cssFiles": 15,
+    "reachableCss": 10
   },
   "styles": [
     {
@@ -205,6 +205,19 @@
       "hexColors": {},
       "fontSizes": {},
       "radii": {},
+      "focusSelectors": []
+    },
+    {
+      "file": "apps/web/src/features/model-settings/model-settings.css",
+      "reachable": true,
+      "ruleBlocks": 18,
+      "hexColors": {},
+      "fontSizes": {
+        "13px": 3
+      },
+      "radii": {
+        "8px": 2
+      },
       "focusSelectors": []
     },
     {
@@ -1074,7 +1087,7 @@
     {
       "file": "apps/web/src/features/work/ui-consistency.css",
       "reachable": true,
-      "ruleBlocks": 45,
+      "ruleBlocks": 46,
       "hexColors": {
         "#0d735f": 2,
         "#82928e": 1,
@@ -2038,7 +2051,7 @@
     {
       "file": "apps/web/src/features/model-settings/model-settings-panel.tsx",
       "reachable": true,
-      "literalClassNameAttributes": 13,
+      "literalClassNameAttributes": 22,
       "dynamicClassNameAttributes": 0,
       "inputs": 6,
       "textareas": 0,
@@ -2049,7 +2062,7 @@
     {
       "file": "apps/web/src/features/platforms/platforms-page.tsx",
       "reachable": true,
-      "literalClassNameAttributes": 12,
+      "literalClassNameAttributes": 13,
       "dynamicClassNameAttributes": 0,
       "inputs": 0,
       "textareas": 0,
