@@ -1,3 +1,4 @@
+import {sessionHealth,sessionFresh} from './session-health';
 import {
   BadRequestException,
   ConflictException,
@@ -51,11 +52,11 @@ export class AccountsService {
           r.status === "UNCONNECTED" &&
           r.dailyLimit > (usage[0]?.occupied || 0),
         sessionReference: sessionReference ? {deviceId:sessionReference.deviceId,provider:sessionReference.provider,state:sessionReference.state,verifiedAt:sessionReference.verifiedAt} : null,
-        loginStatus: sessionReference ? (sessionReference.state==='VERIFIED' && sessionReference.checkedRuntimeId===process.env.CRM_RUNTIME_ID ? (r.loginProvider==='offline'?'OFFLINE_VERIFIED':'VERIFIED') : sessionReference.state==='VERIFIED'?'UNVERIFIED':sessionReference.state) : r.loginVerifiedAt ? (process.env.CRM_PERSISTENT==='1'?'LEGACY_UNMAPPED':r.loginProvider==='real'?'VERIFIED':'OFFLINE_VERIFIED') : 'NOT_CONNECTED',
+        loginStatus: sessionReference ? (sessionFresh(sessionReference,process.env.CRM_RUNTIME_ID) ? (r.loginProvider==='offline'?'OFFLINE_VERIFIED':'VERIFIED') : sessionHealth(sessionReference,process.env.CRM_RUNTIME_ID).state) : r.loginVerifiedAt ? (process.env.CRM_PERSISTENT==='1'?'LEGACY_UNMAPPED':r.loginProvider==='real'?'VERIFIED':'OFFLINE_VERIFIED') : 'NOT_CONNECTED',
         capabilities: {
           simulation: !r.loginSessionKey,
-          login: sessionReference ? sessionReference.state==='VERIFIED'&&sessionReference.checkedRuntimeId===process.env.CRM_RUNTIME_ID : !!r.loginVerifiedAt&&process.env.CRM_PERSISTENT!=='1',
-          read: process.env.CRM_ACCOUNT_READ_ENABLED==='1'&&!!sessionReference&&sessionReference.state==='VERIFIED'&&sessionReference.checkedRuntimeId===process.env.CRM_RUNTIME_ID&&r.status!=='RESTRICTED',
+          login: sessionReference ? sessionFresh(sessionReference,process.env.CRM_RUNTIME_ID) : !!r.loginVerifiedAt&&process.env.CRM_PERSISTENT!=='1',
+          read: process.env.CRM_ACCOUNT_READ_ENABLED==='1'&&!!sessionReference&&sessionFresh(sessionReference,process.env.CRM_RUNTIME_ID)&&r.status!=='RESTRICTED',
           send: false,
         },
       }));

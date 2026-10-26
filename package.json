@@ -67,7 +67,8 @@
     "test:collection-task:ui": "npm run build -w @crm/web && node scripts/test-collection-task-ui.mjs",
     "test:comment-stream:ui": "npm run build -w @crm/web && node --import tsx scripts/test-comment-stream-ui.mjs",
     "test:collection-info:ui": "npm run build -w @crm/web && node --import tsx scripts/test-collection-info-ui.mjs",
-    "test:saved-post:ui": "npm run build -w @crm/web && node scripts/test-saved-post-read-ui.mjs"
+    "test:saved-post:ui": "npm run build -w @crm/web && node scripts/test-saved-post-read-ui.mjs",
+    "test:session-preflight:ui": "npm run build -w @crm/web && node scripts/test-session-preflight-ui.mjs"
   },
   "devDependencies": {
     "prisma": "6.19.0",

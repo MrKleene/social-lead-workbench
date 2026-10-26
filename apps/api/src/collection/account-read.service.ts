@@ -1,3 +1,4 @@
+import {sessionFresh,sessionHealth} from '../accounts/session-health';
 import { BadRequestException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -21,14 +22,16 @@ export class AccountReadService {
   async readiness(actor:Actor){
     requireAdmin(actor); const mode=accountReadMode(); const state=await this.devices.status(actor);
     const rows=mode?await this.db.platformAccount.findMany({where:{archivedAt:null,platform:'XHS'},include:{sessionReference:true},orderBy:{createdAt:'asc'}}):[];
-    return {enabled:!!mode,mode:mode||null,accountBound:true,reason:state.device?.online?'READY':'DEVICE_UNAVAILABLE',lastCheck:null,loginOnly:false,configurationOnly:false,coverage:'WINDOW_ONLY',automaticPolling:false,maxPosts:3,device:state.device,accounts:rows.map(a=>({id:a.id,label:a.label,platformUserId:a.loginPlatformUserId,eligible:this.eligible(a)&&a.sessionReference?.state==='VERIFIED'&&a.sessionReference.checkedRuntimeId===process.env.CRM_RUNTIME_ID,reason:a.sessionReference?.state||'LOGIN_REQUIRED'}))};
+    return {enabled:!!mode,mode:mode||null,accountBound:true,reason:state.device?.online?'READY':'DEVICE_UNAVAILABLE',lastCheck:null,loginOnly:false,configurationOnly:false,coverage:'WINDOW_ONLY',automaticPolling:false,maxPosts:3,device:state.device,sessionCheckVersion:1,accounts:rows.map(a=>{const health=sessionHealth(a.sessionReference,process.env.CRM_RUNTIME_ID),allowed=this.eligible(a)&&a.sessionReference?.sessionKey===a.loginSessionKey;return {id:a.id,label:a.label,platformUserId:a.loginPlatformUserId,eligible:allowed&&health.fresh,reason:a.status==='RESTRICTED'?'RESTRICTED':health.state,canCheck:allowed&&health.checkable,retryAt:health.retryAt,freshUntil:health.freshUntil};})};
   }
   async authorize(tx:Prisma.TransactionClient,actor:Actor,mode:string,accountId?:string,consent?:string):Promise<ReadExecution>{
     requireAdmin(actor);if(!accountId||consent!==readConsent)throw new BadRequestException('请选择账号并逐次确认本机会话只读用途');
     if(mode!==accountReadMode())throw new ForbiddenException('执行模式不符');
+    await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${accountId} FOR UPDATE`;
+    if(await tx.deviceExecutionLease.findFirst({where:{accountId,expiresAt:{gt:new Date()}}}))throw new ForbiddenException('账号检查或执行任务进行中，请稍后重试');
     const a=await tx.platformAccount.findUnique({where:{id:accountId},include:{sessionReference:true}}),d=await tx.executionDevice.findFirst({where:{enabled:true}}),u=await tx.user.findUnique({where:{id:actor.id}});
     const ref=a?.sessionReference;
-    if(!a||!this.eligible(a)||!u?.active||u.role!=='ADMIN'||!d||!ref||ref.state!=='VERIFIED'||ref.checkedRuntimeId!==process.env.CRM_RUNTIME_ID||ref.deviceId!==d.id||ref.deviceKeyId!==d.keyId||ref.provider!==this.runtime.mode()||ref.sessionKey!==a.loginSessionKey)throw new ForbiddenException('账号、稳定ID或批准会话未就绪；请在账号中心核验，暂停/风控账号不可采集');
+    if(!a||!this.eligible(a)||!u?.active||u.role!=='ADMIN'||!d||!ref||!sessionFresh(ref,process.env.CRM_RUNTIME_ID)||ref.deviceId!==d.id||ref.deviceKeyId!==d.keyId||ref.provider!==this.runtime.mode()||ref.sessionKey!==a.loginSessionKey)throw new ForbiddenException('账号、稳定ID或批准会话未就绪；请在账号中心核验，暂停/风控账号不可采集');
     return executionSchema.parse({accountId,actorId:actor.id,deviceId:d.id,keyId:d.keyId,sessionKey:ref.sessionKey,platformUserId:a.loginPlatformUserId,accountVersion:a.version,runtimeId:process.env.CRM_RUNTIME_ID,mode,consent});
   }
   async guard(tx:Prisma.TransactionClient,e:ReadExecution,permit?:ExecutionPermit){

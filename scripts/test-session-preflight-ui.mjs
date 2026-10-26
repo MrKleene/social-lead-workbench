@@ -1,0 +1,38 @@
+// Static built UI + intercepted synthetic responses; no actual platform/collection calls.
+import {createServer} from 'node:http';import {readFile,mkdtemp,writeFile} from 'node:fs/promises';import {join,extname} from 'node:path';import {tmpdir} from 'node:os';import {fileURLToPath} from 'node:url';import assert from 'node:assert/strict';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const root=fileURLToPath(new URL('../apps/web/dist/',import.meta.url)),out=await mkdtemp(join(tmpdir(),'crm-session-preflight-ui-'));
+const server=createServer(async(req,res)=>{try{const p=new URL(req.url,'http://localhost').pathname,f=p.startsWith('/assets/')?p:'/index.html';res.setHeader('Content-Type',({'.js':'application/javascript','.css':'text/css','.html':'text/html'})[extname(f)]||'text/plain');res.end(await readFile(join(root,f)));}catch{res.writeHead(404).end();}});await new Promise(ok=>server.listen(0,'127.0.0.1',ok));const base=`http://127.0.0.1:${server.address().port}`;
+const report={checks:[],errors:[],unexpected:[]};let browser,page;
+try{
+ browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE});
+ for(const width of [1440,390])for(const scenario of ['valid','expired','network','identity','restricted','rate','running','mock','device']){
+  const context=await browser.newContext({viewport:{width,height:900},reducedMotion:'reduce'});let state=scenario==='expired'?'EXPIRED':'UNVERIFIED',checks=0,release,releaseLate;const hold=new Promise(ok=>release=ok),holdLate=new Promise(ok=>releaseLate=ok);
+  const active=scenario==='running',run=active?{id:'r',status:'RUNNING',createdAt:new Date().toISOString(),snapshot:{name:'合成任务'},readPlan:{rounds:1,postsPerRound:1,commentPages:1}}:null;
+  const config={id:'cfg',name:'合成任务',platform:'XHS',mode:scenario==='mock'?'MOCK':'XHS_MCP',keywords:['合成关键词'],excludeWords:[],batchLimit:1,enabled:true,revision:1,activeRunId:run?.id||null,runs:run?[run]:[],monitors:[],matches:[]};
+  const account=()=>({id:'a',label:'合成采集账号',platformUserId:'fixture',reason:state,eligible:state==='VERIFIED',canCheck:state==='UNVERIFIED',retryAt:['CONNECTION_ERROR','RATE_LIMITED'].includes(state)?new Date(Date.now()+300000).toISOString():null});
+  await context.route('**/*',async route=>{const req=route.request(),u=new URL(req.url()),p=u.pathname.slice(4);if(u.origin!==base){report.unexpected.push(u.origin);return route.abort();}if(!u.pathname.startsWith('/api/'))return route.continue();
+   if(req.method()!=='GET'){
+    if(p==='/accounts/a/session/check'){assert.deepEqual(req.postDataJSON(),{purpose:'collection-preflight'});checks++;if(scenario==='valid'&&checks===1)await hold;if(scenario==='valid'&&checks===4)await holdLate;state=({valid:'VERIFIED',network:'CONNECTION_ERROR',identity:'NEEDS_REVIEW',restricted:'RESTRICTED',rate:'RATE_LIMITED'})[scenario]||state;return route.fulfill({json:{state,cached:checks>1}});}
+    report.unexpected.push(req.method()+' '+p);return route.abort();
+   }
+   if(p==='/events')return route.fulfill({contentType:'text/event-stream',body:': fixture\n\n'});
+   if(p.endsWith('/posts')||p.endsWith('/captures'))return route.fulfill({json:{captureArchiveVersion:1,items:[],posts:[],total:0,postTotal:0,hasMore:false,availability:'AVAILABLE',runId:'r',configId:'cfg',status:'RUNNING'}});
+   const data=p==='/auth/me'?{user:{id:'admin',name:'合成管理员',role:'ADMIN'},csrfToken:'fixture'}:p==='/collection/configs'?[config]:p==='/collection/configs/cfg'?config:p==='/collection/mcp/readiness'?{enabled:true,mode:'XHS_MCP',captureArchiveVersion:1,accountBound:true,sessionCheckVersion:1,automaticPolling:false,device:{name:'合成设备',online:scenario!=='device'},accounts:[account()]}:p==='/accounts'?{accounts:[],summary:{available:0,attention:0}}:p==='/health'?{contactWorkflow:true}:[];return route.fulfill({json:data});
+  });
+  page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));await page.goto(base+'/work?module=runs');
+  const panel=page.getByRole('generic',{name:'采集账号登录状态'});
+  if(scenario==='valid'){
+   await page.getByText('正在检查账号登录，不会启动采集…',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'开始采集',exact:true}).count(),0);assert.equal(checks,1);release();await page.getByRole('button',{name:'开始采集',exact:true}).waitFor();await page.reload();await page.getByRole('button',{name:'开始采集',exact:true}).waitFor();assert.equal(checks,1);await page.getByRole('button',{name:'开始采集',exact:true}).dblclick();await page.getByRole('dialog',{name:'确认本次采集',exact:true}).waitFor();assert.equal(checks,2);assert(await page.getByRole('button',{name:'确认并开始',exact:true}).isDisabled());await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});
+   // Expiring the cached proof while this screen stays mounted is handled by Start.
+   state='UNVERIFIED';await page.waitForResponse(r=>r.url().includes('/collection/mcp/readiness')&&r.request().method()==='GET');await page.locator('.task-session-status').getByText('等待检查登录状态',{exact:false}).waitFor();await page.getByRole('button',{name:'开始采集',exact:true}).click();await page.getByRole('dialog',{name:'确认本次采集',exact:true}).waitFor();assert.equal(checks,3);assert(await page.getByRole('button',{name:'确认并开始',exact:true}).isDisabled());await page.keyboard.press('Escape');
+
+   // A delayed pre-start check must not open a confirmation on another screen.
+   await page.getByRole('button',{name:'开始采集',exact:true}).click();await page.getByText('正在检查账号登录，不会启动采集…',{exact:true}).waitFor();await page.getByRole('link',{name:'工作台',exact:true}).click();const lateResponse=page.waitForResponse(r=>r.url().endsWith('/accounts/a/session/check'));releaseLate();await lateResponse;await page.getByRole('link',{name:'采集任务',exact:true}).click();await page.getByRole('button',{name:'开始采集',exact:true}).waitFor();assert.equal(await page.getByRole('dialog',{name:'确认本次采集',exact:true}).count(),0);
+  }else if(scenario==='running'){await page.getByRole('button',{name:'停止采集',exact:true}).waitFor();assert.equal(checks,0);}
+  else if(scenario==='mock'){await page.getByRole('button',{name:'开始采集',exact:true}).waitFor();assert.equal(checks,0);}
+  else{const label={expired:'登录已失效，请重新扫码',network:'连接异常，暂时无法确认登录；请稍后重试',identity:'账号身份或会话需人工核查',restricted:'平台限制，请先人工处理',rate:'平台限流，请等待后重试',device:'执行设备离线，请恢复连接'}[scenario];await page.locator('.task-session-status').getByText(label,{exact:false}).waitFor();assert.equal(await page.getByRole('button',{name:'开始采集',exact:true}).count(),0);assert.equal(checks,['expired','device'].includes(scenario)?0:1);}
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.equal(await page.locator('vite-error-overlay').count(),0);await page.screenshot({path:join(out,`${scenario}-${width}.png`)});report.checks.push(scenario+' '+width);release();releaseLate();await context.close();
+ }
+ assert.deepEqual(report.errors,[]);assert.deepEqual(report.unexpected,[]);console.log('PASS '+report.checks.length+' session preflight UI cases; no collection, credentials, model or external requests');
+}finally{if(page&&!page.isClosed())await page.screenshot({path:join(out,'failure.png')});await browser?.close();server.closeAllConnections();await new Promise(ok=>server.close(ok));await writeFile(join(out,'checks.json'),JSON.stringify(report,null,2));console.log('Evidence: '+out);}

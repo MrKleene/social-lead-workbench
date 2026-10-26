@@ -1,3 +1,4 @@
+import {sessionFresh} from '../accounts/session-health';
 import * as commentPolicy from '../../../../runtime/comment-read-policy.cjs';
 import {BadRequestException,ConflictException,Inject,Injectable} from '@nestjs/common';
 import {z} from 'zod';
@@ -41,7 +42,7 @@ export class SinglePostService {
   let outcome='FAILED',summary:ReturnType<typeof singlePostSummary>|undefined;
   try{
    const session=await this.db.accountSessionReference.findUnique({where:{accountId:input.accountId}});
-   if(!session||session.state!=='VERIFIED'||session.checkedRuntimeId!==process.env.CRM_RUNTIME_ID){
+   if(!sessionFresh(session,process.env.CRM_RUNTIME_ID)){
     const checked=await this.login.verifySaved(actor,input.accountId,'read-local-session-v1');
     if(checked.state!=='VERIFIED'){outcome='LOGIN_NOT_READY';return {status:'LOGIN_NOT_READY' as const};}
    }

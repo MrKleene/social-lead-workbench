@@ -2,7 +2,7 @@ import {InfoDialog} from '@/components/information-panel';
 import {useSavedSession} from './use-saved-session';
 import {Button} from '@/components/ui/button';
 import type {Account} from './types';
-const results:Record<string,string>={VERIFIED:'本机会话已核验，可用于单次只读采集',EXPIRED:'登录已失效；原会话保留，当前不能采集',MISSING:'本机会话文件缺失，未恢复登录',NEEDS_REVIEW:'身份或保存状态不一致，未恢复登录',UNVERIFIED:'暂未完成核验，请稍后手动检查',DEVICE_MISMATCH:'需在原执行电脑恢复'};
+const results:Record<string,string>={CHECKING:'登录检查正在进行',CONNECTION_ERROR:'连接异常，暂不能确认登录；不代表已退出，请稍后重试',RATE_LIMITED:'平台限流，请等待后重试',RESTRICTED:'平台限制，请先人工处理',BUSY:'账号正在执行任务，暂不重复检查',BUSY_OR_DEVICE_UNAVAILABLE:'账号正忙或执行设备不可用，请稍后重试',VERIFIED:'本机会话已核验，可用于单次只读采集',EXPIRED:'登录已失效；原会话保留，当前不能采集',MISSING:'本机会话文件缺失，未恢复登录',NEEDS_REVIEW:'身份或保存状态不一致，未恢复登录',UNVERIFIED:'暂未完成核验，请稍后手动检查',DEVICE_MISMATCH:'需在原执行电脑恢复'};
 export function SavedSessionPanel({account}:{account:Account}){
  const {consent,setConsent,verify}=useSavedSession(account.id),ref=account.sessionReference;
  return <section className="account-login-panel" aria-label="本地会话恢复">

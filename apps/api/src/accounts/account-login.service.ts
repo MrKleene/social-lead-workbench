@@ -1,3 +1,4 @@
+import {SavedSessionChecks} from './saved-session-checks';
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { AccountLogin } from '@prisma/client';
@@ -10,8 +11,8 @@ type Expected={version:number;sessionKey:string|null;provider:string|null;userId
 type Job={expected:Expected;identity?:{userId:string;nickname?:string};permit?:ExecutionPermit;abort:AbortController;driver?:SessionDriver;image?:string;busy:boolean;heartbeat:number;deadline:number;nextCheck:number;timer?:NodeJS.Timeout};
 @Injectable()
 export class AccountLoginService implements OnModuleDestroy, OnModuleInit {
-  private runtimeId=randomUUID(); private savedChecks=new Map<string,AbortController>(); private jobs=new Map<string,Job>();
-  constructor(@Inject(Db)private db:Db,@Inject(LoginRuntime)private runtime:LoginRuntime,@Optional() @Inject(DeviceService)private devices?:DeviceService){}
+  private runtimeId=randomUUID(); private saved:SavedSessionChecks; private jobs=new Map<string,Job>();
+  constructor(@Inject(Db)private db:Db,@Inject(LoginRuntime)private runtime:LoginRuntime,@Optional() @Inject(DeviceService)private devices?:DeviceService){this.saved=new SavedSessionChecks(db,runtime,devices);}
   async capabilities(actor:Actor){requireAdmin(actor);const device=this.devices?.enabled()?await this.devices.status(actor):null;return {device:device?.device||null,deviceRequired:!!device,enabled:!!this.runtime.mode()&&(this.runtime.mode()==='offline'||!!device)&&(!device||!!device.device?.online),mode:this.runtime.mode()||'disabled',storageRoot:device?device.device?.credentialRoot||device.suggestedRoot:this.runtime.storage(),persistent:this.runtime.persistent(),deviceId:this.runtime.persistent()?this.runtime.deviceId():null,send:false,collection:process.env.CRM_ACCOUNT_READ_ENABLED==='1',consentVersion:'local-session-v1',saveConfirmationVersion:1,sessionReplacement:this.runtime.persistent(),replacementConsentVersion:'local-session-replace-v1'};}
   private async account(actor:Actor,id:string,allowArchived=false){requireAdmin(actor);const a=await this.db.platformAccount.findUnique({where:{id}});if(!a||(!allowArchived&&a.archivedAt))throw new NotFoundException();if(a.platform!=='XHS')throw new BadRequestException('仅支持小红书登录');return a;}
   private dto(row:AccountLogin){const job=this.jobs.get(row.id);return {id:row.id,requestKey:row.requestKey,state:row.state,mode:row.mode,expiresAt:row.expiresAt.toISOString(),reason:row.reason,localSaved:row.state==='VERIFIED'&&row.reason==='LOCAL_SESSION_SAVED_V1',nextCheckAt:job?new Date(job.nextCheck).toISOString():null,...(row.state==='WAITING'&&job?.image?{image:job.image}:{})};}
@@ -130,46 +131,14 @@ export class AccountLoginService implements OnModuleDestroy, OnModuleInit {
     // No platform calls. Only opaque references and local ownership/exists checks.
     const refs=await this.db.accountSessionReference.findMany();
     const device=this.devices?.enabled()?await this.db.executionDevice.findFirst({where:{enabled:true}}):null;
-    for(const ref of refs){const inspected=this.devices?.enabled()&&(!device||ref.deviceKeyId!==device.keyId||ref.deviceId!==device.id)?(device&&ref.deviceId!==device.id?'DEVICE_MISMATCH':'NEEDS_REVIEW'):await this.runtime.inspect(ref.accountId,ref.sessionKey,ref.deviceId,ref.provider,device?.credentialRoot);await this.db.accountSessionReference.update({where:{accountId:ref.accountId},data:{state:inspected==='UNVERIFIED'&&ref.state==='EXPIRED'?'EXPIRED':inspected,checkedRuntimeId:null,checkingUntil:null}});}
+    for(const ref of refs){const inspected=this.devices?.enabled()&&(!device||ref.deviceKeyId!==device.keyId||ref.deviceId!==device.id)?(device&&ref.deviceId!==device.id?'DEVICE_MISMATCH':'NEEDS_REVIEW'):await this.runtime.inspect(ref.accountId,ref.sessionKey,ref.deviceId,ref.provider,device?.credentialRoot);await this.db.accountSessionReference.update({where:{accountId:ref.accountId},data:{state:inspected==='UNVERIFIED'?(ref.state==='CHECKING'?'UNVERIFIED':ref.state):inspected,checkedRuntimeId:null}});}
     const interrupted=await this.db.accountLogin.findMany({where:{state:{in:active}}});
     for(const row of interrupted)await this.finish(row.id,'CANCELLED','RUNTIME_RESTARTED');
   }
   async verifySaved(actor:Actor,accountId:string,consent:string){
-    const account=await this.account(actor,accountId);
-    if(this.runtime.mode()==='real'&&!this.devices?.enabled())throw new ForbiddenException('真实会话核验需已批准的专用电脑');
-    if(!this.runtime.persistent()||!this.runtime.mode())throw new ForbiddenException('仅持久工作台支持已保存会话核验');
-    if(consent!=='read-local-session-v1')throw new BadRequestException('需明确确认使用本机已保存会话核验');
-    const permit=this.devices?.enabled()?await this.devices.acquire(actor,accountId):undefined;
-    try{
-      const ref=await this.db.$transaction(async tx=>{
-        await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${accountId} FOR UPDATE`;
-        const a=await tx.platformAccount.findUniqueOrThrow({where:{id:accountId}});if(a.archivedAt)throw new ConflictException('账号已归档');
-        const r=await tx.accountSessionReference.findUnique({where:{accountId}});if(!r)throw new ConflictException('没有可信设备引用；不会扫描或导入遗留会话');
-        if(r.checkingUntil&&r.checkingUntil>new Date())throw new ConflictException('核验正在进行或短暂退避中');
-        await tx.accountSessionReference.update({where:{accountId},data:{state:'UNVERIFIED',checkedRuntimeId:null,checkingUntil:new Date(Date.now()+60000)}});
-        await tx.auditLog.create({data:{actorId:actor.id,entityId:accountId,action:'SAVED_SESSION_CHECK_CONSENT',metadata:{deviceId:this.runtime.deviceId(),consentVersion:consent,provider:r.provider}}});return r;
-      });
-      let state='UNVERIFIED',driver:SessionDriver|undefined;
-      const abort=new AbortController();this.savedChecks.set(accountId,abort);const timer=setTimeout(()=>abort.abort(),45000);
-      const revoked=()=>abort.abort();permit?.signal.addEventListener('abort',revoked,{once:true});if(permit?.signal.aborted)abort.abort();
-      try{
-        state=await this.runtime.inspect(accountId,ref.sessionKey,ref.deviceId,ref.provider,permit?.root);
-        if(state==='UNVERIFIED'&&!abort.signal.aborted){
-          driver=await this.runtime.openSaved(accountId,ref.sessionKey,abort.signal,permit?.root);const status=await driver.status(abort.signal);
-          state=!status.loggedIn?'EXPIRED':status.userId&&status.userId===account.loginPlatformUserId?'VERIFIED':'NEEDS_REVIEW';
-        }
-        if(abort.signal.aborted)state='UNVERIFIED';
-      }catch{state='NEEDS_REVIEW';}finally{clearTimeout(timer);abort.abort();await driver?.stop();this.savedChecks.delete(accountId);permit?.signal.removeEventListener('abort',revoked);}
-      return await this.db.$transaction(async tx=>{
-        if(permit)await this.devices!.lock(tx);
-        await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${accountId} FOR UPDATE`;
-        const a=await tx.platformAccount.findUniqueOrThrow({where:{id:accountId}});if(a.archivedAt)state='UNVERIFIED';
-        const current=await tx.accountSessionReference.findUniqueOrThrow({where:{accountId}});if(current.sessionKey!==ref.sessionKey)throw new ConflictException('会话已更新，请重新检查');
-        if(permit)try{await this.devices!.assertPermit(tx,permit);}catch{state='UNVERIFIED';}
-        const result=await tx.accountSessionReference.update({where:{accountId},data:{state,checkedRuntimeId:state==='VERIFIED'?this.runtime.runtimeId:null,...(state==='VERIFIED'?{verifiedAt:new Date()}:{}),checkingUntil:new Date(Date.now()+10000)}});
-        await tx.auditLog.create({data:{actorId:actor.id,entityId:accountId,action:'SAVED_SESSION_CHECK_RESULT',metadata:{state,provider:ref.provider}}});return {state:result.state,provider:result.provider,verifiedAt:result.verifiedAt};
-      });
-    }finally{await permit?.release();}
+    if(consent!=='read-local-session-v1')throw new BadRequestException('需确认本机会话核验用途');
+    return this.saved.check(actor,accountId);
   }
-  async onModuleDestroy(){for(const abort of this.savedChecks.values())abort.abort();await Promise.all([...this.jobs.keys()].map(id=>this.finish(id,'CANCELLED','WORKBENCH_STOPPED').catch(()=>{})));}
+  async checkSavedForCollection(actor:Actor,accountId:string){return this.saved.check(actor,accountId,true);}
+  async onModuleDestroy(){await this.saved.stop();await Promise.all([...this.jobs.keys()].map(id=>this.finish(id,'CANCELLED','WORKBENCH_STOPPED').catch(()=>{})));}
 }
