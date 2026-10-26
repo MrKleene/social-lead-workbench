@@ -7,13 +7,14 @@ import {mkdtempSync,mkdirSync,realpathSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID,randomBytes} from 'node:crypto';
-import {reviewUseConsent,semanticBatchConsent,thesisRulePreset} from '@crm/contracts';
+import {reviewAutoConsent,reviewUseConsent,semanticBatchConsent,thesisRulePreset} from '@crm/contracts';
 import {AppModule} from '../src/app';
 import {Db} from '../src/common/db';
 import {configure} from '../src/bootstrap';
 import {Actor,digest} from '../src/auth/security';
 import {ModelSettingsService} from '../src/model-settings/model-settings.service';
 import {ReviewPolicyService} from '../src/comment-review/review-policy.service';
+import {AutoReviewService} from '../src/comment-review/auto-review.service';
 import {ReviewEvaluationService} from '../src/comment-review/review-evaluation.service';
 import {QwenMatchingService} from '../src/collection/qwen-matching.service';
 import {CollectionService} from '../src/collection/service';
@@ -27,7 +28,7 @@ const db=new Db({datasources:{db:{url}}}),home=realpathSync(mkdtempSync(join(tmp
 const store=new ModelSettingsService(db,{file}),qwen=new QwenMatchingService(db,undefined,store),policies=new ReviewPolicyService(db,store,qwen);
 const target='识别当前评论是否明确写出一个学科或专业名称';
 const transport=vi.fn(async(_url:string,init:RequestInit)=>{const body=JSON.parse(init.body as string),payload=JSON.parse(body.messages[1].content);expect(body.model).toBe('qwen3.8-flash');expect(body.enable_thinking).toBe(false);expect(body.messages[0].content).toContain('Post and parent text are optional');expect(JSON.stringify(payload)).not.toMatch(/奇异搜索甲|完全不同的搜索乙/);return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:payload.items.map((p:any)=>({id:p.id,score:90,decision:'MATCH',reason:'评论明确出现学科名称',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:p.comment}]}))})}}],usage:{prompt_tokens:40,completion_tokens:20}}));});
-const evaluation=new ReviewEvaluationService(db,policies,{transport});
+const evaluation=new ReviewEvaluationService(db,policies,{transport}),automatic=new AutoReviewService(db,policies,evaluation);
 let actor:Actor,sales:Actor,app:INestApplication,collection:CollectionService;const auth={admin:{cookie:'',csrf:''},sales:{cookie:'',csrf:''}},origin='http://127.0.0.1:5173';
 const api=()=>request(app.getHttpServer());const write=(method:'put'|'post'|'patch',path:string,body:object,who:'admin'|'sales'='admin')=>api()[method]('/api/comment-review'+path).set('Cookie',auth[who].cookie).set('Origin',origin).set('x-csrf-token',auth[who].csrf).send(body);
 async function clear(){await db.semanticModelCall.deleteMany();await db.semanticReview.deleteMany();await db.commentReviewPolicyVersion.deleteMany();await db.commentReviewPolicy.deleteMany();await db.modelSettings.deleteMany();await db.noticeRead.deleteMany();await db.collectionNotice.deleteMany();await db.sourceMatch.deleteMany();await db.commentObservation.deleteMany();await db.monitorPost.deleteMany();await db.collectionRun.deleteMany();await db.collectionConfig.deleteMany();await db.sourceComment.deleteMany();await db.sourcePost.deleteMany();await db.lead.deleteMany();await db.platformIdentity.deleteMany();await db.auditLog.deleteMany();}
@@ -70,4 +71,82 @@ describe('independent comment review: disposable database and mocked provider on
   expect((await api().get('/api/comment-review')).status).toBe(401);expect((await api().get('/api/comment-review').set('Cookie',auth.sales.cookie)).status).toBe(403);expect((await write('put','/policies/workspace',{version:0,target},'sales')).status).toBe(403);expect((await api().put('/api/comment-review/policies/workspace').set('Cookie',auth.admin.cookie).set('Origin',origin).send({version:0,target})).status).toBe(403);expect((await write('put','/policies/workspace',{version:0,target:'短'})).status).toBe(400);
   const p=await saved();expect((await write('patch','/policies/workspace/control',{version:p.version,enabled:true})).status).toBe(400);expect((await write('post','/policies/workspace/prepare',{version:p.version,scope:{kind:'ALL'},keywords:['forged']})).status).toBe(400);expect(transport).not.toHaveBeenCalled();
  });
+ it('manual provider consent and selected comments work while BOTH switches remain off',async()=>{
+  const p=await saved(),a=await source(),b=await source('搜索乙','会计学');
+  await policies.authorize(actor,{consent:reviewUseConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});
+  const list=await policies.comments(actor,a.p.id,0);expect(list.items.map(c=>c.id)).toEqual([a.capture.id]);
+  const selection=await policies.prepare(actor,p.id,{version:p.version,scope:{kind:'COMMENTS',commentIds:[b.capture.id]}});
+  const preview=await evaluation.preview(actor,p.id,selection.reviewIds);expect(preview.usage.canCall).toBe(true);expect(preview.payload.items[0].comment).toBe('会计学');
+  await Promise.all([evaluation.evaluate(actor,p.id,input(preview)),evaluation.evaluate(actor,p.id,input(preview)).catch(()=>null)]);
+  expect(transport).toHaveBeenCalledTimes(1);expect(await db.commentReviewPolicy.findUnique({where:{id:p.id}})).toMatchObject({enabled:false,autoEnabled:false});
+ });
+ it('automatic consent is distinct even for already authorized legacy users; no missing target/key or forged scope',async()=>{
+  const p=await enabled();await expect(policies.automatic(actor,p.id,{version:p.version,enabled:true})).rejects.toThrow();
+  await expect(policies.automatic(sales,p.id,{version:p.version,enabled:false})).rejects.toThrow();
+  expect((await write('patch','/policies/workspace/automatic',{version:p.version,enabled:true},'sales')).status).toBe(403);
+  expect((await write('post','/authorize',{consent:reviewUseConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'},'sales')).status).toBe(403);
+  expect((await api().get('/api/comment-review/posts/any/comments').set('Cookie',auth.sales.cookie)).status).toBe(403);
+  expect((await write('post','/policies/workspace/prepare',{version:p.version,scope:{kind:'COMMENTS',commentIds:['fake','fake']}})).status).toBe(400);
+  await expect(policies.prepare(actor,p.id,{version:p.version,scope:{kind:'COMMENTS',commentIds:['missing']}})).rejects.toThrow();
+  await expect(policies.prepare(actor,'missing',{version:1,scope:{kind:'ALL'}})).rejects.toThrow();
+  await db.modelSettings.deleteMany();await expect(policies.automatic(actor,p.id,{version:p.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'})).rejects.toThrow();expect(transport).not.toHaveBeenCalled();
+ });
+ async function autoEnabled(){const p=await saved();return policies.automatic(actor,p.id,{version:p.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});}
+ async function finishedSource(complete=true){const s=await source();await db.capturedPost.update({where:{id:s.p.id},data:{coverage:complete?'COMPLETE':'PARTIAL'}});const run=await db.collectionRun.findUniqueOrThrow({where:{id:s.capture.runId}});await automatic.postFinished(run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete,windowRead:true,stopReason:complete?undefined:'COMMENT_LIMIT'});return s;}
+ it('per-post callback schedules only complete coverage; repeated completion and concurrent ticks charge once',async()=>{
+  await autoEnabled();const complete=await finishedSource(),partial=await finishedSource(false);
+  const run=await db.collectionRun.findUniqueOrThrow({where:{id:complete.capture.runId}});await automatic.postFinished(run,{post:{id:complete.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});
+  expect(await db.autoReviewJob.count()).toBe(2);expect(await db.autoReviewJob.findFirst({where:{postId:partial.p.id}})).toMatchObject({status:'SKIPPED',reason:'覆盖未通过：COMMENT_LIMIT'});
+  await Promise.all([automatic.tick(),automatic.tick()]);expect(transport).toHaveBeenCalledTimes(1);expect(await db.semanticModelCall.count()).toBe(1);
+  await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoReviewJob.findFirst({where:{postId:complete.p.id}})).toMatchObject({status:'COMPLETED',processed:1});
+ });
+ it('collector complete hook enqueues automatically and saves still never dispatch',async()=>{
+  await autoEnabled();const c=await collection.create(actor,{name:'合成自动覆盖',platform:'XHS',mode:'MOCK',keywords:['护理'],excludeWords:[],batchLimit:1,enabled:true});
+  const adapter=new MockAdapter('XHS','BASELINE');adapter.search=async()=>({items:[{id:'demo-collect-auto-post',title:'选题'}],complete:true});adapter.post=async p=>p;adapter.comments=async()=>({items:[{id:'demo-collect-auto-comment',userId:'demo-collect-auto-user',nickname:'虚构',text:'护理学',hasReplies:false}],complete:true});
+  const run=await collection.start(actor,c.id,'BASELINE',randomUUID());await collection.execute(run.id,adapter);expect(await db.autoReviewJob.findFirst({where:{runId:run.id}})).toMatchObject({status:'PENDING'});expect(transport).not.toHaveBeenCalled();await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);
+ });
+ it.each(['cancel','failed','coverage','model','off','target'])('automatic rechecks %s before any credential access',async reason=>{
+  const p=await autoEnabled(),s=await finishedSource();
+  if(reason==='cancel')await db.collectionRun.update({where:{id:s.capture.runId},data:{cancelRequested:true}});
+  if(reason==='failed')await db.collectionRun.update({where:{id:s.capture.runId},data:{status:'FAILED'}});
+  if(reason==='coverage')await db.capturedPost.update({where:{id:s.p.id},data:{coverage:'PARTIAL'}});
+  if(reason==='model')await db.modelSettings.updateMany({data:{version:{increment:1}}});
+  if(reason==='off')await policies.automatic(actor,p.id,{version:p.version,enabled:false});
+  if(reason==='target')await policies.save(actor,p.id,{version:p.version,target:target+'，排除服务广告'});
+  const read=vi.spyOn(store,'resolve');try{await automatic.tick();expect(transport).not.toHaveBeenCalled();expect(read.mock.calls.some(c=>c[1]===true)).toBe(false);expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'CANCELLED'});}finally{read.mockRestore();}
+ });
+ it('turn-off between automatic reservation and dispatch prevents the transport',async()=>{
+  const p=await autoEnabled(),s=await finishedSource(),job=await db.autoReviewJob.findFirstOrThrow();await db.autoReviewJob.update({where:{id:job.id},data:{status:'PROCESSING'}});
+  const prepared=await policies.prepare(actor,p.id,{version:p.version,scope:{kind:'POSTS',postIds:[s.p.id]}},true),preview=await evaluation.preview(actor,p.id,prepared.reviewIds);
+  const original=db.$transaction.bind(db);let calls=0;const spy=vi.spyOn(db,'$transaction').mockImplementation((async(...args:any[])=>{const result=await (original as any)(...args);if(++calls===1)await policies.automatic(actor,p.id,{version:p.version,enabled:false});return result;}) as any);
+  try{expect(await evaluation.evaluate(actor,p.id,input(preview),job.id)).toMatchObject({status:'FAILED'});expect(transport).not.toHaveBeenCalled();}finally{spy.mockRestore();}
+ });
+ it('automatic failed/uncertain calls are never retried; manual recovery stays possible',async()=>{
+  const p=await autoEnabled();await finishedSource();transport.mockImplementationOnce(async()=>new Response('rate limit',{status:429}));await automatic.tick();expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'FAILED'});await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);
+  const off=await policies.automatic(actor,p.id,{version:p.version,enabled:false});const preview=await batch(off.version);expect(await evaluation.evaluate(actor,p.id,input(preview))).toMatchObject({status:'COMPLETED'});
+  const s=await source('新搜索','药学');await db.autoReviewJob.create({data:{policyId:p.id,policyVersion:off.version,postId:s.p.id,runId:s.capture.runId,status:'PROCESSING',updatedAt:new Date(Date.now()-130000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(2);expect(await db.autoReviewJob.findFirst({where:{postId:s.p.id}})).toMatchObject({status:'FAILED'});
+ });
+
+ it('automatic batches honor five-row limit, global interval and daily budget',async()=>{
+  await autoEnabled();const s=await finishedSource();
+  for(let i=0;i<5;i++)await db.capturedComment.create({data:{configId:s.c.id,runId:s.capture.runId,lastRunId:s.capture.runId,postId:s.p.id,platformCommentId:randomUUID(),contentHash:randomUUID(),contextVersion:'captured-context-v1',snapshot:{...(s.capture.snapshot as object),comment:['法学','医学','会计学','社会学','药学'][i]},isDemo:true}});
+  await db.modelSettings.updateMany({data:{dailyLimit:1}});await automatic.tick();expect(await db.semanticModelCall.findFirst()).toMatchObject({rows:5,trigger:'AUTOMATIC',configurationVersion:1});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);
+  await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'PENDING',processed:5});
+  await db.modelSettings.updateMany({data:{dailyLimit:2}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(2);expect(await db.semanticReview.count({where:{state:'EVALUATED'}})).toBe(6);
+ });
+ it('real-source COMPLETE label alone is insufficient without bounded coverage evidence',async()=>{
+  await autoEnabled();const s=await finishedSource();await db.collectionRun.update({where:{id:s.capture.runId},data:{snapshot:{mode:'XHS_MCP'}}});await automatic.tick();expect(transport).not.toHaveBeenCalled();expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'CANCELLED',reason:'缺少完整覆盖证据'});
+ });
+ it('model changes stop automatic jobs and require renewed consent, preserving historical policy',async()=>{
+  const p=await autoEnabled();await finishedSource();await store.save(actor,{version:1,model:'qwen3.8-flash',endpoint:'beijing-standard',note:'FAKE TEST ONLY',priceVersion:'beijing-2026-10-21'});
+  expect(await db.commentReviewPolicy.findUnique({where:{id:p.id}})).toMatchObject({autoEnabled:false,revision:1,autoModelVersion:null});expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'CANCELLED'});await automatic.tick();expect(transport).not.toHaveBeenCalled();expect(await db.commentReviewPolicyVersion.count()).toBe(1);
+ });
+
+ it('completed resumed posts include earlier saved chunks and a never-dispatched manual preview',async()=>{
+  const p=await autoEnabled(),s=await source();await db.capturedComment.update({where:{id:s.capture.id},data:{lastRunId:'earlier-confirmed-chunk'}});
+  const preview=await batch(p.version,[s.p.id]);expect(preview.count).toBe(1);expect(transport).not.toHaveBeenCalled();
+  await db.capturedPost.update({where:{id:s.p.id},data:{coverage:'COMPLETE'}});const run=await db.collectionRun.findUniqueOrThrow({where:{id:s.capture.runId}});
+  await automatic.postFinished(run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.semanticReview.findFirst()).toMatchObject({state:'EVALUATED'});
+ });
+
 });

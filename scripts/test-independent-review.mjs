@@ -33,6 +33,9 @@ try{
  IF NOT EXISTS(SELECT 1 FROM "CollectionConfig" c,fixture_before f WHERE to_jsonb(c)-'legacyMatchingEnabled'=f.snapshot AND NOT c."legacyMatchingEnabled") THEN RAISE EXCEPTION 'source changed'; END IF;
  IF NOT EXISTS(SELECT 1 FROM "ModelSettings" m,fixture_model_before f WHERE to_jsonb(m)=f.snapshot) THEN RAISE EXCEPTION 'model changed'; END IF;
  IF NOT EXISTS(SELECT 1 FROM "CommentReviewPolicy" p JOIN "CommentReviewPolicyVersion" v ON p.id=v."policyId" WHERE p.id='legacy-legacy-fixture' AND NOT p.enabled AND p.revision=1 AND p.target=v.target AND p.target='识别评论中明确写出学科名称的人') THEN RAISE EXCEPTION 'disabled policy migration failed'; END IF;
- END $$;`);results.push({label:'upgrade-preserves-existing-data-and-disabled-target',exit:0});console.log('upgrade preservation: 0');
+ END $$;`);sql('crm_migration_test',`UPDATE "CommentReviewPolicy" SET enabled=true; UPDATE "ModelSettings" SET consent=true; CREATE TABLE fixture_policy_before AS SELECT to_jsonb(p) AS snapshot FROM "CommentReviewPolicy" p;`);
+ sql('crm_migration_test',readFileSync(join(root,'prisma/migrations/202610260003_review_automation/migration.sql'),'utf8'));
+ sql('crm_migration_test',`DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM "CommentReviewPolicy" p,fixture_policy_before f WHERE to_jsonb(p)-'autoEnabled'-'autoModelVersion'-'autoActorId'=f.snapshot AND p.enabled AND NOT p."autoEnabled" AND p."autoModelVersion" IS NULL AND p."autoActorId" IS NULL) THEN RAISE EXCEPTION 'legacy consent became automation'; END IF; END $$;`);
+ results.push({label:'upgrade-preserves-existing-data-and-disabled-target',exit:0});console.log('upgrade preservation: 0');
  run('integration',['npm','run','test:integration','-w','@crm/api'],env);
 }finally{for(const c of containers.reverse())docker(['rm','-f',c]);writeFileSync(join(output,'checks.json'),JSON.stringify({results,isolated:true,removed:containers.length},null,2));console.log('Evidence: '+output);}

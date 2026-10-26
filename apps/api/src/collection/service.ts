@@ -1,3 +1,5 @@
+import {lockReview} from '../comment-review/review-policy.service';
+import {AutoReviewService} from '../comment-review/auto-review.service';
 import {acquireCheckpoint,releaseCheckpoints,type CheckpointLease} from './comment-checkpoint';
 import {readPlanSchema,savedReadTarget,type ReadPlan} from './saved-post-read';
 import {withCoveragePostLabels} from './run-coverage-labels';
@@ -24,7 +26,7 @@ export class CollectionService {
     @Inject(Db)
     private db: Db, 
     @Inject(CollectionQueue)
-    private queue: CollectionQueue, @Optional() @Inject(AccountReadService) private accountReads?: AccountReadService) { }
+    private queue: CollectionQueue, @Optional() @Inject(AccountReadService) private accountReads?: AccountReadService, @Optional() @Inject(AutoReviewService) private autoReview?:AutoReviewService) { }
     private probeBusy = false;
     private gate(mode: string) {
         if(accountReadMode() && mode === accountReadMode()) return;
@@ -83,6 +85,7 @@ export class CollectionService {
         requireAdmin(actor);
         if(accountReadMode() && data.batchLimit && data.batchLimit>3 && data.mode!=="MOCK")throw new BadRequestException("本轮最多3篇帖子");
         return this.db.$transaction(async (tx) => {
+            await lockReview(tx);
             const [current] = await tx.$queryRaw<CollectionConfig[]> `SELECT * FROM "CollectionConfig" WHERE id=${id} FOR UPDATE`;
             if (!current || current.archivedAt)
                 throw new NotFoundException();
@@ -155,6 +158,7 @@ export class CollectionService {
         if (!run)
             throw new NotFoundException();
         return this.db.$transaction(async (tx) => {
+            await lockReview(tx);
             await tx.$queryRaw `SELECT id FROM "CollectionConfig" WHERE id=${run.configId} FOR UPDATE`;
             const current = await tx.collectionRun.findUniqueOrThrow({ where: { id } });
             if (!["QUEUED", "RUNNING"].includes(current.status))
@@ -200,7 +204,7 @@ export class CollectionService {
                 if(!reader?.supportsChunks?.())return;
                 if(!owned)throw new ReadFailure('REAL_DISABLED');
                 const lease=await acquireCheckpoint(this.db,run,post.id,owned.commitGuard,plan?.restartCheckpoint===true);checkpoints.set(post.id,lease);reader.restoreCheckpoint?.(post,lease.checkpoint);
-            });
+            },async post=>{await this.autoReview?.postFinished(run,post).catch(()=>console.error('自动审核入队失败；原文保留，请手动测试'));});
             if(result.diagnostic)logCollectionDiagnostic(run.id,result.diagnostic);
             diagnosticStage='finish_archive';
             await finishCapture(this.db,run,result);
@@ -208,6 +212,7 @@ export class CollectionService {
             diagnosticStage='commit';
             const finished=await commitRead(this.db, run, result,owned?.commitGuard);
             if(owned)await this.accountReads!.failure(run.execution,result.reason,run.id);
+            await this.autoReview?.finished(run,result).catch(()=>console.error('自动审核入队失败；原文保留，请手动测试'));
             return finished;
         }
         catch (error) {
@@ -216,6 +221,7 @@ export class CollectionService {
             await finishCapture(this.db,run,{posts:[],requests:0,status:"FAILED",reason});
             const failed=await commitRead(this.db, run, { posts: [], requests: 0, status: "FAILED", reason,diagnostic });
             if(run.execution)await this.accountReads?.failure(run.execution,reason,run.id);
+            await this.autoReview?.finished(run,{posts:[],requests:0,status:"FAILED",reason}).catch(()=>console.error('自动审核入队失败；原文保留，请手动测试'));
             return failed;
         } finally { try{await releaseCheckpoints(this.db,checkpoints);}finally{if(owned)await owned.close();else await reader?.close?.();} }
     }

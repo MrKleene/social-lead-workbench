@@ -48,6 +48,8 @@ export class ModelSettingsService {
    decrypt(this.file(),MODEL_SETTINGS_ID,encryptedKey);
    const data={model:input.model,endpoint:input.endpoint,dailyLimit,priceVersion:input.priceVersion,consent:!input.key&&current?.model===input.model&&current.priceVersion===input.priceVersion?(current.consent??false):false,note:input.note,encryptedKey};
    await tx.modelSettings.upsert({where:{id:MODEL_SETTINGS_ID},create:{id:MODEL_SETTINGS_ID,version:1,...data},update:{...data,version:{increment:1}}});
+   await tx.commentReviewPolicy.updateMany({where:{autoEnabled:true},data:{autoEnabled:false,autoModelVersion:null,autoActorId:null,version:{increment:1}}});
+   await tx.autoReviewJob.updateMany({where:{status:{in:['PENDING','PROCESSING']}},data:{status:'CANCELLED',reason:'模型设置已变化，请重新确认自动识别'}});
    await tx.auditLog.create({data:{actorId:actor.id,action:input.key?'MODEL_KEY_REPLACED':'MODEL_SETTINGS_UPDATED',entityId:MODEL_SETTINGS_ID,metadata:{model:input.model,version:input.version+1}}});
   });}catch(e){if(e instanceof ConflictException||e instanceof BadRequestException)throw e;throw new ConflictException(e instanceof VaultError?(vaultMessages[e.code]||vaultMessages.MASTER_UNAVAILABLE):'保存失败；原配置保留，未发起模型请求');}
   return this.status(actor);
@@ -58,6 +60,8 @@ export class ModelSettingsService {
    await tx.$queryRaw`SELECT pg_advisory_xact_lock(63967,210003)::text`;
    const row=await tx.modelSettings.findUnique({where:{id:MODEL_SETTINGS_ID}});if(!row||row.version!==version)throw new ConflictException('模型设置已变化，请刷新');
    await tx.modelSettings.update({where:{id:row.id},data:{encryptedKey:Prisma.DbNull,note:'',consent:false,version:{increment:1}}});
+   await tx.commentReviewPolicy.updateMany({where:{autoEnabled:true},data:{autoEnabled:false,autoModelVersion:null,autoActorId:null,version:{increment:1}}});
+   await tx.autoReviewJob.updateMany({where:{status:{in:['PENDING','PROCESSING']}},data:{status:'CANCELLED',reason:'模型设置已变化，请重新确认自动识别'}});
    await tx.auditLog.create({data:{actorId:actor.id,action:'MODEL_KEY_REMOVED',entityId:row.id,metadata:{version:version+1}}});
   });return this.status(actor);
  }

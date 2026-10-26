@@ -464,6 +464,8 @@ model SemanticReview {
 }
 
 model SemanticModelCall {
+ trigger String @default("MANUAL")
+ configurationVersion Int?
  policyId String?
  policyRevision Int?
  policySnapshot CommentReviewPolicyVersion? @relation(fields:[policyId,policyRevision],references:[policyId,revision],onDelete:Restrict)
@@ -564,7 +566,26 @@ model CommentReadCheckpoint {
 }
 
 // Independent from search configuration. Revisions are immutable evidence.
+model AutoReviewJob {
+ id String @id @default(uuid())
+ policyId String
+ policy CommentReviewPolicy @relation(fields:[policyId],references:[id],onDelete:Cascade)
+ policyVersion Int
+ postId String
+ runId String
+ status String @default("PENDING")
+ reason String?
+ processed Int @default(0)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@unique([policyId,postId,runId])
+ @@index([status,createdAt])
+}
 model CommentReviewPolicy {
+ autoEnabled Boolean @default(false)
+ autoModelVersion Int?
+ autoActorId String?
+ autoJobs AutoReviewJob[]
  id String @id
  name String
  target String

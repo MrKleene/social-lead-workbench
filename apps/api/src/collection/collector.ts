@@ -32,7 +32,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     comments: number;
     callMs: number;
     runMs: number;
-} = limits, progress?: (result:ReadResult)=>Promise<void>, selectedPost?:Post,beforePost?:(post:Post)=>Promise<void>): Promise<ReadResult> {
+} = limits, progress?: (result:ReadResult)=>Promise<void>, selectedPost?:Post,beforePost?:(post:Post)=>Promise<void>,postFinished?:(post:PostRead)=>Promise<void>): Promise<ReadResult> {
     if (adapter.mode !== config.mode || adapter.platform !== config.platform)
         throw new ReadFailure("REAL_DISABLED");
     const result: ReadResult = { posts: [], requests: 0, status: "COMPLETE" };
@@ -161,6 +161,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
                 if(reason==='CANCELLED')throw new ReadFailure('PAUSED');
                 if(reason==='TIMEOUT')throw new ReadFailure('TIMEOUT');
                 if(['READ_FAILED','INVALID_RESPONSE','IDENTITY_CONFLICT','DEPTH_LIMIT'].includes(reason)){result.status='FAILED';break;}
+                await postFinished?.(entry);
                 continue;
             }
             stage='comments';
@@ -190,6 +191,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
             entry.complete = complete;
             entry.windowRead = true;
             await checkpoint();
+            await postFinished?.(entry);
             if (!complete) {
                 result.status = "PARTIAL";
                 result.reason = adapter.mode === "MOCK" ? "COMMENTS_PARTIAL" : "MCP_WINDOW_ONLY";
