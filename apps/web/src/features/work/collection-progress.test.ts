@@ -47,7 +47,20 @@ describe('current collection versus history',()=>{
 });
 
 import {collectionTaskSummary,savedCollectionCounts} from './collection-task-summary';
+const terminalSample=(total:number)=>({status:'OK',ready:{document:'complete',container:true,rootScopeExact:true,replyControls:0,rootEndVisible:false},total:{state:'EXACT',value:total},hasMore:{state:'EXACT',value:false},cursor:'NONEMPTY',list:'EXACT',loaded:{roots:1,replies:1,uniqueKnown:2,missingIds:0,duplicateIds:0,invalidNodes:0},groups:[{ordinal:1,parent:null,depth:0,declared:{state:'EXACT',value:1},loaded:{state:'EXACT',value:1}},{ordinal:2,parent:1,depth:1,declared:{state:'MISSING',value:null},loaded:{state:'MISSING',value:null}}],findings:[]});
+const boundaryRun=()=>{
+ const posts=[2,2,5].map((total,i)=>{const s=terminalSample(total);return {ordinal:i+1,roots:1,replies:1,saved:2,complete:false,reason:'BUTTON_NOT_FOUND',boundedRead:{version:1,state:'UNKNOWN',reason:'BUTTON_NOT_FOUND',rootStop:'ROOT_END',replyStop:'BUTTON_NOT_FOUND',rootActions:0,replyActions:1,excludedRoots:0,elapsedMs:20,initial:structuredClone(s),final:structuredClone(s),retained:structuredClone(s)}};});
+ return {...run,status:'PARTIAL',reason:'BUTTON_NOT_FOUND',capturedPosts:3,capturedCommentsCount:6,metrics:{coverage:{version:1,search:'PARTIAL',reasons:['SEARCH_PARTIAL','BUTTON_NOT_FOUND'],posts}}} as unknown as Run;
+};
 describe('truthful task prose',()=>{
+ it('distinguishes matching totals from an unexplained discrepancy without claiming complete coverage',()=>{
+  const r=boundaryRun(),before=JSON.stringify(r),text=collectionTaskSummary(r);
+  expect(text).toContain('主评论均已到末页');expect(text).toContain('第 1 篇已保存 2 / 平台声明 2 条，数量一致');expect(text).toContain('第 3 篇已保存 2 / 平台声明 5 条，差额 3 条原因未确认');expect(text).toContain('搜索仅覆盖本轮返回范围');expect(text).toContain('全部评论完整性仍待确认');expect(text).not.toContain('平台隐藏');expect(JSON.stringify(r)).toBe(before);
+ });
+ it('falls back when root paging, controls, reply counts, persistence or sample evidence are unresolved',()=>{
+  const changes=[(r:any)=>r.metrics.coverage.posts[0].boundedRead.rootStop='ROOT_PAGE_BUDGET',(r:any)=>r.metrics.coverage.posts[0].boundedRead.final.ready.replyControls=1,(r:any)=>r.metrics.coverage.posts[0].boundedRead.final.groups[0].declared.value=2,(r:any)=>r.capturedCommentsCount=7,(r:any)=>r.metrics.coverage.posts[0].boundedRead.final.loaded.duplicateIds=1,(r:any)=>r.metrics.coverage.posts[0].boundedRead.retained.total.value=4,(r:any)=>r.metrics.coverage.posts[0].boundedRead.final.ready.rootScopeExact=false];
+  for(const change of changes){const r=structuredClone(boundaryRun());change(r);expect(collectionTaskSummary(r)).not.toContain('主评论均已到末页');}
+ });
  it('unknown saved counts are not zero or legacy matches',()=>{expect(savedCollectionCounts({...run,observed:900})).toBe('帖子数量未返回 · 评论数量未返回');});
  it('reports stored counts even when matching metrics were discarded',()=>{const text=collectionTaskSummary({...run,status:'FAILED',reason:'INVALID_DATA',capturedPosts:1,capturedCommentsCount:19,metrics:{discarded:true,diagnostic:{version:1,kind:'SCHEMA_VALIDATION',stage:'post',field:'text',postOrdinal:2}} as Run['metrics']});expect(text).toContain('第 2 篇帖子的评论文本');expect(text).toContain('已保存 1 篇帖子 · 19 条评论/回复');expect(text).toContain('尚未完成');expect(text).not.toContain('空文本');});
  it('zero is explicit and does not fabricate saved results',()=>expect(collectionTaskSummary({...run,status:'FAILED',capturedPosts:0,capturedCommentsCount:0})).toContain('0 篇帖子 · 0 条评论/回复'));
