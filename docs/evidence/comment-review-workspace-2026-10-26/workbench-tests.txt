@@ -1,0 +1,13 @@
+
+> lead-workbench@0.1.0 test:workbench
+> vitest run apps/web/src/features/accounts/login-availability.test.ts apps/web/src/features/work/stable-results.test.ts apps/web/src/features/work/motion-policy.test.ts apps/web/src/features/work/navigation-policy.test.ts apps/web/src/features/collection/mode.test.ts apps/web/src/features/collection/run-stats.test.ts apps/web/src/features/work/collection-preflight.test.ts apps/web/src/features/work/collection-progress.test.ts apps/web/src/features/collection/collection-info-model.test.ts apps/web/src/features/collection/post-counts.test.ts apps/web/src/features/collection/coverage-reading-summary.test.ts apps/web/src/features/collection/coverage-progress-summary.test.ts apps/web/src/features/collection/comment-stream.test.ts apps/web/src/features/collection/collection-outcome.test.ts
+
+
+ RUN  v5.0.5 /private/tmp/social-review-20261026
+
+
+ Test Files  14 passed (14)
+      Tests  152 passed (152)
+   Start at  23:53:13
+   Duration  292ms (import 60%, tests 19%, transform 19%, worker 3%)
+
