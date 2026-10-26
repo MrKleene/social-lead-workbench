@@ -15,7 +15,7 @@ const startOfDay=()=>{const d=new Date();d.setUTCHours(0,0,0,0);return d;};
 export class QwenMatchingService {
  constructor(@Inject(Db) private db:Db,@Optional() @Inject(QWEN_TEST_OPTIONS) private options?:Options,@Optional() @Inject(ModelSettingsService) private modelSettings?:ModelSettingsService){}
  private async settings(db:Db|Prisma.TransactionClient=this.db,includeKey=false,authorization?:typeof semanticBatchConsent){return this.options?.settings?{...this.options.settings(),configurationVersion:0}:await (this.modelSettings??new ModelSettingsService(this.db)).resolve(db,includeKey,authorization);}
- async status(db:Db|Prisma.TransactionClient=this.db,configId?:string){
+ async status(db:Db|Prisma.TransactionClient=this.db,configId?:string,independentControl?:{enabled:boolean;version:number}){
   const status=(await this.settings(db)).status,model=qwenModel(status.model);
   const connection={...status,...(model?{priceVersion:model.priceVersion,priceDescription:model.priceDescription}:{})};
   const [totals,last,unknown,active]=await Promise.all([
@@ -24,14 +24,14 @@ export class QwenMatchingService {
    db.semanticModelCall.count({where:{createdAt:{gte:startOfDay()},inputTokens:null}}),
    db.semanticModelCall.count({where:{status:'RESERVED',reservedUntil:{gt:new Date()}}}),
   ]);
-  const control=configId?(await db.semanticControl.findUnique({where:{configId}})||{enabled:false,version:0}):{enabled:false,version:0};
+  const control=independentControl??(configId?(await db.semanticControl.findUnique({where:{configId}})||{enabled:false,version:0}):{enabled:false,version:0});
   return {connection,control,usage:{requests:totals._count._all,dailyLimit:connection.dailyLimit,inputTokens:totals._sum.inputTokens||0,outputTokens:totals._sum.outputTokens||0,unknownUsage:unknown,lastStatus:last?.status||null,canCall:control.enabled&&connection.state==='READY'&&(connection.dailyLimit===null||totals._count._all<connection.dailyLimit)&&!active&&(!last||Date.now()-last.createdAt.getTime()>=30000)}};
  }
  private async batch(configId:string,db:Db|Prisma.TransactionClient=this.db,reviewIds?:string[]){
   const config=await db.collectionConfig.findUnique({where:{id:configId}});
   if(!config?.semanticRules||config.archivedAt)throw new ConflictException('语义审核未启用；不会自动改写配置');
   const rules=semanticRulesSchema.parse(config.semanticRules),settings=await this.settings(db);
-  const rows=await db.semanticReview.findMany({where:{configId,...(reviewIds?{id:{in:reviewIds}}:{}),AND:[{OR:[{selectedModel:null},{selectedModel:settings.status.model}]},{OR:[{ruleHash:semanticHash(rules)},{ruleHash:null,revision:config.revision}]}],reviewStatus:'PENDING',OR:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:[{createdAt:'asc'},{id:'asc'}],take:5});
+  const rows=await db.semanticReview.findMany({where:{configId,policyId:null,...(reviewIds?{id:{in:reviewIds}}:{}),AND:[{OR:[{selectedModel:null},{selectedModel:settings.status.model}]},{OR:[{ruleHash:semanticHash(rules)},{ruleHash:null,revision:config.revision}]}],reviewStatus:'PENDING',OR:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:[{createdAt:'asc'},{id:'asc'}],take:5});
   const inputs=rows.map(r=>({id:r.id,snapshot:r.snapshot as unknown as SemanticSnapshot,rules}));
   let payload;try{payload=prepareOutbound(inputs);}catch{throw new ConflictException('文本包含无法可靠处理的身份/联系线索，已阻止外发（DATA_BLOCKED）');}
   return {config,rows,inputs,payload,settingsVersion:settings.configurationVersion,model:settings.status.model,hash:previewHash(payload,rows,config.revision,settings.status.model+':'+settings.configurationVersion+':'+qwenModel(settings.status.model)?.priceVersion)};

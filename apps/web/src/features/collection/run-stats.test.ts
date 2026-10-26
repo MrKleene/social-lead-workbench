@@ -32,3 +32,5 @@ it('coverage uses stable references and title labels, never identical counts or 
  const old={...r,metrics:{coverage:{...coverage,posts:coverage.posts.map(({postRef,...p})=>p)}} as unknown as Run['metrics']};
  const legacy=renderToStaticMarkup(createElement(RunStats,{run:old}));expect(legacy).toContain('旧任务未记录帖子关联');expect(legacy).not.toContain('合成A');expect(legacy).not.toContain('合成B');
 });
+
+it('pure capture reports saved raw data without pretending to classify comments',()=>{const text=runSummary({...base,metrics:{version:1,policy:'CAPTURE_ONLY',postsRead:3,rootComments:30,replies:12,highRelevant:0,needsReview:0,unmatched:0,legacyMatches:0,filterReasons:{}}});expect(text).toContain('42 条评论或回复');expect(text).toContain('评论审核独立进行');expect(text).not.toMatch(/不匹配|命中|高相关/);});

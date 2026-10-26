@@ -115,7 +115,7 @@ export class CollectionService {
                 throw new ConflictException("退避期间，请稍后手动重试");
             if (config.activeRunId)
                 throw new ConflictException("已有运行，完成或暂停后再试");
-            const snapshot = configInput.parse({ name: config.name, platform: config.platform, mode: config.mode, semanticRules:config.semanticRules, commentRules:config.commentRules, keywords: config.keywords, excludeWords: config.excludeWords, batchLimit: config.batchLimit, enabled: config.enabled });
+            const snapshot = configInput.parse({ name: config.name, platform: config.platform, mode: config.mode, legacyMatchingEnabled:config.legacyMatchingEnabled,...(config.legacyMatchingEnabled?{semanticRules:config.semanticRules,commentRules:config.commentRules}:{}), keywords: config.keywords, excludeWords: config.excludeWords, batchLimit: config.batchLimit, enabled: config.enabled });
             if(accountReadMode() && mode !== 'MOCK' && snapshot.batchLimit>3)throw new BadRequestException('本轮最多3篇帖子');
             if(readPlan)snapshot.batchLimit=readPlan.postsPerRound;
             if(readPlan?.savedPostId){

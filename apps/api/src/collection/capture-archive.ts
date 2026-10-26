@@ -30,7 +30,7 @@ export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResul
   const [config]=await tx.$queryRaw<CollectionConfig[]>`SELECT * FROM "CollectionConfig" WHERE id=${run.configId} FOR UPDATE`;
   const current=await tx.collectionRun.findUniqueOrThrow({where:{id:run.id}});
   if(current.status!=='RUNNING'||current.cancelRequested||!config.enabled||config.archivedAt||config.revision!==run.revision)throw new ReadFailure('PAUSED');
-  const enabled=(await tx.semanticControl.findUnique({where:{configId:config.id}}))?.enabled===true;
+  // Review is a separate explicit operation over committed captures, never part of ingestion.
   for(const entry of result.posts){
    const valid=(id:string)=>spec.mode==='MOCK'?id.startsWith('demo-collect-'):spec.mode==='XHS_FIXTURE'?id.startsWith('fixture-xhs-'):!/^(demo-|fixture-)/.test(id);
    if(!valid(entry.post.id)||entry.comments.some(c=>![c.id,c.userId,...(c.parentId?[c.parentId]:[])].every(valid)))throw new ReadFailure('INVALID_DATA');
@@ -52,7 +52,7 @@ export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResul
     const commentDiagnostic=safeImageDiagnostics(comment.imageDiagnostics);
     const archived={...snapshot,...mergeReplyTarget((previous?.snapshot||{}) as ReplyTargetMetadata,comment.replyTarget,comment.replyTargetConflict),...(commentDiagnostic?{imageDiagnostics:commentDiagnostic}:{}),...captureDisplay((previous?.snapshot||{}) as CaptureDisplay),...captureDisplay({authorNickname:comment.nickname,authorAvatarUrl:comment.authorAvatarUrl,publishedAt:comment.publishedAt})};
     const c=await tx.capturedComment.upsert({where:{configId_platformCommentId_contentHash_contextVersion:{configId:config.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION}},create:{configId:config.id,runId:run.id,postId:p.id,platformCommentId:comment.id,contentHash,contextVersion:CAPTURE_CONTEXT_VERSION,snapshot:archived,isDemo,lastRunId:run.id},update:{snapshot:archived,lastRunId:run.id,lastSeenAt:new Date()}});
-    if(enabled)await enqueueCaptured(tx,c,config);
+
    }
    if(entry.chunk){const lease=leases?.get(entry.post.id);if(!lease)throw new ReadFailure('AUTHORIZATION_ENDED');await commitCheckpoint(tx,lease,entry.chunk,entry.post.id,entry.chunkComments||[],entry.complete);}
   }

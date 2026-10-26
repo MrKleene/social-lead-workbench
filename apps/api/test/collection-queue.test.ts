@@ -49,7 +49,7 @@ async function stopChild() {
 }
 const config = (word: string, extra = {}) => service.create(actor, {
     name: `【队列测试】${word}`, platform: 'XHS', mode: 'MOCK', keywords: [word],
-    excludeWords: ['广告'], batchLimit: 1, enabled: true, ...extra,
+    excludeWords: ['广告'], batchLimit: 1, enabled: true, legacyMatchingEnabled:true, ...extra,
 });
 async function finish(id: string) {
     const job = await queue.getJob(id);
@@ -111,6 +111,11 @@ describe('真实 Redis/BullMQ + 独立采集 worker + 临时 PostgreSQL', () => 
             await expect(config('禁用模式拒绝', { mode })).rejects.toThrow('REAL_DISABLED');
         expect(await db.collectionConfig.count({ where: { mode: { not: 'MOCK' } } })).toBe(0);
         expect(await db.auditLog.count({ where: { action: { startsWith: 'MCP_' } } })).toBe(0);
+    });
+    it('默认纯采集经独立 worker 保存所有原文，不自动匹配、审核或建线索',async()=>{
+        const c=await service.create(actor,{name:'合成纯采集队列',platform:'XHS',mode:'MOCK',keywords:['纯采集'],excludeWords:[],batchLimit:1,enabled:true});
+        const {run:r}=await run(c.id);expect(r).toMatchObject({status:'COMPLETE',observed:4,matched:0,added:0,notices:0});
+        expect(await db.capturedComment.count({where:{configId:c.id}})).toBe(4);expect(await db.sourceMatch.count({where:{configId:c.id}})).toBe(0);expect(await db.semanticReview.count({where:{configId:c.id}})).toBe(0);expect(await db.semanticModelCall.count({where:{configId:c.id}})).toBe(0);
     });
     it('手动投递经独立进程完成基线，并保留来源与楼中楼', async () => {
         const c = await config('真实队列基线');

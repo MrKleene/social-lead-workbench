@@ -1,3 +1,6 @@
+import {CommentReviewController} from '../comment-review/comment-review.controller';
+import {ReviewPolicyService} from '../comment-review/review-policy.service';
+import {ReviewEvaluationService} from '../comment-review/review-evaluation.service';
 import {savedPostPageInput} from './saved-post-page';
 import {readPlanSchema} from './saved-post-read';
 import { Controller, Get, Post, Patch, Delete, Param, Query, Req, Inject, Module, UseGuards, NotFoundException, Res, Header } from "@nestjs/common";
@@ -124,6 +127,6 @@ class NoticesController {
     id: string) { parse(z.object({}).strict(), r.body); const notice = await this.db.collectionNotice.findFirst({ where: { id, lead: scope(r.actor) } }); if (!notice)
         throw new NotFoundException(); return this.leads.locked(r.actor, notice.leadId, tx => tx.noticeRead.upsert({ where: { noticeId_userId: { noticeId: id, userId: r.actor.id } }, create: { noticeId: id, userId: r.actor.id }, update: {} })); }
 }
-@Module({ imports: [AuthModule, LeadsModule, DevicesModule,ModelSettingsModule,AccountsModule], controllers: [CollectionController, NoticesController], providers: [SinglePostService,CaptureService, QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService] })
+@Module({ imports: [AuthModule, LeadsModule, DevicesModule,ModelSettingsModule,AccountsModule], controllers: [CommentReviewController, CollectionController, NoticesController], providers: [ReviewPolicyService,ReviewEvaluationService,SinglePostService,CaptureService, QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [CollectionService] })
 export class CollectionModule {
 }

@@ -198,6 +198,7 @@ model ReplyTemplate {
   configs CollectionConfig[]
 }
 model CollectionConfig {
+  legacyMatchingEnabled Boolean @default(false) // explicit compatibility only; pure capture by default
   semanticControl SemanticControl?
   captures CapturedPost[]
   capturedComments CapturedComment[]
@@ -414,6 +415,11 @@ model DeviceExecutionLease {
 
 // Opt-in, bounded context snapshots. No model credentials or outbound messages.
 model SemanticReview {
+  policyId String?
+  policyRevision Int?
+  sourceContentHash String?
+  policySnapshot CommentReviewPolicyVersion? @relation(fields:[policyId,policyRevision],references:[policyId,revision],onDelete:Restrict)
+  @@index([policyId,policyRevision,sourceContentHash,selectedModel])
   analysisKey String? @unique
   selectedModel String?
   ruleHash String?
@@ -454,11 +460,14 @@ model SemanticReview {
 }
 
 model SemanticModelCall {
+ policyId String?
+ policyRevision Int?
+ policySnapshot CommentReviewPolicyVersion? @relation(fields:[policyId,policyRevision],references:[policyId,revision],onDelete:Restrict)
  id String @id @default(uuid())
  requestKey String @unique
  previewHash String
- configId String
- config CollectionConfig @relation(fields:[configId],references:[id],onDelete:Cascade)
+ configId String?
+ config CollectionConfig? @relation(fields:[configId],references:[id],onDelete:Cascade)
  actorId String
  status String
  errorCode String?
@@ -548,4 +557,27 @@ model CommentReadCheckpoint {
  updatedAt DateTime @updatedAt
  @@unique([configId,platformPostId,accountId,deviceId])
  @@index([ownerRunId])
+}
+
+// Independent from search configuration. Revisions are immutable evidence.
+model CommentReviewPolicy {
+ id String @id
+ name String
+ target String
+ revision Int @default(1)
+ version Int @default(1)
+ enabled Boolean @default(false)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ revisions CommentReviewPolicyVersion[]
+}
+model CommentReviewPolicyVersion {
+ policyId String
+ revision Int
+ target String
+ createdAt DateTime @default(now())
+ policy CommentReviewPolicy @relation(fields:[policyId],references:[id],onDelete:Restrict)
+ reviews SemanticReview[]
+ calls SemanticModelCall[]
+ @@id([policyId,revision])
 }

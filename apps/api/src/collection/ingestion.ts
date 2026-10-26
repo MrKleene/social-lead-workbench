@@ -23,7 +23,7 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                 }
                 const parsed = configInput.safeParse(run.snapshot);
                 if (!parsed.success && result.posts.length) throw new ReadFailure("INVALID_DATA");
-                const spec = parsed.success ? parsed.data : { mode: "MOCK" as const, platform: "XHS" as const, keywords: [], excludeWords: [], commentRules: null, semanticRules:null };
+                const spec = parsed.success ? parsed.data : { mode: "MOCK" as const, platform: "XHS" as const, keywords: [], excludeWords: [], commentRules: null, semanticRules:null,legacyMatchingEnabled:false };
                 if (spec.mode !== "MOCK" && result.posts.length) {
                     if(run.execution){if(!guard||accountReadMode()!==spec.mode)throw new ReadFailure("REAL_DISABLED");}
                     else {if(accountReadMode())throw new ReadFailure("REAL_DISABLED");requireMcp(spec.mode);}
@@ -34,7 +34,7 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                 const searchAttempts=safeSearchAttempts(result.searchAttempts);
                 const priorCoverage=safeRunCoverage((current.metrics as {coverage?:unknown}|null)?.coverage);
                 const coverage=result.posts.length?runCoverage(result):priorCoverage||runCoverage(result);
-                const metrics:RunMetrics={...(coverage?{coverage}:{}),...(searchAttempts?{searchAttempts}:{}),...(diagnostic?{diagnostic}:{}),version:1,discarded:!!result.discarded||(!result.posts.length&&!!priorCoverage?.posts.length),policy:spec.commentRules?'INDEPENDENT_V1':'LEGACY',postsRead:result.posts.length,rootComments:0,replies:0,highRelevant:0,needsReview:0,unmatched:0,legacyMatches:0,filterReasons:{}};
+                const metrics:RunMetrics={...(coverage?{coverage}:{}),...(searchAttempts?{searchAttempts}:{}),...(diagnostic?{diagnostic}:{}),version:1,discarded:!!result.discarded||(!result.posts.length&&!!priorCoverage?.posts.length),policy:!spec.legacyMatchingEnabled?'CAPTURE_ONLY':spec.commentRules?'INDEPENDENT_V1':'LEGACY',postsRead:result.posts.length,rootComments:0,replies:0,highRelevant:0,needsReview:0,unmatched:0,legacyMatches:0,filterReasons:{}};
                 let observed = 0, matched = 0, added = 0, notices = 0;
                 for (const entry of result.posts) {
                     const monitor = await tx.monitorPost.upsert({ where: { configId_revision_platformPostId: { configId: config.id, revision: run.revision, platformPostId: entry.post.id } }, create: { configId: config.id, revision: run.revision, platformPostId: entry.post.id }, update: {} });
@@ -50,6 +50,8 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                         seen.add(c.id);
                         const prior = await tx.commentObservation.findUnique({ where: { monitorId_platformCommentId: { monitorId: monitor.id, platformCommentId: c.id } } });
                         await tx.commentObservation.upsert({ where: { monitorId_platformCommentId: { monitorId: monitor.id, platformCommentId: c.id } }, create: { monitorId: monitor.id, platformCommentId: c.id, lastRunId: run.id }, update: { state: "PRESENT", lastRunId: run.id, lastSeenAt: new Date() } });
+                        // Pure capture never falls back to search-word matching or creates leads.
+                        if(!spec.legacyMatchingEnabled)continue;
                         const assessment=spec.commentRules?assessComment(c,entry.post,c.parentId?contextComments.get(c.parentId):undefined,spec.commentRules,spec.excludeWords):null;
                         const hit=assessment?(assessment.classification==='NO_MATCH'?null:assessment):classify(c.text,spec.keywords,spec.excludeWords);
                         if (!hit) {metrics.unmatched++;const reason=assessment?.reason||(spec.excludeWords.some(w=>c.text.normalize('NFKC').toLowerCase().includes(w.normalize('NFKC').toLowerCase()))?'EXCLUDED':'NO_SIGNAL');metrics.filterReasons[reason]=(metrics.filterReasons[reason]||0)+1;continue;}

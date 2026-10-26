@@ -32,13 +32,13 @@ export function prepareOutbound(inputs:SemanticInput[]):SemanticOutbound{
  });return {redactionVersion:REDACTION_VERSION,target,items};
 }
 export function previewHash(payload:SemanticOutbound,rows:{id:string;version:number}[],revision:number,modelSelection?:string){return createHash('sha256').update(JSON.stringify({payload,rows,revision,modelSelection})).digest('hex');}
-export function validateQwenEvidence(raw:unknown,payload:SemanticOutbound,inputs:SemanticInput[]):SemanticOutput[]{
+export function validateQwenEvidence(raw:unknown,payload:SemanticOutbound,inputs:SemanticInput[],contextOptional=false):SemanticOutput[]{
  const {items}=qwenResultSchema.parse(raw);if(items.length!==inputs.length||new Set(items.map(r=>r.id)).size!==items.length)throw new QwenError('INVALID_EVIDENCE');
  return inputs.map((input,i)=>{
   const s=payload.items[i],row=items.find(x=>x.id===s.id);if(!row)throw new QwenError('INVALID_EVIDENCE');
   const texts={COMMENT:s.comment,POST_TITLE:s.title,POST_BODY:s.body,PARENT_COMMENT:s.parent||''};
   if(!row.evidence.some(e=>e.source==='COMMENT')||row.evidence.some(e=>e.quote.includes(marker)||!texts[e.source].includes(e.quote))||redactText(row.reason)!==row.reason)throw new QwenError('INVALID_EVIDENCE');
-  const context=s.missingParent||s.truncated||!s.title&&!s.body?'INSUFFICIENT':row.context;
+  const context=!contextOptional&&(s.missingParent||s.truncated||!s.title&&!s.body)?'INSUFFICIENT':row.context;
   return {...row,id:input.id,context,decision:context==='INSUFFICIENT'?'UNCERTAIN':row.decision};
  });
 }

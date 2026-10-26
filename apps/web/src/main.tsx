@@ -1,3 +1,4 @@
+import {CommentReviewPage} from '@/features/comment-review/comment-review-page';
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useParams } from "react-router-dom";
@@ -35,6 +36,7 @@ function App() {
         <Route path="/work/:id?" element={<WorkPage />} />
         <Route path="/templates" element={<Navigate to={legacyWorkspacePath("templates")} replace/>} />
         <Route path="/collection/:configId?" element={<LegacySettings />} />
+        <Route path="/comment-review" element={<CommentReviewPage />} />
         <Route path="/leads/:id?" element={<LeadsPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/platforms" element={<PlatformsPage />} />

@@ -1,0 +1,12 @@
+import {z} from 'zod';
+import type {SemanticConnection,SemanticUsage,SemanticReviewItem} from './semantic-review';
+export const reviewUseConsent='comment-review-first-use-v1' as const;
+export const reviewPolicySaveSchema=z.object({version:z.number().int().nonnegative(),target:z.string().trim().min(10).max(1500)}).strict();
+export const reviewPolicyToggleSchema=z.object({version:z.number().int().positive(),enabled:z.boolean(),consent:z.literal(reviewUseConsent).optional(),modelVersion:z.number().int().nonnegative().optional(),priceVersion:z.string().max(60).optional()}).strict();
+export const reviewScopeSchema=z.discriminatedUnion('kind',[z.object({kind:z.literal('ALL')}).strict(),z.object({kind:z.literal('POSTS'),postIds:z.array(z.string().min(1).max(200)).min(1).max(50).refine(v=>new Set(v).size===v.length)}).strict()]);
+export const reviewPrepareSchema=z.object({version:z.number().int().positive(),scope:reviewScopeSchema}).strict();
+export type ReviewScope=z.infer<typeof reviewScopeSchema>;
+export type ReviewPolicy={id:string;name:string;target:string;revision:number;version:number;enabled:boolean};
+export type ReviewOverview={policies:ReviewPolicy[];connection:SemanticConnection;usage:SemanticUsage;modelVersion:number;capturedComments:number};
+export type ReviewResults={items:(SemanticReviewItem&{policyId:string|null;policyRevision:number|null})[];total:number;hasMore:boolean};
+export type ReviewPosts={items:{id:string;title:string;comments:number}[];hasMore:boolean};

@@ -55,3 +55,5 @@ export * from './comment-checkpoint';
 export * from './xhs-reference-parameters';
 
 export * from './reply-target';
+
+export * from './comment-review';

@@ -5,7 +5,7 @@ import { MockAdapter } from "../src/collection/adapters/mock";
 import { XhsMcpAdapter } from "../src/collection/adapters/xhs-mcp";
 import { collect } from "../src/collection/collector";
 import { parse } from "../src/common/validation";
-const config = { name: "测试", platform: "XHS" as const, mode: "MOCK" as const, keywords: ["法律咨询"], excludeWords: ["广告"], batchLimit: 1, enabled: true };
+const config = { name: "测试", platform: "XHS" as const, mode: "MOCK" as const, keywords: ["法律咨询"], excludeWords: ["广告"], batchLimit: 1, enabled: true, legacyMatchingEnabled:true };
 const envelope = (v: unknown) => ({ content: [{ type: "text", text: JSON.stringify(v) }] });
 describe("只读采集契约与预算", () => {
     it("配置严格拒绝未知模式、空词、重复、覆盖排除词和超预算", () => {
