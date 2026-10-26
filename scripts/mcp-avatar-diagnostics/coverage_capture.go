@@ -13,7 +13,7 @@ const coveragePageScript = `() => {
  const notes = window.__INITIAL_STATE__?.note?.noteDetailMap;
  return JSON.stringify({notes: notes ?? null, ready: {
   document: document.readyState,
-  rootEndVisible: [...document.querySelectorAll('.note-scroller .end-container,.interact-container .end-container')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0&&/^THE\s*END$/i.test((e.textContent||'').trim())),
+  rootEndVisible: [...document.querySelectorAll('.note-scroller .end-container,.interact-container .end-container')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0&&/^(?:THE\s*END|-\s*THE\s*END\s*-)$/i.test((e.textContent||'').trim())),
   replyControls: Math.min(200,[...document.querySelectorAll('.note-scroller .show-more,.interact-container .show-more')].filter(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0).length),
   container: !!document.querySelector('.interact-container, .note-scroller'),
   emptyVisible: [...document.querySelectorAll('.note-scroller .no-comments-text,.interact-container .no-comments-text')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0&&(e.textContent||'').trim()==='这是一片荒地')
