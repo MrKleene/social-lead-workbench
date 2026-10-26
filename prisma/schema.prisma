@@ -65,6 +65,7 @@ model LoginBucket {
   @@index([expiresAt])
 }
 model PlatformAccount {
+  defaultCollectionConfigs CollectionConfig[] @relation("DefaultExecutionAccount")
   id String @id @default(cuid())
   platform Platform
   label String
@@ -198,6 +199,9 @@ model ReplyTemplate {
   configs CollectionConfig[]
 }
 model CollectionConfig {
+  defaultExecutionAccountId String?
+  defaultExecutionAccount PlatformAccount? @relation("DefaultExecutionAccount",fields:[defaultExecutionAccountId],references:[id],onDelete:Restrict)
+  @@index([defaultExecutionAccountId])
   legacyMatchingEnabled Boolean @default(false) // explicit compatibility only; pure capture by default
   semanticControl SemanticControl?
   captures CapturedPost[]

@@ -55,13 +55,15 @@ export class XhsMcpAdapter implements ReadAdapter {
     private continuations=new Map<string,{token:string,window:BoundedReadConfig,ordinal:number}>();
     private usedContinuationTokens=new Set<string>();
     private details = new Map<string, { roots: Comment[]; replies: Map<string, Comment[]> }>();
-    constructor(private transport: ReadOnlyMcpTransport, private allowed = false, readonly mode: McpMode = "XHS_MCP", private readWindow:BoundedReadConfig|undefined=commentPolicy.enabled&&mode==='XHS_MCP'&&process.env.CRM_PERSISTENT==='1'&&process.env.CRM_ACCOUNT_READ_ENABLED==='1'?boundedReadConfigSchema.parse(commentPolicy.readWindow):undefined) {}
+    constructor(private transport: ReadOnlyMcpTransport, private allowed = false, readonly mode: McpMode = "XHS_MCP", private readWindow:BoundedReadConfig|undefined=commentPolicy.enabled&&mode==='XHS_MCP'&&process.env.CRM_PERSISTENT==='1'&&process.env.CRM_ACCOUNT_READ_ENABLED==='1'?boundedReadConfigSchema.parse(commentPolicy.readWindow):undefined,private verifiedTaskGuard?:(()=>Promise<void>)) {}
     private id(value: string) {
         if (/^(demo-|fixture-)/.test(value)) throw new ReadFailure("INVALID_DATA");
         return this.mode === "XHS_FIXTURE" ? `fixture-xhs-${value}` : value;
     }
     async prepare(signal: AbortSignal) {
         if (!this.allowed) throw new ReadFailure("REAL_DISABLED");
+        // Only the account-owned worker supplies this guard after status + stable identity checks.
+        if(this.verifiedTaskGuard){await this.verifiedTaskGuard();await this.transport.connect?.(signal);await this.verifiedTaskGuard();return;}
         await this.transport.connect?.(signal);
         const result = text(await this.transport.call("check_login_status", {}, signal),"prepare");
         // This upstream tool returns a human-readable status, not JSON. Do not store the username.

@@ -139,6 +139,6 @@ export class AccountLoginService implements OnModuleDestroy, OnModuleInit {
     if(consent!=='read-local-session-v1')throw new BadRequestException('需确认本机会话核验用途');
     return this.saved.check(actor,accountId);
   }
-  async checkSavedForCollection(actor:Actor,accountId:string){return this.saved.check(actor,accountId,true);}
+  async checkSavedForCollection(actor:Actor,accountId:string){await this.account(actor,accountId);return {state:'TASK_CHECK_REQUIRED',provider:this.runtime.mode(),verifiedAt:null};}
   async onModuleDestroy(){await this.saved.stop();await Promise.all([...this.jobs.keys()].map(id=>this.finish(id,'CANCELLED','WORKBENCH_STOPPED').catch(()=>{})));}
 }

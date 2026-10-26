@@ -28,7 +28,6 @@ export class SavedSessionChecks {
   if(prior.deviceId!==this.runtime.deviceId())return {state:'DEVICE_MISMATCH',provider:prior.provider,verifiedAt:prior.verifiedAt};
   if(initial.status==='RESTRICTED'||prior.state==='RESTRICTED')return {state:'RESTRICTED',provider:prior.provider,verifiedAt:prior.verifiedAt};
   const health=sessionHealth(prior,this.runtime.runtimeId);
-  if(automatic&&health.fresh)return {state:'VERIFIED',provider:prior.provider,verifiedAt:prior.verifiedAt,cached:true};
   if(health.retryAt){if(!automatic)throw new ConflictException('检查正在进行或短暂退避中');return {state:health.state,provider:prior.provider,verifiedAt:prior.verifiedAt,retryAt:health.retryAt};}
   if(automatic&&!health.checkable)return {state:health.state,provider:prior.provider,verifiedAt:prior.verifiedAt};
   // The same device/account lease is used by collection, so probes cannot share a browser.

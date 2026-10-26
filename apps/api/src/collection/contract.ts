@@ -12,6 +12,7 @@ export const configInput = z.object({
     mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]), keywords: z.array(word).min(1).max(8),
     excludeWords: z.array(word).max(20), batchLimit: z.number().int().min(1).max(10),
     enabled: z.boolean(),
+    defaultExecutionAccountId: z.string().min(1).max(100).nullable().optional(),
     defaultReplyTemplateId: z.string().min(1).max(100).nullable().optional(),
 }).strict().refine(v => v.mode === "MOCK" || v.platform === "XHS", "MCP只支持小红书")
     .refine(v => new Set(v.keywords.map(normalize)).size === v.keywords.length, "关键词不能重复")

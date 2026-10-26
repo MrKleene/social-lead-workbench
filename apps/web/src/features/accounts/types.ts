@@ -55,4 +55,4 @@ export const accountStatus = {
   RESTRICTED: "受限 · 待处理",
 };
 
-export const loginStatusLabel:Record<string,string>={CHECKING:'正在检查登录',CONNECTION_ERROR:'连接异常，未确认登录',RATE_LIMITED:'平台限流',RESTRICTED:'平台限制',VERIFIED:'登录已验证',OFFLINE_VERIFIED:'离线模拟已验证',UNVERIFIED:'本机会话待验证',MISSING:'本机会话缺失',EXPIRED:'本机会话已失效',DEVICE_MISMATCH:'需在原设备核验',NEEDS_REVIEW:'会话需人工核查',LEGACY_UNMAPPED:'历史记录 · 待人工关联',NOT_CONNECTED:'未验证登录'};
+export const loginStatusLabel:Record<string,string>={PREVIOUSLY_VERIFIED:'上次验证通过',CHECKING:'正在检查登录',CONNECTION_ERROR:'连接异常，未确认登录',RATE_LIMITED:'平台限流',RESTRICTED:'平台限制',VERIFIED:'上次验证通过',OFFLINE_VERIFIED:'离线模拟已验证',UNVERIFIED:'任务启动前核验',MISSING:'本机会话缺失',EXPIRED:'本机会话已失效',DEVICE_MISMATCH:'需在原设备核验',NEEDS_REVIEW:'会话需人工核查',LEGACY_UNMAPPED:'历史记录 · 待人工关联',NOT_CONNECTED:'未验证登录'};

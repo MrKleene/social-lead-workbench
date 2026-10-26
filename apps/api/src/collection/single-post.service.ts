@@ -1,4 +1,3 @@
-import {sessionFresh} from '../accounts/session-health';
 import * as commentPolicy from '../../../../runtime/comment-read-policy.cjs';
 import {BadRequestException,ConflictException,Inject,Injectable} from '@nestjs/common';
 import {z} from 'zod';
@@ -41,21 +40,16 @@ export class SinglePostService {
   let execution:ReadExecution|undefined,owned:Awaited<ReturnType<AccountReadService['open']>>|undefined;
   let outcome='FAILED',summary:ReturnType<typeof singlePostSummary>|undefined;
   try{
-   const session=await this.db.accountSessionReference.findUnique({where:{accountId:input.accountId}});
-   if(!sessionFresh(session,process.env.CRM_RUNTIME_ID)){
-    const checked=await this.login.verifySaved(actor,input.accountId,'read-local-session-v1');
-    if(checked.state!=='VERIFIED'){outcome='LOGIN_NOT_READY';return {status:'LOGIN_NOT_READY' as const};}
-   }
    execution=await this.db.$transaction(tx=>this.reads.authorize(tx,actor,mode,input.accountId,readConsent));
-   owned=await this.reads.open(execution);await owned.check();
+   owned=await this.reads.open(execution,undefined,input.requestKey);await owned.check();
    // The same verified identity/lease guards both explicit modes. No search or retry.
    const post=await owned.reader.postReference(ref,AbortSignal.timeout(45000),checkMode);await owned.check();
    const result=singlePostSummary(post,owned.reader.receivedComments(post),checkMode);outcome='CHECKED';summary=result;
-   if(result.boundedRead?.reason==='PLATFORM_LIMIT'){await this.reads.failure(execution,'RESTRICTED');outcome='RESTRICTED';}
+   if(result.boundedRead?.reason==='PLATFORM_LIMIT'){await this.reads.failure(execution,'RESTRICTED',input.requestKey);outcome='RESTRICTED';}
    return result;
   }catch(error){
    const code=error instanceof ReadFailure?error.code:'CHECK_FAILED';
-   if(execution)await this.reads.failure(execution,code);
+   if(execution)await this.reads.failure(execution,code,input.requestKey);
    outcome=code;return {status:'FAILED' as const,reason:code};
   }finally{
    try{await owned?.close();}finally{await this.db.auditLog.update({where:{id:reservation.id},data:{action:'SINGLE_POST_CHECK_FINISHED',metadata:{version:1,mode:checkMode,outcome,...(summary?{summary:JSON.parse(JSON.stringify(summary))}:{})}}});}

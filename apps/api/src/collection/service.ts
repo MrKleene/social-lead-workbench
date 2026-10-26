@@ -66,8 +66,17 @@ export class CollectionService {
     async list(actor: Actor) { requireAdmin(actor); const configs=await this.db.collectionConfig.findMany({ where: { archivedAt: null }, include: { runs: { take: 1, orderBy: { createdAt: "desc" } } }, orderBy: { createdAt: "desc" }, take: 100 }); return withCoveragePostLabels(this.db,configs); }
     async detail(actor: Actor, id: string) { requireAdmin(actor); const config = await this.db.collectionConfig.findUnique({ where: { id }, include: { runs: { orderBy: { createdAt: "desc" }, take: 20 }, matches: { orderBy: { createdAt: "desc" }, take: 50, include: { comment: { include: { post: true, identity: { include: { lead: { select: { id: true } } } } } } } }, monitors: { take: 10, orderBy: { id: "desc" }, include: { observations: { take: 100, orderBy: { lastSeenAt: "desc" } } } } } }); if (!config)
         throw new NotFoundException(); return (await withCoveragePostLabels(this.db,[config]))[0]; }
+    private async validateDefaultAccount(tx:Prisma.TransactionClient,actor:Actor,platform:string,mode:string,accountId?:string|null){
+        if(!accountId)return;
+        const user=await tx.user.findUnique({where:{id:actor.id}});if(!user?.active||user.role!=='ADMIN')throw new ForbiddenException('无权配置执行账号');
+        const account=await tx.platformAccount.findUnique({where:{id:accountId},include:{sessionReference:true}});
+        if(!account||account.archivedAt||account.platform!==platform)throw new BadRequestException('默认执行账号不存在、已归档或平台不匹配');
+        if(mode==='MOCK')return;
+        const provider=mode==='XHS_MCP'?'real':'offline',ref=account.sessionReference,device=await tx.executionDevice.findFirst({where:{enabled:true}});
+        if(account.loginProvider!==provider||!account.loginPlatformUserId||!ref||ref.provider!==provider||ref.sessionKey!==account.loginSessionKey||!device||ref.deviceId!==device.id||ref.deviceKeyId!==device.keyId)throw new BadRequestException('默认执行账号尚未绑定当前批准设备或模式不兼容');
+    }
     async create(actor: Actor, input: ConfigInput) { requireAdmin(actor); input = configInput.parse(input); if(accountReadMode() && input.mode !== "MOCK" && input.batchLimit>3) throw new BadRequestException("本轮最多3篇帖子"); this.gate(input.mode); return this.db.$transaction(async (tx) => { const count = await tx.collectionConfig.count({ where: { archivedAt: null } }); if (count >= 100)
-        throw new BadRequestException("最多100组配置"); if (input.defaultReplyTemplateId && !await tx.replyTemplate.findUnique({ where: { id: input.defaultReplyTemplateId } })) throw new BadRequestException("默认话术不存在，请重新选择"); const config = await tx.collectionConfig.create({ data: {...input,semanticRules:input.semanticRules||Prisma.DbNull,commentRules:input.commentRules||Prisma.DbNull} }); await tx.auditLog.create({ data: { actorId: actor.id, action: "COLLECTION_CONFIG_CREATED", entityId: config.id } }); return config; }); }
+        throw new BadRequestException("最多100组配置"); if (input.defaultReplyTemplateId && !await tx.replyTemplate.findUnique({ where: { id: input.defaultReplyTemplateId } })) throw new BadRequestException("默认话术不存在，请重新选择"); await this.validateDefaultAccount(tx,actor,input.platform,input.mode,input.defaultExecutionAccountId); const config = await tx.collectionConfig.create({ data: {...input,semanticRules:input.semanticRules||Prisma.DbNull,commentRules:input.commentRules||Prisma.DbNull} }); await tx.auditLog.create({ data: { actorId: actor.id, action: "COLLECTION_CONFIG_CREATED", entityId: config.id } }); return config; }); }
     async change(actor: Actor, id: string, data: Partial<ConfigInput> & {
         archivedAt?: Date;
     }, revision: number, reset: boolean) {
@@ -83,6 +92,7 @@ export class CollectionService {
             if (reset && current.activeRunId)
                 throw new ConflictException("请先暂停当前运行再编辑");
             if (data.defaultReplyTemplateId && !await tx.replyTemplate.findUnique({ where: { id: data.defaultReplyTemplateId } })) throw new BadRequestException("默认话术不存在，请重新选择");
+            if(reset||data.defaultExecutionAccountId!==undefined||data.platform!==undefined||data.mode!==undefined)await this.validateDefaultAccount(tx,actor,data.platform??current.platform,data.mode??current.mode,data.defaultExecutionAccountId===undefined?current.defaultExecutionAccountId:data.defaultExecutionAccountId);
             const config = await tx.collectionConfig.update({ where: { id }, data: { ...data, semanticRules:data.semanticRules===undefined?undefined:data.semanticRules||Prisma.DbNull, commentRules:data.commentRules===undefined?undefined:data.commentRules||Prisma.DbNull, ...(data.archivedAt ? { defaultReplyTemplateId: null } : {}), ...(reset ? { revision: { increment: 1 } } : {}), ...(data.enabled ? { pauseReason: null } : {}), ...(data.enabled === false ? { activeRunId: null } : {}) } });
             if (data.enabled === false)
                 await tx.collectionRun.updateMany({ where: { configId: id, status: { in: ["QUEUED", "RUNNING"] } }, data: { cancelRequested: true, status: "PAUSED", reason: "CONFIG_PAUSED", finishedAt: new Date() } });
@@ -102,9 +112,10 @@ export class CollectionService {
             this.gate(config.mode);
             if (config.mode !== mode) throw new BadRequestException("采集模式与配置不一致");
             if ((mode === "MOCK") === (scenario === "READ_WINDOW")) throw new BadRequestException("场景与采集模式不一致");
+            const executionAccountId=mode==='MOCK'?undefined:accountId??config.defaultExecutionAccountId??undefined;
             const old = await tx.collectionRun.findUnique({ where: { requestKey } });
             if (old) {
-                if (old.configId !== id || old.scenario !== scenario || ((readPlan||(old.readPlan as ReadPlan|null)?.savedPostId)&&semanticHash(old.readPlan)!==semanticHash(readPlan??null)) || (old.execution as {accountId?:string;actorId?:string}|null)?.accountId !== accountId || (old.execution && (old.execution as {actorId:string}).actorId !== actor.id))
+                if (old.configId !== id || old.scenario !== scenario || ((readPlan||(old.readPlan as ReadPlan|null)?.savedPostId)&&semanticHash(old.readPlan)!==semanticHash(readPlan??null)) || (old.execution as {accountId?:string;actorId?:string}|null)?.accountId !== executionAccountId || (old.execution && (old.execution as {actorId:string}).actorId !== actor.id))
                     throw new ConflictException("请求键冲突");
                 return { ...old, reused: true };
             }
@@ -122,7 +133,7 @@ export class CollectionService {
                 if(mode!=='MOCK'&&(!accountReadMode()||!this.accountReads))throw new ForbiddenException('定向读取必须使用本机已授权账号');
                 await savedReadTarget(tx,id,readPlan.savedPostId,mode);
             }
-            const execution=accountReadMode() && mode !== 'MOCK' ? await this.accountReads!.authorize(tx,actor,mode,accountId,consent) : undefined;
+            const execution=accountReadMode() && mode !== 'MOCK' ? await this.accountReads!.authorize(tx,actor,mode,executionAccountId,consent) : undefined;
             const created = await tx.collectionRun.create({ data: { configId: id, revision: config.revision, snapshot, scenario, requestKey, readPlan:readPlan||{rounds:1,postsPerRound:snapshot.batchLimit,commentPages:mode==="MOCK"?4:1}, ...(execution?{execution}:{}) } });
             await tx.collectionConfig.update({ where: { id }, data: { activeRunId: created.id } });
             await tx.auditLog.create({ data: { actorId: actor.id, action: config.mode === "MOCK" ? "COLLECTION_REQUESTED_MOCK" : "COLLECTION_REQUESTED_MCP", entityId: created.id, metadata: { configId: id, scenario, mode: config.mode } } });
@@ -177,7 +188,7 @@ export class CollectionService {
             if (spec.mode === "MOCK") reader = adapter || new MockAdapter(spec.platform, run.scenario as Scenario);
             else if(accountReadMode()) {
                 if(adapter||!this.accountReads||spec.mode!==accountReadMode()||spec.batchLimit>3)throw new ReadFailure('REAL_DISABLED');
-                diagnosticStage='authorization';owned=await this.accountReads.open(run.execution,cancelled);reader=owned.reader;
+                diagnosticStage='authorization';owned=await this.accountReads.open(run.execution,cancelled,run.id);reader=owned.reader;
             }
             else { if(run.execution)throw new ReadFailure('REAL_DISABLED'); const settings = requireMcp(spec.mode); reader = adapter || new XhsMcpAdapter(new XhsHttpTransport(settings.url, settings.mode), true, settings.mode); }
             const result = await collect(reader, spec, async () => { if(owned)await owned.check(); else if(spec.mode!=="MOCK")requireMcp(spec.mode);return cancelled(); }, {...(owned?{requests:32,pagesPerStream:1,comments:800,callMs:40000,runMs:150000}:limits),pagesPerStream:(run.readPlan as {commentPages?:number}|null)?.commentPages??(owned?1:limits.pagesPerStream)}, async progress=>{
@@ -196,7 +207,7 @@ export class CollectionService {
             if(owned && result.status==='FAILED'){result.discarded=result.discarded||result.posts.length>0;result.posts=[];}
             diagnosticStage='commit';
             const finished=await commitRead(this.db, run, result,owned?.commitGuard);
-            if(owned)await this.accountReads!.failure(run.execution,result.reason);
+            if(owned)await this.accountReads!.failure(run.execution,result.reason,run.id);
             return finished;
         }
         catch (error) {
@@ -204,7 +215,7 @@ export class CollectionService {
             const diagnostic=diagnose(error,diagnosticStage);logCollectionDiagnostic(run.id,diagnostic);
             await finishCapture(this.db,run,{posts:[],requests:0,status:"FAILED",reason});
             const failed=await commitRead(this.db, run, { posts: [], requests: 0, status: "FAILED", reason,diagnostic });
-            if(run.execution)await this.accountReads?.failure(run.execution,reason);
+            if(run.execution)await this.accountReads?.failure(run.execution,reason,run.id);
             return failed;
         } finally { try{await releaseCheckpoints(this.db,checkpoints);}finally{if(owned)await owned.close();else await reader?.close?.();} }
     }

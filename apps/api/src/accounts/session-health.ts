@@ -1,10 +1,8 @@
-export const sessionTtlMs=30*60_000;
 type Reference={state:string;checkedRuntimeId:string|null;verifiedAt:Date|null;checkingUntil?:Date|null};
-export function sessionFresh(ref:Reference|null|undefined,runtimeId:string|undefined,now=Date.now()){
- return !!ref&&ref.state==='VERIFIED'&&!!runtimeId&&ref.checkedRuntimeId===runtimeId&&!!ref.verifiedAt&&ref.verifiedAt.getTime()<=now&&now-ref.verifiedAt.getTime()<sessionTtlMs;
-}
-export function sessionHealth(ref:Reference|null|undefined,runtimeId:string|undefined,now=Date.now()){
- const fresh=sessionFresh(ref,runtimeId,now),waiting=!!ref?.checkingUntil&&ref.checkingUntil.getTime()>now;
- const state=fresh?'VERIFIED':ref?.state==='VERIFIED'||ref?.state==='CHECKING'&&!waiting?'UNVERIFIED':ref?.state||'LOGIN_REQUIRED';
- return {state,fresh,checkable:!!ref&&!waiting&&['UNVERIFIED','CONNECTION_ERROR','RATE_LIMITED'].includes(state),retryAt:waiting?ref!.checkingUntil:null,freshUntil:fresh?new Date(ref!.verifiedAt!.getTime()+sessionTtlMs):null};
+/** Historical evidence is never a grant to read. Every task checks the platform under its own lease. */
+export function sessionHealth(ref:Reference|null|undefined,_runtimeId?:string,now=Date.now()){
+ const waiting=!!ref?.checkingUntil&&ref.checkingUntil.getTime()>now;
+ const state=ref?.state==='CHECKING'&&!waiting?'UNVERIFIED':ref?.state||'LOGIN_REQUIRED';
+ const taskAllowed=!!ref&&['VERIFIED','UNVERIFIED','CONNECTION_ERROR'].includes(state)&&(!waiting||state==='VERIFIED');
+ return {state,taskAllowed,checkable:!!ref&&!waiting&&['VERIFIED','UNVERIFIED','CONNECTION_ERROR','RATE_LIMITED'].includes(state),retryAt:waiting?ref!.checkingUntil:null,verifiedAt:ref?.verifiedAt??null};
 }
