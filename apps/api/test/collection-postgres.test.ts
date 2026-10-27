@@ -37,7 +37,7 @@ async function clean() {
     await db.sourceMatch.deleteMany();
     await db.commentObservation.deleteMany();
     await db.monitorPost.deleteMany();
-    await db.collectionRun.deleteMany();
+    await db.semanticReview.deleteMany();await db.capturedComment.deleteMany();await db.capturedPost.deleteMany();await db.collectionRun.deleteMany();
     await db.collectionConfig.deleteMany();
   await db.replyTemplate.deleteMany();
     await db.auditLog.deleteMany();

@@ -4,8 +4,8 @@ export const contactTimezone = 'Asia/Shanghai';
 export const autoContactRuleInput = z.object({ version: z.number().int().nonnegative(), platform: z.enum(['XHS', 'DOUYIN']), policyId: z.string().min(1).max(200), policyRevision: z.number().int().positive(), threshold: z.number().int().min(0).max(100), channel: z.enum(['COMMENT', 'DM']), content: z.string().max(1000), accounts: z.array(z.object({ id: z.string().min(1).max(200), version: z.number().int().positive(), dailyLimit: z.number().int().min(0).max(1000) }).strict()).max(100).refine(a => new Set(a.map(x => x.id)).size === a.length) }).strict();
 export type AutoContactRuleInput = z.infer<typeof autoContactRuleInput>;
 export const autoContactToggleInput = z.object({ version: z.number().int().positive(), enabled: z.boolean(), consent: z.literal(autoContactConsent).optional(), hash: z.string().max(100).optional() }).strict();
-export const contactStatuses = ['QUEUED', 'WAITING_QUOTA', 'WAITING_ACCOUNT', 'RESERVED', 'ATTEMPTED', 'CONFIRMED', 'SIMULATED_SUCCESS', 'FAILED', 'UNKNOWN', 'CANCELLED', 'SKIPPED'] as const;
-export const contactStatusLabel: Record<string, string> = { QUEUED: '排队中', WAITING_QUOTA: '等待额度', WAITING_ACCOUNT: '等待可用账号', RESERVED: '已预占', ATTEMPTED: '已尝试，待回执', CONFIRMED: '平台已确认', SIMULATED_SUCCESS: '模拟完成 · 未发送', FAILED: '确认失败', UNKNOWN: '结果未知 · 保留占用', CANCELLED: '已取消', SKIPPED: '未执行' };
+export const contactStatuses = ['QUEUED', 'WAITING_QUOTA', 'WAITING_ACCOUNT', 'RESERVED', 'ATTEMPTED', 'CONFIRMED', 'SIMULATED_SUCCESS', 'FAILED', 'UNKNOWN', 'CANCELLED', 'SKIPPED', 'BLOCKED_POST'] as const;
+export const contactStatusLabel: Record<string, string> = { BLOCKED_POST:'帖子状态阻断 · 需重新确认', QUEUED: '排队中', WAITING_QUOTA: '等待额度', WAITING_ACCOUNT: '等待可用账号', RESERVED: '已预占', ATTEMPTED: '已尝试，待回执', CONFIRMED: '平台已确认', SIMULATED_SUCCESS: '模拟完成 · 未发送', FAILED: '确认失败', UNKNOWN: '结果未知 · 保留占用', CANCELLED: '已取消', SKIPPED: '未执行' };
 export type AutoContactRule = {
     id: string;
     accountLimits: {
@@ -58,6 +58,8 @@ export type AutoContactOverview = {
     day: string;
 };
 export type AutoContactJobView = {
+    availability?:import('./post-availability').PostAvailabilityView;
+    sourceSnapshot?:unknown;
     id: string;
     status: string;
     reason: string | null;
@@ -84,6 +86,8 @@ export type AutoContactJobView = {
         observationPolicy: string | null;
     };
     attempt: null | {
+        accountIdSnapshot?:string|null;
+        historySnapshot?:{accountLabel?:string;senderPlatformId?:string|null}|null;
         outcome: string;
         day: string;
         createdAt: string;

@@ -4,6 +4,7 @@ import {AutoReviewService} from '../comment-review/auto-review.service';
 import {CommentReviewController} from '../comment-review/comment-review.controller';
 import {ReviewPolicyService} from '../comment-review/review-policy.service';
 import {ReviewEvaluationService} from '../comment-review/review-evaluation.service';
+import {availabilityInput} from '@crm/contracts';
 import {savedPostPageInput} from './saved-post-page';
 import {readPlanSchema} from './saved-post-read';
 import { Controller, Get, Post, Patch, Delete, Param, Query, Req, Inject, Module, UseGuards, NotFoundException, Res, Header } from "@nestjs/common";
@@ -37,6 +38,12 @@ class CollectionController {
     private service: CollectionService, @Inject(SemanticService) private semantic:SemanticService, @Inject(QwenMatchingService) private qwen:QwenMatchingService, @Inject(CaptureService) private captures:CaptureService,@Inject(SinglePostService) private singlePost:SinglePostService) { }
     @Post("single-post-check") @Header("Cache-Control","no-store, private")
     singlePostCheck(@Req() r:AuthedRequest){return this.singlePost.check(r.actor,parse(singlePostInput,r.body));}
+    @Get('captured-posts/:id/availability') @Header('Cache-Control','no-store, private')
+    availability(@Req() r:AuthedRequest,@Param('id') id:string){return this.captures.availability(r.actor,id);}
+    @Post('captured-posts/:id/availability/recheck') @Header('Cache-Control','no-store, private')
+    recheckAvailability(@Req() r:AuthedRequest,@Param('id') id:string){parse(z.object({}).strict(),r.body);return this.captures.availability(r.actor,id);}
+    @Patch('captured-posts/:id/availability')
+    markAvailability(@Req() r:AuthedRequest,@Param('id') id:string){return this.captures.markAvailability(r.actor,id,parse(availabilityInput,r.body));}
     @Get("captured-posts/:id/source") @Header("Cache-Control","no-store, private") @Header("Referrer-Policy","no-referrer")
     async original(@Req() r:AuthedRequest,@Param("id") id:string,@Res() response:Response){response.setHeader("Cache-Control","no-store, private");response.setHeader("Referrer-Policy","no-referrer");response.redirect(302,await this.captures.source(r.actor,id));}
     @Post("configs/:id/capture-preview")

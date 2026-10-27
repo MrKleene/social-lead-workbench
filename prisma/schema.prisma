@@ -335,7 +335,7 @@ model ContactLedger {
   identityId String
   mode String @default("LEGACY_SIMULATION")
   @@unique([identityId,mode])
-  identity PlatformIdentity @relation(fields:[identityId],references:[id],onDelete:Cascade)
+  identity PlatformIdentity @relation(fields:[identityId],references:[id],onDelete:Restrict)
   accountId String
   account PlatformAccount @relation(fields:[accountId],references:[id],onDelete:Restrict)
   attempts ContactAttempt[]
@@ -351,6 +351,8 @@ enum ContactOutcome {
   FAILED
 }
 model ContactAttempt {
+  accountIdSnapshot String?
+  historySnapshot Json?
   jobId String? @unique
   mode String @default("LEGACY_SIMULATION")
   channel ReplyChannel?
@@ -360,7 +362,7 @@ model ContactAttempt {
   confirmedAt DateTime?
   id String @id @default(cuid())
   ledgerId String
-  ledger ContactLedger @relation(fields:[ledgerId],references:[id],onDelete:Cascade)
+  ledger ContactLedger @relation(fields:[ledgerId],references:[id],onDelete:Restrict)
   requestKey String @unique
   kind String
   outcome ContactOutcome @default(ATTEMPTED)
@@ -442,13 +444,13 @@ model SemanticReview {
   ruleHash String?
   contextVersion String?
   captureId String?
-  capture CapturedComment? @relation(fields:[captureId],references:[id],onDelete:SetNull)
+  capture CapturedComment? @relation(fields:[captureId],references:[id],onDelete:Restrict)
   evaluationInput Json?
   id String @id @default(cuid())
   configId String
-  config CollectionConfig @relation(fields:[configId], references:[id], onDelete:Cascade)
+  config CollectionConfig @relation(fields:[configId], references:[id], onDelete:Restrict)
   runId String
-  run CollectionRun @relation(fields:[runId], references:[id], onDelete:Cascade)
+  run CollectionRun @relation(fields:[runId], references:[id], onDelete:Restrict)
   revision Int
   leaseUntil DateTime?
   snapshotHash String
@@ -509,9 +511,9 @@ model SemanticControl {
 model CapturedPost {
  id String @id @default(cuid())
  configId String
- config CollectionConfig @relation(fields:[configId],references:[id],onDelete:Cascade)
+ config CollectionConfig @relation(fields:[configId],references:[id],onDelete:Restrict)
  runId String
- run CollectionRun @relation(fields:[runId],references:[id],onDelete:Cascade)
+ run CollectionRun @relation(fields:[runId],references:[id],onDelete:Restrict)
  platformPostId String
  contentHash String
  snapshot Json
@@ -526,11 +528,11 @@ model CapturedPost {
 model CapturedComment {
  id String @id @default(cuid())
  configId String
- config CollectionConfig @relation(fields:[configId],references:[id],onDelete:Cascade)
+ config CollectionConfig @relation(fields:[configId],references:[id],onDelete:Restrict)
  runId String
- run CollectionRun @relation(fields:[runId],references:[id],onDelete:Cascade)
+ run CollectionRun @relation(fields:[runId],references:[id],onDelete:Restrict)
  postId String
- post CapturedPost @relation(fields:[postId],references:[id],onDelete:Cascade)
+ post CapturedPost @relation(fields:[postId],references:[id],onDelete:Restrict)
  platformCommentId String
  contentHash String
  contextVersion String
@@ -680,6 +682,8 @@ model AutoContactControl {
  @@id([platform,mode])
 }
 model AutoContactJob {
+ availabilityVersion Int @default(0)
+ sourceSnapshot Json?
  id String @id @default(uuid())
  ruleId String
  rule AutoContactRule @relation(fields:[ruleId],references:[id],onDelete:Restrict)
@@ -706,4 +710,32 @@ model AutoContactJob {
  @@unique([ruleId,ruleVersion,reviewId])
  @@index([status,createdAt])
  @@index([platform,recipientId,mode])
+}
+
+// Independent of archive versions. Absence means UNKNOWN, never NORMAL.
+model PostAvailability {
+ platform Platform
+ postId String
+ state String @default("UNKNOWN")
+ reason String @default("NOT_CHECKED")
+ version Int @default(1)
+ checkedAt DateTime
+ source String
+ evidence Json
+ // Latest loss of accessibility; recovery requires a new authorization and review.
+ invalidatedAt DateTime?
+ @@id([platform,postId])
+}
+model PostAvailabilityEvent {
+ id String @id @default(cuid())
+ platform Platform
+ postId String
+ version Int
+ state String
+ reason String
+ checkedAt DateTime
+ source String
+ evidence Json
+ actorId String?
+ @@unique([platform,postId,version])
 }

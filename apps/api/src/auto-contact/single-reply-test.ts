@@ -1,3 +1,6 @@
+import {postAvailability,postSendBlock} from '../collection/post-availability';
+import {publicPostSnapshot} from '../collection/post-reference';
+import type {Prisma} from '@prisma/client';
 import { z } from 'zod';
 import type { Db } from '../common/db';
 import { requireAdmin, type Actor } from '../auth/security';
@@ -10,7 +13,7 @@ import type { XhsReplyBinding } from './xhs-reply-protocol';
 export const singleReplyCandidateSha = 'ee0901efc70426a8d44eef00e731cf474447967057d3b50df4727bb1cf032d96';
 const id=z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/), platformId=z.string().regex(/^[a-f0-9]{24}$/);
 export const singleReplyScopeSchema=z.object({
- approvalId:z.string().uuid(),accountId:id,senderId:platformId,reviewId:id,reviewVersion:z.number().int().nonnegative(),templateId:id,
+ availabilityVersion:z.number().int().nonnegative(),approvalId:z.string().uuid(),accountId:id,senderId:platformId,reviewId:id,reviewVersion:z.number().int().nonnegative(),templateId:id,
  postId:platformId,commentId:platformId,recipientId:platformId,comment:z.string().min(1).max(20000),content:z.string().min(1).max(4000),
  binarySha256:z.literal(singleReplyCandidateSha),maximumSubmissions:z.literal(1),retryCount:z.literal(0),expiresAt:z.string().datetime(),
  // A narrow exception to this pre-existing read-only setting, never platform risk.
@@ -40,12 +43,13 @@ export class SingleReplyTestService {
   if(!t||t.body!==s.content||t.channel!=='COMMENT'||t._count.configs!==0)refuse();
   const target=contactTarget(r!,r!.capture,r!.capture?.post??null),snapshot=r!.snapshot as Record<string,unknown>;
   if(!target||target.postId!==s.postId||target.commentId!==s.commentId||target.recipientId!==s.recipientId||snapshot.comment!==s.comment)refuse();
+  const availability=await postAvailability(tx,'XHS',s.postId);if(postSendBlock(availability,now,r!.updatedAt,s.availabilityVersion))refuse();
   const ref=savedPostReference((r!.capture!.post.snapshot as Record<string,unknown>).sourceReference,s.postId);if(!ref)refuse();
   const identity=await tx.platformIdentity.findUnique({where:{platform_platformUserId:{platform:'XHS',platformUserId:s.recipientId}},include:{lead:true}});
   if(identity?.lead&&(identity.lead.doNotContact||(!identity.lead.isDemo&&(identity.lead.contactedAt||['CONTACTED','INTERESTED'].includes(identity.lead.contactStage)))))refuse();
   if(await tx.autoContactRule.count({where:{enabled:true}}))refuse();
-  const day=quotaBucket('REAL',now),hash=semanticHash({review:eligibilityHash(r!),accountVersion:a!.version,session:semanticHash(a!.loginSessionKey),templateVersion:t!.version,day});
-  return {account:a!,reference:ref!,day,hash};
+  const day=quotaBucket('REAL',now),hash=semanticHash({review:eligibilityHash(r!),accountVersion:a!.version,session:semanticHash(a!.loginSessionKey),templateVersion:t!.version,availabilityVersion:availability?.version??0,day});
+  return {account:a!,reference:ref!,day,hash,source:{post:publicPostSnapshot(r!.capture!.post.snapshot),comment:r!.snapshot}};
  }
  async execute(actor:Actor,input:unknown,signal:AbortSignal=AbortSignal.timeout(90000)){
   requireAdmin(actor);const s=singleReplyScopeSchema.parse(input),key='single-reply:'+s.approvalId,scopeHash=semanticHash(s);
@@ -64,7 +68,7 @@ export class SingleReplyTestService {
    const usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId:s.accountId,day:v.day}}});
    if(v.account.dailyLimit<=0||(usage?.occupied??0)>=v.account.dailyLimit)throw Error('QUOTA_EXHAUSTED');
    const l=ledger?await tx.contactLedger.update({where:{id:ledger.id},data:{accountId:s.accountId}}):await tx.contactLedger.create({data:{identityId:identity.id,mode:'REAL',accountId:s.accountId}});
-   const attempt=await tx.contactAttempt.create({data:{ledgerId:l.id,requestKey:key,kind:'FIRST',mode:'REAL',channel:'COMMENT',content:s.content,outcome:'RESERVED',day:v.day,actorId:actor.id}});
+   const attempt=await tx.contactAttempt.create({data:{ledgerId:l.id,requestKey:key,kind:'FIRST',mode:'REAL',channel:'COMMENT',content:s.content,outcome:'RESERVED',day:v.day,actorId:actor.id,accountIdSnapshot:s.accountId,historySnapshot:{platform:'XHS',recipientId:s.recipientId,postId:s.postId,commentId:s.commentId,accountId:s.accountId,accountLabel:v.account.label,senderPlatformId:s.senderId,source:v.source} as Prisma.InputJsonValue}});
    await tx.accountDay.upsert({where:{accountId_day:{accountId:s.accountId,day:v.day}},create:{accountId:s.accountId,day:v.day,occupied:1},update:{occupied:{increment:1}}});
    await tx.autoContactControl.upsert({where:{platform_mode:{platform:'XHS',mode:'REAL'}},create:{platform:'XHS',mode:'REAL',activeJobId:key,leaseUntil:new Date(Date.now()+120000)},update:{activeJobId:key,leaseUntil:new Date(Date.now()+120000)}});
    await tx.auditLog.create({data:{actorId:actor.id,entityId:key,action:'SINGLE_REPLY_TEST_AUTHORIZED_RESERVED',metadata:{scope:s,scopeHash,validationHash:v.hash,attemptId:attempt.id,automaticContactEnabled:false}}});

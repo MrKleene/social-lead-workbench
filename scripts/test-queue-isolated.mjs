@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const databaseOnly = process.argv.includes('--database-only');
 const recovery = process.argv.includes('--recovery');
 const mcpAcceptance = process.argv.includes('--mcp');
 const mockOnly = process.argv.includes('--mock-only');
-assert([recovery,mcpAcceptance,mockOnly].filter(Boolean).length<=1, 'Choose one isolated acceptance mode');
-const output = join(root, recovery ? '.qa/recovery-validation' : mockOnly ? '.qa/mock-only-validation' : mcpAcceptance ? '.qa/mcp-validation' : '.qa/step3-validation');
+assert([recovery,mcpAcceptance,mockOnly,databaseOnly].filter(Boolean).length<=1, 'Choose one isolated acceptance mode');
+const output = join(root, databaseOnly ? '.qa/database-validation' : recovery ? '.qa/recovery-validation' : mockOnly ? '.qa/mock-only-validation' : mcpAcceptance ? '.qa/mcp-validation' : '.qa/step3-validation');
 mkdirSync(output, { recursive: true });
 const id = randomBytes(8).toString('hex');
 const password = randomBytes(24).toString('hex');
@@ -73,7 +74,7 @@ function stopGroup(child) {
 }
 let interrupted = false;
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { interrupted = true; stopGroup(current); });
-const report = { mode: recovery ? 'ISOLATED_CHUNK_RECOVERY' : mockOnly ? 'MOCK_ONLY' : mcpAcceptance ? 'MCP_OFFLINE' : 'QUEUE_MIXED', isolated: true, persistent_volumes: false, credentials_persisted: false, results, cleanup: [] };
+const report = { mode: databaseOnly ? 'DATABASE_ONLY' : recovery ? 'ISOLATED_CHUNK_RECOVERY' : mockOnly ? 'MOCK_ONLY' : mcpAcceptance ? 'MCP_OFFLINE' : 'QUEUE_MIXED', isolated: true, persistent_volumes: false, credentials_persisted: false, results, cleanup: [] };
 try {
     // Reuse installed official images only. No daemon settings, persistent credentials, or external platforms.
     docker(['image', 'inspect', 'postgres:17']); docker(['image', 'inspect', 'redis:7-alpine']);
@@ -89,10 +90,11 @@ try {
     await command('migrate', ['npm', 'exec', 'prisma', 'migrate', 'deploy'], env);
     for (const workspace of ['@crm/contracts', '@crm/api', '@crm/worker'])
         await command(`build-${workspace.split('/')[1]}`, ['npm', 'run', 'build', '-w', workspace], env);
-    if (mcpAcceptance || mockOnly) await command('postgres-tests', ['npm', 'run', 'test:integration', '-w', '@crm/api', '--', '--reporter=verbose'], env);
-    if (recovery) await command('recovery-tests', ['node','scripts/test-chunk-worker-recovery.mjs'], env);
+    if (mcpAcceptance || mockOnly || databaseOnly) await command('postgres-tests', ['npm', 'run', 'test:integration', '-w', '@crm/api', '--', '--reporter=verbose'], env);
+    if (databaseOnly) {}
+    else if (recovery) await command('recovery-tests', ['node','scripts/test-chunk-worker-recovery.mjs'], env);
     else await command('queue-tests', ['npm', 'run', 'test:queue', '-w', '@crm/api', '--', '--reporter=verbose'], env);
-    await command('health-queue', ['node', 'scripts/test-worker.mjs'], env);
+    if (!databaseOnly) await command('health-queue', ['node', 'scripts/test-worker.mjs'], env);
     const keys = docker(['exec', redis.container, 'redis-cli', '--scan', '--pattern', `bull:crm-queue-acceptance-${id}*`]);
     // obliterate may recreate only metadata during the final empty-count check; container removal clears all keys.
     report.remaining_acceptance_key_count_before_container_removal = keys ? keys.split('\n').length : 0;

@@ -62,3 +62,5 @@ export * from './semantic-output-errors';
 export {rootScopedRepliesExhausted} from './root-reply-scope';
 export {observedReadCounts} from './observed-read';
 export * from './auto-contact';
+
+export * from './post-availability';

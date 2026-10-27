@@ -1,3 +1,5 @@
+import {postAvailability,postSendBlock} from '../collection/post-availability';
+import {publicPostSnapshot} from '../collection/post-reference';
 import { Inject, Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma, type AutoContactJob, type AutoContactRule } from '@prisma/client';
 import { Db } from '../common/db';
@@ -35,7 +37,8 @@ export class AutoContactService {
         const identity = await tx.platformIdentity.findUnique({ where: { platform_platformUserId: { platform: r.platform, platformUserId: target.recipientId } }, include: { lead: true } });
         if (identity?.lead && (identity.lead.doNotContact || (!identity.lead.isDemo && (identity.lead.contactedAt || ['CONTACTED', 'INTERESTED'].includes(identity.lead.contactStage)))))
             return null;
-        return { row, target };
+        const availability = await postAvailability(tx,r.platform,target.postId);
+        return { row, target, availability, block:postSendBlock(availability,r.authorizedAt,row.updatedAt) };
     }
     async enqueue() {
         return this.db.$transaction(async (tx) => {
@@ -49,7 +52,7 @@ export class AutoContactService {
                 const rows = await tx.semanticReview.findMany({ where: { policyId: r.policyId, policyRevision: r.policyRevision, selectedModel: r.model, platform: r.platform, state: 'EVALUATED', score: { gte: r.threshold }, context: 'SUFFICIENT', reviewStatus: { in: ['PENDING', 'APPROVED'] }, updatedAt: { gte: r.authorizedAt! }, contactJobs: { none: { ruleId: r.id, ruleVersion: r.version } } }, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], take: 100 });
                 for (const row of rows) {
                     const valid = await this.reviewReady(tx, r, row.id), input = row.evaluationInput as Record<string, unknown> | null;
-                    await tx.autoContactJob.create({ data: { ruleId: r.id, ruleVersion: r.version, reviewId: row.id, reviewVersion: row.version, mode: r.mode, platform: r.platform, recipientId: valid?.target.recipientId ?? '', postId: valid?.target.postId ?? '', commentId: valid?.target.commentId ?? '', channel: r.channel, content: r.content, eligibilityHash: eligibilityHash(row), status: valid ? 'QUEUED' : 'SKIPPED', reason: valid ? null : '评论作者、来源、充分性或勿联系条件未通过', evidence: json({ score: row.score, modelVersion: row.modelVersion, target: (row.rules as {
+                    await tx.autoContactJob.create({ data: { ruleId: r.id, ruleVersion: r.version, reviewId: row.id, reviewVersion: row.version, mode: r.mode, platform: r.platform, recipientId: valid?.target.recipientId ?? '', postId: valid?.target.postId ?? '', commentId: valid?.target.commentId ?? '', channel: r.channel, content: r.content, eligibilityHash: eligibilityHash(row), availabilityVersion:valid?.availability?.version??0, sourceSnapshot:valid?json({post:publicPostSnapshot(valid.row.capture!.post.snapshot),comment:valid.row.snapshot,availability:valid.availability?{state:valid.availability.state,reason:valid.availability.reason,version:valid.availability.version,checkedAt:valid.availability.checkedAt.toISOString(),source:valid.availability.source,evidence:valid.availability.evidence}:{state:'UNKNOWN',version:0,checkedAt:null}}):Prisma.JsonNull, status: valid?.block ? 'BLOCKED_POST' : valid ? 'QUEUED' : 'SKIPPED', reason: valid?.block ?? (valid ? null : '评论作者、来源、充分性或勿联系条件未通过'), evidence: json({ score: row.score, modelVersion: row.modelVersion, target: (row.rules as {
                                     target?: string;
                                 }).target ?? '', policyRevision: row.policyRevision, quotes: (row.result as {
                                     evidence?: unknown;
@@ -87,6 +90,8 @@ export class AutoContactService {
                 if (control?.activeJobId)
                     continue;
                 const valid = await this.reviewReady(tx, r, j.reviewId);
+                const postBlock = valid ? postSendBlock(valid.availability,r.authorizedAt,valid.row.updatedAt,j.availabilityVersion) : null;
+                if(postBlock){await cancelReserved(tx,j,postBlock);await tx.autoContactJob.update({where:{id:j.id},data:{status:'BLOCKED_POST'}});continue;}
                 if (!valid || eligibilityHash(valid.row) !== j.eligibilityHash) {
                     await cancelReserved(tx, j, '审核结果或来源已变化');
                     continue;
@@ -117,7 +122,8 @@ export class AutoContactService {
                 }
                 const l = ledger ? await tx.contactLedger.update({ where: { id: ledger.id }, data: { accountId: selected } }) : await tx.contactLedger.create({ data: { identityId: identity.id, mode: j.mode, accountId: selected } });
                 await tx.accountDay.upsert({ where: { accountId_day: { accountId: selected, day } }, create: { accountId: selected, day, occupied: 1 }, update: { occupied: { increment: 1 } } });
-                const attempt = await tx.contactAttempt.create({ data: { ledgerId: l.id, requestKey: 'auto-contact:' + j.id, jobId: j.id, mode: j.mode, kind: 'FIRST', channel: j.channel, content: j.content, outcome: 'RESERVED', day, actorId: r.authorizedBy! } }), leaseUntil = new Date(now.getTime() + 120000);
+                const sendingAccount=await tx.platformAccount.findUniqueOrThrow({where:{id:selected},select:{label:true,loginPlatformUserId:true}});
+                const attempt = await tx.contactAttempt.create({ data: { ledgerId: l.id, requestKey: 'auto-contact:' + j.id, jobId: j.id, mode: j.mode, kind: 'FIRST', channel: j.channel, content: j.content, outcome: 'RESERVED', day, actorId: r.authorizedBy!, accountIdSnapshot:selected, historySnapshot:json({platform:j.platform,recipientId:j.recipientId,postId:j.postId,commentId:j.commentId,accountId:selected,accountLabel:sendingAccount.label,senderPlatformId:sendingAccount.loginPlatformUserId,source:j.sourceSnapshot,evidence:j.evidence}) } }), leaseUntil = new Date(now.getTime() + 120000);
                 await tx.autoContactControl.upsert({ where: { platform_mode: { platform: j.platform, mode: j.mode } }, create: { platform: j.platform, mode: j.mode, activeJobId: j.id, leaseUntil }, update: { activeJobId: j.id, leaseUntil } });
                 return tx.autoContactJob.update({ where: { id: j.id }, data: { status: 'RESERVED', accountId: selected, attemptId: attempt.id, leaseUntil, reason: null } });
             }
@@ -142,6 +148,8 @@ export class AutoContactService {
                 return null;
             await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${j.accountId!} FOR UPDATE`;
             const valid = await this.reviewReady(tx, j.rule, j.reviewId), a = await tx.platformAccount.findUnique({ where: { id: j.accountId! }, include: { sessionReference: true } }), now = await this.now(tx);
+            const postBlock = valid ? postSendBlock(valid.availability,j.rule.authorizedAt,valid.row.updatedAt,j.availabilityVersion) : null;
+            if(postBlock){await cancelReserved(tx,j,postBlock);await tx.autoContactJob.update({where:{id:j.id},data:{status:'BLOCKED_POST'}});return null;}
             const attempt = await tx.contactAttempt.findUniqueOrThrow({ where: { id: j.attemptId! } }), usage = await tx.accountDay.findUnique({ where: { accountId_day: { accountId: j.accountId!, day: attempt.day } } });
             if (!healthy || !a || a.archivedAt || a.status !== 'UNCONNECTED' || !j.rule.accountIds.includes(a.id) || j.ruleVersion !== j.rule.version || !await this.ruleReady(tx, j.rule) || !valid || eligibilityHash(valid.row) !== j.eligibilityHash || !j.leaseUntil || j.leaseUntil < now || attempt.day !== quotaBucket(j.mode, now) || (usage?.occupied ?? 0) > limit(j.rule, a.id, a.dailyLimit) || (j.mode === 'REAL' ? (a.isDemo || a.sessionReference?.state !== 'VERIFIED') : (!a.isDemo || !!a.loginSessionKey))) {
                 await cancelReserved(tx, j, '发送前健康、授权、额度日期或证据已变化；未发送');
@@ -181,7 +189,7 @@ export class AutoContactService {
             }
             else if (result.kind === 'FAILED') {
                 status = 'FAILED';
-                reason = '适配器确认未发送';
+                reason = '适配器确认未发送：'+result.reason;
             }
             else {
                 status = 'UNKNOWN';

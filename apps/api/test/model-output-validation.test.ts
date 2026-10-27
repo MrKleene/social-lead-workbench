@@ -97,7 +97,7 @@ describe('all paid entry points share output validation without a real provider'
   expect(await run()).toMatchObject({reused:true,status:bad?'FAILED':'COMPLETED'});expect(transport).toHaveBeenCalledTimes(1);
  });
  it('API projects historical explanation without writing historical records',async()=>{
-  const {db,policies}=harness(false),stored={...source(),state:'FAILED',reason:'评估失败（INVALID_EVIDENCE）'};db.semanticReview.findMany=async()=>[stored];
+  const {db,policies}=harness(false);(db as any).postAvailability={findUnique:vi.fn(async()=>null)};const stored={...source(),state:'FAILED',reason:'评估失败（INVALID_EVIDENCE）'};db.semanticReview.findMany=async()=>[stored];
   const service=new ReviewPolicyService(db,policies.models,policies.qwen);const result=await service.results({id:'admin',name:'Synthetic admin',email:'admin@example.invalid',role:'ADMIN'},'workspace',0);
   expect(result.items[0].displayReason).toContain('旧记录未保存具体原因');expect(result.items[0].reason).toBe(stored.reason);expect(db.semanticReview.updateMany).not.toHaveBeenCalled();
  });

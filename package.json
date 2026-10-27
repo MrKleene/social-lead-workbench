@@ -69,6 +69,7 @@
     "test:collection-info:ui": "npm run build -w @crm/web && node --import tsx scripts/test-collection-info-ui.mjs",
     "test:saved-post:ui": "npm run build -w @crm/web && node scripts/test-saved-post-read-ui.mjs",
     "test:session-preflight:ui": "npm run build -w @crm/web && node scripts/test-session-preflight-ui.mjs",
+    "test:post-availability:ui": "npm run build -w @crm/web && node scripts/test-post-availability-ui.mjs",
     "test:auto-contact:ui": "npm run build -w @crm/web && node scripts/test-auto-contact-ui.mjs"
   },
   "devDependencies": {

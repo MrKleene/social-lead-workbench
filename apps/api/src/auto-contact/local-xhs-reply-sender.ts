@@ -1,3 +1,4 @@
+import {postAvailability,postSendBlock} from '../collection/post-availability';
 import type { Db } from '../common/db';
 import type { DeviceService, ExecutionPermit } from '../devices/device.service';
 import type { LoginRuntime, SessionDriver } from '../accounts/login-runtime';
@@ -35,6 +36,7 @@ export class LocalXhsReplySender implements ContactSender {
             !j.rule.enabled || !j.rule.authorizedAt || j.rule.mode !== 'REAL' || j.rule.platform !== 'XHS' || j.rule.channel !== 'COMMENT' || j.rule.content !== request.content || j.ruleVersion !== j.rule.version || j.rule.authorizedHash !== ruleHash(j.rule) || !j.rule.authorizedBy ||
             !j.rule.accountIds.includes(request.accountId) || eligibilityHash(j.review) !== j.eligibilityHash || !eligible(j.review, j.rule.threshold)) return null;
         if (j.review.isDemo || j.review.platform !== 'XHS' || j.review.capture?.config.platform !== 'XHS' || j.review.policyId !== j.rule.policyId || j.review.policyRevision !== j.rule.policyRevision || j.review.selectedModel !== j.rule.model) return null;
+        if(postSendBlock(await postAvailability(this.db,j.platform,j.postId),j.rule.authorizedAt,j.review.updatedAt,j.availabilityVersion))return null;
         const target = contactTarget(j.review, j.review.capture, j.review.capture?.post ?? null);
         if (!target || target.recipientId !== request.recipientId || target.commentId !== request.commentId || target.postId !== request.postId) return null;
         const [actor, policy, model, control, identity, attempt] = await Promise.all([

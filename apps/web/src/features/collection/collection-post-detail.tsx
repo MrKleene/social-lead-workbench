@@ -1,3 +1,4 @@
+import {PostAvailabilityEntry} from './post-availability';
 import {InfoSection} from '@/components/information-panel';
 import {commentCoverage} from './collection-outcome';
 import {SavedCommentConversation} from './saved-comment-conversation';
@@ -31,7 +32,7 @@ export function CollectionPostDetail({configId,post,id,readAction,platform,onBac
  const openEvidence=(value:ArchivedComment|'post',target:HTMLButtonElement)=>{returnFocus.current=target;setEvidence(value);};
  return <section className="info-post-detail" aria-label="帖子评论详情">
   <div className="info-detail-bar"><Button variant="ghost" onClick={onBack}><ArrowLeft size={15}/>返回帖子列表</Button><div className="info-detail-actions"><button className="info-text-action" onClick={e=>openEvidence('post',e.currentTarget)}>来源与证据</button><Button variant="ghost" onClick={()=>{setRefreshVersion(v=>v+1);onRefresh();}}>刷新</Button></div></div>
-  <header className="mist-detail-heading"><div><h2 ref={heading} tabIndex={-1}>{savedTitleLabel(post?.title)}</h2><div className="info-story-meta"><span data-warning={reading.warning}>{reading.label}</span><span>{platformLabel[platform]} · 已保存原文</span>{(publication||post?.lastSeenAt)&&<time dateTime={publication||post?.lastSeenAt}>{publication?'发布于':'采集于'} {readingTime(publication||post!.lastSeenAt)} · 北京时间</time>}</div></div><div className="info-original-action">{readAction}{sourceLink?<a className="info-original-link" href={sourceLink} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">查看原文<ArrowUpRight size={14}/></a>:<small>未保存有效原文链接</small>}{sourceLink&&<small>可能需登录或访问受限</small>}</div></header>
+  <header className="mist-detail-heading"><div><h2 ref={heading} tabIndex={-1}>{savedTitleLabel(post?.title)}</h2><div className="info-story-meta">{original&&<PostAvailabilityEntry id={original.id} value={original.availability}/>}<span data-warning={reading.warning}>{reading.label}</span><span>{platformLabel[platform]} · 已保存原文</span>{(publication||post?.lastSeenAt)&&<time dateTime={publication||post?.lastSeenAt}>{publication?'发布于':'采集于'} {readingTime(publication||post!.lastSeenAt)} · 北京时间</time>}</div></div><div className="info-original-action">{readAction}{sourceLink?<a className="info-original-link" href={sourceLink} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">查看原文<ArrowUpRight size={14}/></a>:<small>未保存有效原文链接</small>}{sourceLink&&<small>可能需登录或访问受限</small>}</div></header>
   <div className="info-detail-grid"><aside className="info-story" tabIndex={0} role="region" aria-label="帖子内容阅读区" onKeyDown={paneKeys}>
    <h3 className="info-story-title">原帖内容</h3>
    <div className="info-story-scroll" data-media={!!cover&&failedCover!==cover}>

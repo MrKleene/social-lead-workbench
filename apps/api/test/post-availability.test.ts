@@ -1,0 +1,8 @@
+import 'reflect-metadata';
+import {it,expect} from 'vitest';
+import {availabilityInput,unknownPostAvailability} from '@crm/contracts';
+import {classifyPostReason,postSendBlock} from '../src/collection/post-availability';
+it('absence is unknown and no-result never claims current access',()=>{expect(unknownPostAvailability).toMatchObject({state:'UNKNOWN',checkedAt:null,version:0});expect(classifyPostReason('NO_RESULT')).toBe('UNKNOWN');});
+it.each(['HTTP_404','REDIRECT','LOGIN_REQUIRED','RATE_LIMITED','RESTRICTED','NETWORK_ERROR'])('%s is unavailable, never deleted',reason=>expect(classifyPostReason(reason)).toBe('UNAVAILABLE'));
+it('deletion needs explicit manual confirmation and sourced evidence; caller cannot impersonate platform proof',()=>{const body={version:0,reason:'MANUAL_DELETED',evidence:'synthetic source evidence'};expect(availabilityInput.safeParse(body).success).toBe(false);expect(availabilityInput.safeParse({...body,confirmDeleted:true}).success).toBe(true);expect(availabilityInput.safeParse({...body,reason:'PLATFORM_DELETED',confirmDeleted:true}).success).toBe(false);expect(availabilityInput.safeParse({...body,confirmDeleted:true,evidence:'xsec_token=secret'}).success).toBe(false);});
+it('recovery rejects stale authorizations, stale reviews and stale preview versions',()=>{const date=new Date(1000),a:any={state:'NORMAL',version:3,invalidatedAt:date};expect(postSendBlock(a,new Date(0),new Date(2000),3)).toContain('REAUTHORIZE');expect(postSendBlock(a,new Date(2000),new Date(0),3)).toContain('REAUTHORIZE');expect(postSendBlock(a,new Date(2000),new Date(2000),2)).toBe('POST_EVIDENCE_CHANGED');expect(postSendBlock(a,new Date(2000),new Date(2000),3)).toBeNull();});

@@ -1,3 +1,5 @@
+import {readAvailability,markAvailability,postAvailabilityMap} from './post-availability';
+import {unknownPostAvailability} from '@crm/contracts';
 import {readSavedPostPage,savedPostPageInput} from './saved-post-page';
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { prepareOutbound } from './semantic-redaction';
@@ -12,6 +14,8 @@ import { enqueueCaptured, selectedSemanticModel, semanticHash } from './capture-
 @Injectable()
 export class CaptureService {
  constructor(@Inject(Db) private db:Db){}
+ availability(actor:Actor,id:string){return readAvailability(this.db,actor,id);}
+ markAvailability(actor:Actor,id:string,input:unknown){return markAvailability(this.db,actor,id,input);}
  async source(actor:Actor,id:string){
   requireAdmin(actor);const p=await this.db.capturedPost.findUnique({where:{id},include:{config:{select:{platform:true}}}});
   const ref=p?.config.platform==='XHS'?savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId):undefined;
@@ -44,7 +48,7 @@ export class CaptureService {
    this.db.capturedComment.count({where:commentWhere}),this.db.capturedPost.findMany({where:postWhere,orderBy:{lastSeenAt:'desc'},take:20}),this.db.capturedPost.count({where:{configId}}),
    this.db.$queryRaw<{count:bigint}[]>`SELECT COUNT(DISTINCT o."platformCommentId") AS count FROM "CommentObservation" o JOIN "MonitorPost" p ON p.id=o."monitorId" WHERE p."configId"=${configId} AND NOT EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."configId"=p."configId" AND c."platformCommentId"=o."platformCommentId")`,this.control(actor,configId),
    this.db.$queryRaw<{platformPostId:string;count:bigint}[]>`SELECT p."platformPostId",COUNT(DISTINCT c."platformCommentId") AS count FROM "CapturedPost" p LEFT JOIN "CapturedComment" c ON c."postId"=p.id AND c."configId"=p."configId" WHERE p."configId"=${configId} GROUP BY p."platformPostId"`
-  ]);const counts=new Map(savedCounts.map(p=>[p.platformPostId,Number(p.count)]));return {items,total,offset,hasMore:offset+items.length<total,commentScope:postId?{postId}:null,posts:posts.map(p=>({...p,savedComments:counts.get(p.platformPostId)??0,snapshot:publicPostSnapshot(p.snapshot),sourceAvailable:config.platform==='XHS'&&!!savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId)})),postTotal,legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model:await selectedSemanticModel(this.db),hasRules:!!config.semanticRules};
+  ]);const availability=await postAvailabilityMap(this.db,config.platform,posts.map(p=>p.platformPostId));const counts=new Map(savedCounts.map(p=>[p.platformPostId,Number(p.count)]));return {items,total,offset,hasMore:offset+items.length<total,commentScope:postId?{postId}:null,posts:posts.map(p=>({...p,availability:availability.get(p.platformPostId)??unknownPostAvailability,savedComments:counts.get(p.platformPostId)??0,snapshot:publicPostSnapshot(p.snapshot),sourceAvailable:config.platform==='XHS'&&!!savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId)})),postTotal,legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model:await selectedSemanticModel(this.db),hasRules:!!config.semanticRules};
  }
  async preview(actor:Actor,configId:string,ids:string[]){
   requireAdmin(actor);const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config?.semanticRules)throw new ConflictException('请先保存自然语言目标');

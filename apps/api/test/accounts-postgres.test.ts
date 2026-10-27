@@ -118,6 +118,8 @@ afterAll(async () => {
   vi.restoreAllMocks();
   await db.auditLog.deleteMany({ where: { actorId: { in: users } } });
   await db.lead.deleteMany({ where: { identityId: { in: identities } } });
+  await db.contactAttempt.deleteMany({where:{ledger:{identityId:{in:identities}}}});
+  await db.contactLedger.deleteMany({where:{identityId:{in:identities}}});
   await db.platformIdentity.deleteMany({ where: { id: { in: identities } } });
   await db.platformAccount.deleteMany({ where: { id: { in: accounts } } });
   await db.user.deleteMany({ where: { id: { in: users } } });
