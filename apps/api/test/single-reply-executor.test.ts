@@ -40,3 +40,12 @@ it('new scope requires explicit submission purpose and protocol, no default migr
  for(const key of ['scopeVersion','purpose','protocol']){const missing={...scope};delete missing[key];expect(singleReplyScopeSchema.safeParse(missing).success).toBe(false);}
  expect(singleReplyScopeSchema.safeParse({...scope,binarySha256:'f'.repeat(64)}).success).toBe(false);
 });
+
+it('persists only validated fixed execution evidence under the same authorization key',async()=>{
+ const f=fixture(),events:any[]=[];
+ const db:any={auditLog:{create:vi.fn(async(e:any)=>{events.push(e);})},$transaction:vi.fn(async(fn:any)=>fn({}))};
+ const executor=new LocalSingleReplyExecutor(db,f.devices,f.runtime);vi.spyOn(executor,'capable').mockReturnValue(true);
+ f.c.request.requestKey='single-reply:synthetic';
+ wire.send.mockImplementation(async(_r:any,_b:any,_s:any,record:any)=>{await record({stage:'RPC_INTENT',protocolAttemptId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'});await expect(record({stage:'RPC_INTENT',protocolAttemptId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',token:'secret'})).rejects.toThrow();return {kind:'UNKNOWN',reason:'synthetic'};});
+ await executor.run(f.c,f.before,AbortSignal.timeout(5000));expect(events).toHaveLength(1);expect(events[0].data).toMatchObject({entityId:'single-reply:synthetic',action:'SINGLE_REPLY_EXECUTION_STAGE'});expect(JSON.stringify(events)).not.toContain('secret');
+});

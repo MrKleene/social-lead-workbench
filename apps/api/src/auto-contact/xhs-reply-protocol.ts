@@ -51,9 +51,9 @@ const observationSchema = z.object({
 }).strict();
 // Fixed enums only. Raw platform errors, IDs, URLs, content and tokens are rejected.
 const identityCheck=z.enum(['UNKNOWN','MATCH','MISMATCH']);
-const diagnosticSchema=z.object({
+export const diagnosticSchema=z.object({
  stage:z.enum(['VALIDATE','INSPECT','SELECT','RECHECK','SUBMIT','READBACK','CLOSE']),
- code:z.enum(['INVALID_COMMAND','STATE_UNAVAILABLE','STATE_INVALID','STATE_USER_MISSING','STATE_POST_MISSING','STATE_POST_MISMATCH','STATE_COMMENTS_MISSING','DEPTH_LIMIT','ROW_LIMIT','POST_MISMATCH','EXACT_TARGET_MISSING_OR_AMBIGUOUS','TARGET_MISMATCH','TARGET_CHANGED','COMPOSER_ALREADY_OPEN','COMPOSER_DRAFT_PRESENT','COMPOSER_HIDDEN','COMPOSER_ACTIVE','COMPOSER_TARGET_BOUND','COMPOSER_NOT_DEFAULT','COMPOSER_AMBIGUOUS','COMPOSER_UNRECOGNIZED','COMPOSER_BINDING_UNVERIFIED','COMPOSER_NOT_ACTIVE','BINDING_EMPTY','BINDING_STATE_MISSING','BINDING_USER_MISSING','SUBMIT_NOT_READY','BINDING_INVALID','BINDING_TARGET_MISMATCH','BINDING_AUTHOR_MISMATCH','BINDING_POST_MISMATCH','BINDING_ACCOUNT_MISMATCH','EXACT_TARGET_NOT_VISIBLE','AUTHOR_AMBIGUOUS','EXACT_TARGET_MISSING','AUTHOR_MISMATCH','REPLY_BUTTON_AMBIGUOUS','BUTTON_TARGET_MISMATCH','CONTENT_CHANGED','COMPOSER_CHANGED','SUBMIT_AMBIGUOUS','NOT_SUBMITTED','CANCELLED','DRIVER_ERROR','DRIVER_PANIC','STOP_UNCONFIRMED','UNCONFIRMED','RATE_LIMITED','VERIFICATION','BANNED','PLATFORM_REFUSED']),
+ code:z.enum(['JOURNAL_UNAVAILABLE','PREFLIGHT_NAVIGATION_UNVERIFIED','PREFLIGHT_REFERENCE_UNVERIFIED','INVALID_COMMAND','STATE_UNAVAILABLE','STATE_INVALID','STATE_USER_MISSING','STATE_POST_MISSING','STATE_POST_MISMATCH','STATE_COMMENTS_MISSING','DEPTH_LIMIT','ROW_LIMIT','POST_MISMATCH','EXACT_TARGET_MISSING_OR_AMBIGUOUS','TARGET_MISMATCH','TARGET_CHANGED','COMPOSER_ALREADY_OPEN','COMPOSER_DRAFT_PRESENT','COMPOSER_HIDDEN','COMPOSER_ACTIVE','COMPOSER_TARGET_BOUND','COMPOSER_NOT_DEFAULT','COMPOSER_AMBIGUOUS','COMPOSER_UNRECOGNIZED','COMPOSER_BINDING_UNVERIFIED','COMPOSER_NOT_ACTIVE','BINDING_EMPTY','BINDING_STATE_MISSING','BINDING_USER_MISSING','SUBMIT_NOT_READY','BINDING_INVALID','BINDING_TARGET_MISMATCH','BINDING_AUTHOR_MISMATCH','BINDING_POST_MISMATCH','BINDING_ACCOUNT_MISMATCH','EXACT_TARGET_NOT_VISIBLE','AUTHOR_AMBIGUOUS','EXACT_TARGET_MISSING','AUTHOR_MISMATCH','REPLY_BUTTON_AMBIGUOUS','BUTTON_TARGET_MISMATCH','CONTENT_CHANGED','COMPOSER_CHANGED','SUBMIT_AMBIGUOUS','NOT_SUBMITTED','CANCELLED','DRIVER_ERROR','DRIVER_PANIC','STOP_UNCONFIRMED','UNCONFIRMED','RATE_LIMITED','VERIFICATION','BANNED','PLATFORM_REFUSED']),
  checks:z.object({post:identityCheck,sender:identityCheck,target:identityCheck,author:identityCheck}).strict(),
 }).strict();
 const common = {
@@ -103,4 +103,12 @@ export function verifyXhsReplyResult(command: XhsReplyCommand, raw: unknown): Se
         return unknown();
     // Only the platform-created reply ID is saved; echoed request/target IDs are not receipts.
     return { kind: 'CONFIRMED', receipt: r.response.commentId };
+}
+
+/** Diagnostic-only projection. Never retain raw envelopes or accept this as a receipt. */
+export function replyResultDiagnostic(command:XhsReplyCommand,raw:unknown){
+ const base=z.object({protocol:z.literal(command.protocol),attemptId:z.literal(command.attemptId),requestKey:z.literal(command.requestKey),accountId:z.literal(command.accountId),kind:z.enum(['UNKNOWN','ACCEPTED','NOT_SENT','RISK','CONFIRMED']),diagnostic:z.unknown().optional()}).safeParse(raw);
+ if(!base.success)return {kind:'INVALID' as const,envelopeValid:false};
+ const diagnostic=diagnosticSchema.safeParse(base.data.diagnostic);
+ return {kind:base.data.kind,envelopeValid:resultSchema.safeParse(raw).success,...(diagnostic.success?{diagnostic:{stage:diagnostic.data.stage,code:diagnostic.data.code}}:{})};
 }

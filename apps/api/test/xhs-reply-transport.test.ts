@@ -7,7 +7,7 @@ afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await c
 const req = { platform: 'XHS', channel: 'COMMENT' as const, accountId: 'account1', requestKey: 'job:1', postId: 'b'.repeat(24), commentId: 'c'.repeat(24), recipientId: 'd'.repeat(24), content: 'synthetic-only' };
 const binding = { accountId: req.accountId, senderId: 'a'.repeat(24), postReference: { postId: req.postId, token: 'synthetic', source: 'pc_feed' as const } };
 const caps = { protocol: XHS_REPLY_PROTOCOL, enabled: true, exactTarget: true, cancellation: 'context-and-owned-stop', receiptMode: 'FAIL_CLOSED', confirmedResponseMapping: true, channels: ['COMMENT'], sendTool: 'workbench_reply_exact', statusTool: 'workbench_reply_status' };
-async function fixture(options: { enabled?: boolean; old?: boolean; mismatch?: boolean; badHash?: boolean; result?: string; stop?: boolean; hang?: boolean; http?: number; mapping?: boolean; handshakeHttp?: number } = {}) {
+async function fixture(options: { enabled?: boolean; old?: boolean; mismatch?: boolean; badHash?: boolean; result?: string; stop?: boolean; hang?: boolean; http?: number; mapping?: boolean; handshakeHttp?: number; requireJournal?:boolean; journal?:boolean } = {}) {
     const calls: string[] = []; let sendCount = 0;
     const server = createServer(async (request, response) => {
         let raw = ''; for await (const b of request) raw += b;
@@ -19,7 +19,7 @@ async function fixture(options: { enabled?: boolean; old?: boolean; mismatch?: b
         if (rpc.method === 'initialize' && options.handshakeHttp) { response.writeHead(options.handshakeHttp).end(); return; }
         if (rpc.method === 'initialize') result = { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'xiaohongshu-mcp', version: 'fixture' } };
         if (rpc.method === 'tools/list') result = { tools: (options.old ? ['check_login_status'] : ['workbench_reply_capabilities', 'workbench_reply_exact', 'workbench_reply_status']).map(name => ({ name, inputSchema: { type: 'object' } })) };
-        if (rpc.params?.name === 'workbench_reply_capabilities') result = { content: [], structuredContent: { ...caps, confirmedResponseMapping: options.mapping ?? true, enabled: options.enabled ?? true } };
+        if (rpc.params?.name === 'workbench_reply_capabilities') result = { content: [], structuredContent: { ...caps, ...(options.journal?{stageJournal:"workbench.reply-stage-journal.v1"}:{}), confirmedResponseMapping: options.mapping ?? true, enabled: options.enabled ?? true } };
         if (rpc.params?.name === 'workbench_reply_exact') {
             sendCount++; if (options.hang) return;
             if (options.http) { response.writeHead(options.http).end(); return; }
@@ -34,8 +34,8 @@ async function fixture(options: { enabled?: boolean; old?: boolean; mismatch?: b
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     cleanup.push(() => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); }));
     const stop = vi.fn(async () => options.stop !== false);
-    const endpoint = { url: new URL(`http://127.0.0.1:${(server.address() as { port: number }).port}/mcp`), token: '1'.repeat(64), accountId: req.accountId, binarySha256: '2'.repeat(64), stop };
-    const transport = new XhsExactReplyTransport(endpoint, { enabled: true, reviewedSha256: options.badHash ? '3'.repeat(64) : '2'.repeat(64) });
+    const endpoint = { url: new URL(`http://127.0.0.1:${(server.address() as { port: number }).port}/mcp`), token: '1'.repeat(64), accountId: req.accountId, binarySha256: '2'.repeat(64), readJournal:async()=>({state:"AVAILABLE" as const,records:[]}), stop };
+    const transport = new XhsExactReplyTransport(endpoint, { enabled: true, reviewedSha256: options.badHash ? '3'.repeat(64) : '2'.repeat(64),requireJournal:options.requireJournal });
     cleanup.push(() => transport.stop());
     return { transport, calls, stop, endpoint, sends: () => sendCount };
 }
@@ -74,3 +74,9 @@ it('account and DM mismatch are rejected before a write', async () => {
 
 it('candidate without reviewed response mapping cannot return CONFIRMED', async()=>{ const f=await fixture({mapping:false}); await f.transport.connect(AbortSignal.timeout(2000)); expect((await f.transport.send(req,binding,AbortSignal.timeout(2000))).kind).toBe('UNKNOWN'); });
 it.each([429,403])('risk during negotiation is retained without sending: %s',async handshakeHttp=>{const f=await fixture({handshakeHttp});expect(await f.transport.connect(AbortSignal.timeout(2000))).toBe(false);expect(f.transport.connectionFailure().kind).toBe('RISK');expect(f.sends()).toBe(0);});
+
+it('required durable capability blocks an old installed binary before send',async()=>{const f=await fixture({requireJournal:true});expect(await f.transport.connect(AbortSignal.timeout(2000))).toBe(false);expect(f.sends()).toBe(0);});
+it('persists protocol intent then diagnostic and owned stop with no resend',async()=>{const f=await fixture({requireJournal:true,journal:true,result:'ACCEPTED'});await f.transport.connect(AbortSignal.timeout(2000));const stages:any[]=[];const r=await f.transport.send(req,binding,AbortSignal.timeout(2000),async e=>{stages.push(e);if(e.stage==='RPC_INTENT')expect(f.sends()).toBe(0);});expect(r.kind).toBe('UNKNOWN');expect(stages.map(e=>e.stage)).toEqual(['RPC_INTENT','RPC_RETURNED','TRANSPORT_STOP']);expect(stages[1]).toMatchObject({kind:'ACCEPTED',envelopeValid:false});expect(stages[2].stopped).toBe(true);expect(f.sends()).toBe(1);});
+it('failed durable pre-RPC audit prevents dispatch without retry',async()=>{const f=await fixture({requireJournal:true,journal:true});await f.transport.connect(AbortSignal.timeout(2000));const r=await f.transport.send(req,binding,AbortSignal.timeout(2000),async()=>{throw Error('synthetic database unavailable')});expect(r.kind).toBe('UNKNOWN');expect(f.sends()).toBe(0);expect(f.stop).toHaveBeenCalledTimes(1);});
+it('transport cancellation persists fixed error and stop observation',async()=>{const f=await fixture({journal:true,requireJournal:true,hang:true});await f.transport.connect(AbortSignal.timeout(2000));const stages:any[]=[];const r=await f.transport.send(req,binding,AbortSignal.timeout(50),async e=>{stages.push(e)});expect(r.kind).toBe('UNKNOWN');expect(stages.map(e=>e.stage)).toEqual(['RPC_INTENT','RPC_ERROR','TRANSPORT_STOP']);expect(stages[1].code).toBe('TIMEOUT_OR_CANCELLED');expect(f.sends()).toBe(1);});
+it('a failed audit cannot erase a platform risk response',async()=>{const f=await fixture({requireJournal:true,journal:true,result:'RISK'});await f.transport.connect(AbortSignal.timeout(2000));const r=await f.transport.send(req,binding,AbortSignal.timeout(2000),async e=>{if(e.stage!=='RPC_INTENT')throw Error('audit unavailable')});expect(r).toEqual({kind:'RISK',reason:'RATE_LIMITED'});expect(f.sends()).toBe(1);});

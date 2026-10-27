@@ -85,7 +85,7 @@ func diagnosticCode(err error) string {
 		return "UNCONFIRMED"
 	}
 	switch err.Error() {
-	case "PREFLIGHT_NAVIGATION_UNVERIFIED", "PREFLIGHT_REFERENCE_UNVERIFIED", "INVALID_COMMAND", "STATE_UNAVAILABLE", "STATE_INVALID", "STATE_USER_MISSING", "STATE_POST_MISSING", "STATE_POST_MISMATCH", "STATE_COMMENTS_MISSING", "DEPTH_LIMIT", "ROW_LIMIT", "POST_MISMATCH", "EXACT_TARGET_MISSING_OR_AMBIGUOUS", "TARGET_MISMATCH", "TARGET_CHANGED", "COMPOSER_ALREADY_OPEN", "COMPOSER_DRAFT_PRESENT", "COMPOSER_HIDDEN", "COMPOSER_ACTIVE", "COMPOSER_TARGET_BOUND", "COMPOSER_NOT_DEFAULT", "COMPOSER_AMBIGUOUS", "COMPOSER_UNRECOGNIZED", "COMPOSER_BINDING_UNVERIFIED", "COMPOSER_NOT_ACTIVE", "BINDING_EMPTY", "BINDING_STATE_MISSING", "BINDING_USER_MISSING", "SUBMIT_NOT_READY", "BINDING_INVALID", "BINDING_TARGET_MISMATCH", "BINDING_AUTHOR_MISMATCH", "BINDING_POST_MISMATCH", "BINDING_ACCOUNT_MISMATCH", "EXACT_TARGET_NOT_VISIBLE", "AUTHOR_AMBIGUOUS", "EXACT_TARGET_MISSING", "AUTHOR_MISMATCH", "REPLY_BUTTON_AMBIGUOUS", "BUTTON_TARGET_MISMATCH", "CONTENT_CHANGED", "COMPOSER_CHANGED", "SUBMIT_AMBIGUOUS", "NOT_SUBMITTED":
+	case "JOURNAL_UNAVAILABLE", "PREFLIGHT_NAVIGATION_UNVERIFIED", "PREFLIGHT_REFERENCE_UNVERIFIED", "INVALID_COMMAND", "STATE_UNAVAILABLE", "STATE_INVALID", "STATE_USER_MISSING", "STATE_POST_MISSING", "STATE_POST_MISMATCH", "STATE_COMMENTS_MISSING", "DEPTH_LIMIT", "ROW_LIMIT", "POST_MISMATCH", "EXACT_TARGET_MISSING_OR_AMBIGUOUS", "TARGET_MISMATCH", "TARGET_CHANGED", "COMPOSER_ALREADY_OPEN", "COMPOSER_DRAFT_PRESENT", "COMPOSER_HIDDEN", "COMPOSER_ACTIVE", "COMPOSER_TARGET_BOUND", "COMPOSER_NOT_DEFAULT", "COMPOSER_AMBIGUOUS", "COMPOSER_UNRECOGNIZED", "COMPOSER_BINDING_UNVERIFIED", "COMPOSER_NOT_ACTIVE", "BINDING_EMPTY", "BINDING_STATE_MISSING", "BINDING_USER_MISSING", "SUBMIT_NOT_READY", "BINDING_INVALID", "BINDING_TARGET_MISMATCH", "BINDING_AUTHOR_MISMATCH", "BINDING_POST_MISMATCH", "BINDING_ACCOUNT_MISMATCH", "EXACT_TARGET_NOT_VISIBLE", "AUTHOR_AMBIGUOUS", "EXACT_TARGET_MISSING", "AUTHOR_MISMATCH", "REPLY_BUTTON_AMBIGUOUS", "BUTTON_TARGET_MISMATCH", "CONTENT_CHANGED", "COMPOSER_CHANGED", "SUBMIT_AMBIGUOUS", "NOT_SUBMITTED":
 		return err.Error()
 	default:
 		return "DRIVER_ERROR"
@@ -164,6 +164,11 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 		closeCtx, stop := context.WithTimeout(context.Background(), 2*time.Second)
 		defer stop()
 		r.Stopped = closeSafely(closeCtx, d)
+		if RecordStage(ctx, "DRIVER_CLOSED", nil, &r.Stopped) != nil && r.Kind != "RISK" {
+			r = base(c)
+			r.Reason = "JOURNAL_UNAVAILABLE"
+			r.Diagnostic = &Diagnostic{"CLOSE", "JOURNAL_UNAVAILABLE", identity}
+		}
 		if !r.Stopped && r.Kind != "RISK" {
 			r = base(c)
 			r.Reason = "STOP_UNCONFIRMED"
@@ -195,6 +200,9 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 	if ctx.Err() != nil {
 		return fail(ctx.Err())
 	}
+	if err := RecordStage(ctx, "STARTED", nil, nil); err != nil {
+		return fail(err)
+	}
 	stage = "INSPECT"
 	before, err := d.Inspect(ctx, c)
 	identity = checks(before, c)
@@ -207,8 +215,14 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 	if ctx.Err() != nil {
 		return fail(ctx.Err())
 	}
+	if err = RecordStage(ctx, "INSPECTED", nil, nil); err != nil {
+		return fail(err)
+	}
 	stage = "SELECT"
 	if err = d.Select(ctx, c); err != nil {
+		return fail(err)
+	}
+	if err = RecordStage(ctx, "SELECTED", nil, nil); err != nil {
 		return fail(err)
 	}
 	stage = "RECHECK"
@@ -223,11 +237,20 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 	if ctx.Err() != nil {
 		return fail(ctx.Err())
 	}
+	if err = RecordStage(ctx, "RECHECKED", nil, nil); err != nil {
+		return fail(err)
+	}
 	// Once Submit is entered, errors are ambiguous unless the driver proves no click.
 	stage = "SUBMIT"
 	submitted = true
 	s, err := d.Submit(ctx, c)
 	submitted = s.Attempted
+	if journalErr := RecordStage(ctx, "SUBMIT_FINISHED", &s.Attempted, nil); journalErr != nil && !isRisk(s.Risk) && risk(err) == "" {
+		r = base(c)
+		r.Reason = "JOURNAL_UNAVAILABLE"
+		r.Diagnostic = &Diagnostic{stage, "JOURNAL_UNAVAILABLE", identity}
+		return r
+	}
 	if isRisk(s.Risk) {
 		r.Kind = "RISK"
 		r.Reason = s.Risk
@@ -240,6 +263,7 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 		submitted = false
 		return fail(errors.New("NOT_SUBMITTED"))
 	}
+	r.Diagnostic = &Diagnostic{"SUBMIT", "UNCONFIRMED", identity}
 	if s.Response == nil || !Matches(*s.Response, c) || before.ExistingIDs[s.Response.ID] || again.ExistingIDs[s.Response.ID] {
 		if s.Accepted {
 			r.Kind = "ACCEPTED"
@@ -254,6 +278,9 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 	}
 	if ctx.Err() != nil || !Matches(observed, c) || observed != *s.Response {
 		return r
+	}
+	if err = RecordStage(ctx, "READBACK", nil, nil); err != nil {
+		return fail(err)
 	}
 	r.Kind = "CONFIRMED"
 	r.Reason = ""

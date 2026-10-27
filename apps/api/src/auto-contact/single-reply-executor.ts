@@ -1,3 +1,4 @@
+import {executionEventSchema,type ExecutionEvent} from './reply-stage-journal';
 import type { DeviceService, ExecutionPermit } from '../devices/device.service';
 import type { LoginRuntime, SessionDriver } from '../accounts/login-runtime';
 import type { Db } from '../common/db';
@@ -18,14 +19,15 @@ export class LocalSingleReplyExecutor implements SingleReplyExecutor {
    if(await this.runtime.inspect(c.request.accountId,c.sessionKey,this.runtime.deviceId(),'real',permit.root)!=='UNVERIFIED')throw Error('SESSION_METADATA_MISMATCH');
    driver=await this.runtime.openSavedForReply(c.request.accountId,c.sessionKey,combined,permit.root,c.scope.binarySha256);stopped=false;
    if(!driver.replyEndpoint)throw Error('ENDPOINT_MISSING');
-   transport=new XhsExactReplyTransport(driver.replyEndpoint(),{enabled:true,reviewedSha256:c.scope.binarySha256});
+   transport=new XhsExactReplyTransport(driver.replyEndpoint(),{enabled:true,reviewedSha256:c.scope.binarySha256,requireJournal:true});
    // Read-only platform login check in this owned candidate process before any write.
    const login=await driver.status(combined);if(!login.loggedIn||login.userId!==c.scope.senderId)throw Error('LIVE_ACCOUNT_MISMATCH');identityVerified=true;
    if(!await transport.connect(combined)){result=transport.connectionFailure();}
    else{
     await this.db.$transaction(tx=>this.devices.assertPermit(tx,permit!));
     if(!combined.aborted&&await beforeSubmit()){
-     protocolCalls=1;result=await transport.send(c.request,c.binding,combined);
+     const record=async(event:ExecutionEvent)=>{const safe=executionEventSchema.parse(event);await this.db.auditLog.create({data:{actorId:c.actor.id,entityId:c.request.requestKey,action:'SINGLE_REPLY_EXECUTION_STAGE',metadata:safe}});};
+     protocolCalls=1;result=await transport.send(c.request,c.binding,combined,record);
     }
    }
   }catch(error){if(protocolCalls)result={kind:'UNKNOWN',reason:'单次调用结果不确定，不重试'};if(error instanceof Error&&error.message==='RATE_LIMITED')result={kind:'RISK',reason:'RATE_LIMITED'};if(error instanceof Error&&error.message==='RESTRICTED')result={kind:'RISK',reason:'PLATFORM_REFUSED'};}

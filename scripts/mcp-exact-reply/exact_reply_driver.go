@@ -300,8 +300,8 @@ func (d *ExactReplyDriver) Submit(ctx context.Context, c exactreply.Command) (ex
 		return s, ctx.Err()
 	}
 	// The click is never retried, including when its acknowledgement is lost.
-	s.Attempted = true
-	if err = humanize.Click(buttons[0]); err != nil {
+	s.Attempted, err = exactreply.SubmitOnce(ctx, func() error { return humanize.Click(buttons[0]) })
+	if err != nil {
 		return s, err
 	}
 	fresh, err := d.state(ctx, c, true)

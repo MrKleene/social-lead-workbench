@@ -82,3 +82,9 @@ it('preserves safe pre-submit stage and identity consistency without leaking arb
  expect(verifyXhsReplyResult(command,{...raw,processStopped:false}).kind).toBe('UNKNOWN');
  expect(verifyXhsReplyResult(command,{...raw,phase:'AFTER_SUBMIT'}).kind).toBe('UNKNOWN');
  });
+
+it.each(['PREFLIGHT_NAVIGATION_UNVERIFIED','PREFLIGHT_REFERENCE_UNVERIFIED'])('retains stopped navigation diagnostic %s without claiming delivery',code=>{
+ const {command}=fixture();const raw={protocol:command.protocol,attemptId:command.attemptId,requestKey:command.requestKey,accountId:command.accountId,processStopped:true,kind:'NOT_SENT',phase:'BEFORE_SUBMIT',reason:'TARGET_MISMATCH',diagnostic:{stage:'INSPECT',code,checks:{post:'UNKNOWN',sender:'UNKNOWN',target:'UNKNOWN',author:'UNKNOWN'}}};
+ expect(verifyXhsReplyResult(command,raw)).toEqual({kind:'FAILED',reason:`发送前已停止：TARGET_MISMATCH [INSPECT/${code}; post=UNKNOWN,sender=UNKNOWN,target=UNKNOWN,author=UNKNOWN]`});
+ expect(verifyXhsReplyResult(command,{...raw,processStopped:false}).kind).toBe('UNKNOWN');expect(verifyXhsReplyResult(command,{...raw,phase:'AFTER_SUBMIT'}).kind).toBe('UNKNOWN');
+});

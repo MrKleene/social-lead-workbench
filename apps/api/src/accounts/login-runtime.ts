@@ -1,3 +1,4 @@
+import {readReplyJournal} from '../auto-contact/reply-stage-journal';
 import type {OwnedReplyEndpoint} from '../auto-contact/xhs-reply-transport';
 import {confirmSessionFile} from './session-save-proof';
 import {privateDirectory,privateFile,isWithin,inspectTools,minimalEnvironment,spawnOwned,stopOwned,windowsDataRoot} from '../../../../runtime/platform.cjs';
@@ -144,7 +145,7 @@ export class LoginRuntime {
       let ready=false;for(let i=0;i<40&&alive&&!signal.aborted;i++){try{ready=(await fetch(endpoint+'/health',{signal:AbortSignal.timeout(200),redirect:'error'})).ok;}catch{}if(ready)break;await new Promise(ok=>setTimeout(ok,100));}
       if(!ready||!alive||signal.aborted)throw Error('PROCESS_START_FAILED');
       return {qr:async s=>parseQr(await request('/api/v1/login/qrcode',s)),status:async s=>parseStatus(await request('/api/v1/login/status',s)),readTransport:()=>new XhsHttpTransport(new URL(endpoint+'/mcp'),'XHS_MCP',{token,callMs:40000}),
-      ...(replySha256?{replyEndpoint:():OwnedReplyEndpoint=>({url:new URL(endpoint+'/mcp'),token,accountId,binarySha256:tools.hash,stop:async()=>{
+      ...(replySha256?{replyEndpoint:():OwnedReplyEndpoint=>({url:new URL(endpoint+'/mcp'),token,accountId,binarySha256:tools.hash,readJournal:async id=>readReplyJournal(directory,id),stop:async()=>{
         await stop();if(!child.pid||process.platform!=='darwin')return false;
         // Probe only this freshly spawned owned process group, never a stored PID.
         for(let i=0;i<10;i++){try{process.kill(-child.pid,0);}catch(error){return (error as NodeJS.ErrnoException).code==='ESRCH';}await new Promise(ok=>setTimeout(ok,50));}return false;

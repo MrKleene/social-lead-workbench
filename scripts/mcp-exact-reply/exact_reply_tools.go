@@ -33,12 +33,24 @@ func registerExactReplyTools(server *mcp.Server) {
 	registerExactPreflightTool(server)
 	engine := &exactreply.Engine{}
 	mcp.AddTool(server, &mcp.Tool{Name: "workbench_reply_capabilities", Description: exactreply.Protocol + " finite exact-target reply, default OFF", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest, args struct{}) (*mcp.CallToolResult, any, error) {
-		return nil, map[string]any{"protocol": exactreply.Protocol, "enabled": os.Getenv("CRM_EXACT_REPLY_ENABLED") == "1", "exactTarget": true, "cancellation": "context-and-owned-stop", "receiptMode": "FAIL_CLOSED", "confirmedResponseMapping": false, "channels": []string{"COMMENT"}, "sendTool": "workbench_reply_exact", "statusTool": "workbench_reply_status"}, nil
+		return nil, map[string]any{"protocol": exactreply.Protocol, "enabled": os.Getenv("CRM_EXACT_REPLY_ENABLED") == "1", "exactTarget": true, "cancellation": "context-and-owned-stop", "receiptMode": "FAIL_CLOSED", "confirmedResponseMapping": false, "stageJournal": exactreply.JournalProtocol, "channels": []string{"COMMENT"}, "sendTool": "workbench_reply_exact", "statusTool": "workbench_reply_status"}, nil
 	})
 	mcp.AddTool(server, &mcp.Tool{Name: "workbench_reply_exact", Description: exactreply.Protocol + " no author fallback; no unverified success", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(true)}}, func(ctx context.Context, req *mcp.CallToolRequest, c exactreply.Command) (*mcp.CallToolResult, any, error) {
 		if os.Getenv("CRM_EXACT_REPLY_ENABLED") != "1" {
 			return nil, exactreply.Result{Protocol: exactreply.Protocol, AttemptID: c.AttemptID, RequestKey: c.RequestKey, AccountID: c.AccountID, Kind: "NOT_SENT", Phase: "BEFORE_SUBMIT", Reason: "CANCELLED", Stopped: true}, nil
 		}
+		// Fixed file in the already-private owned session directory. Never use a
+		// path supplied by the command, and never start a browser without durability.
+		directory, err := os.Getwd()
+		if err != nil {
+			return nil, exactreply.Result{Protocol: exactreply.Protocol, AttemptID: c.AttemptID, RequestKey: c.RequestKey, AccountID: c.AccountID, Kind: "UNKNOWN", Reason: "JOURNAL_UNAVAILABLE", Stopped: true}, nil
+		}
+		journal, err := exactreply.OpenJournal(directory, c.AttemptID)
+		if err != nil {
+			return nil, exactreply.Result{Protocol: exactreply.Protocol, AttemptID: c.AttemptID, RequestKey: c.RequestKey, AccountID: c.AccountID, Kind: "UNKNOWN", Reason: "JOURNAL_UNAVAILABLE", Stopped: true}, nil
+		}
+		defer journal.Close()
+		ctx = exactreply.WithJournal(ctx, journal)
 		r := engine.Execute(ctx, c, func() (exactreply.Driver, error) {
 			b := newBrowser()
 			p := b.NewPage()
