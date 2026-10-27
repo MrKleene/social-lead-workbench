@@ -174,3 +174,37 @@ it('old or read-only authorization is rejected before reservation and does not b
  for(const scope of [legacy,{...f.scope,purpose:'INSPECT_ONLY'},{...f.scope,protocol:'workbench.xhs.exact-preflight.v2'},{...f.scope,binarySha256:'ee0901efc70426a8d44eef00e731cf474447967057d3b50df4727bb1cf032d96'}])await expect(f.service.execute(actor,scope)).rejects.toThrow();
  expect(f.executor.run).not.toHaveBeenCalled();expect(await db.contactAttempt.count()).toBe(0);expect(await db.accountDay.count()).toBe(0);expect(await db.auditLog.count()).toBe(0);
 });
+
+async function provenNotAttemptedFixture(){
+ const f=await oneShotFixture();
+ f.executor.run.mockImplementationOnce(async(_c,before)=>{expect(await before()).toBe(true);return {result:{kind:'FAILED',reason:'synthetic stopped before any submit'},protocolCalls:1,submission:'NOT_ATTEMPTED',identityVerified:true,stopped:true} as any;});
+ await f.service.execute(actor,f.scope);const old=await db.contactAttempt.findFirstOrThrow(),ledger=await db.contactLedger.findFirstOrThrow();
+ return {...f,old,ledger,next:{...f.scope,approvalId:randomUUID(),previousNotAttemptedId:old.id}};
+}
+it('explicit new approval referencing proven non-submission preserves old row and identity lock',async()=>{
+ const f=await provenNotAttemptedFixture();expect((await f.service.execute(actor,f.next)).outcome).toBe('UNKNOWN');
+ expect(await db.contactAttempt.findUnique({where:{id:f.old.id}})).toEqual(f.old);expect(await db.contactLedger.findUnique({where:{id:f.ledger.id}})).toEqual(f.ledger);
+ expect(await db.contactAttempt.count()).toBe(2);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);
+ await f.service.execute(actor,f.scope);await f.service.execute(actor,f.next);expect(f.executor.run).toHaveBeenCalledTimes(2);
+ await expect(f.service.execute(actor,{...f.next,approvalId:randomUUID()})).rejects.toThrow('RECIPIENT_ALREADY_RESERVED_OR_CONTACTED');
+});
+it.each(['UNKNOWN','CONFIRMED','ATTEMPTED','RESERVED'])('fresh approval cannot reopen %s history',async outcome=>{
+ const f=await provenNotAttemptedFixture();await db.contactAttempt.update({where:{id:f.old.id},data:{outcome:outcome as any}});
+ await expect(f.service.execute(actor,f.next)).rejects.toThrow('PREVIOUS_SUBMISSION_NOT_PROVEN_ABSENT');expect(f.executor.run).toHaveBeenCalledTimes(1);expect(await db.contactAttempt.count()).toBe(1);
+});
+it.each([{submission:'AT_MOST_ONCE_UNKNOWN'},{stopped:false},{result:'UNKNOWN'},{pause:'RATE_LIMITED'},{scopeHash:'changed'}])('fresh approval requires complete matching stopped/no-submit evidence %#',async change=>{
+ const f=await provenNotAttemptedFixture(),end=await db.auditLog.findFirstOrThrow({where:{entityId:f.old.requestKey,action:'SINGLE_REPLY_TEST_FINISHED'}});
+ await db.auditLog.update({where:{id:end.id},data:{metadata:{...(end.metadata as any),...change}}});
+ await expect(f.service.execute(actor,f.next)).rejects.toThrow('PREVIOUS_SUBMISSION_NOT_PROVEN_ABSENT');expect(f.executor.run).toHaveBeenCalledTimes(1);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(0);
+});
+it('two new approvals cannot race past the existing recipient lock',async()=>{
+ const f=await provenNotAttemptedFixture();const outcomes=await Promise.allSettled([f.service.execute(actor,f.next),f.service.execute(actor,{...f.next,approvalId:randomUUID()})]);
+ expect(outcomes.filter(r=>r.status==='fulfilled')).toHaveLength(1);expect(f.executor.run).toHaveBeenCalledTimes(2);expect(await db.contactAttempt.count()).toBe(2);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);
+});
+it('missing or incorrect predecessor never bypasses a failed recipient',async()=>{
+ const f=await provenNotAttemptedFixture();for(const previousNotAttemptedId of [undefined,'wrong'])await expect(f.service.execute(actor,{...f.next,previousNotAttemptedId})).rejects.toThrow('RECIPIENT_ALREADY_RESERVED_OR_CONTACTED');expect(f.executor.run).toHaveBeenCalledTimes(1);
+});
+it('inconsistent executor failure cannot refund an uncertain submission',async()=>{
+ const f=await oneShotFixture();f.executor.run.mockResolvedValue({result:{kind:'FAILED',reason:'synthetic inconsistent'},protocolCalls:1,submission:'AT_MOST_ONCE_UNKNOWN',identityVerified:true,stopped:true} as any);
+ expect((await f.service.execute(actor,f.scope)).outcome).toBe('UNKNOWN');expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);expect((await db.contactAttempt.findFirstOrThrow()).outcome).toBe('UNKNOWN');
+});

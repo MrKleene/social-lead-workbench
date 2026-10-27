@@ -15,6 +15,7 @@ import {XHS_REPLY_PROTOCOL} from './xhs-reply-protocol';
 const id=z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/), platformId=z.string().regex(/^[a-f0-9]{24}$/);
 export const singleReplyScopeSchema=z.object({
  scopeVersion:z.literal(singleReplyScopeVersion),purpose:z.literal(singleReplyPurpose),protocol:z.literal(XHS_REPLY_PROTOCOL),
+ previousNotAttemptedId:id.optional(),
  availabilityVersion:z.number().int().nonnegative(),approvalId:z.string().uuid(),accountId:id,senderId:platformId,reviewId:id,reviewVersion:z.number().int().nonnegative(),templateId:id,
  postId:platformId,commentId:platformId,recipientId:platformId,comment:z.string().min(1).max(20000),content:z.string().min(1).max(4000),
  binarySha256:z.enum(singleReplyBuildHashes),maximumSubmissions:z.literal(1),retryCount:z.literal(0),expiresAt:z.string().datetime(),
@@ -65,12 +66,25 @@ export class SingleReplyTestService {
    if(control?.activeJobId||control?.pauseReason)throw Error('PLATFORM_BUSY_OR_PAUSED');
    const identity=await tx.platformIdentity.upsert({where:{platform_platformUserId:{platform:'XHS',platformUserId:s.recipientId}},create:{platform:'XHS',platformUserId:s.recipientId,nickname:'',isDemo:false},update:{}});
    const ledger=await tx.contactLedger.findUnique({where:{identityId_mode:{identityId:identity.id,mode:'REAL'}},include:{attempts:true}});
-   if(ledger?.attempts.some(a=>a.outcome!=='CANCELLED'))throw Error('RECIPIENT_ALREADY_RESERVED_OR_CONTACTED');
+   const blocking=ledger?.attempts.filter(a=>a.outcome!=='CANCELLED')??[];
+   if(s.previousNotAttemptedId){
+    // A new explicit one-shot scope may reference one proven non-submission.
+    // No record is rewritten/deleted; unknown/success/in-flight rows never pass.
+    if(ledger?.accountId!==s.accountId||ledger.attempts.some(a=>a.outcome==='CANCELLED'&&(a.attemptedAt||a.confirmedAt||a.platformReceipt))||blocking.length!==1||blocking[0].id!==s.previousNotAttemptedId)throw Error('RECIPIENT_ALREADY_RESERVED_OR_CONTACTED');
+    const old=blocking[0];
+    if(old.outcome!=='FAILED'||old.mode!=='REAL'||old.channel!=='COMMENT'||old.confirmedAt||old.platformReceipt||old.accountIdSnapshot!==s.accountId||old.actorId!==actor.id||old.content!==s.content)throw Error('PREVIOUS_SUBMISSION_NOT_PROVEN_ABSENT');
+    const events=await tx.auditLog.findMany({where:{entityId:old.requestKey,action:{in:['SINGLE_REPLY_TEST_AUTHORIZED_RESERVED','SINGLE_REPLY_TEST_FINISHED']}}});
+    const starts=events.filter(e=>e.action==='SINGLE_REPLY_TEST_AUTHORIZED_RESERVED'),ends=events.filter(e=>e.action==='SINGLE_REPLY_TEST_FINISHED');
+    const start=starts[0]?.metadata as Record<string,any>|undefined,end=ends[0]?.metadata as Record<string,any>|undefined;
+    const priorScope=start?.scope as Record<string,unknown>|undefined;
+    const same=priorScope&&['accountId','senderId','postId','commentId','recipientId','comment','content','purpose','protocol','scopeVersion'].every(k=>priorScope[k]===s[k as keyof SingleReplyScope]);
+    if(starts.length!==1||ends.length!==1||!same||priorScope?.approvalId===s.approvalId||start?.attemptId!==old.id||end?.attemptId!==old.id||start?.scopeHash!==semanticHash(priorScope)||end?.scopeHash!==start?.scopeHash||end?.result!=='NOT_ATTEMPTED'||end?.submission!=='NOT_ATTEMPTED'||end?.stopped!==true||end?.pause!==null)throw Error('PREVIOUS_SUBMISSION_NOT_PROVEN_ABSENT');
+   }else if(blocking.length)throw Error('RECIPIENT_ALREADY_RESERVED_OR_CONTACTED');
    await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${s.accountId} FOR UPDATE`;
    const usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId:s.accountId,day:v.day}}});
    if(v.account.dailyLimit<=0||(usage?.occupied??0)>=v.account.dailyLimit)throw Error('QUOTA_EXHAUSTED');
-   const l=ledger?await tx.contactLedger.update({where:{id:ledger.id},data:{accountId:s.accountId}}):await tx.contactLedger.create({data:{identityId:identity.id,mode:'REAL',accountId:s.accountId}});
-   const attempt=await tx.contactAttempt.create({data:{ledgerId:l.id,requestKey:key,kind:'FIRST',mode:'REAL',channel:'COMMENT',content:s.content,outcome:'RESERVED',day:v.day,actorId:actor.id,accountIdSnapshot:s.accountId,historySnapshot:{platform:'XHS',recipientId:s.recipientId,postId:s.postId,commentId:s.commentId,accountId:s.accountId,accountLabel:v.account.label,senderPlatformId:s.senderId,source:v.source} as Prisma.InputJsonValue}});
+   const l=ledger?(s.previousNotAttemptedId?ledger:await tx.contactLedger.update({where:{id:ledger.id},data:{accountId:s.accountId}})):await tx.contactLedger.create({data:{identityId:identity.id,mode:'REAL',accountId:s.accountId}});
+   const attempt=await tx.contactAttempt.create({data:{ledgerId:l.id,requestKey:key,kind:'FIRST',mode:'REAL',channel:'COMMENT',content:s.content,outcome:'RESERVED',day:v.day,actorId:actor.id,accountIdSnapshot:s.accountId,historySnapshot:{previousNotAttemptedId:s.previousNotAttemptedId??null,platform:'XHS',recipientId:s.recipientId,postId:s.postId,commentId:s.commentId,accountId:s.accountId,accountLabel:v.account.label,senderPlatformId:s.senderId,source:v.source} as Prisma.InputJsonValue}});
    await tx.accountDay.upsert({where:{accountId_day:{accountId:s.accountId,day:v.day}},create:{accountId:s.accountId,day:v.day,occupied:1},update:{occupied:{increment:1}}});
    await tx.autoContactControl.upsert({where:{platform_mode:{platform:'XHS',mode:'REAL'}},create:{platform:'XHS',mode:'REAL',activeJobId:key,leaseUntil:new Date(Date.now()+120000)},update:{activeJobId:key,leaseUntil:new Date(Date.now()+120000)}});
    await tx.auditLog.create({data:{actorId:actor.id,entityId:key,action:'SINGLE_REPLY_TEST_AUTHORIZED_RESERVED',metadata:{scope:s,scopeHash,validationHash:v.hash,attemptId:attempt.id,automaticContactEnabled:false}}});
@@ -96,7 +110,7 @@ export class SingleReplyTestService {
   await this.db.$transaction(async tx=>{
    await contactLock(tx);const current=await tx.contactAttempt.findUniqueOrThrow({where:{id:attempt.id}});
    if(!['RESERVED','ATTEMPTED'].includes(current.outcome))return;
-   const failed=result.kind==='FAILED'&&outcome.stopped;
+   const failed=result.kind==='FAILED'&&outcome.stopped&&outcome.submission==='NOT_ATTEMPTED';
    // This exact approved candidate has no verified response mapping. Never confirm.
    await tx.contactAttempt.update({where:{id:attempt.id},data:{outcome:failed?'FAILED':'UNKNOWN',resolutionNote:failed?'单次测试：候选确认提交前停止，未发送':'单次测试：未获得可靠平台回执；禁止重发',version:{increment:1}}});
    if(failed)await tx.accountDay.update({where:{accountId_day:{accountId:s.accountId,day:attempt.day}},data:{occupied:{decrement:1}}});
@@ -105,6 +119,6 @@ export class SingleReplyTestService {
    if(pause)await tx.autoContactRule.updateMany({where:{platform:'XHS',mode:'REAL'},data:{enabled:false}});
    await tx.auditLog.create({data:{actorId:actor.id,entityId:key,action:'SINGLE_REPLY_TEST_FINISHED',metadata:{attemptId:attempt.id,scopeHash,result:failed?'NOT_ATTEMPTED':'UNKNOWN',resultReason:result.kind==='CONFIRMED'?'UNCONFIRMED':result.reason,protocolCalls:outcome.protocolCalls,submission:outcome.submission,identityVerified:outcome.identityVerified,stopped:outcome.stopped,pause}}});
   });
-  return {reused:false,attemptId:attempt.id,outcome:result.kind==='FAILED'&&outcome.stopped?'FAILED':'UNKNOWN',...outcome};
+  return {reused:false,attemptId:attempt.id,outcome:result.kind==='FAILED'&&outcome.stopped&&outcome.submission==='NOT_ATTEMPTED'?'FAILED':'UNKNOWN',...outcome};
  }
 }

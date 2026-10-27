@@ -69,3 +69,9 @@ The replacement source reads that binding through the existing reviewed `window.
 The component contract has **source evidence and offline fixtures, not a successful live binding read or send**. The browser's read-only evaluation did not expose the runtime store. If that state path is unavailable or remains stale in the owned MCP page, the candidate rejects before input; it does not infer the target from the visible header. `confirmedResponseMapping` remains false. Production and the approved single-send hash list are unchanged.
 
 Candidate version `v2.5.5-local-reply-binding-v1`, SHA256 `70c02190c6936b50d77f0931dabbf853cae013422b76b2b77c599cdca6010215`. Candidate artifacts are build-only; a new exact-hash installation and any subsequent one-recipient submit require separate approval. Existing consumed authorizations remain consumed.
+
+## Approved binding build compatibility and fresh non-submission scope
+
+The approved `70c02190...` build is registered with its exact source revision and overlay hash; the normal macOS runtime pin matches it. Registration is not an automatic-send enable switch. Old build metadata remains for historical compatibility, while the installed-hash check still requires an exact match.
+
+An operator's fresh one-shot scope may explicitly name `previousNotAttemptedId`. This narrow path requires exactly one noncancelled prior row for the same recipient, account, sender, post, comment and body; it must be FAILED with no receipt/confirmation and have matching original-scope hashes plus a unique finished audit proving NOT_ATTEMPTED and stopped without a platform pause. The old attempt and ledger remain unchanged. The new scope gets its own request key, quota reservation, lock and audit. Concurrent new scopes cannot both pass; successful, unknown, reserved, in-flight, inconsistent, missing-audit or merely new-build approvals remain blocked. No schema migration or automatic retry is introduced.
