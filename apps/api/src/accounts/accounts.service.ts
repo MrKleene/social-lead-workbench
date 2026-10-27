@@ -158,7 +158,7 @@ export class AccountsService {
     });
     if (!lead) throw new NotFoundException();
     const ledger = await this.db.contactLedger.findUnique({
-      where: { identityId: lead.identityId },
+      where: { identityId_mode: {identityId: lead.identityId, mode:"LEGACY_SIMULATION"} },
       include: {
         account: { select: { id: true, label: true, platform: true } },
         attempts: { orderBy: { createdAt: "desc" }, take: 30 },
@@ -253,7 +253,7 @@ export class AccountsService {
       if (account.platform !== lead.identity.platform)
         throw new ConflictException("平台不匹配");
       let ledger = await tx.contactLedger.findUnique({
-        where: { identityId: lead.identityId },
+        where: { identityId_mode: {identityId: lead.identityId, mode:"LEGACY_SIMULATION"} },
         include: { attempts: true },
       });
       if (ledger && ledger.accountId !== accountId)

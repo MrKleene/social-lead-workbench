@@ -328,7 +328,7 @@ describe("account center / isolated PostgreSQL", () => {
       first = await reserve(l, c);
     await finish(l, first, "SIMULATED_SUCCESS");
     const ledger = await db.contactLedger.findUniqueOrThrow({
-      where: { identityId: l.identityId },
+      where: { identityId_mode: {identityId:l.identityId,mode:"LEGACY_SIMULATION"} },
     });
     await db.contactAttempt.createMany({
       data: Array.from({ length: 31 }, () => ({

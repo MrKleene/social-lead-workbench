@@ -1,0 +1,19 @@
+import { useRef, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { autoContactConsent, type AutoContactOverview, type AutoContactRuleInput, type AutoContactJobView } from '@crm/contracts';
+import { api, send } from '@/lib/api';
+export function useAutoContact(enabled: boolean) {
+    const client = useQueryClient(), [offset, setOffset] = useState(0), [status, setStatus] = useState(''), [draft, setDraft] = useState<AutoContactRuleInput | null>(null), [confirm, setConfirm] = useState(false), [detail, setDetail] = useState<AutoContactJobView | null>(null), trigger = useRef<HTMLElement | null>(null);
+    const overview = useQuery({ queryKey: ['auto-contact'], queryFn: () => api<AutoContactOverview>('/auto-contact'), enabled, refetchInterval: 5000 });
+    const jobs = useQuery({ queryKey: ['auto-contact-jobs', offset, status], queryFn: () => api<{
+            items: AutoContactJobView[];
+            total: number;
+        }>(`/auto-contact/jobs?offset=${offset}${status ? '&status=' + status : ''}`), enabled, refetchInterval: 5000 });
+    const rule = overview.data?.rules[0], refresh = () => Promise.all([client.invalidateQueries({ queryKey: ['auto-contact'] }), client.invalidateQueries({ queryKey: ['auto-contact-jobs'] }), client.invalidateQueries({ queryKey: ['accounts'] })]);
+    const save = useMutation({ mutationFn: () => send(`/auto-contact/rules/${rule?.id ?? 'workspace'}`, 'PUT', draft), retry: false, onSuccess: async () => { await refresh(); setDraft(null); } });
+    const toggle = useMutation({ mutationFn: (enabled: boolean) => send(`/auto-contact/rules/${rule!.id}/enabled`, 'POST', { version: rule!.version, enabled, ...(enabled ? { consent: autoContactConsent, hash: rule!.hash } : {}) }), retry: false, onSuccess: async () => { setConfirm(false); await refresh(); } });
+    const cancel = useMutation({ mutationFn: (id: string) => send(`/auto-contact/jobs/${id}/cancel`, 'POST', {}), retry: false, onSuccess: async () => { setDetail(null); await refresh(); } });
+    const open = () => { trigger.current = document.activeElement as HTMLElement; const d = overview.data; if (!d)
+        return; setDraft({ version: rule?.version ?? 0, platform: rule?.platform ?? 'XHS', policyId: rule?.policyId ?? d.policies[0]?.id ?? '', policyRevision: rule?.policyRevision ?? d.policies[0]?.revision ?? 1, threshold: rule?.threshold ?? 80, channel: rule?.channel ?? 'COMMENT', content: rule?.content ?? '', accounts: rule?.accountIds.map(id => ({ id, version: d.accounts.find(a => a.id === id)?.version ?? 0, dailyLimit: rule.accountLimits.find(a => a.id === id)?.dailyLimit ?? d.accounts.find(a => a.id === id)?.dailyLimit ?? 0 })) ?? [] }); save.reset(); };
+    return { overview, jobs, rule, offset, setOffset, status, setStatus: (s: string) => { setStatus(s); setOffset(0); }, draft, setDraft, confirm, setConfirm, detail, setDetail, trigger, open, save, toggle, cancel, busy: save.isPending || toggle.isPending || cancel.isPending };
+}

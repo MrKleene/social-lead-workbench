@@ -96,7 +96,7 @@ model PlatformIdentity {
   nickname String
   isDemo Boolean @default(true)
   lead Lead?
-  contactLedger ContactLedger?
+  contactLedger ContactLedger[]
   comments SourceComment[]
   @@unique([platform, platformUserId])
 }
@@ -332,7 +332,9 @@ model AccountDay {
 }
 model ContactLedger {
   id String @id @default(cuid())
-  identityId String @unique
+  identityId String
+  mode String @default("LEGACY_SIMULATION")
+  @@unique([identityId,mode])
   identity PlatformIdentity @relation(fields:[identityId],references:[id],onDelete:Cascade)
   accountId String
   account PlatformAccount @relation(fields:[accountId],references:[id],onDelete:Restrict)
@@ -340,12 +342,22 @@ model ContactLedger {
   createdAt DateTime @default(now())
 }
 enum ContactOutcome {
+  RESERVED
+  CONFIRMED
+  CANCELLED
   ATTEMPTED
   UNKNOWN
   SIMULATED_SUCCESS
   FAILED
 }
 model ContactAttempt {
+  jobId String? @unique
+  mode String @default("LEGACY_SIMULATION")
+  channel ReplyChannel?
+  content String?
+  platformReceipt String?
+  attemptedAt DateTime?
+  confirmedAt DateTime?
   id String @id @default(cuid())
   ledgerId String
   ledger ContactLedger @relation(fields:[ledgerId],references:[id],onDelete:Cascade)
@@ -419,6 +431,7 @@ model DeviceExecutionLease {
 
 // Opt-in, bounded context snapshots. No model credentials or outbound messages.
 model SemanticReview {
+ contactJobs AutoContactJob[]
   policyId String?
   policyRevision Int?
   sourceContentHash String?
@@ -633,4 +646,64 @@ model ManualReviewJob {
  updatedAt DateTime @updatedAt
  @@index([status,createdAt])
  @@index([scopeHash,actorId])
+}
+
+// Independent opt-in sending rules. No migration of review consent into sending consent.
+model AutoContactRule {
+ accountLimits Json @default("[]")
+ model String @default("")
+ id String @id @default(cuid())
+ platform Platform
+ policyId String
+ policyRevision Int
+ threshold Int @default(80)
+ channel ReplyChannel @default(COMMENT)
+ content String @default("")
+ accountIds String[] @default([])
+ enabled Boolean @default(false)
+ version Int @default(1)
+ authorizedBy String?
+ authorizedAt DateTime?
+ authorizedHash String?
+ mode String @default("REAL")
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ jobs AutoContactJob[]
+}
+model AutoContactControl {
+ activeJobId String?
+ leaseUntil DateTime?
+ platform Platform
+ mode String
+ pauseReason String?
+ pausedAt DateTime?
+ @@id([platform,mode])
+}
+model AutoContactJob {
+ id String @id @default(uuid())
+ ruleId String
+ rule AutoContactRule @relation(fields:[ruleId],references:[id],onDelete:Restrict)
+ ruleVersion Int
+ reviewId String
+ review SemanticReview @relation(fields:[reviewId],references:[id],onDelete:Restrict)
+ reviewVersion Int
+ mode String
+ platform Platform
+ recipientId String
+ postId String
+ commentId String
+ channel ReplyChannel
+ content String
+ evidence Json
+ eligibilityHash String
+ status String @default("QUEUED")
+ reason String?
+ accountId String?
+ attemptId String? @unique
+ leaseUntil DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@unique([ruleId,ruleVersion,reviewId])
+ @@index([status,createdAt])
+ @@index([platform,recipientId,mode])
 }

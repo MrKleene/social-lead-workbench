@@ -19,7 +19,7 @@ try{
  run('migrate',['node','node_modules/prisma/build/index.js','migrate','deploy'],env);
  const diff=run('schema-diff',['node','node_modules/prisma/build/index.js','migrate','diff','--from-url',url,'--to-schema-datamodel','prisma/schema.prisma','--script'],env);
  // Existing account/contact FK and checkpoint-name drift predates this migration.
- assert(!/SemanticReview|SemanticModelCall|CommentReviewPolicy|ManualReviewJob|AutoReviewJob|ModelSettings|CollectionConfig/.test(diff),'independent review migration must match its schema');
+ assert(!/SemanticReview|SemanticModelCall|CommentReviewPolicy|ManualReviewJob|AutoReviewJob|AutoContact|ModelSettings|CollectionConfig/.test(diff),'independent review migration must match its schema');
  const sql=(database,input)=>{const r=spawnSync('docker',['exec','-i',pg.id,'psql','-X','-U','crmtest','-d',database,'-v','ON_ERROR_STOP=1'],{input,encoding:'utf8',timeout:20000});assert.equal(r.status,0,safe(r.stderr));return r.stdout;};
  sql('crm_test','CREATE DATABASE crm_migration_test;');
  const migrations=readdirSync(join(root,'prisma/migrations')).filter(n=>n!=='migration_lock.toml').sort(),last='202610260002_independent_comment_review';
@@ -53,5 +53,20 @@ try{
  END $$;`);
  results.push({label:'original-input-migration-invalidates-old-consent-and-jobs-preserves-source-key-budget',exit:0});
  results.push({label:'upgrade-preserves-existing-data-and-disabled-target',exit:0});console.log('upgrade preservation: 0');
+ sql('crm_migration_test',`INSERT INTO "PlatformAccount" (id,platform,label,"isDemo") VALUES ('legacy-account','XHS','合成旧账号',true);
+ INSERT INTO "PlatformIdentity" (id,platform,"platformUserId",nickname) VALUES ('legacy-identity','XHS','synthetic-user','合成');
+ INSERT INTO "ContactLedger" (id,"identityId","accountId") VALUES ('legacy-ledger','legacy-identity','legacy-account');
+ INSERT INTO "ContactAttempt" (id,"ledgerId","requestKey",kind,outcome,day,"actorId","updatedAt") VALUES ('legacy-attempt','legacy-ledger','legacy-key','FIRST','SIMULATED_SUCCESS','2026-10-26','synthetic',now());
+ INSERT INTO "AccountDay" ("accountId",day,occupied) VALUES ('legacy-account','2026-10-26',1);
+ CREATE TABLE fixture_contact_before AS SELECT to_jsonb(a) AS snapshot FROM "ContactAttempt" a;
+ CREATE TABLE fixture_ledger_before AS SELECT to_jsonb(a) AS snapshot FROM "ContactLedger" a;`);
+ sql('crm_migration_test',readFileSync(join(root,'prisma/migrations/202610270001_auto_contact/migration.sql'),'utf8'));
+ sql('crm_migration_test',`DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM "AutoContactRule") OR EXISTS(SELECT 1 FROM "AutoContactJob") THEN RAISE EXCEPTION 'sending migration created business activity'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM "ContactAttempt" a,fixture_contact_before f WHERE to_jsonb(a)-'jobId'-'mode'-'channel'-'content'-'platformReceipt'-'attemptedAt'-'confirmedAt'=f.snapshot AND a.mode='LEGACY_SIMULATION') THEN RAISE EXCEPTION 'legacy attempt changed'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM "ContactLedger" a,fixture_ledger_before f WHERE to_jsonb(a)-'mode'=f.snapshot AND a.mode='LEGACY_SIMULATION') THEN RAISE EXCEPTION 'legacy ledger changed'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM "AccountDay" WHERE day='2026-10-26' AND occupied=1) THEN RAISE EXCEPTION 'UTC quota reset'; END IF;
+ END $$;`);
+ results.push({label:'auto-contact-preserves-legacy-simulation-utc-and-default-off',exit:0});
  run('integration',['npm','run','test:integration','-w','@crm/api'],env);
 }finally{for(const c of containers.reverse())docker(['stop',c]);writeFileSync(join(output,'checks.json'),JSON.stringify({results,isolated:true,removed:containers.length},null,2));console.log('Evidence: '+output);}
