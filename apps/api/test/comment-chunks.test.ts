@@ -86,3 +86,10 @@ it('normal cancellation after durable first chunk does not send another read; de
  const result=await collect(b,spec,async()=>false,{...limits,comments:800},async result=>{const e=result.posts[0];if(e.chunk&&e.chunk.hash!==checkpointHash(saved)){saved=validateChunk(saved,e.chunk,e.post.id,e.chunkComments||[]);for(const c of e.chunkComments||[]){expect(ids.has(c.id)).toBe(false);ids.add(c.id);}}},undefined,async p=>b.restoreCheckpoint(p,saved));
  expect(result.status).not.toBe('FAILED');expect(result.posts[0].comments).toHaveLength(85);expect(saved.marks).toHaveLength(125);expect(ids.size).toBe(125);
 });
+
+it('accepts new Go root-scope evidence without changing leaf metadata or direct reply targets',async()=>{
+ const {readFileSync}=await import('node:fs'),{resolve}=await import('node:path'),wire=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/root-scope-wire.json'),'utf8'));
+ const t={supportsBoundedComments:()=>true,supportsCommentChunks:()=>true,call:vi.fn(async(name:string)=>({content:[{type:'text',text:JSON.stringify(name==='search_feeds'?{feeds:[{id:'synthetic-post',xsecToken:'SYNTHETIC'}]}:wire)}]}))};
+ const a=new XhsMcpAdapter(t,true,'XHS_MCP',window),signal=new AbortController().signal,found=await a.search('synthetic',undefined,signal),post=await a.post(found.items[0],signal);
+ expect(post.boundedRead?.state).toBe('COMPLETE');expect(post.boundedRead?.chunkSummary?.rootScopedLeafGroups).toBe(3);expect(post.boundedRead?.retained.groups[1].declared.state).toBe('MISSING');expect(a.receivedComments(post)).toHaveLength(6);expect(a.chunkReceipt(post)?.checkpoint.marks).toHaveLength(6);
+});

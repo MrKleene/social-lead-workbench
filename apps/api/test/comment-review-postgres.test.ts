@@ -7,9 +7,9 @@ import {beforeAll,beforeEach,afterAll,describe,it,expect,vi} from 'vitest';
 import {Test} from '@nestjs/testing';
 import type {INestApplication} from '@nestjs/common';
 import request from 'supertest';
-import {mkdtempSync,mkdirSync,realpathSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,realpathSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,resolve} from 'node:path';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {reviewAutoConsent,reviewUseConsent,semanticBatchConsent,thesisRulePreset} from '@crm/contracts';
 import {AppModule} from '../src/app';
@@ -137,6 +137,18 @@ describe('independent comment review: disposable database and mocked provider on
   await db.modelSettings.updateMany({data:{dailyLimit:1}});await automatic.tick();expect(await db.semanticModelCall.findFirst()).toMatchObject({rows:6,trigger:'AUTOMATIC',configurationVersion:1});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);
   await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'COMPLETED',processed:6});
   await db.modelSettings.updateMany({data:{dailyLimit:2}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.semanticReview.count({where:{state:'EVALUATED'}})).toBe(6);
+ });
+ it.each(['complete','partial','forged'] as const)('root-scoped Go evidence integrates with automatic gate: %s',async mode=>{
+  await autoEnabled();const s=await wholeSource(6),wire=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/root-scope-wire.json'),'utf8')),d=wire.data.boundedRead;
+  if(mode!=='complete'){d.final.ready.rootEndVisible=false;d.retained.ready.rootEndVisible=false;d.chunkSummary.rootEndVisible=false;}
+  if(mode==='partial'){d.state='UNKNOWN';d.reason='BUTTON_NOT_FOUND';d.replyStop='BUTTON_NOT_FOUND';}
+  const complete=mode!=='partial';await db.capturedPost.update({where:{id:s.p.id},data:{coverage:complete?'COMPLETE':'PARTIAL',snapshot:{...(s.p.snapshot as object),boundedRead:d}}});
+  const run=await db.collectionRun.update({where:{id:s.capture.runId},data:{snapshot:{mode:'XHS_MCP'},status:complete?'COMPLETE':'PARTIAL'}});
+  await automatic.postFinished(run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete,windowRead:true,stopReason:complete?undefined:'BUTTON_NOT_FOUND'});
+  await Promise.all([automatic.tick(),automatic.tick()]);await automatic.tick();
+  expect(transport).toHaveBeenCalledTimes(mode==='complete'?1:0);
+  expect(await db.autoReviewJob.findFirst()).toMatchObject({status:mode==='complete'?'COMPLETED':mode==='partial'?'SKIPPED':'CANCELLED',processed:mode==='complete'?6:0});
+  if(mode==='complete'){expect(await db.semanticModelCall.findFirst()).toMatchObject({rows:6,trigger:'AUTOMATIC'});expect(JSON.parse(JSON.parse(transport.mock.calls[0][1].body as string).messages[1].content).items).toHaveLength(6);}
  });
  it('real-source COMPLETE label alone is insufficient without bounded coverage evidence',async()=>{
   await autoEnabled();const s=await finishedSource();await db.collectionRun.update({where:{id:s.capture.runId},data:{snapshot:{mode:'XHS_MCP'}}});await automatic.tick();expect(transport).not.toHaveBeenCalled();expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'CANCELLED',reason:'缺少完整覆盖证据'});

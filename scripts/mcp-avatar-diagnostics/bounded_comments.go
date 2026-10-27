@@ -261,6 +261,9 @@ func boundedError(ctx context.Context, err error) string {
 	return "READ_FAILED"
 }
 func boundedReplies(s CoverageSample) (gap, unknown bool) {
+	if rootScopedRepliesExhausted(s) {
+		return false, false
+	}
 	if s.Loaded == nil {
 		return false, true
 	}

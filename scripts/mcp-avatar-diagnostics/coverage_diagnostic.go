@@ -160,20 +160,7 @@ func inspectCoverage(payload []byte, feedID string, ready CoverageReady) Coverag
 	comments := coverageObject(feed["comments"])
 	d.Total = coverageCount(info["commentCount"])
 	d.HasMore = coverageBoolean(comments["hasMore"])
-	if raw := comments["cursor"]; len(raw) > 0 {
-		if string(raw) == "null" {
-			d.Cursor = "NULL"
-		} else {
-			var cursor string
-			if json.Unmarshal(raw, &cursor) != nil {
-				d.Cursor = "INVALID"
-			} else if cursor == "" {
-				d.Cursor = "EMPTY"
-			} else {
-				d.Cursor = "NONEMPTY"
-			}
-		}
-	}
+	d.Cursor = coverageCursor(comments["cursor"])
 	roots, state := coverageArray(comments["list"])
 	d.List = state
 	if state != "EXACT" {
@@ -269,4 +256,21 @@ func coverageReport(samples []CoverageSample, elapsed int) *CoverageDiagnostic {
 		}
 	}
 	return d
+}
+
+func coverageCursor(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return "MISSING"
+	}
+	if string(raw) == "null" {
+		return "NULL"
+	}
+	var cursor string
+	if json.Unmarshal(raw, &cursor) != nil {
+		return "INVALID"
+	}
+	if cursor == "" {
+		return "EMPTY"
+	}
+	return "NONEMPTY"
 }

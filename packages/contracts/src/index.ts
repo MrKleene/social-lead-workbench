@@ -58,3 +58,5 @@ export * from './reply-target';
 
 export * from './comment-review';
 export * from './semantic-output-errors';
+
+export {rootScopedRepliesExhausted} from './root-reply-scope';

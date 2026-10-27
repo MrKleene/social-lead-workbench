@@ -92,18 +92,19 @@ type CommentChunk struct {
 }
 
 type ChunkCoverageSummary struct {
-	Roots              int           `json:"roots"`
-	Replies            int           `json:"replies"`
-	Unique             int           `json:"unique"`
-	Declared           CoverageCount `json:"declared"`
-	HasMore            CoverageBool  `json:"hasMore"`
-	UnknownReplyGroups int           `json:"unknownReplyGroups"`
-	ReplyDeficit       int           `json:"replyDeficit"`
-	ReplyExcess        int           `json:"replyExcess"`
-	RootEndVisible     *bool         `json:"rootEndVisible"`
-	ReplyControls      *int          `json:"replyControls"`
-	ScopeExact         *bool         `json:"scopeExact"`
-	EmptyVisible       bool          `json:"emptyVisible"`
+	Roots                int           `json:"roots"`
+	Replies              int           `json:"replies"`
+	Unique               int           `json:"unique"`
+	Declared             CoverageCount `json:"declared"`
+	HasMore              CoverageBool  `json:"hasMore"`
+	RootScopedLeafGroups int           `json:"rootScopedLeafGroups,omitempty"`
+	UnknownReplyGroups   int           `json:"unknownReplyGroups"`
+	ReplyDeficit         int           `json:"replyDeficit"`
+	ReplyExcess          int           `json:"replyExcess"`
+	RootEndVisible       *bool         `json:"rootEndVisible"`
+	ReplyControls        *int          `json:"replyControls"`
+	ScopeExact           *bool         `json:"scopeExact"`
+	EmptyVisible         bool          `json:"emptyVisible"`
 }
 
 func chunkCoverage(rows []chunkRecord, raw []byte, id string, ready CoverageReady) *ChunkCoverageSummary {
@@ -133,10 +134,42 @@ func chunkCoverage(rows []chunkRecord, raw []byte, id string, ready CoverageRead
 			c.ReplyExcess -= difference
 		}
 	}
+	// The full row ledger is checked even when diagnostic samples exceed 200.
+	groups := []CoverageReplyGroup{}
+	ordinals := map[string]int{}
+	for i, r := range rows {
+		ordinals[r.mark.ID] = i + 1
+	}
+	for i, r := range rows {
+		children, shape := coverageArray(r.raw["subComments"])
+		loaded := CoverageCount{State: shape}
+		if shape == "EXACT" {
+			n := len(children)
+			loaded.Value = &n
+		}
+		g := CoverageReplyGroup{Ordinal: i + 1, Declared: coverageCount(r.raw["subCommentCount"]), Loaded: loaded}
+		if r.mark.Parent != "" {
+			parent := ordinals[r.mark.Parent]
+			g.Parent = &parent
+			g.Depth = 1
+			// A nested child is not a flat root reply, even if its direct target is a root.
+			for _, p := range rows {
+				if p.mark.ID == r.mark.Parent && p.mark.Parent != "" {
+					g.Depth = 2
+					break
+				}
+			}
+		}
+		groups = append(groups, g)
+	}
+	sample := CoverageSample{Groups: groups, Loaded: &CoverageLoaded{Roots: c.Roots, Replies: c.Replies, UniqueKnown: c.Unique}}
+	if n, ok := rootScopedLeaves(sample); ok && (coverageCursor(comments["cursor"]) == "EMPTY" || coverageCursor(comments["cursor"]) == "NONEMPTY") && ready.Document == "complete" && ready.Container {
+		c.RootScopedLeafGroups = n
+	}
 	return c
 }
 func (c *ChunkCoverageSummary) Complete() bool {
-	return c != nil && c.HasMore.State == "EXACT" && c.HasMore.Value != nil && !*c.HasMore.Value && c.UnknownReplyGroups == 0 && c.ReplyDeficit == 0 && c.ReplyExcess == 0 && c.ScopeExact != nil && *c.ScopeExact && c.ReplyControls != nil && *c.ReplyControls == 0 && ((c.Declared.Value != nil && *c.Declared.Value == c.Unique && c.RootEndVisible != nil && *c.RootEndVisible) || (c.Unique == 0 && c.EmptyVisible && c.Declared.Value == nil))
+	return c != nil && c.HasMore.State == "EXACT" && c.HasMore.Value != nil && !*c.HasMore.Value && c.UnknownReplyGroups == c.RootScopedLeafGroups && c.ReplyDeficit == 0 && c.ReplyExcess == 0 && c.ScopeExact != nil && *c.ScopeExact && c.ReplyControls != nil && *c.ReplyControls == 0 && ((c.Declared.Value != nil && *c.Declared.Value == c.Unique && c.RootEndVisible != nil && *c.RootEndVisible) || (c.Unique == 0 && c.EmptyVisible && c.Declared.Value == nil))
 }
 
 type chunkRecord struct {
