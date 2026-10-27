@@ -26,3 +26,13 @@ func TestExactPreflightRoutesExcludeAllLegacyHTTPActions(t *testing.T) {
 		t.Fatal("ordinary runtime registration unexpectedly changed")
 	}
 }
+
+func TestExactPreflightRoutesRestrictionModeExcludesWrites(t *testing.T) {
+	t.Setenv("CRM_ACCOUNT_INSPECTION_ONLY", "1")
+	t.Setenv("CRM_EXACT_REPLY_ENABLED", "1")
+	for _, route := range setupRoutes(&AppServer{}).Routes() {
+		if route.Path != "/health" && route.Path != "/mcp" && route.Path != "/mcp/*path" {
+			t.Fatal(route.Path)
+		}
+	}
+}

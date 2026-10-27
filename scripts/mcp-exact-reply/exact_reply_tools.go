@@ -8,6 +8,25 @@ import (
 	"os"
 )
 
+func registerRestrictionInspectionTool(server *mcp.Server) {
+	mcp.AddTool(server, &mcp.Tool{Name: "workbench_account_restriction_inspect", Description: exactreply.RestrictionProtocol + " same saved session; visible notice and bounded screenshot; no writes", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest, t exactreply.RestrictionTarget) (*mcp.CallToolResult, any, error) {
+		r := exactreply.InspectRestriction(ctx, t, func() (exactreply.RestrictionInspector, error) {
+			b := newBrowser()
+			complete := false
+			defer func() {
+				if !complete {
+					b.Close()
+				}
+			}()
+			p := b.NewPage()
+			inspector := xiaohongshu.NewRestrictionInspectionDriver(p, func() { b.Close() })
+			complete = true
+			return inspector, nil
+		})
+		return nil, r, nil
+	})
+}
+
 func registerExactPreflightTool(server *mcp.Server) {
 	// Independent read-only tool: does not enable or invoke the send engine.
 	mcp.AddTool(server, &mcp.Tool{Name: "workbench_reply_preflight", Description: exactreply.PreflightProtocol + " inspect exact target only; never select/type/submit", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest, t exactreply.PreflightTarget) (*mcp.CallToolResult, any, error) {
