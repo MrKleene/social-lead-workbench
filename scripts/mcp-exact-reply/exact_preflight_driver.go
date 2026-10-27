@@ -12,7 +12,9 @@ import (
 type ExactPreflightDriver struct{ read *ExactReplyDriver }
 
 func NewExactPreflightDriver(p *rod.Page, closeBrowser func()) *ExactPreflightDriver {
-	return &ExactPreflightDriver{read: NewExactReplyDriver(p, closeBrowser)}
+	// Diagnostic-only reader retains its original one-post navigation scope.
+	// This type exposes no Select/Submit and cannot grant sending permission.
+	return &ExactPreflightDriver{read: &ExactReplyDriver{page: p, closeBrowser: closeBrowser, profileChecked: true}}
 }
 
 var _ exactreply.ReadOnlyInspector = (*ExactPreflightDriver)(nil)

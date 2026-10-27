@@ -222,3 +222,47 @@ it('single-shot UNKNOWN remains visible without an automatic rule or job and can
  const realSettings=new ContactSettingsService(db,{...sender,mode:'REAL'});
  const view=await realSettings.overview(actor);expect(view.rules).toHaveLength(0);expect(view.recentAttempts).toHaveLength(1);expect(view.recentAttempts[0]).toMatchObject({outcome:'UNKNOWN',executionEvidence:[]});expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);
 });
+
+// Synthetic journal from the same owned sender. No platform session is opened.
+import {recordSendExecution,accountSendObservation} from '../src/auto-contact/send-observation';
+import type {ExecutionEvent} from '../src/auto-contact/reply-stage-journal';
+const syntheticSender='a'.repeat(24), syntheticAttempt='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
+function profileJournal(code='ACCOUNT_CONTENT_RESTRICTED'):ExecutionEvent{return {stage:'TRANSPORT_STOP',protocolAttemptId:syntheticAttempt,stopped:true,journal:{state:'AVAILABLE',records:[{sequence:1,attemptId:syntheticAttempt,stage:'RESTRICTION_CHECK',at:new Date().toISOString(),evidence:{identity:'MATCH',title:'合成账号',pathname:'/user/profile/[SENDER]',warnings:code?[{code:code as any,text:'接相关投诉该账户违反 《社区规范》 其内容无法查看'}]:[],screenshotState:'NOT_CAPTURED'}}]}};}
+async function realRestrictionFixture(){
+ const f=await rule();await db.platformAccount.update({where:{id:f.accounts[0].id},data:{isDemo:false,loginPlatformUserId:syntheticSender}});
+ await db.autoContactRule.update({where:{id:f.r.id},data:{mode:'REAL'}});
+ return f;
+}
+it('same-session profile restriction atomically pauses account and every REAL rule, preserving UNKNOWN history',async()=>{
+ const f=await oneShotFixture();await f.service.execute(actor,f.scope);
+ const account=await db.platformAccount.findUniqueOrThrow({where:{id:f.account.id}});
+ const attempts=await db.contactAttempt.findMany(),ledgers=await db.contactLedger.findMany(),quotas=await db.accountDay.findMany();
+ await db.$transaction(tx=>recordSendExecution(tx,actor.id,account.id,'synthetic-profile','AUTO_CONTACT_EXECUTION_STAGE',profileJournal(),account.loginPlatformUserId!));
+ expect(await db.contactAttempt.findMany()).toEqual(attempts);expect(await db.contactLedger.findMany()).toEqual(ledgers);expect(await db.accountDay.findMany()).toEqual(quotas);
+ expect((await db.platformAccount.findUniqueOrThrow({where:{id:account.id}})).status).toBe('PAUSED');
+ expect((await db.autoContactControl.findUniqueOrThrow({where:{platform_mode:{platform:'XHS',mode:'REAL'}}})).pauseReason).toBeTruthy();
+ const fresh=new ContactSettingsService(db,{...sender,mode:'REAL'});const view=await fresh.overview(actor);
+ expect(view.accounts.find(a=>a.id===account.id)?.sendEligibility).toMatchObject({state:'RESTRICTED',canSend:false,evidence:{pathname:'/user/profile/[SENDER]',screenshotState:'NOT_CAPTURED'}});
+});
+it('concurrent profile observations and scheduler attempts do not reserve quota or switch accounts; restart retains restriction',async()=>{
+ const f=await realRestrictionFixture();const realSender:ContactSender={...sender,mode:'REAL'};const scheduler=new AutoContactService(db,realSender);
+ await Promise.all([db.$transaction(tx=>recordSendExecution(tx,actor.id,f.accounts[0].id,'synthetic-profile','AUTO_CONTACT_EXECUTION_STAGE',profileJournal(),syntheticSender)),scheduler.tick(),scheduler.tick()]);
+ expect((await db.autoContactRule.findUniqueOrThrow({where:{id:f.r.id}})).enabled).toBe(false);
+ expect(await db.contactAttempt.count()).toBe(0);expect(await db.accountDay.count()).toBe(0);expect(sender.send).not.toHaveBeenCalled();
+ await db.$transaction(tx=>recordSendExecution(tx,actor.id,f.accounts[0].id,'synthetic-empty','AUTO_CONTACT_EXECUTION_STAGE',profileJournal(''),syntheticSender));
+ expect(await accountSendObservation(db,f.accounts[0].id,new Date(Date.now()+86400000))).toMatchObject({state:'RESTRICTED',stale:true,canSend:false});
+ await new AutoContactService(db,realSender).tick();expect(sender.send).not.toHaveBeenCalled();
+});
+it('wrong identity or mismatched protocol attempt rolls back observation and platform pause',async()=>{
+ const f=await realRestrictionFixture();const bad=profileJournal();if(bad.stage==='TRANSPORT_STOP')bad.journal.records[0].attemptId='bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
+ for(const [event,senderId] of [[profileJournal(),'b'.repeat(24)],[bad,syntheticSender]] as const){
+  await expect(db.$transaction(tx=>recordSendExecution(tx,actor.id,f.accounts[0].id,'synthetic-profile','AUTO_CONTACT_EXECUTION_STAGE',event,senderId))).rejects.toThrow();
+ }
+ expect(await db.auditLog.count({where:{action:'ACCOUNT_SEND_OBSERVATION'}})).toBe(0);expect(await db.autoContactControl.count({where:{mode:'REAL'}})).toBe(0);
+});
+it('missing or empty restriction evidence cannot enable a REAL rule even with a healthy adapter',async()=>{
+ const f=await realRestrictionFixture();const realSettings=new ContactSettingsService(db,{...sender,mode:'REAL'});
+ const r=await db.autoContactRule.update({where:{id:f.r.id},data:{enabled:false}});
+ await expect(realSettings.toggle(actor,r.id,{version:r.version,enabled:true,consent:autoContactConsent,hash:ruleHash(r)})).rejects.toThrow();
+ expect((await realSettings.overview(actor)).accounts.every(a=>!a.sendEligibility?.canSend)).toBe(true);expect(sender.send).not.toHaveBeenCalled();
+});

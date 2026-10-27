@@ -152,3 +152,24 @@ func TestExactReplyProfileCaptureRevalidationRejectsChangedOrPrivateUI(t *testin
 		}
 	}
 }
+
+func TestExactReplyProfileGate(t *testing.T) {
+	clear := exactreply.RestrictionObservation{Identity: "MATCH", Path: "/user/profile/[SENDER]", Navigation: []exactreply.RestrictionStep{{Path: "/explore", Identity: "MATCH"}, {Path: "/user/profile/[SENDER]", Identity: "MATCH"}}}
+	if err := profileSendBlock(clear); err != nil {
+		t.Fatal(err)
+	}
+	for _, code := range []string{"ACCOUNT_CONTENT_RESTRICTED", "BANNED", "MUTED", "SESSION_LIMIT", "VERIFICATION", "RATE_LIMITED", "COMMENT_RESTRICTED"} {
+		notice := clear
+		notice.Warnings = []exactreply.RestrictionWarning{{Code: code, Text: "合成限制"}}
+		if profileSendBlock(notice) == nil {
+			t.Fatal(code)
+		}
+	}
+	for _, change := range []func(*exactreply.RestrictionObservation){func(o *exactreply.RestrictionObservation) { o.Identity = "MISMATCH" }, func(o *exactreply.RestrictionObservation) { o.Identity = "UNKNOWN" }, func(o *exactreply.RestrictionObservation) { o.Path = "/explore/[POST]" }, func(o *exactreply.RestrictionObservation) { o.Navigation = nil }} {
+		bad := clear
+		change(&bad)
+		if profileSendBlock(bad) == nil {
+			t.Fatal("unverified profile allowed")
+		}
+	}
+}

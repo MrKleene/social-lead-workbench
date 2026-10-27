@@ -1,3 +1,4 @@
+import {accountSendObservation} from './send-observation';
 import {postAvailability,postSendBlock} from '../collection/post-availability';
 import {publicPostSnapshot} from '../collection/post-reference';
 import { Inject, Injectable, ConflictException, NotFoundException } from '@nestjs/common';
@@ -24,6 +25,7 @@ export class AutoContactService {
     private async ruleReady(tx: ContactDb, r: AutoContactRule) {
         if (!r.enabled || r.mode !== this.sender.mode || r.authorizedHash !== ruleHash(r) || !r.authorizedAt || !r.authorizedBy || !r.content.trim() || !r.accountIds.length || !this.sender.capability(r.platform, r.channel))
             return false;
+        if(r.mode==='REAL') for(const id of r.accountIds){if(!(await accountSendObservation(tx,id,await this.now(tx))).canSend)return false;}
         const [p, m, a, c] = await Promise.all([tx.commentReviewPolicy.findUnique({ where: { id: r.policyId } }), tx.modelSettings.findFirst({ select: { model: true } }), tx.user.findUnique({ where: { id: r.authorizedBy }, select: { active: true, role: true } }), tx.autoContactControl.findUnique({ where: { platform_mode: { platform: r.platform, mode: r.mode } } })]);
         return p?.revision === r.policyRevision && m?.model === r.model && a?.active && a.role === 'ADMIN' && !c?.pauseReason;
     }
@@ -109,6 +111,7 @@ export class AutoContactService {
                     const a = await tx.platformAccount.findUnique({ where: { id }, include: { sessionReference: true } });
                     if (!a || a.archivedAt || a.platform !== j.platform || a.status !== 'UNCONNECTED' || (j.mode === 'SIMULATION' ? !a.isDemo || !!a.loginSessionKey : a.isDemo || a.sessionReference?.state !== 'VERIFIED'))
                         continue;
+                    if(j.mode==='REAL'&&!(await accountSendObservation(tx,id,now)).canSend)continue;
                     healthyCount++;
                     const usage = await tx.accountDay.findUnique({ where: { accountId_day: { accountId: id, day } } });
                     if ((usage?.occupied ?? 0) >= limit(r, id, a.dailyLimit))

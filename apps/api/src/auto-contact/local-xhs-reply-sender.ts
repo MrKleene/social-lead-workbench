@@ -86,7 +86,7 @@ export class LocalXhsReplySender implements ContactSender {
             await this.db.$transaction(tx => this.devices.assertPermit(tx, permit!));
             attempted = true;
             const result = await transport.send(request, { accountId: request.accountId, senderId: current.account.loginPlatformUserId!, postReference: current.reference }, combined, async (event: ExecutionEvent) => {
-                await this.db.$transaction(tx=>recordSendExecution(tx,current.actor.id,request.accountId,request.requestKey,'AUTO_CONTACT_EXECUTION_STAGE',event));
+                await this.db.$transaction(tx=>recordSendExecution(tx,current.actor.id,request.accountId,request.requestKey,'AUTO_CONTACT_EXECUTION_STAGE',event,current.account.loginPlatformUserId!));
             });
             stopped = await transport.stop(); return !stopped && result.kind !== 'RISK' ? { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' } : result;
         } catch {

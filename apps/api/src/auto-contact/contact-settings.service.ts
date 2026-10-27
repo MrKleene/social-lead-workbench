@@ -10,7 +10,8 @@ import { requireAdmin, type Actor } from '../auth/security';
 import { CONTACT_SENDER, UnavailableContactSender, senderUnavailable, type ContactSender } from './contact-sender';
 import { ruleHash, shanghaiDay, quotaBucket } from './contact-policy';
 export type ContactDb = Prisma.TransactionClient;
-export async function contactLock(tx: ContactDb) { await tx.$executeRaw `SELECT pg_advisory_xact_lock(70272026)`; }
+import {contactLock} from './contact-lock';
+export {contactLock} from './contact-lock';
 export async function contactNow(tx: ContactDb) { const [r] = await tx.$queryRaw<{
     now: Date;
 }[]> `SELECT clock_timestamp() AS now`; return r.now; }
@@ -111,6 +112,10 @@ export class ContactSettingsService {
                     throw new ConflictException('目标、模型或权限已变化');
                 if (accounts.length !== r.accountIds.length || !accounts.every(a => r.mode === 'SIMULATION' ? a.isDemo && !a.loginSessionKey : !a.isDemo && a.sessionReference?.state === 'VERIFIED'))
                     throw new ConflictException('账号池存在未授权或不健康账号');
+                if(r.mode==='REAL') for(const account of accounts){
+                    if(!(await accountSendObservation(tx,account.id,await contactNow(tx))).canSend)
+                        throw new ConflictException('账号受限或发送资格待核验，不能开启自动联系');
+                }
                 await tx.autoContactControl.upsert({ where: { platform_mode: { platform: r.platform, mode: r.mode } }, create: { platform: r.platform, mode: r.mode }, update: {} });
             }
             else {

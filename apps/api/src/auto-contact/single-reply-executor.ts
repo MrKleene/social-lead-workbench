@@ -29,7 +29,7 @@ export class LocalSingleReplyExecutor implements SingleReplyExecutor {
    else{
     await this.db.$transaction(tx=>this.devices.assertPermit(tx,permit!));
     if(!combined.aborted&&await beforeSubmit()){
-     const record=async(event:ExecutionEvent)=>{await this.db.$transaction(tx=>recordSendExecution(tx,c.actor.id,c.request.accountId,c.request.requestKey,'SINGLE_REPLY_EXECUTION_STAGE',event));};
+     const record=async(event:ExecutionEvent)=>{await this.db.$transaction(tx=>recordSendExecution(tx,c.actor.id,c.request.accountId,c.request.requestKey,'SINGLE_REPLY_EXECUTION_STAGE',event,c.scope.senderId));};
      protocolCalls=1;result=await transport.send(c.request,c.binding,combined,record);
     }
    }

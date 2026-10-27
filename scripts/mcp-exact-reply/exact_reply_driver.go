@@ -17,6 +17,7 @@ type ExactReplyDriver struct {
 	page             *rod.Page
 	closeBrowser     func()
 	opened, selected bool
+	profileChecked   bool
 	before           map[string]bool
 }
 
@@ -42,6 +43,12 @@ func (d *ExactReplyDriver) state(ctx context.Context, c exactreply.Command, relo
 	p := d.page.Context(ctx)
 	if ctx.Err() != nil {
 		return exactState{}, ctx.Err()
+	}
+	if !d.profileChecked {
+		if err := d.profileRestrictions(ctx, c); err != nil {
+			return exactState{}, err
+		}
+		d.profileChecked = true
 	}
 	if !d.opened || reload {
 		if err := exactreply.RecordStage(ctx, "NAVIGATION_INTENT", nil, nil); err != nil {
@@ -554,4 +561,42 @@ func (d *ExactReplyDriver) FinalRestriction(ctx context.Context, c exactreply.Co
 		return nil
 	}
 	return d.restrictions(ctx, c)
+}
+
+// Runs on the exact owned send page before target navigation/editor access. It
+// detects restrictions, never supplies the missing positive send qualification.
+func (d *ExactReplyDriver) profileRestrictions(ctx context.Context, c exactreply.Command) error {
+	inspector := NewRestrictionInspectionDriver(d.page, func() {})
+	inspector.textOnly = true
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = inspector.Close(closeCtx)
+	}()
+	o, err := inspector.Inspect(ctx, exactreply.RestrictionTarget{Protocol: exactreply.ProfileRestrictionProtocol, AccountID: c.AccountID, SenderID: c.SenderID})
+	if err != nil {
+		return err
+	}
+	return profileSendBlock(o)
+}
+func profileSendBlock(o exactreply.RestrictionObservation) error {
+	if o.Identity != "MATCH" {
+		return errors.New("RESTRICTION_UNVERIFIED")
+	}
+	for _, w := range o.Warnings {
+		switch w.Code {
+		case "BANNED", "MUTED":
+			return exactreply.RiskError("BANNED")
+		case "VERIFICATION", "SESSION_LIMIT":
+			return exactreply.RiskError("VERIFICATION")
+		case "RATE_LIMITED":
+			return exactreply.RiskError("RATE_LIMITED")
+		default:
+			return exactreply.RiskError("PLATFORM_REFUSED")
+		}
+	}
+	if o.Path != "/user/profile/[SENDER]" || len(o.Navigation) != 2 || o.Navigation[0].Path != "/explore" || o.Navigation[0].Identity != "MATCH" || o.Navigation[1].Path != o.Path || o.Navigation[1].Identity != "MATCH" {
+		return errors.New("PROFILE_ENTRY_UNAVAILABLE")
+	}
+	return nil
 }

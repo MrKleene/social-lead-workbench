@@ -17,6 +17,8 @@ import (
 // Same MCP-owned page and saved session as other drivers; no ordinary Chrome.
 // Only read operations: a post, or explore then an identity-bound self profile. No editor or send methods.
 type RestrictionInspectionDriver struct {
+	textOnly bool // send gate journals safe text; no image bytes in ordinary logs
+
 	page                           *rod.Page
 	closeBrowser                   func()
 	cancelEvents                   context.CancelFunc
@@ -112,6 +114,9 @@ func (d *RestrictionInspectionDriver) Inspect(ctx context.Context, t exactreply.
 	var navigation []exactreply.RestrictionStep
 	defer func() { o.Navigation = navigation }()
 	for step := 0; step < 2; step++ {
+		if err = exactreply.RecordStage(ctx, "NAVIGATION_INTENT", nil, nil); err != nil {
+			return o, err
+		}
 		if err = p.Navigate(destination); err != nil {
 			return o, err
 		}
@@ -144,6 +149,9 @@ func (d *RestrictionInspectionDriver) Inspect(ctx context.Context, t exactreply.
 			case <-timer.C:
 			}
 		}
+		if err = exactreply.RecordStage(ctx, "NAVIGATED", nil, nil); err != nil {
+			return o, err
+		}
 		navigation = append(navigation, exactreply.RestrictionStep{ObservedAt: time.Now().UTC().Format(time.RFC3339Nano), Path: dom.Path, Identity: dom.Identity})
 		if !profile || step == 1 || !profileNavigationAllowed(dom) {
 			break
@@ -153,6 +161,17 @@ func (d *RestrictionInspectionDriver) Inspect(ctx context.Context, t exactreply.
 		destination = "https://www.xiaohongshu.com/user/profile/" + t.SenderID
 	}
 	o = exactreply.RestrictionObservation{Navigation: navigation, Identity: dom.Identity, IdentitySource: dom.IdentitySource, Title: dom.Title, Path: dom.Path, Warnings: dom.Warnings, ScreenshotState: "UNAVAILABLE", ScreenshotReasons: dom.ScreenshotReasons, ConsoleErrors: int(d.consoleErrors.Load()), NetworkFailures: int(d.networkFailures.Load())}
+	// A send gate uses this same page/session before it visits the target post.
+	if d.textOnly {
+		evidence := o
+		if evidence.Identity != "MATCH" {
+			evidence.Warnings = nil
+		}
+		if err = exactreply.RecordRestriction(ctx, evidence, t); err != nil {
+			return o, err
+		}
+		return o, nil
+	}
 	// No recovery navigation after a restriction, unknown route or account mismatch.
 	if dom.Identity == "MISMATCH" {
 		o.ScreenshotState = "IDENTITY_MISMATCH"
