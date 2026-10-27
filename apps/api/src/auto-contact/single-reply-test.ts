@@ -10,19 +10,21 @@ import { semanticHash } from '../collection/capture-archive';
 import { savedPostReference } from '../collection/post-reference';
 import { normalizeSendResult, type SendRequest, type SendResult } from './contact-sender';
 import type { XhsReplyBinding } from './xhs-reply-protocol';
-export const singleReplyCandidateSha = 'ee0901efc70426a8d44eef00e731cf474447967057d3b50df4727bb1cf032d96';
+import {singleReplyBuildHashes,singleReplyScopeVersion,singleReplyPurpose} from './single-reply-builds';
+import {XHS_REPLY_PROTOCOL} from './xhs-reply-protocol';
 const id=z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/), platformId=z.string().regex(/^[a-f0-9]{24}$/);
 export const singleReplyScopeSchema=z.object({
+ scopeVersion:z.literal(singleReplyScopeVersion),purpose:z.literal(singleReplyPurpose),protocol:z.literal(XHS_REPLY_PROTOCOL),
  availabilityVersion:z.number().int().nonnegative(),approvalId:z.string().uuid(),accountId:id,senderId:platformId,reviewId:id,reviewVersion:z.number().int().nonnegative(),templateId:id,
  postId:platformId,commentId:platformId,recipientId:platformId,comment:z.string().min(1).max(20000),content:z.string().min(1).max(4000),
- binarySha256:z.literal(singleReplyCandidateSha),maximumSubmissions:z.literal(1),retryCount:z.literal(0),expiresAt:z.string().datetime(),
+ binarySha256:z.enum(singleReplyBuildHashes),maximumSubmissions:z.literal(1),retryCount:z.literal(0),expiresAt:z.string().datetime(),
  // A narrow exception to this pre-existing read-only setting, never platform risk.
  pausedReason:z.literal('登录已验证；只读采集须逐次确认，发送禁用'),
 }).strict();
 export type SingleReplyScope=z.infer<typeof singleReplyScopeSchema>;
 export type SingleReplyContext={request:SendRequest;binding:XhsReplyBinding;sessionKey:string;accountVersion:number;actor:Actor;scope:SingleReplyScope};
 export type SingleReplyResult={result:SendResult;protocolCalls:number;submission:'NOT_ATTEMPTED'|'AT_MOST_ONCE_UNKNOWN'|'CONFIRMED_ONCE';identityVerified:boolean;stopped:boolean};
-export interface SingleReplyExecutor { capable():boolean; run(context:SingleReplyContext,beforeSubmit:()=>Promise<boolean>,signal:AbortSignal):Promise<SingleReplyResult>; }
+export interface SingleReplyExecutor { capable(scope:SingleReplyScope):boolean; run(context:SingleReplyContext,beforeSubmit:()=>Promise<boolean>,signal:AbortSignal):Promise<SingleReplyResult>; }
 const refuse=()=>{throw Error('SINGLE_REPLY_SCOPE_OR_STATE_CHANGED');};
 /** Operator-only one-shot service, deliberately no HTTP route, queue or enabled rule.
  * Audit + reservation are atomic under the same lock/ledger/day as automatic contact.
@@ -57,7 +59,7 @@ export class SingleReplyTestService {
    await contactLock(tx);
    const prior=await tx.contactAttempt.findUnique({where:{requestKey:key}});
    if(prior)return {existing:true as const,attempt:prior};
-   if(!this.executor.capable())throw Error('SINGLE_REPLY_RUNTIME_UNAVAILABLE');
+   if(!this.executor.capable(s))throw Error('SINGLE_REPLY_RUNTIME_UNAVAILABLE');
    const v=await this.validate(tx,actor,s);
    const control=await tx.autoContactControl.findUnique({where:{platform_mode:{platform:'XHS',mode:'REAL'}}});
    if(control?.activeJobId||control?.pauseReason)throw Error('PLATFORM_BUSY_OR_PAUSED');

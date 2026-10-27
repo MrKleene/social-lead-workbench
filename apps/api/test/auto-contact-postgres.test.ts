@@ -75,7 +75,9 @@ it('dispatch deadline pauses before allowing another account and aborts the send
 
 // One-shot fixtures only. These tests never launch a browser or contact a platform.
 async function oneShotFixture(){
- const {SingleReplyTestService,singleReplyCandidateSha}=await import('../src/auto-contact/single-reply-test');
+ const {SingleReplyTestService}=await import('../src/auto-contact/single-reply-test');
+ const {singleReplyBuildHashes,singleReplyScopeVersion,singleReplyPurpose}=await import('../src/auto-contact/single-reply-builds');
+ const {XHS_REPLY_PROTOCOL}=await import('../src/auto-contact/xhs-reply-protocol');
  const userId='d'.repeat(24),postId='b'.repeat(24),commentId='c'.repeat(24),senderId='a'.repeat(24);
  let r=await source(userId,{isDemo:false});const capture=await db.capturedComment.findUniqueOrThrow({where:{id:r.captureId!}});
  const snapshot={postId,commentId,userId,comment:'synthetic evidence',isDemo:false};
@@ -85,7 +87,7 @@ async function oneShotFixture(){
  const sessionKey=randomUUID(),pauseReason='登录已验证；只读采集须逐次确认，发送禁用';
  const account=await db.platformAccount.create({data:{platform:'XHS',label:'Synthetic one shot',isDemo:false,status:'PAUSED',pauseReason,dailyLimit:3,loginProvider:'real',loginPlatformUserId:senderId,loginSessionKey:sessionKey,sessionReference:{create:{deviceId:randomUUID(),sessionKey,provider:'real',state:'VERIFIED'}}}});
  const template=await db.replyTemplate.create({data:{name:'Synthetic one shot only',channel:'COMMENT',body:'synthetic reply'}});
- const scope={availabilityVersion:0,approvalId:randomUUID(),accountId:account.id,senderId,reviewId:r.id,reviewVersion:r.version,templateId:template.id,postId,commentId,recipientId:userId,comment:'synthetic evidence',content:template.body,binarySha256:singleReplyCandidateSha,maximumSubmissions:1 as const,retryCount:0 as const,expiresAt:new Date(Date.now()+600000).toISOString(),pausedReason:pauseReason as '登录已验证；只读采集须逐次确认，发送禁用'};
+ const scope={scopeVersion:singleReplyScopeVersion,purpose:singleReplyPurpose,protocol:XHS_REPLY_PROTOCOL,availabilityVersion:0,approvalId:randomUUID(),accountId:account.id,senderId,reviewId:r.id,reviewVersion:r.version,templateId:template.id,postId,commentId,recipientId:userId,comment:'synthetic evidence',content:template.body,binarySha256:singleReplyBuildHashes[0],maximumSubmissions:1 as const,retryCount:0 as const,expiresAt:new Date(Date.now()+600000).toISOString(),pausedReason:pauseReason as '登录已验证；只读采集须逐次确认，发送禁用'};
  let calls=0;const executor={capable:()=>true,run:vi.fn(async(_c:any,before:()=>Promise<boolean>)=>{if(!await before())return {result:{kind:'FAILED' as const,reason:'synthetic rejected'},protocolCalls:0,submission:'NOT_ATTEMPTED' as const,identityVerified:true,stopped:true};calls++;return {result:{kind:'UNKNOWN' as const,reason:'synthetic only'},protocolCalls:1,submission:'AT_MOST_ONCE_UNKNOWN' as const,identityVerified:true,stopped:true};})};
  return {scope,account,template,executor,service:new SingleReplyTestService(db,executor),calls:()=>calls};
 }
@@ -157,4 +159,18 @@ it('single-shot old preview or an inaccessible source cannot reserve or dispatch
 
 it('authorization made during outage is invalid after restoration, even with a later review',async()=>{
  await rule();const r=await source();const down=await mark(r,'HTTP_404');const during=new Date(down.checkedAt.getTime()+1);await new Promise(ok=>setTimeout(ok,5));const restored=await mark(r,'EXACT_VISIBLE',1);expect(restored.invalidatedAt).toEqual(restored.checkedAt);const {postSendBlock}=await import('../src/collection/post-availability');expect(postSendBlock(restored,during,new Date(restored.checkedAt.getTime()+1),2)).toBe('POST_RESTORED_REAUTHORIZE_AND_REVIEW');
+});
+
+it('new build approval cannot revive a consumed failed recipient or rewrite its receipt',async()=>{
+ const f=await oneShotFixture();f.executor.run.mockResolvedValueOnce({result:{kind:'FAILED',reason:'synthetic old pre-submit refusal'},protocolCalls:0,submission:'NOT_ATTEMPTED',identityVerified:true,stopped:true} as any);
+ await f.service.execute(actor,f.scope);const old=await db.contactAttempt.findFirstOrThrow();const audits=await db.auditLog.count();
+ // A valid new-format replay of an existing approval remains a receipt lookup only.
+ await expect(f.service.execute(actor,{...f.scope,commentId:'e'.repeat(24)})).resolves.toMatchObject({reused:true,outcome:'FAILED'});
+ await expect(f.service.execute(actor,{...f.scope,approvalId:randomUUID()})).rejects.toThrow('RECIPIENT_ALREADY_RESERVED_OR_CONTACTED');
+ expect(f.executor.run).toHaveBeenCalledTimes(1);expect(await db.contactAttempt.findUnique({where:{id:old.id}})).toEqual(old);expect(await db.auditLog.count()).toBe(audits);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(0);
+});
+it('old or read-only authorization is rejected before reservation and does not become new consent',async()=>{
+ const f=await oneShotFixture();const {scopeVersion,purpose,protocol,...legacy}=f.scope;
+ for(const scope of [legacy,{...f.scope,purpose:'INSPECT_ONLY'},{...f.scope,protocol:'workbench.xhs.exact-preflight.v2'},{...f.scope,binarySha256:'ee0901efc70426a8d44eef00e731cf474447967057d3b50df4727bb1cf032d96'}])await expect(f.service.execute(actor,scope)).rejects.toThrow();
+ expect(f.executor.run).not.toHaveBeenCalled();expect(await db.contactAttempt.count()).toBe(0);expect(await db.accountDay.count()).toBe(0);expect(await db.auditLog.count()).toBe(0);
 });

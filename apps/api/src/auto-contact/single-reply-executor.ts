@@ -2,22 +2,23 @@ import type { DeviceService, ExecutionPermit } from '../devices/device.service';
 import type { LoginRuntime, SessionDriver } from '../accounts/login-runtime';
 import type { Db } from '../common/db';
 import { toolPlan } from '../../../../runtime/platform.cjs';
+import { compatibleSingleReplyScope, type SingleReplyRuntimeScope } from './single-reply-builds';
 import { XhsExactReplyTransport } from './xhs-reply-transport';
-import { singleReplyCandidateSha, type SingleReplyContext, type SingleReplyExecutor, type SingleReplyResult } from './single-reply-test';
+import { type SingleReplyContext, type SingleReplyExecutor, type SingleReplyResult } from './single-reply-test';
 export class LocalSingleReplyExecutor implements SingleReplyExecutor {
  constructor(private db:Db,private devices:DeviceService,private runtime:LoginRuntime){}
- capable(){return process.platform==='darwin'&&this.devices.enabled()&&this.runtime.persistent()&&this.runtime.mode()==='real'&&toolPlan(process.env.HOME??'').hash===singleReplyCandidateSha;}
+ capable(scope:SingleReplyRuntimeScope){return process.platform==='darwin'&&this.devices.enabled()&&this.runtime.persistent()&&this.runtime.mode()==='real'&&compatibleSingleReplyScope(scope,toolPlan(process.env.HOME??'').hash);}
  async run(c:SingleReplyContext,beforeSubmit:()=>Promise<boolean>,signal:AbortSignal):Promise<SingleReplyResult>{
   let permit:ExecutionPermit|undefined,driver:SessionDriver|undefined,transport:XhsExactReplyTransport|undefined,identityVerified=false,stopped=true,protocolCalls=0;
   let result:SingleReplyResult['result']={kind:'FAILED',reason:'单次提交前核验未通过'};
   try{
-   if(!this.capable())throw Error('UNAVAILABLE');
+   if(!this.capable(c.scope))throw Error('UNAVAILABLE');
    permit=await this.devices.acquire(c.actor,c.request.accountId);
    const combined=AbortSignal.any([signal,permit.signal,AbortSignal.timeout(70000)]);
    if(await this.runtime.inspect(c.request.accountId,c.sessionKey,this.runtime.deviceId(),'real',permit.root)!=='UNVERIFIED')throw Error('SESSION_METADATA_MISMATCH');
-   driver=await this.runtime.openSavedForReply(c.request.accountId,c.sessionKey,combined,permit.root,singleReplyCandidateSha);stopped=false;
+   driver=await this.runtime.openSavedForReply(c.request.accountId,c.sessionKey,combined,permit.root,c.scope.binarySha256);stopped=false;
    if(!driver.replyEndpoint)throw Error('ENDPOINT_MISSING');
-   transport=new XhsExactReplyTransport(driver.replyEndpoint(),{enabled:true,reviewedSha256:singleReplyCandidateSha});
+   transport=new XhsExactReplyTransport(driver.replyEndpoint(),{enabled:true,reviewedSha256:c.scope.binarySha256});
    // Read-only platform login check in this owned candidate process before any write.
    const login=await driver.status(combined);if(!login.loggedIn||login.userId!==c.scope.senderId)throw Error('LIVE_ACCOUNT_MISMATCH');identityVerified=true;
    if(!await transport.connect(combined)){result=transport.connectionFailure();}
