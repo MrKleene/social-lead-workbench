@@ -17,7 +17,7 @@ function PostFacts({post:p,run}:{post:RunPostItem;run:Run}){
  const evidence=safeRunCoverage(run.metrics?.coverage)?.posts.find(item=>item.postRef===p.platformPostId);
  const coverage=commentCoverage(evidence?.recovery?.remainingAnchors?undefined:evidence?.boundedRead,p.stopReason,p.savedCount);
  const published=displayPublication(p.publishedAt);
- return <><p className="run-post-counts">已保存 {p.savedCount??'数量待确认'} 条评论/回复 <span>{p.rootCount===null?'一级评论数待确认':`${p.rootCount} 条一级评论`} · {p.replyCount===null?'回复数待确认':`${p.replyCount} 条回复`}</span></p>
+ return <><p className="run-post-counts">{p.confirmedRecovery?'本次确认':'已保存'} {p.savedCount??'数量待确认'} 条评论/回复 <span>{p.rootCount===null?'一级评论数待确认':`${p.rootCount} 条一级评论`} · {p.replyCount===null?'回复数待确认':`${p.replyCount} 条回复`}</span></p>
  <div className="run-post-meta" data-warning={coverage.warning}><span>{coverage.label}</span>{coverage.declared!==null&&<span>平台声明 {coverage.declared} 条{coverage.difference?` · 差 ${coverage.difference} 条原因未确认`:""}</span>}{coverage.issue&&<span>{coverage.issue}</span>}<span>新存 {p.newCount??'待确认'} · 复用 {p.reusedCount??'待确认'} 份原文</span></div>
  <div className="run-post-times">{published&&<time dateTime={published}>发布 {readingTime(published)}</time>}<time dateTime={p.savedAt}>采集更新 {readingTime(p.savedAt)}</time><span>北京时间</span></div></>;
 }
@@ -43,7 +43,7 @@ export function RunPostStream({configId,run,visible}:{configId:string;run:Run;vi
    {!items.length&&!feed.isError&&<p className="run-post-notice">{['RUNNING','QUEUED'].includes(run.status)?'等待首篇帖子返回；不会预猜正在读取的内容。':'本轮没有可返回的帖子原文。'}</p>}
   </div>
   {unseen&&<Button className="run-post-new" variant="outline" onClick={()=>{following.current=true;viewport.current?.scrollTo({top:viewport.current.scrollHeight,behavior:'instant'});setUnseen(false);}}>有新帖子 · 查看</Button>}
-  {!!items.length&&<small className="run-post-footnote">{items.every(p=>p.readOrdinal)?'按本次读取顺序 · 与覆盖证据逐帖对应':'历史未记录读取关联，存档序号不是读取序号'} · 数量仅含本轮保存，不代表平台总评论数</small>}
+  {!!items.length&&<small className="run-post-footnote">{items.every(p=>p.readOrdinal)?'按本次读取顺序 · 与覆盖证据逐帖对应':'历史未记录读取关联，存档序号不是读取序号'} · 数量包含本轮确认的已存原文，不代表平台总评论数</small>}
   <Sheet open={!!detail} onOpenChange={open=>{if(!open)setSelected('');}}><SheetContent className="task-settings-sheet run-post-detail" onCloseAutoFocus={e=>{e.preventDefault();returnFocus.current?.focus({preventScroll:true});}}><SheetHeader><SheetTitle>{savedTitleLabel(detail?.title)}</SheetTitle><SheetDescription>本轮已保存内容；关闭后返回原位置。</SheetDescription></SheetHeader>{detail&&<div className="task-settings-body"><PostCover url={detail.coverUrl}/><p className="run-post-full">{savedSourceText(detail.body)}</p><PostFacts post={detail} run={run}/></div>}</SheetContent></Sheet>
  </section>;
 }

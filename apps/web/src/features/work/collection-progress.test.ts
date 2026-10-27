@@ -74,3 +74,10 @@ describe('truthful task prose',()=>{
   expect(collectionTaskSummary({...base,metrics:{diagnostic:{version:1,stage:'search',kind:'UPSTREAM_ERROR',searchReason:'SEARCH_DATA_MISSING'}} as Run['metrics']})).toContain('未取得搜索数据');
   const old=collectionTaskSummary({...base,metrics:{diagnostic:{version:1,stage:'search',kind:'UPSTREAM_ERROR'}} as Run['metrics']});expect(old).toContain('具体原因尚未确定');expect(old).not.toContain('平台冷却');
  });
+
+import {readFileSync} from 'node:fs';
+it('resumed zero-delta run presents six confirmed comments and complete evidence without changing history',()=>{
+ const report=JSON.parse(readFileSync(new URL('../../../../../scripts/mcp-avatar-diagnostics/root-scope-wire.json',import.meta.url),'utf8')).data.boundedRead;
+ const r={...run,status:'COMPLETE',capturedPosts:1,capturedCommentsCount:0,metrics:{coverage:{version:1,search:'UNKNOWN',reasons:[],posts:[{postRef:'synthetic',ordinal:1,saved:0,roots:0,replies:0,complete:true,reason:'DECLARED_TREE_EXHAUSTED',boundedRead:report,recovery:{sequence:1,confirmedTotal:6,remainingAnchors:0}}]}}} as unknown as Run;
+ const before=JSON.stringify(r);expect(collectionTaskSummary(r)).toContain('本次确认 6 条');expect(progressMessages(r,[])[0].title).toContain('6 条评论/回复（含恢复确认）');expect(JSON.stringify(r)).toBe(before);
+});

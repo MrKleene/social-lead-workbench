@@ -1,13 +1,17 @@
+import {safeRunCoverage,observedReadCounts} from '@crm/contracts';
 import {collectionOutcome} from '../collection/collection-outcome';
 import {safeSearchAttempts,searchAttemptLabel,safeCollectionDiagnostic,searchFailureLabels} from '@crm/contracts';
 import {reasonLabels,type Run} from '../collection/types';
 import {collectionBoundarySummary} from './collection-boundary-summary';
 export function savedCollectionCounts(run:Run){
- const posts=run.capturedPosts,comments=run.capturedCommentsCount;
- return [posts===undefined?'帖子数量未返回':`${posts} 篇帖子`,comments===undefined?'评论数量未返回':`${comments} 条评论/回复`].join(' · ');
+ const coverage=safeRunCoverage(run.metrics?.coverage),observed=coverage?.posts.map(observedReadCounts),recovered=observed?.some(p=>p.recovered)&&coverage?.posts.reduce((n,p)=>n+p.saved,0)===run.capturedCommentsCount;
+ const posts=run.capturedPosts,comments=recovered?observed!.reduce((n,p)=>n+p.count,0):run.capturedCommentsCount;
+ return [posts===undefined?'帖子数量未返回':`${posts} 篇帖子`,comments===undefined?'评论数量未返回':`${comments} 条评论/回复${recovered?'（含恢复确认）':''}`].join(' · ');
 }
 export function collectionTaskSummary(run:Run){
- const saved=run.capturedPosts===undefined&&run.capturedCommentsCount===undefined?'保存数量尚未返回':`已保存 ${savedCollectionCounts(run)}`;
+ const coverage=safeRunCoverage(run.metrics?.coverage),observed=coverage?.posts.map(observedReadCounts);
+ const recovered=observed?.some(p=>p.recovered)&&coverage?.posts.reduce((n,p)=>n+p.saved,0)===run.capturedCommentsCount;
+ const saved=run.capturedPosts===undefined&&run.capturedCommentsCount===undefined?'保存数量尚未返回':recovered?`本次确认 ${observed!.reduce((n,p)=>n+p.count,0)} 条评论/回复（包含恢复核对的已存原文）`:`已保存 ${savedCollectionCounts(run)}`;
  const diagnostic=safeCollectionDiagnostic(run.metrics?.diagnostic);
  const attempts=safeSearchAttempts(run.metrics?.searchAttempts);
  const searchSummary=run.reason==='SEARCH_PARTIAL'&&attempts?.length?[...new Set(attempts.map(searchAttemptLabel))].slice(0,2).join('；'):undefined;

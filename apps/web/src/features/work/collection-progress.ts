@@ -1,3 +1,4 @@
+import {savedCollectionCounts} from './collection-task-summary';
 import {collectionOutcome,readingInterruption} from '../collection/collection-outcome';
 import type {Run} from '../collection/types';
 import {reasonLabels} from '../collection/types';
@@ -9,7 +10,7 @@ export const runFinished=(run:Run)=>!['QUEUED','RUNNING'].includes(run.status);
 export function progressMessages(run:Run,posts:ArchivedPost[]):ProgressMessage[]{
  const messages:ProgressMessage[]=[];
  const metrics=run.metrics?.version===1&&!run.metrics.discarded?run.metrics:null;
- if(run.capturedPosts!==undefined) messages.push({id:`${run.id}:count`,kind:'count',title:`已保存 ${run.capturedPosts} 篇帖子 · ${run.capturedCommentsCount??'数量未知'} 条评论/回复`,detail:metrics?`已提交统计：${metrics.rootComments} 条一级评论 · ${metrics.replies} 条回复`:undefined,warning:false});
+ if(run.capturedPosts!==undefined) messages.push({id:`${run.id}:count`,kind:'count',title:`已保存 ${savedCollectionCounts(run)}`,detail:metrics?`已提交统计：${metrics.rootComments} 条一级评论 · ${metrics.replies} 条回复`:undefined,warning:false});
  else if(metrics) messages.push({id:`${run.id}:count`,kind:'count',title:`已读取 ${metrics.postsRead} 篇帖子 · ${metrics.rootComments} 条一级评论 · ${metrics.replies} 条回复`,warning:false});
  else if(run.observed>0) messages.push({id:`${run.id}:count`,kind:'count',title:`已返回 ${run.observed} 条评论/回复`,detail:'帖子数量尚未返回',warning:false});
  for(const p of posts.filter(p=>p.lastRunId===run.id||p.runId===run.id)) messages.push({id:`${run.id}:post:${p.id}`,kind:'post',title:p.snapshot.title||'已归档帖子（标题缺失）',detail:coverageLabel(p.coverage),warning:readingInterruption(p.stopReason)});

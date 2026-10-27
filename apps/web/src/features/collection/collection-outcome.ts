@@ -1,4 +1,4 @@
-import {safeBoundedReadReport,safeRunCoverage,safeCollectionDiagnostic,type BoundedReadReport} from '@crm/contracts';
+import {observedReadCounts,safeBoundedReadReport,safeRunCoverage,safeCollectionDiagnostic,type BoundedReadReport} from '@crm/contracts';
 import {reasonLabels,type Run} from './types';
 
 // Execution interruptions are distinct from missing coverage evidence. Never mutate persisted statuses.
@@ -22,7 +22,7 @@ export function commentCoverage(value:unknown,reason?:string|null,saved?:number|
  return {label:warning?'读取范围未尽':visible?'已采集当前可见评论':'覆盖待确认',warning,visible,issue:issue?reasonLabels[issue]||issue:replyGap?'声明的回复尚未读尽':warning?'有评论未保留':undefined,declared,difference:declared!=null&&saved!=null?Math.abs(declared-saved):null};
 }
 export function collectionOutcome(run:Run){
- const c=safeRunCoverage(run.metrics?.coverage),postViews=c?.posts.map(p=>commentCoverage(p.boundedRead,p.reason,p.saved))||[];
+ const c=safeRunCoverage(run.metrics?.coverage),postViews=c?.posts.map(p=>commentCoverage(p.boundedRead,p.reason,observedReadCounts(p).count))||[];
  const issue=[run.reason,...(c?.reasons||[])].find(readingInterruption);
  const diagnostic=safeCollectionDiagnostic(run.metrics?.diagnostic);
  const interrupted=!!issue||!!diagnostic||postViews.some(p=>p.warning),terminal=['COMPLETE','PARTIAL'].includes(run.status);

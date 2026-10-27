@@ -1,6 +1,6 @@
 import {Prisma} from '@prisma/client';
 import {NotFoundException} from '@nestjs/common';
-import {safeRunCoverage,safePostCoverUrl,savedPublishedAt,type RunPostFeed,type RunPostItem} from '@crm/contracts';
+import {safeRunCoverage,observedReadCounts,safePostCoverUrl,savedPublishedAt,type RunPostFeed,type RunPostItem} from '@crm/contracts';
 import {Db} from '../common/db';
 /** A single repeatable read: never combines checkpoints or fetches per-post comments.
  * Archive membership retains only first/last run. Older run snapshots cannot be reconstructed. */
@@ -27,7 +27,9 @@ export async function readRunPostFeed(db:Db,configId:string,runId:string):Promis
     if(parent===null)rootCount++;else if(typeof parent==='string'&&parent)replyCount++;else unknown=true;
     if(entries.some(c=>c.runId===runId))newCount++;
    }
-   return {readOrdinal:ordinals.get(platformPostId),id:p.id,platformPostId,title:typeof s.title==='string'&&s.title.length<=500?s.title:'',...(typeof s.body==='string'&&s.body.length<=20000?{body:s.body}:{}),coverUrl:safePostCoverUrl(s.coverUrl),publishedAt:savedPublishedAt(s.publishedAt),savedAt:p.lastSeenAt.toISOString(),savedCount:limited?null:unique.size,rootCount:unknown?null:rootCount,replyCount:unknown?null:replyCount,newCount:limited?null:newCount,reusedCount:limited?null:unique.size-newCount,coverage:p.coverage,stopReason:p.stopReason};
+   const evidence=coverage?.posts.find(item=>item.postRef===platformPostId),observed=evidence&&observedReadCounts(evidence);
+   const recovered=!limited&&observed?.recovered&&observed.count>=unique.size&&newCount<=observed.count;
+   return {readOrdinal:ordinals.get(platformPostId),id:p.id,platformPostId,title:typeof s.title==='string'&&s.title.length<=500?s.title:'',...(typeof s.body==='string'&&s.body.length<=20000?{body:s.body}:{}),coverUrl:safePostCoverUrl(s.coverUrl),publishedAt:savedPublishedAt(s.publishedAt),savedAt:p.lastSeenAt.toISOString(),savedCount:limited?null:recovered?observed.count:unique.size,rootCount:recovered?observed.roots:unknown?null:rootCount,replyCount:recovered?observed.replies:unknown?null:replyCount,newCount:limited?null:newCount,reusedCount:limited?null:(recovered?observed.count:unique.size)-newCount,confirmedRecovery:!!recovered,coverage:p.coverage,stopReason:p.stopReason};
   });
   // Only immutable task references determine read order; legacy archives keep their own order.
   items.sort((a,b)=>(a.readOrdinal??Number.MAX_SAFE_INTEGER)-(b.readOrdinal??Number.MAX_SAFE_INTEGER));

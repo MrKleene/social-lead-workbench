@@ -60,3 +60,4 @@ export * from './comment-review';
 export * from './semantic-output-errors';
 
 export {rootScopedRepliesExhausted} from './root-reply-scope';
+export {observedReadCounts} from './observed-read';

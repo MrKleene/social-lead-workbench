@@ -63,6 +63,15 @@ try{
   await page.getByRole('button',{name:'停止采集',exact:true}).click();await page.locator('.task-current-result').getByText('本轮已停止',{exact:false}).waitFor();
   for(const status of ['FAILED','PARTIAL','COMPLETE']){run={...run,status,reason:status==='FAILED'?'INVALID_DATA':status==='PARTIAL'?'MCP_WINDOW_ONLY':null};await refresh();await page.waitForFunction(t=>document.querySelector('.task-current-result')?.textContent.includes(t),status==='FAILED'?'尚未完成':status==='PARTIAL'?'覆盖待确认':'采集已结束');assert.equal(await page.locator('.task-current-result .task-result-summary').count(),1);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await settled(page);await page.screenshot({path:join(out,`${status}-${narrow}.png`)});}
   report.checks.push('concise live counters, isolated historical detail, stop/failure/partial/finite completion '+narrow);
+  const resumedReport=JSON.parse(await readFile(new URL('./mcp-avatar-diagnostics/root-scope-wire.json',import.meta.url),'utf8')).data.boundedRead;
+  run={...run,status:'COMPLETE',reason:null,capturedPosts:1,capturedCommentsCount:0,metrics:{coverage:{version:1,search:'UNKNOWN',reasons:[],posts:[{postRef:'p-resumed',ordinal:1,saved:0,roots:0,replies:0,complete:true,reason:'DECLARED_TREE_EXHAUSTED',boundedRead:resumedReport,recovery:{sequence:1,confirmedTotal:6,remainingAnchors:0}}]}}};
+  outcomePosts=[{id:'resumed',readOrdinal:1,platformPostId:'p-resumed',title:'合成恢复核对帖子',savedAt:run.createdAt,savedCount:6,rootCount:3,replyCount:3,newCount:0,reusedCount:6,confirmedRecovery:true,coverage:'COMPLETE',stopReason:'DECLARED_TREE_EXHAUSTED'}];
+  await refresh();await page.locator('.task-current-result .task-result-summary').getByText('6 条评论/回复（含恢复确认）',{exact:false}).waitFor();await page.locator('.run-post-feed-head').getByRole('button',{name:'刷新帖子',exact:true}).click();
+  const resumedCard=page.locator('[data-run-post=p-resumed]');await resumedCard.getByText('本次确认 6 条评论/回复',{exact:false}).waitFor();await resumedCard.getByText('新存 0 · 复用 6 份原文',{exact:true}).waitFor();await resumedCard.getByText('已采集当前可见评论',{exact:true}).waitFor();assert(!(await resumedCard.innerText()).includes('覆盖待确认'));assert(!(await resumedCard.innerText()).includes('差 6'));
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:join(out,`resumed-six-${narrow}-${fastRefresh}.png`)});
+  await resumedCard.getByRole('button',{name:'合成恢复核对帖子',exact:true}).click();await page.getByRole('dialog').getByText('新存 0 · 复用 6 份原文',{exact:true}).waitFor();await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});assert(await resumedCard.getByRole('button',{name:'合成恢复核对帖子',exact:true}).evaluate(e=>e===document.activeElement));
+  report.checks.push('resumed 6 confirmed / 0 new / 6 reused, complete evidence, detail and return focus '+narrow);
+
   // Execution is distinct from coverage; no manual browser comparison is fabricated.
   for(const mode of ['pending','visible','budget']){
    const exact=value=>({state:'EXACT',value});
