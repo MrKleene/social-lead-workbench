@@ -1,0 +1,14 @@
+
+> @crm/api@0.1.0 test:integration
+> vitest run --no-file-parallelism test/postgres.test.ts test/collection-postgres.test.ts test/accounts-postgres.test.ts test/account-login-postgres.test.ts test/devices-postgres.test.ts test/account-read-postgres.test.ts test/model-settings-postgres.test.ts test/comment-review-postgres.test.ts test/session-preflight-postgres.test.ts
+
+
+ RUN  v5.0.5 /private/tmp/social-review-20261026/apps/api
+
+
+ Test Files  9 passed (9)
+      Tests  299 passed | 9 skipped (308)
+   Start at  16:42:18
+   Duration  23.47s (tests 91%, import 8%, transform 1%)
+
+
