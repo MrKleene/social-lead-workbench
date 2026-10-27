@@ -1,0 +1,9 @@
+# Bounded one-comment operator test
+
+The operator entry `node scripts/run-single-reply-test.mjs --execute-approved-once /absolute/private-scope.json` consumes an explicit, expiring scope containing one account, stable sender/recipient/post/comment IDs, review version, independent template, exact text, approved binary hash, maximum one submission and no retries. The file must be an owner-only regular file. It is not a queue or HTTP endpoint.
+
+It records the authorization and reserves the existing REAL recipient ledger, configured Asia/Shanghai account-day quota and platform lock atomically. Reusing the same approval returns its receipt; a prior recipient attempt blocks another approval across accounts/channels. Live saved-session identity and new-protocol capabilities must match before the scope is checked again and one send call is permitted. The narrowly recognized read-only account pause is retained throughout; platform risk pauses are never overridden. All automatic contact rules must stay OFF; the global deployment enable record remains OFF.
+
+The reviewed candidate SHA256 is `ee0901efc70426a8d44eef00e731cf474447967057d3b50df4727bb1cf032d96`. It has no reliable response mapping, so this path never records CONFIRMED. Proven pre-submission refusal releases quota once but consumes the authorization. Ambiguous outcomes retain recipient protection and quota; uncertain process shutdown or risk pauses the platform. Never rerun after a timeout: inspect the durable attempt and audit first. Installation alone does not authorize any account, content or target.
+
+Offline validation: 730 API tests, PostgreSQL migration/preservation and integration tests, runtime pin tests, workspace types and build. Synthetic tests do not establish real delivery. Actual scopes and live evidence are private operational artifacts, not repository fixtures.
