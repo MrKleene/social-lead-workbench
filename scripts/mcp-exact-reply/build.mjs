@@ -16,7 +16,7 @@ for(const f of ['exact_reply_driver.go','exact_reply_driver_test.go','exact_pref
 const registration=join(source,'mcp_server.go'),old=await readFile(registration,'utf8'),needle='func registerTools(server *mcp.Server, appServer *AppServer) {';
 if(old.split(needle).length!==2)throw Error('REGISTRATION_CHANGED');await writeFile(registration,old.replace(needle,needle+'\n if os.Getenv("CRM_EXACT_PREFLIGHT_ONLY") == "1" { registerExactPreflightTool(server); return }; registerExactReplyTools(server)'));
 const registered=await readFile(registration,'utf8'); if(!/\"os\"/.test(registered))await writeFile(registration,registered.replace('import (','import (\n \"os\"'));
-const boundary=spawnSync(process.execPath,['--test',join(bundle,'preflight-boundary.test.mjs')],{encoding:'utf8'});await writeFile(join(out,'preflight-boundary-tests.log'),(boundary.stdout||'')+(boundary.stderr||''));if(boundary.status!==0)throw Error('PREFLIGHT_BOUNDARY_FAILED');
+const boundary=spawnSync(process.execPath,['--test',join(bundle,'preflight-boundary.test.mjs'),join(bundle,'composer-boundary.test.mjs')],{encoding:'utf8'});await writeFile(join(out,'preflight-boundary-tests.log'),(boundary.stdout||'')+(boundary.stderr||''));if(boundary.status!==0)throw Error('PREFLIGHT_BOUNDARY_FAILED');
 const routes=join(source,'routes.go'),routesText=await readFile(routes,'utf8'),apiNeedle='\t// API 路由组';if(routesText.split(apiNeedle).length!==2)throw Error('ROUTES_CHANGED');await writeFile(routes,routesText.replace('import (','import (\n "os"').replace(apiNeedle,'\tif os.Getenv("CRM_EXACT_PREFLIGHT_ONLY") == "1" { return router }\n'+apiNeedle));
 await cp(join(bundle,'exact_preflight_routes_test.go'),join(source,'exact_preflight_routes_test.go'));
 const env={PATH:'/usr/bin:/bin',HOME:join(out,'home'),TMPDIR:join(out,'tmp'),GOCACHE:join(out,'cache'),GOMODCACHE:modcache,GOPROXY:'off',GOSUMDB:'off',GOTOOLCHAIN:'local',GOWORK:'off',GOENV:'off',GOTELEMETRY:'off',CGO_ENABLED:'0',GOOS:'darwin',GOARCH:'arm64'};
@@ -25,7 +25,7 @@ const compiler=await run(['version'],'compiler.log');if(compiler!=='go version g
 await run(['test','-mod=readonly','-count=1','-v','./exactreply'],'engine-tests.log');
 await run(['test','-mod=readonly','-count=1','-v','-run','^TestExactReply','./xiaohongshu'],'driver-tests.log');
 await run(['test','-mod=readonly','-count=1','-v','-run','^TestExactPreflightRoutes','.'],'route-tests.log');
-const version='v2.5.5-local-exact-preflight-v2',binary=join(out,'xiaohongshu-mcp-candidate');
+const version='v2.5.5-local-composer-guard-v1',binary=join(out,'xiaohongshu-mcp-candidate');
 const flags=['build','-mod=readonly','-trimpath','-buildvcs=false','-ldflags=-buildid= -X main.version='+version,'-o',binary,'.'];await run(flags,'build.log');
 const overlay={};for(const f of [...(await paths(join(bundle,'exactreply'))).map(p=>'exactreply/'+p),'exact_reply_driver.go','exact_reply_driver_test.go','exact_preflight_driver.go','exact_preflight_page.go','exact_preflight_routes_test.go','exact_reply_tools.go'])overlay[f]=createHash('sha256').update(await readFile(join(bundle,f))).digest('hex');
 await writeFile(join(out,'SOURCE-OVERLAY.json'),JSON.stringify(overlay,null,2)+'\n');

@@ -356,3 +356,15 @@ func TestExactReplyDiagnosticsInvalidCommandHasNoDriver(t *testing.T) {
 		t.Fatal(r)
 	}
 }
+
+func TestExactReplyComposerGuardsStopBeforeSubmitAndClose(t *testing.T) {
+	for _, code := range []string{"COMPOSER_DRAFT_PRESENT", "COMPOSER_HIDDEN", "COMPOSER_ACTIVE", "COMPOSER_TARGET_BOUND", "COMPOSER_NOT_DEFAULT", "COMPOSER_AMBIGUOUS", "COMPOSER_UNRECOGNIZED", "COMPOSER_BINDING_UNVERIFIED", "EXACT_TARGET_NOT_VISIBLE", "AUTHOR_AMBIGUOUS"} {
+		t.Run(code, func(t *testing.T) {
+			f := &fake{selectError: errors.New(code)}
+			r := Run(context.Background(), command(), f)
+			if r.Kind != "NOT_SENT" || !r.Stopped || f.submitted != 0 || r.Diagnostic.Code != code {
+				t.Fatal(r, f)
+			}
+		})
+	}
+}

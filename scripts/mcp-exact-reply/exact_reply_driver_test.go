@@ -1,7 +1,9 @@
 package xiaohongshu
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"github.com/xpzouying/xiaohongshu-mcp/exactreply"
 	"net/url"
 	"testing"
@@ -35,5 +37,21 @@ func TestExactReplyURLPreservesExactPostAndSavedReference(t *testing.T) {
 		if err != nil || u.Scheme != "https" || u.Host != "www.xiaohongshu.com" || u.Path != "/explore/"+c.PostID || u.Query().Get("xsec_token") != c.Reference.Token || u.Query().Get("xsec_source") != source || len(u.Query()) != 2 {
 			t.Fatal("reference round trip failed")
 		}
+	}
+}
+
+func TestExactReplyCancelledSelectDoesNotTouchPage(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	d := &ExactReplyDriver{}
+	if err := d.Select(ctx, exactreply.Command{}); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+}
+func TestExactReplyNoSelectionNeverEntersSubmit(t *testing.T) {
+	d := &ExactReplyDriver{}
+	result, err := d.Submit(context.Background(), exactreply.Command{})
+	if err == nil || err.Error() != "NOT_SUBMITTED" || result.Attempted {
+		t.Fatal(result, err)
 	}
 }

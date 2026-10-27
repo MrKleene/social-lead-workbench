@@ -139,59 +139,43 @@ func (d *ExactReplyDriver) Inspect(ctx context.Context, c exactreply.Command) (e
 	return result, nil
 }
 func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	p := d.page.Context(ctx)
-	// A preexisting composer may point at another comment; never adopt it.
-	exists, _, err := p.Has("div.input-box p.content-input")
+	// Inspect emits only fixed codes, never draft text. An idle default editor is
+	// normal page furniture; its mere presence does not mean an occupied reply.
+	check, err := p.Eval(exactReplySelectionGuard, c.TargetID, c.RecipientID)
 	if err != nil {
 		return err
 	}
-	if exists {
-		return errors.New("COMPOSER_ALREADY_OPEN")
+	if code := check.Value.Str(); code != "DEFAULT_EMPTY" {
+		return errors.New(code)
 	}
-	targets, err := p.Elements("#comment-" + c.TargetID)
-	if err != nil || len(targets) != 1 {
-		return errors.New("EXACT_TARGET_MISSING")
+	// Recheck stable platform identity after inspecting the editor, before input.
+	snap, err := d.Inspect(ctx, c)
+	if err != nil {
+		return err
 	}
-	authors, err := targets[0].Elements(`[data-user-id="` + c.RecipientID + `"]`)
-	if err != nil || len(authors) != 1 {
-		return errors.New("AUTHOR_MISMATCH")
-	}
-	buttons, err := targets[0].Elements(".right .interactions .reply")
-	if err != nil || len(buttons) != 1 {
-		return errors.New("REPLY_BUTTON_AMBIGUOUS")
-	}
-	// Check closest comment ancestor so a nested reply's button cannot be selected.
-	hit, err := buttons[0].Eval(`() => this.closest('.comment-item')?.id || ''`)
-	if err != nil || hit.Value.Str() != "comment-"+c.TargetID {
-		return errors.New("BUTTON_TARGET_MISMATCH")
+	if snap.PostID != c.PostID || snap.SenderID != c.SenderID || snap.TargetID != c.TargetID || snap.TargetAuthor != c.RecipientID {
+		return errors.New("TARGET_CHANGED")
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if err = humanize.Click(buttons[0]); err != nil {
-		return err
-	}
-	input, err := p.Element("div.input-box p.content-input")
-	if err != nil {
-		return err
-	}
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	if err = humanize.Type(ctx, input, c.Content); err != nil {
-		return err
-	}
-	text, err := input.Text()
-	if err != nil || text != c.Content {
-		return errors.New("CONTENT_CHANGED")
-	}
-	d.selected = true
-	return nil
+	// The observed default DOM has no stable reply-to binding. Until a reviewed
+	// reader can verify that binding after selection, do not click merely to try
+	// it. This gate is intentionally NOT a nickname-based acceptance path.
+	return errors.New("COMPOSER_BINDING_UNVERIFIED")
 }
+
 func (d *ExactReplyDriver) Submit(ctx context.Context, c exactreply.Command) (exactreply.Submission, error) {
 	s := exactreply.Submission{}
-	if !d.selected || ctx.Err() != nil {
+	if ctx.Err() != nil {
 		return s, ctx.Err()
+	}
+	if !d.selected {
+		return s, errors.New("NOT_SUBMITTED")
 	}
 	p := d.page.Context(ctx)
 	inputs, err := p.Elements("div.input-box p.content-input")
@@ -291,3 +275,37 @@ func (d *ExactReplyDriver) Close(ctx context.Context) error {
 		return errors.New("BROWSER_CLOSE_TIMEOUT")
 	}
 }
+
+// exactReplySelectionGuard is pure/read-only DOM inspection. The default marker
+// and editor shape were observed on the existing page without clicking/focusing.
+// Missing, hidden, active, bound, populated and ambiguous structures fail closed.
+const exactReplySelectionGuard = `(targetId, authorId) => {
+ const visible = e => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility === 'visible' && getComputedStyle(e).display !== 'none';
+ const targets = [...document.querySelectorAll('#comment-' + targetId)];
+ if (targets.length !== 1) return 'EXACT_TARGET_MISSING';
+ const target = targets[0];
+ if (!visible(target)) return 'EXACT_TARGET_NOT_VISIBLE';
+ const authors = [...target.querySelectorAll('[data-user-id]')].filter(e => e.closest('.comment-item') === target);
+ if (!authors.length || authors.some(e => e.getAttribute('data-user-id') !== authorId)) return 'AUTHOR_MISMATCH';
+ const names = authors.filter(e => e.matches('a.name'));
+ if (names.length !== 1 || !visible(names[0])) return 'AUTHOR_AMBIGUOUS';
+ const buttons = [...target.querySelectorAll('.right .interactions .reply')].filter(e => e.closest('.comment-item') === target);
+ if (buttons.length !== 1 || !visible(buttons[0])) return 'REPLY_BUTTON_AMBIGUOUS';
+ const editors = [...document.querySelectorAll('div.input-box p.content-input')];
+ if (editors.length !== 1 || document.querySelectorAll('[contenteditable="true"]').length !== 1) return 'COMPOSER_AMBIGUOUS';
+ const input = editors[0], box = input.closest('div.input-box'), edit = input.parentElement;
+ if (!visible(input)) return 'COMPOSER_HIDDEN';
+ if (input.id !== 'content-textarea' || input.getAttribute('contenteditable') !== 'true' || !edit?.matches('.content-edit') || !box) return 'COMPOSER_UNRECOGNIZED';
+ // Do not silently discard whitespace/zero-width drafts. Only truly zero text
+ // (or an empty BR inserted by contenteditable) may pass.
+ if ((input.textContent || '').length !== 0 || [...input.children].some(e => e.tagName !== 'BR' || e.attributes.length || e.textContent)) return 'COMPOSER_DRAFT_PRESENT';
+ if (document.activeElement === input || input.contains(document.activeElement)) return 'COMPOSER_ACTIVE';
+ // Any explicit target/reply marker is evidence of a bound or unfamiliar editor.
+ // No values, private text or IDs are returned by this diagnostic.
+ const nodes = [box, edit, input, ...edit.querySelectorAll('*')];
+ if (nodes.some(e => [...e.attributes].some(a => /(?:target|reply|comment-id|recipient)/i.test(a.name)) || /(?:reply|target)/i.test(e.className || ''))) return 'COMPOSER_TARGET_BOUND';
+ const markers = [...edit.querySelectorAll('.not-active.inner-when-not-active')];
+ if (markers.length !== 1 || !visible(markers[0]) || markers[0].textContent.trim() !== '说点什么...') return 'COMPOSER_NOT_DEFAULT';
+ if ([...edit.children].some(e => e !== input && e !== markers[0])) return 'COMPOSER_UNRECOGNIZED';
+ return 'DEFAULT_EMPTY';
+}`

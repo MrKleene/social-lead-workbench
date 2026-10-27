@@ -74,3 +74,11 @@ it('preserves safe pre-submit stage and identity consistency without leaking arb
  expect(verifyXhsReplyResult(command,{...raw,accountId:'another'}).kind).toBe('UNKNOWN');
  expect(verifyXhsReplyResult(command,{...raw,processStopped:false}).kind).toBe('UNKNOWN');
 });
+
+ it.each(['COMPOSER_DRAFT_PRESENT', 'COMPOSER_HIDDEN', 'COMPOSER_ACTIVE', 'COMPOSER_TARGET_BOUND', 'COMPOSER_NOT_DEFAULT', 'COMPOSER_AMBIGUOUS', 'COMPOSER_UNRECOGNIZED', 'COMPOSER_BINDING_UNVERIFIED', 'EXACT_TARGET_NOT_VISIBLE', 'AUTHOR_AMBIGUOUS'])('keeps safe composer diagnostic %s but never accepts it as delivery',code=>{
+ const {command}=fixture();
+ const raw={protocol:XHS_REPLY_PROTOCOL,attemptId:command.attemptId,requestKey:command.requestKey,accountId:command.accountId,processStopped:true,kind:'NOT_SENT',phase:'BEFORE_SUBMIT',reason:'TARGET_MISMATCH',diagnostic:{stage:'SELECT',code,checks:{post:'MATCH',sender:'MATCH',target:'MATCH',author:'MATCH'}}};
+ expect(verifyXhsReplyResult(command,raw).kind).toBe('FAILED');
+ expect(verifyXhsReplyResult(command,{...raw,processStopped:false}).kind).toBe('UNKNOWN');
+ expect(verifyXhsReplyResult(command,{...raw,phase:'AFTER_SUBMIT'}).kind).toBe('UNKNOWN');
+ });
