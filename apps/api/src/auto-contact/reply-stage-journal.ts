@@ -6,7 +6,15 @@ import {join} from 'node:path';
 import {z} from 'zod';
 
 export const replyJournalProtocol='workbench.reply-stage-journal.v1' as const;
-export const journalRecordSchema=z.object({sequence:z.number().int().min(1).max(64),attemptId:z.string().uuid(),stage:z.enum(['NAVIGATION_INTENT','NAVIGATED','TARGET_LOCATED','SELECT_INTENT','REPLY_SELECTED','INPUT_INTENT','INPUT_FINISHED','CANCELLED','RESTRICTION_CHECK','BEFORE_CLOSE','STARTED','INSPECTED','SELECTED','RECHECKED','BEFORE_SUBMIT','ATTEMPTED','AFTER_SUBMIT','SUBMIT_FINISHED','READBACK','DRIVER_CLOSED']),at:z.string().datetime(),attempted:z.boolean().optional(),stopped:z.boolean().optional(),evidence:restrictionResultSchema.shape.observation.pick({identity:true,title:true,pathname:true,warnings:true}).extend({screenshotState:z.literal('NOT_CAPTURED')}).strict().optional()}).strict();
+const receiptEvidenceSchema=z.object({
+ state:z.enum(['ARMED','REQUEST_MATCHED','RESPONSE_CAPTURED','MAPPING_UNREVIEWED','REQUEST_NOT_OBSERVED','AMBIGUOUS_REQUEST','RESPONSE_UNAVAILABLE','UNREVIEWED_READBACK']),
+ endpointHost:z.enum(['edith.xiaohongshu.com','www.xiaohongshu.com']).optional(),endpointPath:z.string().regex(/^\/api(\/(sns|web|comment|reply|post|publish|add|create|send|v[0-9]{1,2})){1,8}$/).optional(),
+ endpointSha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),requestSha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),responseSha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),
+ status:z.number().int().min(100).max(599).optional(),
+ fields:z.array(z.object({path:z.string().max(600).regex(/^(\/(data|result|success|code|id|comment_id|commentId|note_id|noteId|target_comment_id|targetCommentId|parent_comment_id|parentCommentId|user_id|userId|content|comment|comments|user_info|userInfo|target_comment|targetComment|status|message|msg|reply_id|replyId|opaque_[a-f0-9]{12}|[0-9]+))*$/),type:z.enum(['string','number','boolean','null']),binding:z.enum(['POST','TARGET','RECIPIENT','SENDER','CONTENT']).optional(),publicId:z.string().regex(/^[a-f0-9]{24}$/).optional(),boolean:z.boolean().optional(),number:z.number().int().min(-1000000).max(1000000).optional()}).strict()).max(128).optional(),
+ readback:z.enum(['NO_NEW_MATCH','ONE_NEW_MATCH','AMBIGUOUS']).optional(),
+}).strict();
+export const journalRecordSchema=z.object({sequence:z.number().int().min(1).max(64),attemptId:z.string().uuid(),stage:z.enum(['RECEIPT_CAPTURE','NAVIGATION_INTENT','NAVIGATED','TARGET_LOCATED','SELECT_INTENT','REPLY_SELECTED','INPUT_INTENT','INPUT_FINISHED','CANCELLED','RESTRICTION_CHECK','BEFORE_CLOSE','STARTED','INSPECTED','SELECTED','RECHECKED','BEFORE_SUBMIT','ATTEMPTED','AFTER_SUBMIT','SUBMIT_FINISHED','READBACK','DRIVER_CLOSED']),at:z.string().datetime(),attempted:z.boolean().optional(),stopped:z.boolean().optional(),receipt:receiptEvidenceSchema.optional(),evidence:restrictionResultSchema.shape.observation.pick({identity:true,title:true,pathname:true,warnings:true}).extend({screenshotState:z.literal('NOT_CAPTURED')}).strict().optional()}).strict();
 export type ReplyJournal={state:'AVAILABLE'|'MISSING'|'INVALID'|'TRUNCATED';records:z.infer<typeof journalRecordSchema>[]};
 /** Only an owned endpoint supplies the private directory, never the command.
  * Read after owned-stop. A torn final line is marked truncated, never inferred safe.

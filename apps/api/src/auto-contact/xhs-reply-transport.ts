@@ -16,6 +16,7 @@ export type OwnedReplyEndpoint = {
 };
 const capabilitySchema = z.object({
     stageJournal:z.literal(replyJournalProtocol).optional(),
+    receiptCapture:z.literal('workbench.reply-receipt-capture.v1').optional(),
     protocol: z.literal(XHS_REPLY_PROTOCOL), enabled: z.boolean(), exactTarget: z.literal(true),
     cancellation: z.literal('context-and-owned-stop'), receiptMode: z.literal('FAIL_CLOSED'),
     confirmedResponseMapping: z.boolean(), channels: z.tuple([z.literal('COMMENT')]),
@@ -38,10 +39,11 @@ export class XhsExactReplyTransport {
     private started = false;
     private risk?: 'RATE_LIMITED' | 'PLATFORM_REFUSED';
     private used = false;
+    private submissionCalls=0;
     private stopping?: Promise<boolean>;
     private requestCount = 0;
     private permittedCall?: { name: typeof tools[number]; arguments: Record<string, unknown> };
-    constructor(private owned: OwnedReplyEndpoint, private approval: { enabled?: boolean; reviewedSha256?: string; requireJournal?:boolean; requireConfirmedMapping?:boolean } = {}) {
+    constructor(private owned: OwnedReplyEndpoint, private approval: { enabled?: boolean; reviewedSha256?: string; requireJournal?:boolean; requireConfirmedMapping?:boolean; captureOnce?:boolean } = {}) {
         const endpoint = endpointUrl(owned.url.href).href;
         if (!/^[a-f0-9]{64}$/.test(owned.token)) throw Error('REPLY_ENDPOINT_AUTH_INVALID');
         this.wire = new StreamableHTTPClientTransport(new URL(endpoint), {
@@ -72,6 +74,7 @@ export class XhsExactReplyTransport {
     }
     connectionFailure(): SendResult { return this.risk ? { kind: 'RISK', reason: this.risk } : { kind: 'FAILED', reason: '新发送协议未就绪，未提交' }; }
     capability() { return this.ready && !this.used; }
+    submissionInvocations(){return this.submissionCalls;}
     async connect(signal: AbortSignal): Promise<boolean> {
         if (this.used || this.started) return this.capability();
         if (this.approval.enabled !== true || !/^[a-f0-9]{64}$/.test(this.approval.reviewedSha256 ?? '') || this.approval.reviewedSha256 !== this.owned.binarySha256) return false;
@@ -87,6 +90,7 @@ export class XhsExactReplyTransport {
             this.ready = caps.success && caps.data.enabled && (!this.approval.requireJournal || (this.journalSupported && !!this.owned.readJournal));
             this.confirmedMapping = caps.success && caps.data.confirmedResponseMapping;
             if(this.approval.requireConfirmedMapping && !this.confirmedMapping) this.ready=false;
+            if(this.approval.captureOnce && (!caps.success||caps.data.receiptCapture!=='workbench.reply-receipt-capture.v1'||!this.approval.requireJournal))this.ready=false;
             return this.ready;
         } catch { return false; }
         finally { this.operation = undefined; }
@@ -102,7 +106,7 @@ export class XhsExactReplyTransport {
     /** One attempt per owned process. Timeout, disconnect and close never retry send. */
     async send(request: SendRequest, binding: XhsReplyBinding, signal: AbortSignal, record?:ExecutionRecorder): Promise<SendResult> {
         if (!this.capability() || request.accountId !== this.owned.accountId) throw Error('SENDER_UNAVAILABLE');
-        const command = prepareXhsReply(request, binding); this.used = true;
+        const command = {...prepareXhsReply(request, binding),...(this.approval.captureOnce?{receiptMode:'CAPTURE_ONCE' as const}:{})}; this.used = true;
         const combined = AbortSignal.any([signal, AbortSignal.timeout(45000)]);
         const cancel = () => { void this.stop(); }; combined.addEventListener('abort', cancel, { once: true });
         let raw: unknown, result: SendResult = unknown(),intentRecorded=false;
@@ -111,12 +115,13 @@ export class XhsExactReplyTransport {
             if(this.approval.requireJournal&&!record)throw Error('JOURNAL_REQUIRED');
             if(record){await record({stage:'RPC_INTENT',protocolAttemptId:command.attemptId});intentRecorded=true;}
             if (combined.aborted) throw Error('REPLY_CANCELLED');
+            this.submissionCalls++;
             raw = await this.call('workbench_reply_exact', command, combined);
             result = verifyXhsReplyResult(command, raw);
             if(record)await record({stage:'RPC_RETURNED',protocolAttemptId:command.attemptId,...replyResultDiagnostic(command,raw)});
-            if (result.kind === 'CONFIRMED' && !this.confirmedMapping) result = unknown();
+            if (result.kind === 'CONFIRMED' && (!this.confirmedMapping||this.approval.captureOnce)) result = unknown();
         } catch (error) {
-            if(result.kind!=='RISK')result=unknown();
+            if(result.kind!=='RISK')result=this.submissionCalls?unknown():{kind:'FAILED',reason:'本机提交前停止，未调用发送协议'};
             if(record&&intentRecorded)try{await record({stage:'RPC_ERROR',protocolAttemptId:command.attemptId,code:combined.aborted?'TIMEOUT_OR_CANCELLED':error instanceof Error&&error.message==='REPLY_RATE_LIMITED'?'RATE_LIMITED':error instanceof Error&&error.message==='REPLY_PLATFORM_REFUSED'?'PLATFORM_REFUSED':'TRANSPORT_ERROR'});}catch{/* durable journal still retained; outcome remains unknown */}
             if (error instanceof Error && error.message === 'REPLY_RATE_LIMITED') result = { kind: 'RISK', reason: 'RATE_LIMITED' };
             if (error instanceof Error && error.message === 'REPLY_PLATFORM_REFUSED') result = { kind: 'RISK', reason: 'PLATFORM_REFUSED' };
@@ -125,8 +130,8 @@ export class XhsExactReplyTransport {
         const stopped = await this.stop();
         if(record&&intentRecorded){
             const journal=stopped&&this.owned.readJournal?await this.owned.readJournal(command.attemptId).catch(()=>({state:'INVALID' as const,records:[]})):{state:'MISSING' as const,records:[]};
-            try{await record({stage:'TRANSPORT_STOP',protocolAttemptId:command.attemptId,stopped,journal,...(this.owned.diagnostics?{processDiagnostics:this.owned.diagnostics()}:{} )});}catch{if(result.kind!=='RISK')result=unknown();}
-            if(this.approval.requireJournal&&journal.state!=='AVAILABLE'&&result.kind!=='RISK')result=unknown();
+            try{await record({stage:'TRANSPORT_STOP',protocolAttemptId:command.attemptId,stopped,journal,...(this.owned.diagnostics?{processDiagnostics:this.owned.diagnostics()}:{} )});}catch{if(result.kind!=='RISK'&&this.submissionCalls)result=unknown();}
+            if(this.submissionCalls&&this.approval.requireJournal&&journal.state!=='AVAILABLE'&&result.kind!=='RISK')result=unknown();
         }
         // Preserve risk even if shutdown is uncertain; both paths pause the workflow.
         if (!stopped && result.kind !== 'RISK') return blocked();
@@ -137,7 +142,7 @@ export class XhsExactReplyTransport {
         if (!this.ready || command.accountId !== this.owned.accountId || this.used) return unknown();
         this.used = true; let result: SendResult = unknown();
         try { result = verifyXhsReplyResult(command, await this.call('workbench_reply_status', command, signal)); } catch { /* unknown */ }
-        if (result.kind === 'CONFIRMED' && !this.confirmedMapping) result = unknown();
+        if (result.kind === 'CONFIRMED' && (!this.confirmedMapping||this.approval.captureOnce)) result = unknown();
         if (!await this.stop() && result.kind !== 'RISK') return blocked(); return result;
     }
     async stop(): Promise<boolean> {

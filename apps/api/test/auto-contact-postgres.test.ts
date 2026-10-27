@@ -266,3 +266,29 @@ it('missing or empty restriction evidence cannot enable a REAL rule even with a 
  await expect(realSettings.toggle(actor,r.id,{version:r.version,enabled:true,consent:autoContactConsent,hash:ruleHash(r)})).rejects.toThrow();
  expect((await realSettings.overview(actor)).accounts.every(a=>!a.sendEligibility?.canSend)).toBe(true);expect(sender.send).not.toHaveBeenCalled();
 });
+
+function captureScope(scope:any){return {...scope,scopeVersion:'workbench.single-reply-authorization.v3',purpose:'CAPTURE_EXACT_COMMENT_RECEIPT_ONCE',receiptCapture:'workbench.reply-receipt-capture.v1',binarySha256:'f'.repeat(64),excludedPostIds:['e'.repeat(24)],excludedRecipientIds:['e'.repeat(24)]};}
+it('controlled capture crosses durable intent exactly once, remains unknown across restart and retains quota',async()=>{
+ const f=await oneShotFixture(),scope=captureScope(f.scope);const {recordSendExecution}=await import('../src/auto-contact/send-observation');
+ f.executor.run.mockImplementation(async(c,before)=>{
+  expect(await before()).toBe(true);
+  const record=()=>db.$transaction(tx=>recordSendExecution(tx,actor.id,c.request.accountId,c.request.requestKey,'SINGLE_REPLY_EXECUTION_STAGE',{stage:'RPC_INTENT',protocolAttemptId:randomUUID()},scope.senderId));
+  await record();await expect(record()).rejects.toThrow('SEND_PERMISSION_UNVERIFIED');
+  return {result:{kind:'UNKNOWN',reason:'unreviewed capture'},protocolCalls:1,submission:'AT_MOST_ONCE_UNKNOWN',identityVerified:true,stopped:true};
+ });
+ expect((await f.service.execute(actor,scope)).outcome).toBe('UNKNOWN');
+ const {SingleReplyTestService}=await import('../src/auto-contact/single-reply-test');expect(await new SingleReplyTestService(db,f.executor).execute(actor,scope)).toMatchObject({reused:true,outcome:'UNKNOWN'});
+ expect(f.executor.run).toHaveBeenCalledTimes(1);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);expect(await db.contactLedger.count()).toBe(1);expect(await db.autoContactRule.count({where:{enabled:true}})).toBe(0);
+});
+it.each(['RESTRICTED','VERIFY_REQUIRED','RATE_LIMITED','REPLY_DISABLED'])('controlled capture cannot reserve account with durable %s evidence',async state=>{
+ const f=await oneShotFixture();await db.auditLog.create({data:{actorId:actor.id,entityId:f.account.id,action:'ACCOUNT_SEND_OBSERVATION',metadata:{state,source:'USER_REPORT',observedAt:new Date(0).toISOString()}}});
+ await expect(f.service.execute(actor,captureScope(f.scope))).rejects.toThrow();expect(f.executor.run).not.toHaveBeenCalled();expect(await db.contactAttempt.count()).toBe(0);
+});
+it('restriction arriving after preflight blocks controlled RPC intent without clearing reservation',async()=>{
+ const f=await oneShotFixture(),scope=captureScope(f.scope);const {recordSendExecution}=await import('../src/auto-contact/send-observation');
+ f.executor.run.mockImplementation(async(c,before)=>{await before();await db.auditLog.create({data:{actorId:actor.id,entityId:f.account.id,action:'ACCOUNT_SEND_OBSERVATION',metadata:{state:'RESTRICTED',source:'USER_REPORT',observedAt:new Date().toISOString()}}});
+  await expect(db.$transaction(tx=>recordSendExecution(tx,actor.id,c.request.accountId,c.request.requestKey,'SINGLE_REPLY_EXECUTION_STAGE',{stage:'RPC_INTENT',protocolAttemptId:randomUUID()},scope.senderId))).rejects.toThrow('SEND_PERMISSION_UNVERIFIED');
+  return {result:{kind:'UNKNOWN',reason:'concurrent restriction'},protocolCalls:0,submission:'AT_MOST_ONCE_UNKNOWN',identityVerified:true,stopped:true};
+ });
+ expect((await f.service.execute(actor,scope)).outcome).toBe('UNKNOWN');expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);
+});

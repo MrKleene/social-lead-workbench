@@ -52,7 +52,7 @@ func registerExactReplyTools(server *mcp.Server) {
 	registerExactPreflightTool(server)
 	engine := &exactreply.Engine{}
 	mcp.AddTool(server, &mcp.Tool{Name: "workbench_reply_capabilities", Description: exactreply.Protocol + " finite exact-target reply, default OFF", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest, args struct{}) (*mcp.CallToolResult, any, error) {
-		return nil, map[string]any{"protocol": exactreply.Protocol, "enabled": os.Getenv("CRM_EXACT_REPLY_ENABLED") == "1", "exactTarget": true, "cancellation": "context-and-owned-stop", "receiptMode": "FAIL_CLOSED", "confirmedResponseMapping": false, "stageJournal": exactreply.JournalProtocol, "channels": []string{"COMMENT"}, "sendTool": "workbench_reply_exact", "statusTool": "workbench_reply_status"}, nil
+		return nil, map[string]any{"protocol": exactreply.Protocol, "enabled": os.Getenv("CRM_EXACT_REPLY_ENABLED") == "1", "exactTarget": true, "cancellation": "context-and-owned-stop", "receiptMode": "FAIL_CLOSED", "confirmedResponseMapping": false, "receiptCapture": exactreply.ReceiptCaptureProtocol, "stageJournal": exactreply.JournalProtocol, "channels": []string{"COMMENT"}, "sendTool": "workbench_reply_exact", "statusTool": "workbench_reply_status"}, nil
 	})
 	mcp.AddTool(server, &mcp.Tool{Name: "workbench_reply_exact", Description: exactreply.Protocol + " no author fallback; no unverified success", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(true)}}, func(ctx context.Context, req *mcp.CallToolRequest, c exactreply.Command) (*mcp.CallToolResult, any, error) {
 		if os.Getenv("CRM_EXACT_REPLY_ENABLED") != "1" {

@@ -23,6 +23,7 @@ type Reference struct {
 }
 type Command struct {
 	Protocol    string    `json:"protocol"`
+	ReceiptMode string    `json:"receiptMode,omitempty"`
 	AttemptID   string    `json:"attemptId"`
 	RequestKey  string    `json:"requestKey"`
 	AccountID   string    `json:"accountId"`
@@ -85,7 +86,7 @@ func diagnosticCode(err error) string {
 		return "UNCONFIRMED"
 	}
 	switch err.Error() {
-	case "ACCOUNT_CHANGED", "RECEIPT_NOT_UNIQUE", "SELECTION_STEP_MISSING", "RESTRICTION_UNVERIFIED", "JOURNAL_UNAVAILABLE", "PREFLIGHT_NAVIGATION_UNVERIFIED", "PREFLIGHT_REFERENCE_UNVERIFIED", "INVALID_COMMAND", "STATE_UNAVAILABLE", "STATE_INVALID", "STATE_USER_MISSING", "STATE_POST_MISSING", "STATE_POST_MISMATCH", "STATE_COMMENTS_MISSING", "DEPTH_LIMIT", "ROW_LIMIT", "POST_MISMATCH", "EXACT_TARGET_MISSING_OR_AMBIGUOUS", "TARGET_MISMATCH", "TARGET_CHANGED", "COMPOSER_ALREADY_OPEN", "COMPOSER_DRAFT_PRESENT", "COMPOSER_HIDDEN", "COMPOSER_ACTIVE", "COMPOSER_TARGET_BOUND", "COMPOSER_NOT_DEFAULT", "COMPOSER_AMBIGUOUS", "COMPOSER_UNRECOGNIZED", "COMPOSER_BINDING_UNVERIFIED", "COMPOSER_NOT_ACTIVE", "BINDING_EMPTY", "BINDING_STATE_MISSING", "BINDING_USER_MISSING", "SUBMIT_NOT_READY", "BINDING_INVALID", "BINDING_TARGET_MISMATCH", "BINDING_AUTHOR_MISMATCH", "BINDING_POST_MISMATCH", "BINDING_ACCOUNT_MISMATCH", "EXACT_TARGET_NOT_VISIBLE", "AUTHOR_AMBIGUOUS", "EXACT_TARGET_MISSING", "AUTHOR_MISMATCH", "REPLY_BUTTON_AMBIGUOUS", "BUTTON_TARGET_MISMATCH", "CONTENT_CHANGED", "COMPOSER_CHANGED", "SUBMIT_AMBIGUOUS", "NOT_SUBMITTED":
+	case "RECEIPT_CAPTURE_UNAVAILABLE", "RECEIPT_MAPPING_UNREVIEWED", "ACCOUNT_CHANGED", "RECEIPT_NOT_UNIQUE", "SELECTION_STEP_MISSING", "RESTRICTION_UNVERIFIED", "JOURNAL_UNAVAILABLE", "PREFLIGHT_NAVIGATION_UNVERIFIED", "PREFLIGHT_REFERENCE_UNVERIFIED", "INVALID_COMMAND", "STATE_UNAVAILABLE", "STATE_INVALID", "STATE_USER_MISSING", "STATE_POST_MISSING", "STATE_POST_MISMATCH", "STATE_COMMENTS_MISSING", "DEPTH_LIMIT", "ROW_LIMIT", "POST_MISMATCH", "EXACT_TARGET_MISSING_OR_AMBIGUOUS", "TARGET_MISMATCH", "TARGET_CHANGED", "COMPOSER_ALREADY_OPEN", "COMPOSER_DRAFT_PRESENT", "COMPOSER_HIDDEN", "COMPOSER_ACTIVE", "COMPOSER_TARGET_BOUND", "COMPOSER_NOT_DEFAULT", "COMPOSER_AMBIGUOUS", "COMPOSER_UNRECOGNIZED", "COMPOSER_BINDING_UNVERIFIED", "COMPOSER_NOT_ACTIVE", "BINDING_EMPTY", "BINDING_STATE_MISSING", "BINDING_USER_MISSING", "SUBMIT_NOT_READY", "BINDING_INVALID", "BINDING_TARGET_MISMATCH", "BINDING_AUTHOR_MISMATCH", "BINDING_POST_MISMATCH", "BINDING_ACCOUNT_MISMATCH", "EXACT_TARGET_NOT_VISIBLE", "AUTHOR_AMBIGUOUS", "EXACT_TARGET_MISSING", "AUTHOR_MISMATCH", "REPLY_BUTTON_AMBIGUOUS", "BUTTON_TARGET_MISMATCH", "CONTENT_CHANGED", "COMPOSER_CHANGED", "SUBMIT_AMBIGUOUS", "NOT_SUBMITTED":
 		return err.Error()
 	default:
 		return "DRIVER_ERROR"
@@ -135,7 +136,7 @@ var token = regexp.MustCompile(`^[A-Za-z0-9_+/=-]+$`)
 
 func Hash(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }
 func Valid(c Command) bool {
-	return c.Protocol == Protocol && uuid.MatchString(c.AttemptID) && opaque.MatchString(c.RequestKey) && opaque.MatchString(c.AccountID) && id.MatchString(c.PostID) && id.MatchString(c.TargetID) && id.MatchString(c.RecipientID) && id.MatchString(c.SenderID) && c.Reference.PostID == c.PostID && len(c.Reference.Token) <= 4096 && token.MatchString(c.Reference.Token) && (c.Reference.Source == "pc_feed" || c.Reference.Source == "pc_search") && strings.TrimSpace(c.Content) != "" && len(c.Content) <= 16000 && Hash(c.Content) == c.ContentHash
+	return (c.ReceiptMode == "" || c.ReceiptMode == CaptureOnce) && c.Protocol == Protocol && uuid.MatchString(c.AttemptID) && opaque.MatchString(c.RequestKey) && opaque.MatchString(c.AccountID) && id.MatchString(c.PostID) && id.MatchString(c.TargetID) && id.MatchString(c.RecipientID) && id.MatchString(c.SenderID) && c.Reference.PostID == c.PostID && len(c.Reference.Token) <= 4096 && token.MatchString(c.Reference.Token) && (c.Reference.Source == "pc_feed" || c.Reference.Source == "pc_search") && strings.TrimSpace(c.Content) != "" && len(c.Content) <= 16000 && Hash(c.Content) == c.ContentHash
 }
 func sameTarget(s Snapshot, c Command) bool {
 	return s.PostID == c.PostID && s.TargetID == c.TargetID && s.TargetAuthor == c.RecipientID && s.SenderID == c.SenderID

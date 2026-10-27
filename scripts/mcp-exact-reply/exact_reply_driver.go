@@ -342,26 +342,40 @@ func (d *ExactReplyDriver) Submit(ctx context.Context, c exactreply.Command) (ex
 	if err := d.restrictions(ctx, c); err != nil {
 		return s, err
 	}
-	// The click is never retried, including when its acknowledgement is lost.
+	// Arm independent response capture before any possible click. A build with no
+	// reviewed mapping accepts only the separately authorized evidence capture mode.
+	if reviewedExactReceiptMapping() == nil && c.ReceiptMode != exactreply.CaptureOnce {
+		return s, errors.New("RECEIPT_MAPPING_UNREVIEWED")
+	}
+	capture, err := armExactReceipt(ctx, p, c)
+	if err != nil {
+		return s, err
+	}
+	defer capture.stop()
 	s.Attempted, err = exactreply.SubmitOnce(ctx, func() error {
 		if err := d.restrictions(ctx, c); err != nil {
 			return err
 		}
-		if err := exactreply.RecordStage(ctx, "SELECT_INTENT", nil, nil); err != nil {
+		if err := capture.activate(ctx); err != nil {
 			return err
 		}
-		if err := humanize.Click(buttons[0]); err != nil {
-			return err
-		}
-		return exactreply.RecordStage(ctx, "REPLY_SELECTED", nil, nil)
+		return humanize.Click(buttons[0])
 	})
 	if err != nil {
 		return s, err
 	}
-	// Read response notices before any reload can dismiss them.
-	if err := d.restrictions(ctx, c); err != nil {
+	// Capture notices before reload dismisses them. Restrictions always win.
+	if err = d.restrictions(ctx, c); err != nil {
 		return s, err
 	}
+	s.Response, s.Accepted, err = capture.result(ctx, c)
+	if err != nil {
+		return s, err
+	}
+	if s.Response != nil {
+		return s, nil
+	} // engine independently reloads and verifies it
+	// An unreviewed capture still gets an independent reload, but cannot confirm.
 	fresh, err := d.state(ctx, c, true)
 	if err != nil {
 		return s, err
@@ -380,12 +394,18 @@ func (d *ExactReplyDriver) Submit(ctx context.Context, c exactreply.Command) (ex
 			matches++
 		}
 	}
-	_ = matches // DOM candidates are neither platform acceptance nor delivery proof
-	// No reviewed submission-response schema exists in this source. A fresh matching
-	// comment is only a candidate: it cannot prove this request created it. Do NOT
-	// invent an endpoint/response or populate Response from the readback itself.
+	readback := "NO_NEW_MATCH"
+	if matches == 1 {
+		readback = "ONE_NEW_MATCH"
+	} else if matches > 1 {
+		readback = "AMBIGUOUS"
+	}
+	if err = exactreply.RecordReceipt(ctx, exactreply.ReceiptEvidence{State: "UNREVIEWED_READBACK", Readback: readback}); err != nil {
+		return s, err
+	}
 	return s, nil
 }
+
 func exactObservation(r Comment, postID string) (exactreply.Observation, bool) {
 	o := exactreply.Observation{ID: r.ID, PostID: r.NoteID, SenderID: r.UserInfo.UserID, ContentHash: exactreply.Hash(r.Content)}
 	if r.NoteID != postID || r.TargetComment == nil || r.TargetComment.UserInfo == nil {

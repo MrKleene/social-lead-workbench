@@ -23,8 +23,11 @@ export function reviewedSingleReplyBuild(hash:string){
 }
 export const singleReplyScopeVersion = 'workbench.single-reply-authorization.v2' as const;
 export const singleReplyPurpose = 'SUBMIT_EXACT_COMMENT_ONCE' as const;
-export type SingleReplyRuntimeScope = {scopeVersion:string;purpose:string;binarySha256:string;protocol:string};
+export type SingleReplyRuntimeScope = {scopeVersion:string;purpose:string;binarySha256:string;protocol:string;receiptCapture?:string};
 export function compatibleSingleReplyScope(scope:SingleReplyRuntimeScope,installedHash:string){
+ // New capture authority is bound to the installed source pin AND the negotiated
+ // capture capability. Legacy scopes cannot gain this exception by changing hash.
+ if(scope.scopeVersion==='workbench.single-reply-authorization.v3'&&scope.purpose==='CAPTURE_EXACT_COMMENT_RECEIPT_ONCE')return scope.receiptCapture==='workbench.reply-receipt-capture.v1'&&/^[a-f0-9]{64}$/.test(scope.binarySha256)&&scope.binarySha256===installedHash&&scope.protocol===XHS_REPLY_PROTOCOL;
  const build=reviewedSingleReplyBuild(scope.binarySha256);
  return scope.scopeVersion===singleReplyScopeVersion&&scope.purpose===singleReplyPurpose&&
   scope.binarySha256===installedHash&&!!build&&scope.protocol===build.protocol;

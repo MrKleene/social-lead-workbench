@@ -20,6 +20,7 @@ type JournalRecord struct {
 	Attempted *bool                `json:"attempted,omitempty"`
 	Stopped   *bool                `json:"stopped,omitempty"`
 	Evidence  *RestrictionEvidence `json:"evidence,omitempty"`
+	Receipt   *ReceiptEvidence     `json:"receipt,omitempty"`
 }
 type Journal struct {
 	mu       sync.Mutex
@@ -64,7 +65,7 @@ func OpenJournal(directory, attempt string) (*Journal, error) {
 func (j *Journal) Close() error { return j.file.Close() }
 func validJournalStage(s string) bool {
 	switch s {
-	case "NAVIGATION_INTENT", "NAVIGATED", "TARGET_LOCATED", "SELECT_INTENT", "REPLY_SELECTED", "INPUT_INTENT", "INPUT_FINISHED", "CANCELLED", "RESTRICTION_CHECK", "BEFORE_CLOSE", "STARTED", "INSPECTED", "SELECTED", "RECHECKED", "BEFORE_SUBMIT", "ATTEMPTED", "AFTER_SUBMIT", "SUBMIT_FINISHED", "READBACK", "DRIVER_CLOSED":
+	case "RECEIPT_CAPTURE", "NAVIGATION_INTENT", "NAVIGATED", "TARGET_LOCATED", "SELECT_INTENT", "REPLY_SELECTED", "INPUT_INTENT", "INPUT_FINISHED", "CANCELLED", "RESTRICTION_CHECK", "BEFORE_CLOSE", "STARTED", "INSPECTED", "SELECTED", "RECHECKED", "BEFORE_SUBMIT", "ATTEMPTED", "AFTER_SUBMIT", "SUBMIT_FINISHED", "READBACK", "DRIVER_CLOSED":
 		return true
 	}
 	return false
@@ -73,12 +74,15 @@ func (j *Journal) append(stage string, attempted, stopped *bool) error {
 	return j.appendEvidence(stage, attempted, stopped, nil)
 }
 func (j *Journal) appendEvidence(stage string, attempted, stopped *bool, evidence *RestrictionEvidence) error {
+	return j.appendRecord(stage, attempted, stopped, evidence, nil)
+}
+func (j *Journal) appendRecord(stage string, attempted, stopped *bool, evidence *RestrictionEvidence, receipt *ReceiptEvidence) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.broken || j.sequence >= 64 || !validJournalStage(stage) {
 		return errors.New("JOURNAL_UNAVAILABLE")
 	}
-	b, err := json.Marshal(JournalRecord{j.sequence + 1, j.attempt, stage, time.Now().UTC().Format(time.RFC3339Nano), attempted, stopped, evidence})
+	b, err := json.Marshal(JournalRecord{j.sequence + 1, j.attempt, stage, time.Now().UTC().Format(time.RFC3339Nano), attempted, stopped, evidence, receipt})
 	if err == nil {
 		var n int
 		b = append(b, '\n')
@@ -151,4 +155,12 @@ func RecordRestriction(ctx context.Context, o RestrictionObservation, t Restrict
 		return j.appendEvidence("RESTRICTION_CHECK", nil, nil, e)
 	}
 	return nil
+}
+
+func RecordReceipt(ctx context.Context, evidence ReceiptEvidence) error {
+	j, ok := ctx.Value(journalKey{}).(*Journal)
+	if !ok {
+		return errors.New("JOURNAL_UNAVAILABLE")
+	}
+	return j.appendRecord("RECEIPT_CAPTURE", nil, nil, nil, &evidence)
 }

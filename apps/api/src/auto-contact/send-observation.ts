@@ -1,3 +1,6 @@
+import {exactReplyDeployment,type ExactReplyDeployment} from './xhs-reply-deployment';
+import {singleReplyScopeSchema,controlledPurpose} from './single-reply-scope';
+import {semanticHash} from '../collection/capture-archive';
 import {z} from 'zod';
 import {contactLock} from './contact-lock';
 import type {Prisma} from '@prisma/client';
@@ -24,10 +27,23 @@ export async function recordSendExecution(tx:Prisma.TransactionClient, actorId:s
  const account=await tx.platformAccount.findUnique({where:{id:accountId}});
  if(!account||account.isDemo||account.platform!=='XHS'||account.loginPlatformUserId!==senderId)throw Error('SEND_EVIDENCE_ACCOUNT_MISMATCH');
  // Last durable application boundary before RPC: a concurrent restriction cannot
- // pass this boundary using a stale health result. No positive provider exists yet.
+ // pass this boundary using a stale health result. Controlled evidence capture must additionally prove its durable one-use scope.
  if(safe.stage==='RPC_INTENT'){
   const control=await tx.autoContactControl.findUnique({where:{platform_mode:{platform:account.platform,mode:'REAL'}}});
-  if(control?.pauseReason||!(await accountSendObservation(tx,accountId,new Date())).canSend)throw Error('SEND_PERMISSION_UNVERIFIED');
+  const observation=await accountSendObservation(tx,accountId,new Date());
+  if(control?.pauseReason||observation.state!=='UNKNOWN'||observation.evidenceInvalid)throw Error('SEND_PERMISSION_UNVERIFIED');
+  if(!observation.canSend){
+   if(action!=='SINGLE_REPLY_EXECUTION_STAGE'||control?.activeJobId!==requestKey||!control.leaseUntil||control.leaseUntil<=new Date())throw Error('SEND_PERMISSION_UNVERIFIED');
+   const starts=await tx.auditLog.findMany({where:{entityId:requestKey,action:'SINGLE_REPLY_TEST_AUTHORIZED_RESERVED'}});
+   const metadata=starts[0]?.metadata as Record<string,unknown>|undefined;
+   const parsed=singleReplyScopeSchema.safeParse(metadata?.scope);
+   const attempt=await tx.contactAttempt.findUnique({where:{requestKey}});
+   const priorIntent=await tx.auditLog.count({where:{entityId:requestKey,action,metadata:{path:['stage'],equals:'RPC_INTENT'}}});
+   if(starts.length!==1||starts[0].actorId!==actorId||!parsed.success||parsed.data.purpose!==controlledPurpose||
+    parsed.data.accountId!==accountId||parsed.data.senderId!==senderId||requestKey!=='single-reply:'+parsed.data.approvalId||
+    Date.parse(parsed.data.expiresAt)<=Date.now()||metadata?.scopeHash!==semanticHash(parsed.data)||
+    attempt?.outcome!=='ATTEMPTED'||attempt.actorId!==actorId||attempt.accountIdSnapshot!==accountId||attempt.id!==metadata?.attemptId||priorIntent!==0)throw Error('SEND_PERMISSION_UNVERIFIED');
+  }
  }
 
  await tx.auditLog.create({data:{actorId,entityId:requestKey,action,metadata:safe}});
@@ -47,6 +63,15 @@ export async function recordSendExecution(tx:Prisma.TransactionClient, actorId:s
 
  }
 }
+/** Application readiness, not a platform-issued permission. The platform may
+ * reject the next submission despite a clean read. Every submission still performs
+ * same-session checks before/after click; restrictions and UNKNOWN latch stops.
+ * No new can-send API or always-false provider is required to graduate the release. */
+export function automaticSendReady(observation:SendObservation|null,now:Date,deployment:ExactReplyDeployment=exactReplyDeployment){
+ const age=observation?now.getTime()-Date.parse(observation.observedAt):Infinity;
+ return deployment.enabled&&deployment.responseMappingReviewed===true&&deployment.sendEligibilityReviewed===true&&!!deployment.reviewedSha256&&
+  observation?.state==='UNKNOWN'&&observation.source==='SAME_SESSION'&&observation.evidence?.identity==='MATCH'&&age>=0&&age<=300000;
+}
 /** Restriction observations are append-only. No empty page or elapsed time clears a
  * prior restriction. A future recovery workflow needs separate reviewed evidence. */
 export async function accountSendObservation(tx:Prisma.TransactionClient,accountId:string,now:Date){
@@ -55,5 +80,6 @@ export async function accountSendObservation(tx:Prisma.TransactionClient,account
  const parsed=sendObservationSchema.safeParse(row?.metadata);
  const observation=parsed.success?parsed.data:null;
  const age=observation?now.getTime()-Date.parse(observation.observedAt):Infinity;
- return {state:observation?.state??'UNKNOWN',canSend:false as const,checkedAt:observation?.observedAt??null,stale:age<0||age>300000,source:observation?.source??null,evidence:observation?.evidence??null,reason:observation&&observation.state!=='UNKNOWN'?'账号受限，禁止发送或换号继续':'发送权限待核验；登录有效或未见提示不代表可发送'};
+ const ready=automaticSendReady(observation,now);
+ return {state:observation?.state??'UNKNOWN',evidenceInvalid:!!row&&!parsed.success,canSend:ready,checkedAt:observation?.observedAt??null,stale:age<0||age>300000,source:observation?.source??null,evidence:observation?.evidence??null,automaticSendReady:ready,qualificationBasis:'RESTRICTION_OBSERVATION_ONLY' as const,reason:observation&&observation.state!=='UNKNOWN'?'账号受限，禁止发送或换号继续':ready?'应用发送条件已满足；提交时仍检查限制，不能保证平台接受或展示':'平台未提供只读发送许可；应用回执部署或限制检查尚未就绪，独立单次取证须精确授权并现场检查限制'};
 }

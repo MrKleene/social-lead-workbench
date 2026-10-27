@@ -7,7 +7,7 @@ import {singleReplyScopeSchema} from '../src/auto-contact/single-reply-test';
 import {XHS_REPLY_PROTOCOL} from '../src/auto-contact/xhs-reply-protocol';
 import {LocalSingleReplyExecutor} from '../src/auto-contact/single-reply-executor';
 const wire=vi.hoisted(()=>({connect:vi.fn(),send:vi.fn(),stop:vi.fn(),connectionFailure:vi.fn()}));
-vi.mock('../src/auto-contact/xhs-reply-transport',()=>({XhsExactReplyTransport:class {connect=wire.connect;send=wire.send;stop=wire.stop;connectionFailure=wire.connectionFailure;}}));
+vi.mock('../src/auto-contact/xhs-reply-transport',()=>({XhsExactReplyTransport:class {submissionInvocations(){return wire.send.mock.calls.length;}connect=wire.connect;send=wire.send;stop=wire.stop;connectionFailure=wire.connectionFailure;}}));
 afterEach(()=>vi.restoreAllMocks());
 function fixture(){
  wire.connect.mockReset().mockResolvedValue(true);wire.send.mockReset().mockResolvedValue({kind:'UNKNOWN',reason:'synthetic'});wire.stop.mockReset().mockResolvedValue(true);wire.connectionFailure.mockReset().mockReturnValue({kind:'FAILED',reason:'no new protocol'});
@@ -50,4 +50,15 @@ it('persists only validated fixed execution evidence under the same authorizatio
  f.c.request.requestKey='single-reply:synthetic';
  wire.send.mockImplementation(async(_r:any,_b:any,_s:any,record:any)=>{await record({stage:'RPC_RETURNED',kind:'UNKNOWN',envelopeValid:true,protocolAttemptId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'});await expect(record({stage:'RPC_INTENT',protocolAttemptId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',token:'secret'})).rejects.toThrow();return {kind:'UNKNOWN',reason:'synthetic'};});
  await executor.run(f.c,f.before,AbortSignal.timeout(5000));expect(events).toHaveLength(1);expect(events[0].data).toMatchObject({entityId:'single-reply:synthetic',action:'SINGLE_REPLY_EXECUTION_STAGE'});expect(JSON.stringify(events)).not.toContain('secret');
+});
+
+it('explicit v3 capture scope binds exact new authority, exclusions, count and hash',()=>{
+ const f=fixture();const s={...f.c.scope,scopeVersion:'workbench.single-reply-authorization.v3',purpose:'CAPTURE_EXACT_COMMENT_RECEIPT_ONCE',receiptCapture:'workbench.reply-receipt-capture.v1',binarySha256:'f'.repeat(64),availabilityVersion:0,approvalId:'11111111-1111-4111-8111-111111111111',accountId:'account1',reviewId:'review1',reviewVersion:4,templateId:'template1',postId:'b'.repeat(24),commentId:'c'.repeat(24),recipientId:'d'.repeat(24),comment:'synthetic',content:'synthetic reply',maximumSubmissions:1,retryCount:0,expiresAt:'2026-10-27T14:00:00.000Z',pausedReason:'登录已验证；只读采集须逐次确认，发送禁用',excludedPostIds:['e'.repeat(24)],excludedRecipientIds:['e'.repeat(24)]};
+ expect(singleReplyScopeSchema.safeParse(s).success).toBe(true);expect(compatibleSingleReplyScope(s,s.binarySha256)).toBe(true);
+ for(const change of [{maximumSubmissions:2},{retryCount:1},{previousNotAttemptedId:'old'},{excludedPostIds:[s.postId]},{excludedRecipientIds:[s.recipientId]},{excludedPostIds:[]},{receiptCapture:'other'}])expect(singleReplyScopeSchema.safeParse({...s,...change}).success).toBe(false);
+ expect(compatibleSingleReplyScope(s,'a'.repeat(64))).toBe(false);
+});
+it.each(['UNKNOWN','RESTRICTED','RATE_LIMITED','VERIFY_REQUIRED','REPLY_DISABLED'])('capture treats %s as observation, never platform permission',async state=>{
+ const {accountSendObservation}=await import('../src/auto-contact/send-observation');vi.mocked(accountSendObservation).mockResolvedValueOnce({state,canSend:false} as any);
+ const f=fixture();f.c.scope.purpose='CAPTURE_EXACT_COMMENT_RECEIPT_ONCE';const r=await f.executor.run(f.c,f.before,AbortSignal.timeout(5000));expect(wire.send).toHaveBeenCalledTimes(state==='UNKNOWN'?1:0);expect(r.result.kind).toBe(state==='UNKNOWN'?'UNKNOWN':'FAILED');
 });

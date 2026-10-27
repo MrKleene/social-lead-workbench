@@ -58,3 +58,12 @@ it('durable stage write failure cannot proceed to account or platform mutations'
  await expect(recordSendExecution(tx,'admin','account','job:1','AUTO_CONTACT_EXECUTION_STAGE',{stage:'RPC_ERROR',protocolAttemptId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',code:'TRANSPORT_ERROR'},'a'.repeat(24))).rejects.toThrow('synthetic journal storage failure');
  expect(tx.autoContactControl.upsert).not.toHaveBeenCalled();expect(tx.platformAccount.update).not.toHaveBeenCalled();
 });
+
+it('automatic readiness is a reviewed application release plus fresh same-session observation, not a mythical platform can-send API',async()=>{
+ const {automaticSendReady}=await import('../src/auto-contact/send-observation');
+ const observation:any={state:'UNKNOWN',source:'SAME_SESSION',observedAt:now.toISOString(),evidence:{identity:'MATCH',title:'synthetic',pathname:'/user/profile/[SENDER]',warnings:[],screenshotState:'NOT_CAPTURED'}};
+ const release={enabled:true,reviewedSha256:'f'.repeat(64),responseMappingReviewed:true,sendEligibilityReviewed:true};
+ expect(automaticSendReady(observation,now)).toBe(false);expect(automaticSendReady(observation,now,release)).toBe(true);
+ for(const o of [null,{...observation,state:'RESTRICTED'},{...observation,source:'USER_REPORT'},{...observation,evidence:undefined},{...observation,observedAt:new Date(now.getTime()-300001).toISOString()}])expect(automaticSendReady(o,now,release)).toBe(false);
+ expect(automaticSendReady(observation,now,{...release,responseMappingReviewed:false})).toBe(false);
+});

@@ -173,3 +173,13 @@ func TestExactReplyProfileGate(t *testing.T) {
 		}
 	}
 }
+
+func TestExactReplyURLRoundTripReservedCharacters(t *testing.T) {
+	for _, token := range []string{"abc+def/ghi==", "a_b-c+/=", "synthetic"} {
+		c := exactreply.Command{PostID: "bbbbbbbbbbbbbbbbbbbbbbbb", Reference: exactreply.Reference{PostID: "bbbbbbbbbbbbbbbbbbbbbbbb", Token: token, Source: "pc_search"}}
+		u, err := url.Parse(exactURL(c))
+		if err != nil || u.Host != "www.xiaohongshu.com" || u.Path != "/explore/"+c.PostID || u.Query().Get("xsec_token") != token || len(u.Query()["xsec_token"]) != 1 || u.Query().Get("xsec_source") != "pc_search" {
+			t.Fatal("reference changed")
+		}
+	}
+}
