@@ -13,7 +13,8 @@ export function SavedPostRead({config,savedPostId,title,sourceAvailable}:{config
  const state=useSavedPostRead(config,savedPostId,open,id=>{setRunId(id);setOpen(false);});
  return <><Button ref={trigger} variant="outline" disabled={!sourceAvailable} onClick={()=>{state.reset();setOpen(true);}}>重新读取此帖</Button>{!sourceAvailable&&<small>需有效原文引用</small>}{runId&&<p role="status">本帖读取已提交，<Link to="/work?module=runs">查看采集进度</Link></p>}
  <Sheet open={open} onOpenChange={value=>{if(!state.mutation.isPending)setOpen(value);}}><SheetContent className="task-settings-sheet" onCloseAutoFocus={e=>{e.preventDefault();trigger.current?.focus({preventScroll:true});}}><SheetHeader><SheetTitle>仅重新读取这一帖</SheetTitle><SheetDescription>{savedTitleLabel(title)} · 保存新增原文，已有记录保留。</SheetDescription></SheetHeader><div className="task-settings-body">
- <p>不执行搜索。分块保存，优先恢复未完成的读取；达到限额会保留进度，不调用模型或发送消息。</p>
+ <p>不执行搜索。分块保存，优先恢复未完成的读取；达到限额会保留进度，不发送评论或私信。</p>
+ <p role="status" aria-live="polite">{state.reviewNotice.text}</p>
  <InfoSection  title={<>恢复选项</>}><label className="check-label" style={{display:'flex',alignItems:'flex-start',gap:8,marginTop:12}}><input style={{width:'auto',flexShrink:0,marginTop:3}} type="checkbox" checked={state.restartCheckpoint} disabled={state.mutation.isPending||state.uncertain} onChange={e=>{state.setRestartCheckpoint(e.target.checked);state.setConsent(false);}}/>从头重新核对，保留所有已存原文</label></InfoSection>
  <label>执行账号<select aria-label="定向读取账号" value={state.selected} disabled={state.mutation.isPending||state.uncertain} onChange={e=>state.setAccount(e.target.value)}><option value="">请选择可用账号</option>{state.readiness.data?.accounts?.map(a=><option key={a.id} value={a.id} disabled={!a.eligible}>{accountOptionName(a)}{a.eligible?'':' · 待核验'}</option>)}</select></label>
  {open&&!state.mutation.isPending&&!state.uncertain&&!state.accepted&&state.reason&&<p role="status">{state.reason}。<Link to="/work?module=accounts">账号中心</Link></p>}

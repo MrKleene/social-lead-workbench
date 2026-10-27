@@ -6,7 +6,7 @@ const report={checks:[],errors:[],unexpected:[],submitted:0};let browser,page;
 try{
  browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE});
  for(const narrow of[false,true]){
-  let active=false,eligible=true,source=true,failed=false,expectRestart=false,hold,release;
+  let active=false,eligible=true,source=true,failed=false,expectRestart=false,autoEnabled=false,reviewFailed=false,policyVersion=1,hold,release;
   const postId='0123456789abcdef01234567';
   const config=()=>({id:'cfg',name:'合成配置',platform:'XHS',mode:'XHS_MCP',keywords:['合成'],excludeWords:[],batchLimit:3,enabled:true,revision:1,activeRunId:active?'accepted':null,runs:active?[{id:'accepted',status:'RUNNING',reason:null,createdAt:'2026-10-25T00:00:00Z',readPlan:{rounds:1,postsPerRound:1,commentPages:1,savedPostId:'saved-row'}}]:[]});
   const context=await browser.newContext({viewport:narrow?{width:390,height:844}:{width:1440,height:900}});context.setDefaultTimeout(12000);
@@ -16,6 +16,7 @@ try{
     report.submitted++;const body=req.postDataJSON();assert.deepEqual(body.readPlan,{rounds:1,postsPerRound:1,commentPages:1,savedPostId:'saved-row',...(expectRestart?{restartCheckpoint:true}:{})});assert.equal(body.mode,'XHS_MCP');assert.equal(body.accountId,'fixture-account');assert.equal(body.consent,'account-read-window-v1');assert(!JSON.stringify(body).includes('http'));if(hold)await hold;
     if(failed)return route.fulfill({status:503,json:{message:'合成响应失败'}});active=true;return route.fulfill({json:{id:'accepted'}});
    }
+   if(p==='/comment-review')return route.fulfill({status:reviewFailed?503:200,json:reviewFailed?{message:'synthetic unavailable'}:{policies:[{id:'policy',version:policyVersion,autoEnabled}],connection:{model:'synthetic-qwen'},modelVersion:2}});
    if(p==='/events')return route.fulfill({contentType:'text/event-stream',body:':fixture\n\n'});
    if((p.endsWith('/captures')||/^\/collection\/configs\/[^/]+\/posts$/.test(p)))return route.fulfill({json:{control:{enabled:false,version:0},model:'unconfigured',hasRules:false,total:0,postTotal:1,legacyWithoutSnapshot:0,hasMore:false,items:[],posts:[{id:'saved-row',platformPostId:postId,runId:'old',lastRunId:'old',lastSeenAt:'2026-10-24T00:00:00Z',sourceAvailable:source,savedComments:0,snapshot:{title:'合成指定帖子',body:'离线测试。只读取这一篇，旧记录保留。'},coverage:'PARTIAL',stopReason:'MCP_WINDOW_ONLY'}]}});
    const data=p==='/auth/me'?{user:{id:'fake',name:'合成',role:'ADMIN'},csrfToken:'fixture'}:p==='/health'?{}:p==='/accounts'?{accounts:[],summary:{available:0,attention:0}}:p==='/collection/configs'?[config()]:p==='/collection/configs/cfg'?{...config(),monitors:[],matches:[]}:p==='/collection/mcp/readiness'?{enabled:true,mode:'XHS_MCP',device:{name:'合成设备',online:true},accounts:[{id:'fixture-account',label:'合成账号',eligible,reason:eligible?'VERIFIED':'UNVERIFIED'}]}:[];return route.fulfill({json:data});
@@ -24,6 +25,12 @@ try{
   const open=async()=>{await page.getByRole('button',{name:'重新读取此帖',exact:true}).click();await page.getByRole('dialog',{name:'仅重新读取这一帖',exact:true}).waitFor();};
   const url=base+'/work?module=archive&post='+postId;
   await page.goto(url);await open();await page.getByRole('checkbox',{name:'授权重新读取此帖',exact:true}).check();
+  await page.getByText('自动识别关闭：本次仅采集并保存原文，不调用模型。',{exact:true}).waitFor();
+  autoEnabled=true;policyVersion++;await page.getByText('自动识别已开启：',{exact:false}).waitFor();assert((await page.getByRole('dialog').innerText()).includes('synthetic-qwen'));assert((await page.getByRole('dialog').innerText()).includes('可能产生费用'));assert(!(await page.getByRole('checkbox',{name:'授权重新读取此帖',exact:true}).isChecked()));assert(await page.getByRole('button',{name:'确认读取此帖',exact:true}).isDisabled());await page.screenshot({path:join(out,`auto-on-${narrow}.png`)});
+  await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});assert(await page.getByRole('button',{name:'重新读取此帖',exact:true}).evaluate(e=>e===document.activeElement));
+  reviewFailed=true;await open();await page.getByText('无法确认自动识别状态，请刷新后再提交。',{exact:true}).first().waitFor();assert(await page.getByRole('button',{name:'确认读取此帖',exact:true}).isDisabled());await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});
+  reviewFailed=false;autoEnabled=false;policyVersion++;await open();await page.getByText('自动识别关闭：本次仅采集并保存原文，不调用模型。',{exact:true}).waitFor();await page.getByRole('checkbox',{name:'授权重新读取此帖',exact:true}).check();
+  report.checks.push('automatic ON/OFF fee notice, state change invalidates consent, unknown blocks, Escape restores trigger focus '+narrow);
   assert((await page.getByRole('dialog').innerText()).includes('不执行搜索'));assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:join(out,`confirm-${narrow}.png`)});
   hold=new Promise(ok=>release=ok);const before=report.submitted;await page.getByRole('button',{name:'确认读取此帖',exact:true}).click();await page.getByRole('button',{name:'正在提交…',exact:true}).waitFor();await page.keyboard.press('Escape');assert(await page.getByRole('dialog').isVisible());assert(await page.getByRole('button',{name:'正在提交…',exact:true}).isDisabled());release();hold=undefined;await page.getByRole('dialog').waitFor({state:'hidden'});assert.equal(report.submitted,before+1);await page.getByText('本帖读取已提交',{exact:false}).waitFor();assert.equal(await page.getByRole('link',{name:'查看采集进度',exact:true}).getAttribute('href'),'/work?module=runs');
   await open();await page.getByRole('dialog').getByText('已有任务正在运行',{exact:false}).waitFor();assert(await page.getByRole('button',{name:'确认读取此帖',exact:true}).isDisabled());await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});

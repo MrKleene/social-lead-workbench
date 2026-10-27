@@ -1,14 +1,20 @@
 import {useRef,useState} from 'react';
 import {useConfig,useMcpReadiness,useWorkspaceMutation} from './use-collection';
+import {useReviewOverview} from '@/features/comment-review/use-comment-review';
+import {savedPostReviewNotice} from './saved-post-review-notice';
 import type {Config} from './types';
 export function useSavedPostRead(config:Config,savedPostId:string,open:boolean,onAccepted:(id:string)=>void){
  const readiness=useMcpReadiness(open),current=useConfig(open?config.id:undefined),mutation=useWorkspaceMutation<{id:string}>();
  const [restartCheckpoint,setRestartCheckpoint]=useState(false);
- const [account,setAccount]=useState(''),[consent,setConsent]=useState(false),[uncertain,setUncertain]=useState(false),[accepted,setAccepted]=useState(false);
+ const review=useReviewOverview(open),reviewNotice=savedPostReviewNotice(review.data,review.isFetching||review.isPending,review.isError);
+ const [consentKey,setConsentKey]=useState('');
+ const consent=reviewNotice.ready&&consentKey===reviewNotice.key;
+ const setConsent=(value:boolean)=>setConsentKey(value?reviewNotice.key:'');
+ const [account,setAccount]=useState(''),[uncertain,setUncertain]=useState(false),[accepted,setAccepted]=useState(false);
  const submitting=useRef(false),key=useRef<string|undefined>(undefined);
  const selected=account||readiness.data?.accounts?.find(a=>a.eligible)?.id||'';
  const c=current.data;
- const reason=readiness.isPending||current.isPending?'正在确认账号和任务状态':readiness.isError||current.isError?'无法确认当前状态':!readiness.data?.device?.online?'执行电脑离线':!readiness.data?.accounts?.some(a=>a.id===selected&&a.eligible)?'账号尚未核验，请先到账号中心检查登录':!c?.enabled?'配置已暂停':c.activeRunId||c.runs.some(r=>['RUNNING','QUEUED'].includes(r.status))?'已有任务正在运行':Date.parse(c.nextAllowedAt||'')>Date.now()?'请等待当前退避结束':null;
+ const reason=!reviewNotice.ready?reviewNotice.text:readiness.isPending||current.isPending?'正在确认账号和任务状态':readiness.isError||current.isError?'无法确认当前状态':!readiness.data?.device?.online?'执行电脑离线':!readiness.data?.accounts?.some(a=>a.id===selected&&a.eligible)?'账号尚未核验，请先到账号中心检查登录':!c?.enabled?'配置已暂停':c.activeRunId||c.runs.some(r=>['RUNNING','QUEUED'].includes(r.status))?'已有任务正在运行':Date.parse(c.nextAllowedAt||'')>Date.now()?'请等待当前退避结束':null;
  const reset=()=>{if(uncertain)return;setConsent(false);setRestartCheckpoint(false);setUncertain(false);setAccepted(false);key.current=undefined;mutation.reset();};
  const submit=()=>{
   if(submitting.current||accepted||uncertain||reason||!consent)return;submitting.current=true;key.current??=crypto.randomUUID();
@@ -17,5 +23,5 @@ export function useSavedPostRead(config:Config,savedPostId:string,open:boolean,o
    setAccepted(true);setConsent(false);onAccepted(result.id);
   }},{onError:()=>{setUncertain(true);setConsent(false);},onSettled:()=>{submitting.current=false;}});
  };
- return {restartCheckpoint,setRestartCheckpoint,readiness,current,mutation,selected,setAccount:(id:string)=>{setAccount(id);setConsent(false);},consent,setConsent,uncertain,accepted,reason,submit,reset};
+ return {reviewNotice,restartCheckpoint,setRestartCheckpoint,readiness,current,mutation,selected,setAccount:(id:string)=>{setAccount(id);setConsent(false);},consent,setConsent,uncertain,accepted,reason,submit,reset};
 }
