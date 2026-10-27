@@ -3,7 +3,7 @@ import {z} from 'zod';
 import type {Prisma} from '@prisma/client';
 import {postSchema,type ConfigInput} from './contract';
 import {savedPostReference} from './post-reference';
-export const readPlanSchema=z.object({rounds:z.literal(1),postsPerRound:z.number().int().min(1).max(20),commentPages:z.number().int().min(1).max(4),restartCheckpoint:z.boolean().optional(),savedPostId:z.string().min(1).max(100).optional()}).strict().refine(p=>!p.restartCheckpoint||!!p.savedPostId,'仅定向读取可重新建立检查点').refine(p=>!p.savedPostId||(p.postsPerRound===1&&p.commentPages===1),'指定帖子只允许一篇、一个受控读取计划');
+export const readPlanSchema=z.object({freshPostsOnly:z.literal(true).optional(),rounds:z.literal(1),postsPerRound:z.number().int().min(1).max(20),commentPages:z.number().int().min(1).max(4),restartCheckpoint:z.boolean().optional(),savedPostId:z.string().min(1).max(100).optional()}).strict().refine(p=>!p.freshPostsOnly||(!p.savedPostId&&p.postsPerRound===1),'全新帖子测试仅允许一个搜索结果，不复用存量帖子').refine(p=>!p.restartCheckpoint||!!p.savedPostId,'仅定向读取可重新建立检查点').refine(p=>!p.savedPostId||(p.postsPerRound===1&&p.commentPages===1),'指定帖子只允许一篇、一个受控读取计划');
 export type ReadPlan=z.infer<typeof readPlanSchema>;
 /** Read only the selected archive row; never accept a caller-supplied URL or search fallback. */
 export async function savedReadTarget(db:Pick<Prisma.TransactionClient,'capturedPost'>,configId:string,id:string,mode:ConfigInput['mode']){

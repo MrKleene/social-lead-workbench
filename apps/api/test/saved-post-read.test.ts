@@ -71,3 +71,16 @@ it('saved reference cannot bypass disabled transport or login verification',asyn
  const result=await collect(new XhsMcpAdapter({call:t},true,'XHS_MCP',undefined),{name:'synthetic',platform:'XHS',mode:'XHS_MCP',keywords:['never-search'],excludeWords:[],batchLimit:1,enabled:true},async()=>false,undefined,undefined,selected);
  expect(result.reason).toBe('LOGIN_EXPIRED');expect(t.mock.calls).toHaveLength(1);expect(t.mock.calls[0][0]).toBe('check_login_status');
 });
+
+it('fresh-only single-post plan cannot silently become a multi-post or saved-post run',()=>{
+ const plan={rounds:1,postsPerRound:1,commentPages:1,freshPostsOnly:true};expect(readPlanSchema.safeParse(plan).success).toBe(true);
+ expect(readPlanSchema.safeParse({...plan,postsPerRound:2}).success).toBe(false);expect(readPlanSchema.safeParse({...plan,savedPostId:'old'}).success).toBe(false);
+});
+it('fresh-only selection reads one new actual search result and preserves raw search evidence',async()=>{
+ const {collect}=await import('../src/collection/collector');
+ const posts=[{id:'old',title:'previously captured'},{id:'new',title:'new source'},{id:'extra',title:'not selected'}];
+ const adapter:any={mode:'XHS_MCP',platform:'XHS',search:vi.fn(async()=>({items:posts,complete:false,searchEvidence:{evidence:'LEGACY_UNAVAILABLE',returnedCount:3}})),post:vi.fn(async(p:any)=>p),receivedComments:()=>[],comments:async()=>({items:[],complete:true})};
+ const r=await collect(adapter,{name:'synthetic',platform:'XHS',mode:'XHS_MCP',keywords:['scope'],excludeWords:[],batchLimit:1,enabled:true},async()=>false,undefined,undefined,undefined,undefined,undefined,p=>p.id!=='old');
+ expect(r.posts.map(p=>p.post.id)).toEqual(['new']);expect(adapter.post).toHaveBeenCalledTimes(1);expect(r.searchAttempts?.[0].returnedCount).toBe(3);
+ const none=await collect(adapter,{name:'synthetic',platform:'XHS',mode:'XHS_MCP',keywords:['scope'],excludeWords:[],batchLimit:1,enabled:true},async()=>false,undefined,undefined,undefined,undefined,undefined,()=>false);expect(none.posts).toHaveLength(0);expect(adapter.post).toHaveBeenCalledTimes(1);
+});

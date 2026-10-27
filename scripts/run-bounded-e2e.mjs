@@ -1,0 +1,73 @@
+// Explicit finite operator workflow: real collection -> existing model batch ->
+// deterministic rule selection -> at most one exact capture. No automatic retries.
+import {readFile,writeFile,realpath} from 'node:fs/promises';
+import {resolve,join} from 'node:path';import {fileURLToPath} from 'node:url';import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url),root=await realpath(fileURLToPath(new URL('../',import.meta.url)));
+const [flag,file,evidence]=process.argv.slice(2);if(flag!=='--execute-bounded-once'||!file||!evidence||process.argv.length!==5)throw Error('EXPLICIT_BOUNDED_SCOPE_REQUIRED');
+const {privateFile,privateDirectory,toolPlan}=require('../runtime/platform.cjs');const path=resolve(file),out=resolve(evidence);await privateFile(path);await privateDirectory(out);
+const {boundedFlowScopeSchema,chooseBoundedCandidate}=require('../apps/api/dist/auto-contact/bounded-flow-policy.js');const scope=boundedFlowScopeSchema.parse(JSON.parse(await readFile(path,'utf8')));
+if(Date.parse(scope.expiresAt)<=Date.now()||Date.parse(scope.expiresAt)>Date.now()+7200000||toolPlan(process.env.HOME).hash!==scope.binarySha256)throw Error('BOUNDED_SCOPE_EXPIRED_OR_PIN_CHANGED');
+await writeFile(join(out,'started.json'),JSON.stringify({scope,startedAt:new Date().toISOString()})+'\n',{flag:'wx',mode:0o600});
+const directory=join(root,'.local/persistent/main'),manifest=JSON.parse(await readFile(join(directory,'instance.json'),'utf8'));
+if(manifest.kind!=='crm-persistent-v1'||manifest.root!==root||manifest.name!=='main'||manifest.mode!=='real'||manifest.database!=='crm')throw Error('INSTANCE_MISMATCH');
+await privateFile(join(directory,'secret.json'));const secret=JSON.parse(await readFile(join(directory,'secret.json'),'utf8'));if(!/^[a-f0-9]{64}$/.test(secret.databasePassword))throw Error('DATABASE_CONFIGURATION_INVALID');
+Object.assign(process.env,{DATABASE_URL:`postgresql://crm:${secret.databasePassword}@127.0.0.1:${manifest.postgres.port}/crm?schema=public`,REDIS_URL:`redis://127.0.0.1:${manifest.redis.port}`,COLLECTION_QUEUE_NAME:'crm-persist-'+manifest.id,DOTENV_CONFIG_PATH:'/dev/null',XHS_ACCOUNT_LOGIN_MODE:'real',CRM_PROJECT_ROOT:root,CRM_DEVICE_ID:manifest.deviceId,CRM_PERSISTENT:'1',CRM_DEVICE_MANAGEMENT:'1',CRM_ACCOUNT_READ_ENABLED:'1',CRM_INSTANCE_DIRECTORY:directory});
+if(process.env.CRM_SUPERVISED_BOOT)throw Error('USE_DIRECT_OPERATOR_CONTEXT');
+require('reflect-metadata');const {Db}=require('../apps/api/dist/common/db.js');const db=new Db();
+const {semanticHash}=require('../apps/api/dist/collection/capture-archive.js');
+let actor,queue,devices,collection,review,runId,reviewJobId,result={kind:'NOT_STARTED'},phase='AUTHORIZE',baselineCalls=[],authorized=false;
+const abort=new AbortController();for(const name of ['SIGINT','SIGTERM'])process.once(name,()=>abort.abort());
+const assertTime=()=>{if(abort.signal.aborted||Date.now()>=Date.parse(scope.expiresAt))throw Error('BOUNDED_AUTHORIZATION_ENDED');};
+async function record(stage,data){const event={stage,...data,at:new Date().toISOString()};await writeFile(join(out,stage+'.json'),JSON.stringify(event,null,2)+'\n',{flag:'wx',mode:0o600});await db.auditLog.create({data:{actorId:actor.id,entityId:scope.workflowId,action:'BOUNDED_WORKFLOW_STAGE',metadata:event}});console.log(JSON.stringify(event));}
+async function waitFor(read,done,ms){const end=Date.now()+ms;while(Date.now()<end){assertTime();const row=await read();if(done(row))return row;await new Promise(r=>setTimeout(r,1500));}throw Error('BOUNDED_STAGE_TIMEOUT_NO_RETRY');}
+try{
+ const device=await db.executionDevice.findUnique({where:{id:manifest.deviceId}});if(!device?.enabled||!device.runtimeId||Date.now()-device.lastSeenAt.getTime()>30000)throw Error('CURRENT_DEVICE_RUNTIME_REQUIRED');process.env.CRM_RUNTIME_ID=device.runtimeId;
+ const actors=await db.user.findMany({where:{active:true,role:'ADMIN'},select:{id:true,name:true,email:true,role:true,active:true}});if(actors.length!==1)throw Error('EXACT_ADMIN_REQUIRED');actor=actors[0];
+ const config=await db.collectionConfig.findUnique({where:{id:scope.configId}}),policy=await db.commentReviewPolicy.findUnique({where:{id:scope.policyId}}),model=await db.modelSettings.findFirst({select:{model:true,version:true}}),account=await db.platformAccount.findUnique({where:{id:scope.accountId}});
+ if(!config||!config.enabled||config.archivedAt||config.mode!=='XHS_MCP'||config.revision!==scope.configRevision||policy?.revision!==scope.policyRevision||policy.version!==scope.policyVersion||policy.autoEnabled||model?.model!==scope.model||model.version!==scope.modelConfigurationVersion||account?.loginPlatformUserId!==scope.senderId||account.status!=='PAUSED'||account.isDemo)throw Error('BOUNDED_CONFIGURATION_CHANGED');
+ if(await db.autoContactRule.count({where:{enabled:true}})||await db.autoContactJob.count({where:{status:{in:['QUEUED','RESERVED','ATTEMPTED']}}})||await db.autoContactControl.count({where:{OR:[{pauseReason:{not:null}},{activeJobId:{not:null}}]}})||await db.manualReviewJob.count({where:{status:{in:['PENDING','PROCESSING']}}})||await db.autoReviewJob.count({where:{status:{in:['PENDING','PROCESSING']}}}))throw Error('WORKFLOW_BUSY_OR_PAUSED');
+ const {accountSendObservation}=require('../apps/api/dist/auto-contact/send-observation.js');const observation=await accountSendObservation(db,scope.accountId,new Date());if(observation.state!=='UNKNOWN'||observation.evidenceInvalid)throw Error('ACCOUNT_RESTRICTED');
+ baselineCalls=(await db.semanticModelCall.findMany({select:{id:true}})).map(c=>c.id);
+ await db.$transaction(async tx=>{await tx.$queryRaw`SELECT pg_advisory_xact_lock(7027,2026)::text`;if(await tx.auditLog.findFirst({where:{entityId:scope.workflowId,action:'BOUNDED_WORKFLOW_AUTHORIZED'}}))throw Error('BOUNDED_SCOPE_CONSUMED');await tx.auditLog.create({data:{actorId:actor.id,entityId:scope.workflowId,action:'BOUNDED_WORKFLOW_AUTHORIZED',metadata:{scope,scopeHash:semanticHash(scope),automaticContactEnabled:false,baselineModelCallIds:baselineCalls}}});});
+ authorized=true;
+ const {DeviceService}=require('../apps/api/dist/devices/device.service.js'),{LocalDeviceRuntime}=require('../apps/api/dist/devices/device-runtime.js'),{LoginRuntime}=require('../apps/api/dist/accounts/login-runtime.js'),{AccountReadService,readConsent}=require('../apps/api/dist/collection/account-read.service.js'),{CollectionQueue}=require('../apps/api/dist/collection/queue.js'),{CollectionService}=require('../apps/api/dist/collection/service.js');
+ devices=new DeviceService(db,new LocalDeviceRuntime());const runtime=new LoginRuntime();queue=new CollectionQueue();const reads=new AccountReadService(db,devices,runtime);collection=new CollectionService(db,queue,reads);
+ phase='COLLECTION';assertTime();const requested=await collection.start(actor,scope.configId,'READ_WINDOW',scope.workflowId,'XHS_MCP',scope.accountId,readConsent,{rounds:1,postsPerRound:1,commentPages:1,freshPostsOnly:true});runId=requested.id;await record('COLLECTION_REQUESTED',{runId,keywords:config.keywords,posts:1,freshPostsOnly:true});
+ const run=await waitFor(()=>db.collectionRun.findUniqueOrThrow({where:{id:runId}}),r=>!['QUEUED','RUNNING'].includes(r.status),240000);
+ await record('COLLECTION_FINISHED',{runId,status:run.status,reason:run.reason,requests:run.requests,observed:run.observed});
+ if(['FAILED','PAUSED'].includes(run.status))throw Error('COLLECTION_NOT_READY');
+ const posts=await db.capturedPost.findMany({where:{configId:scope.configId,lastRunId:runId},include:{_count:{select:{comments:true}}}});if(posts.length!==1||scope.excludedPostIds.includes(posts[0].platformPostId))throw Error('EXACTLY_ONE_NEW_POST_REQUIRED');const post=posts[0];
+ const text=[post.snapshot?.title,post.snapshot?.body].filter(v=>typeof v==='string').join('\n').normalize('NFKC').toLowerCase();
+ if(!config.keywords.some(k=>text.includes(k.normalize('NFKC').toLowerCase()))||config.excludeWords.some(k=>text.includes(k.normalize('NFKC').toLowerCase())))throw Error('POST_KEYWORD_MATCH_UNVERIFIED');
+ if(!post._count.comments)throw Error('NO_COMMENTS_TO_REVIEW');
+ await record('POST_SELECTED',{runId,postId:post.id,platformPostId:post.platformPostId,title:post.snapshot?.title,coverage:post.coverage,comments:post._count.comments});
+ phase='REVIEW';assertTime();const {ModelSettingsService}=require('../apps/api/dist/model-settings/model-settings.service.js'),{QwenMatchingService}=require('../apps/api/dist/collection/qwen-matching.service.js'),{ReviewPolicyService}=require('../apps/api/dist/comment-review/review-policy.service.js'),{ReviewEvaluationService}=require('../apps/api/dist/comment-review/review-evaluation.service.js'),{ManualReviewService}=require('../apps/api/dist/comment-review/manual-review.service.js');
+ const models=new ModelSettingsService(db),policies=new ReviewPolicyService(db,models,new QwenMatchingService(db,undefined,models)),evaluation=new ReviewEvaluationService(db,policies);review=new ManualReviewService(db,policies,evaluation);
+ const preview=await review.prepare(actor,scope.policyId,{postId:post.id,revision:scope.policyRevision});reviewJobId=preview.id;if(preview.status!=='PREVIEW'||preview.maxCalls!==1||preview.capacityError||preview.pending<1)throw Error('ONE_MODEL_BATCH_NOT_READY');
+ const {manualPostConsent,reviewUseConsent}=require('../packages/contracts/dist/index.js');
+ await record('REVIEW_AUTHORIZED',{runId,postId:post.id,reviewJobId,scopeHash:preview.scopeHash,model:preview.model,modelVersion:preview.modelVersion,originalComments:preview.pending,maximumCalls:1});
+ await review.confirm(actor,reviewJobId,{hash:preview.scopeHash,requestKey:scope.workflowId,consent:manualPostConsent,providerConsent:reviewUseConsent});
+ const job=await waitFor(()=>db.manualReviewJob.findUniqueOrThrow({where:{id:reviewJobId}}),j=>!['PENDING','PROCESSING'].includes(j.status),240000);
+ const calls=await db.semanticModelCall.findMany({where:{id:{notIn:baselineCalls}},select:{id:true,status:true,rows:true,errorCode:true,inputTokens:true,outputTokens:true,configurationVersion:true}});
+ await record('REVIEW_FINISHED',{reviewJobId,status:job.status,reason:job.reason,calls});if(job.status!=='COMPLETED'||calls.length!==1||calls[0].status!=='COMPLETED')throw Error('MODEL_RESULT_NOT_CONFIRMED');
+ phase='SELECT';assertTime();const ids=job.items.filter(i=>i.state==='SUCCESS').map(i=>i.reviewId),rows=await db.semanticReview.findMany({where:{id:{in:ids}},include:{capture:{include:{post:true}}}});
+ const identities=await db.platformIdentity.findMany({where:{platform:'XHS',OR:[{contactLedger:{some:{mode:'REAL'}}},{lead:{is:{OR:[{doNotContact:true},{contactedAt:{not:null}},{contactStage:{in:['CONTACTED','INTERESTED']}}]}}}]},select:{platformUserId:true}});
+ const priorJobs=await db.autoContactJob.findMany({where:{platform:'XHS'},select:{recipientId:true}});const blocked=new Set([...identities.map(x=>x.platformUserId),...priorJobs.map(x=>x.recipientId)]);
+ const selected=chooseBoundedCandidate(rows,scope,runId,post.id,blocked);await record('RULE_SELECTION',{runId,postId:post.id,reviewJobId,reviewed:rows.length,eligibleSelected:selected?.id??null,threshold:91,maximumSubmissions:1,scores:rows.map(r=>({id:r.id,score:r.score,state:r.state,context:r.context,decision:r.result?.decision}))});
+ if(!selected)throw Error('NO_ELIGIBLE_NEW_RECIPIENT');
+ const {contactTarget}=require('../apps/api/dist/auto-contact/contact-policy.js');const target=contactTarget(selected,selected.capture,selected.capture.post);
+ let template=await db.replyTemplate.findFirst({where:{body:scope.content,channel:'COMMENT',configs:{none:{}}}});if(!template)template=await db.replyTemplate.create({data:{name:'单次流程 '+scope.workflowId,body:scope.content,channel:'COMMENT'}});
+ const availability=await db.postAvailability.findUnique({where:{platform_postId:{platform:'XHS',postId:target.postId}}});
+ const sendScope={scopeVersion:'workbench.single-reply-authorization.v3',purpose:'CAPTURE_EXACT_COMMENT_RECEIPT_ONCE',receiptCapture:'workbench.reply-receipt-capture.v1',protocol:'workbench.xhs.exact-reply.v1',availabilityVersion:availability?.version??0,approvalId:scope.workflowId,accountId:scope.accountId,senderId:scope.senderId,reviewId:selected.id,reviewVersion:selected.version,templateId:template.id,...target,commentId:target.commentId,comment:selected.snapshot.comment,content:scope.content,binarySha256:scope.binarySha256,maximumSubmissions:1,retryCount:0,expiresAt:new Date(Math.min(Date.parse(scope.expiresAt),Date.now()+900000)).toISOString(),pausedReason:'登录已验证；只读采集须逐次确认，发送禁用',excludedPostIds:scope.excludedPostIds,excludedRecipientIds:scope.excludedRecipientIds};
+ await writeFile(join(out,'send-scope.json'),JSON.stringify({actorId:actor.id,scope:sendScope},null,2)+'\n',{flag:'wx',mode:0o600});
+ await record('SEND_SCOPED',{reviewId:selected.id,score:selected.score,...target,content:scope.content,scopeHash:semanticHash(sendScope)});
+ phase='SEND';const {SingleReplyTestService}=require('../apps/api/dist/auto-contact/single-reply-test.js'),{LocalSingleReplyExecutor}=require('../apps/api/dist/auto-contact/single-reply-executor.js');
+ const outcome=await new SingleReplyTestService(db,new LocalSingleReplyExecutor(db,devices,runtime)).execute(actor,sendScope,abort.signal);await record('SEND_FINISHED',outcome);result={kind:outcome.outcome,runId,reviewJobId,...outcome};
+}catch(e){const reason=e instanceof Error&&/^[A-Z_]+$/.test(e.message)?e.message:'BOUNDED_WORKFLOW_STOPPED_REVIEW_EVIDENCE';result={kind:'STOPPED',phase,reason,errorType:e?.constructor?.name??'Unknown',errorCode:typeof e?.code==='string'&&/^[A-Z0-9_]+$/.test(e.code)?e.code:null,runId,reviewJobId};console.error(JSON.stringify(result));process.exitCode=1;}
+finally{
+ try{
+ if(result.kind==='STOPPED'){if(runId&&collection)await collection.pauseRun(actor,runId);if(reviewJobId&&review)await review.cancel(actor,reviewJobId);}
+ await queue?.onModuleDestroy();await devices?.onModuleDestroy();const calls=authorized?await db.semanticModelCall.findMany({where:{id:{notIn:baselineCalls}},select:{id:true,status:true,errorCode:true,inputTokens:true,outputTokens:true}}):[];
+ for(let i=0;i<10&&await db.deviceExecutionLease.count({where:{accountId:scope.accountId}});i++)await new Promise(r=>setTimeout(r,1000));
+ result={...result,modelCalls:calls,leaseCount:await db.deviceExecutionLease.count({where:{accountId:scope.accountId}}),finishedAt:new Date().toISOString()};await writeFile(join(out,'result.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});if(actor)await db.auditLog.create({data:{actorId:actor.id,entityId:scope.workflowId,action:'BOUNDED_WORKFLOW_FINISHED',metadata:result}});}finally{await db.$disconnect();}
+}

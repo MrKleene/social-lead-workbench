@@ -195,16 +195,20 @@ export class CollectionService {
                 diagnosticStage='authorization';owned=await this.accountReads.open(run.execution,cancelled,run.id);reader=owned.reader;
             }
             else { if(run.execution)throw new ReadFailure('REAL_DISABLED'); const settings = requireMcp(spec.mode); reader = adapter || new XhsMcpAdapter(new XhsHttpTransport(settings.url, settings.mode), true, settings.mode); }
+            // Fresh-only selection is server-owned and bounded to one post. It never
+            // changes the search evidence or substitutes a guessed source reference.
+            const seenPosts=plan?.freshPostsOnly?new Set((await this.db.capturedPost.findMany({where:{config:{platform:spec.platform}},select:{platformPostId:true}})).map(p=>p.platformPostId)):undefined;
             const result = await collect(reader, spec, async () => { if(owned)await owned.check(); else if(spec.mode!=="MOCK")requireMcp(spec.mode);return cancelled(); }, {...(owned?{requests:32,pagesPerStream:1,comments:800,callMs:40000,runMs:150000}:limits),pagesPerStream:(run.readPlan as {commentPages?:number}|null)?.commentPages??(owned?1:limits.pagesPerStream)}, async progress=>{
                 await checkpointCapture(this.db,run,progress,owned?.commitGuard,checkpoints);
                 await this.db.collectionRun.updateMany({where:{id,status:'RUNNING'},data:{
                     requests:progress.requests,observed:progress.posts.reduce((n,p)=>n+p.comments.length,0)
                 }});
             },selectedPost,async post=>{
+                if(plan?.freshPostsOnly&&await this.db.capturedPost.findFirst({where:{platformPostId:post.id,config:{platform:spec.platform}},select:{id:true}}))throw new ReadFailure('AUTHORIZATION_ENDED');
                 if(!reader?.supportsChunks?.())return;
                 if(!owned)throw new ReadFailure('REAL_DISABLED');
                 const lease=await acquireCheckpoint(this.db,run,post.id,owned.commitGuard,plan?.restartCheckpoint===true);checkpoints.set(post.id,lease);reader.restoreCheckpoint?.(post,lease.checkpoint);
-            },async post=>{await this.autoReview?.postFinished(run,post).catch(()=>console.error('自动审核入队失败；原文保留，请手动测试'));});
+            },async post=>{await this.autoReview?.postFinished(run,post).catch(()=>console.error('自动审核入队失败；原文保留，请手动测试'));},seenPosts?(post=>!seenPosts.has(post.id)):undefined);
             if(result.diagnostic)logCollectionDiagnostic(run.id,result.diagnostic);
             diagnosticStage='finish_archive';
             await finishCapture(this.db,run,result);

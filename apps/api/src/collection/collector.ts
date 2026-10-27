@@ -32,7 +32,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     comments: number;
     callMs: number;
     runMs: number;
-} = limits, progress?: (result:ReadResult)=>Promise<void>, selectedPost?:Post,beforePost?:(post:Post)=>Promise<void>,postFinished?:(post:PostRead)=>Promise<void>): Promise<ReadResult> {
+} = limits, progress?: (result:ReadResult)=>Promise<void>, selectedPost?:Post,beforePost?:(post:Post)=>Promise<void>,postFinished?:(post:PostRead)=>Promise<void>,selectPost?:(post:Post)=>boolean): Promise<ReadResult> {
     if (adapter.mode !== config.mode || adapter.platform !== config.platform)
         throw new ReadFailure("REAL_DISABLED");
     const result: ReadResult = { posts: [], requests: 0, status: "COMPLETE" };
@@ -97,7 +97,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
         for (const keyword of selectedPost?[]:config.keywords) {
             stage='search';keywordOrdinal++;
             const complete = await pages((c, s) => adapter.search(keyword, c, s), postSchema, async (items) => { for (const p of items)
-                if (found.size < config.batchLimit)
+                if (found.size < config.batchLimit && (!selectPost||selectPost(p)))
                     found.set(p.id, p); }, adapter.mode==="MOCK"?limits.pagesPerStream:1);
             result.searchIncomplete=(result.searchIncomplete??false)||!complete;
             if (!complete) {
