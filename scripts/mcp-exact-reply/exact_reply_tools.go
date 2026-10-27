@@ -9,7 +9,7 @@ import (
 )
 
 func registerRestrictionInspectionTool(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{Name: "workbench_account_restriction_inspect", Description: exactreply.RestrictionProtocol + " same saved session; visible notice and bounded screenshot; no writes", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest, t exactreply.RestrictionTarget) (*mcp.CallToolResult, any, error) {
+	mcp.AddTool(server, &mcp.Tool{Name: "workbench_account_restriction_inspect", Description: exactreply.RestrictionProtocol + " " + exactreply.ProfileRestrictionProtocol + " same saved session; visible notice and bounded screenshot; no writes", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest, t exactreply.RestrictionTarget) (*mcp.CallToolResult, any, error) {
 		r := exactreply.InspectRestriction(ctx, t, func() (exactreply.RestrictionInspector, error) {
 			b := newBrowser()
 			complete := false

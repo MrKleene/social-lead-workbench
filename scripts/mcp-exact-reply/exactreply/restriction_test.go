@@ -119,3 +119,41 @@ func TestRestrictionScreenshotNeverExportsViewportOrUnsafeNotice(t *testing.T) {
 		t.Fatal("viewport must never be exported")
 	}
 }
+
+func TestProfileRestrictionRejectsPostReferenceAndBindsResponse(t *testing.T) {
+	tgt := restrictionTarget()
+	tgt.Protocol = ProfileRestrictionProtocol
+	if tgt.Valid() {
+		t.Fatal("profile request accepted post reference")
+	}
+	tgt.PostID = ""
+	tgt.Reference = Reference{}
+	if !tgt.Valid() {
+		t.Fatal("valid profile target rejected")
+	}
+	f := &fakeRestriction{o: RestrictionObservation{Identity: "MATCH", Path: "/user/profile/[SENDER]", Warnings: []RestrictionWarning{{"ACCOUNT_CONTENT_RESTRICTED", "接相关投诉该账户违反 《社区规范》 其内容无法查看"}}}}
+	r := InspectRestriction(context.Background(), tgt, func() (RestrictionInspector, error) { return f, nil })
+	if r.Kind != "RESTRICTION_VISIBLE" || r.AccountID != tgt.AccountID || r.SenderID != tgt.SenderID || r.Protocol != ProfileRestrictionProtocol {
+		t.Fatalf("%#v", r)
+	}
+}
+func TestProfileRestrictionDoesNotAttributeUnverifiedPageOrTreatMissingEntryAsNormal(t *testing.T) {
+	tgt := restrictionTarget()
+	tgt.Protocol = ProfileRestrictionProtocol
+	tgt.PostID = ""
+	tgt.Reference = Reference{}
+	for _, tc := range []struct {
+		o          RestrictionObservation
+		kind, code string
+	}{
+		{RestrictionObservation{Identity: "UNKNOWN", Warnings: []RestrictionWarning{{"ACCOUNT_CONTENT_RESTRICTED", "其内容无法查看"}}}, "IDENTITY_UNVERIFIED", "ACCOUNT_UNVERIFIED"},
+		{RestrictionObservation{Identity: "MATCH", Path: "/explore"}, "UNAVAILABLE", "PROFILE_ENTRY_UNAVAILABLE"},
+		{RestrictionObservation{Identity: "MATCH", Path: "/user/profile/[SENDER]"}, "OBSERVED_NO_RESTRICTION", "NOT_A_SEND_PERMISSION_CHECK"},
+	} {
+		f := &fakeRestriction{o: tc.o}
+		r := InspectRestriction(context.Background(), tgt, func() (RestrictionInspector, error) { return f, nil })
+		if r.Kind != tc.kind || r.Code != tc.code {
+			t.Fatalf("%#v", r)
+		}
+	}
+}

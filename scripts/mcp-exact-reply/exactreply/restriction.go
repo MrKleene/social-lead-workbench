@@ -11,16 +11,20 @@ import (
 )
 
 const RestrictionProtocol = "workbench.xhs.restriction-inspection.v1"
+const ProfileRestrictionProtocol = "workbench.xhs.account-profile-inspection.v1"
 
 type RestrictionTarget struct {
 	Protocol  string    `json:"protocol"`
 	AccountID string    `json:"accountId"`
 	SenderID  string    `json:"senderId"`
-	PostID    string    `json:"postId"`
-	Reference Reference `json:"postReference"`
+	PostID    string    `json:"postId,omitempty"`
+	Reference Reference `json:"postReference,omitempty"`
 }
 
 func (t RestrictionTarget) Valid() bool {
+	if t.Protocol == ProfileRestrictionProtocol {
+		return opaque.MatchString(t.AccountID) && id.MatchString(t.SenderID) && t.PostID == "" && t.Reference == (Reference{})
+	}
 	return t.Protocol == RestrictionProtocol && opaque.MatchString(t.AccountID) && id.MatchString(t.SenderID) && id.MatchString(t.PostID) && t.Reference.PostID == t.PostID && len(t.Reference.Token) <= 4096 && token.MatchString(t.Reference.Token) && (t.Reference.Source == "pc_feed" || t.Reference.Source == "pc_search")
 }
 
@@ -35,7 +39,13 @@ type RestrictionImage struct {
 	Height int    `json:"height"`
 	Scope  string `json:"scope"`
 }
+type RestrictionStep struct {
+	ObservedAt string `json:"observedAt"`
+	Path       string `json:"pathname"`
+	Identity   string `json:"identity"`
+}
 type RestrictionObservation struct {
+	Navigation        []RestrictionStep    `json:"navigation,omitempty"`
 	Identity          string               `json:"identity"`
 	IdentitySource    string               `json:"identitySource"`
 	Title             string               `json:"title"`
@@ -48,6 +58,8 @@ type RestrictionObservation struct {
 	NetworkFailures   int                  `json:"networkFailures"`
 }
 type RestrictionResult struct {
+	AccountID       string                 `json:"accountId,omitempty"`
+	SenderID        string                 `json:"senderId,omitempty"`
 	Protocol        string                 `json:"protocol"`
 	Kind            string                 `json:"kind"`
 	Code            string                 `json:"code"`
@@ -84,17 +96,31 @@ func RestrictionSafeText(s, secret string, limit int) string {
 	return s
 }
 func SafeRestrictionObservation(o RestrictionObservation, t RestrictionTarget) RestrictionObservation {
+	steps := []RestrictionStep{}
+	for _, s := range o.Navigation {
+		if len(steps) == 2 {
+			break
+		}
+		if _, err := time.Parse(time.RFC3339Nano, s.ObservedAt); err != nil {
+			continue
+		}
+		if s.Path != "/explore" && s.Path != "/user/profile/[SENDER]" {
+			s.Path = "/[OTHER_ROUTE]"
+		}
+		steps = append(steps, RestrictionStep{s.ObservedAt, s.Path, choose(s.Identity, "MATCH", "MISMATCH")})
+	}
+	o.Navigation = steps
 	o.Identity = choose(o.Identity, "MATCH", "MISMATCH")
 	o.IdentitySource = choose(o.IdentitySource, "INITIAL_STATE_USER_INFO", "SELF_PROFILE_LINK", "STATE_AND_SELF_LINK")
 	o.Title = RestrictionSafeText(o.Title, t.Reference.Token, 160)
 	switch o.Path {
-	case "/explore/[POST]", "/explore", "/login", "/404", "/[OTHER_ROUTE]", "/[EXTERNAL_ORIGIN]":
+	case "/user/profile/[SENDER]", "/explore/[POST]", "/explore", "/login", "/404", "/[OTHER_ROUTE]", "/[EXTERNAL_ORIGIN]":
 	default:
 		o.Path = "/[OTHER_ROUTE]"
 	}
 	out := []RestrictionWarning{}
 	for _, w := range o.Warnings {
-		code := choose(w.Code, "BANNED", "MUTED", "VERIFICATION", "RATE_LIMITED", "COMMENT_RESTRICTED", "REVIEW_PENDING", "VISIBILITY_RESTRICTED", "ACCESS_ERROR")
+		code := choose(w.Code, "BANNED", "MUTED", "VERIFICATION", "RATE_LIMITED", "COMMENT_RESTRICTED", "REVIEW_PENDING", "VISIBILITY_RESTRICTED", "ACCESS_ERROR", "ACCOUNT_CONTENT_RESTRICTED", "SESSION_LIMIT")
 		if code != "UNKNOWN" && len(out) < 5 {
 			out = append(out, RestrictionWarning{code, RestrictionSafeText(w.Text, t.Reference.Token, 500)})
 		}
@@ -103,12 +129,12 @@ func SafeRestrictionObservation(o RestrictionObservation, t RestrictionTarget) R
 	o.ScreenshotState = choose(o.ScreenshotState, "CAPTURED", "UNAVAILABLE", "NO_SAFE_REGION", "SENSITIVE_UI", "IDENTITY_MISMATCH", "EXTERNAL_ORIGIN", "OVERSIZE", "CANCELLED")
 	reasons := []string{}
 	for _, reason := range o.ScreenshotReasons {
-		code := choose(reason, "NOTICE_SENSITIVE_TEXT", "EDITABLE_CONTENT", "VISIBLE_QR", "UNVERIFIED_MEDIA", "TEXT_SCAN_LIMIT", "REGION_SENSITIVE_TEXT", "NO_SAFE_REGION")
+		code := choose(reason, "NOTICE_SENSITIVE_TEXT", "EDITABLE_CONTENT", "VISIBLE_QR", "UNVERIFIED_MEDIA", "TEXT_SCAN_LIMIT", "REGION_SENSITIVE_TEXT", "NO_SAFE_REGION", "LOGIN_CHALLENGE", "OCCLUDED_NOTICE", "UI_CHANGED")
 		if code == "UNKNOWN" {
 			o.Screenshot = nil
 			o.ScreenshotState = "SENSITIVE_UI"
 		}
-		if code != "UNKNOWN" && len(reasons) < 7 {
+		if code != "UNKNOWN" && len(reasons) < 10 {
 			reasons = append(reasons, code)
 		}
 	}
@@ -147,6 +173,11 @@ func InspectRestriction(ctx context.Context, t RestrictionTarget, factory func()
 	if !t.Valid() {
 		r.ProcessStopped = true
 		return
+	}
+	if t.Protocol == ProfileRestrictionProtocol {
+		r.Protocol = t.Protocol
+		r.AccountID = t.AccountID
+		r.SenderID = t.SenderID
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -187,6 +218,13 @@ func InspectRestriction(ctx context.Context, t RestrictionTarget, factory func()
 		r.Observation.Screenshot = nil
 		return
 	}
+	if t.Protocol == ProfileRestrictionProtocol && r.Observation.Identity != "MATCH" {
+		r.Kind = "IDENTITY_UNVERIFIED"
+		r.Code = "ACCOUNT_UNVERIFIED"
+		r.Observation.Screenshot = nil
+		r.Observation.ScreenshotState = "UNAVAILABLE"
+		return
+	}
 	if len(r.Observation.Warnings) > 0 {
 		r.Kind = "RESTRICTION_VISIBLE"
 		r.Code = "VISIBLE_NOTICE"
@@ -198,6 +236,18 @@ func InspectRestriction(ctx context.Context, t RestrictionTarget, factory func()
 	}
 	if err != nil {
 		r.Code = "DRIVER_ERROR"
+		return
+	}
+	if t.Protocol == ProfileRestrictionProtocol {
+		for _, reason := range r.Observation.ScreenshotReasons {
+			if reason == "LOGIN_CHALLENGE" {
+				r.Code = "SESSION_CHALLENGE"
+				return
+			}
+		}
+	}
+	if t.Protocol == ProfileRestrictionProtocol && r.Observation.Identity == "MATCH" && r.Observation.Path != "/user/profile/[SENDER]" {
+		r.Code = "PROFILE_ENTRY_UNAVAILABLE"
 		return
 	}
 	switch r.Observation.Identity {

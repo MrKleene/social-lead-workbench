@@ -2,9 +2,9 @@ import test from 'node:test';import assert from 'node:assert/strict';import {rea
 const read=f=>readFileSync(new URL(f,import.meta.url),'utf8'),src=read('restriction_inspection_driver.go'),js=src.match(/const restrictionInspectionDOM = `([\s\S]*?)`/)[1];
 function inspect(o={}){
  const rect={x:10,y:10,width:300,height:100,bottom:110,right:310,top:10,left:10};
- const node=(text)=>({innerText:text,textContent:text,tagName:'DIV',value:'',getBoundingClientRect:()=>rect,getAttribute:()=>'/user/profile/'+(o.self??'a'.repeat(24)),click(){throw Error('write')},focus(){throw Error('write')}});
+ const node=(text)=>({innerText:text,textContent:text,tagName:'DIV',contains:()=>false,value:'',getBoundingClientRect:()=>rect,getAttribute:()=>'/user/profile/'+(o.self??'a'.repeat(24)),click(){throw Error('write')},focus(){throw Error('write')}});
  const warning=node(o.warning||'');if(o.hidden)warning.getBoundingClientRect=()=>({...rect,width:0});
- const document={title:o.title??'小红书',readyState:'complete',body:{},querySelectorAll:s=>s==='.qrcode-img,.login-qrcode,[data-qr-code]'?(o.qr?[{...node(''),getBoundingClientRect:()=>o.qrHidden?{...rect,width:0}:rect}]:[]):s==='img,canvas,video,iframe'?(o.media?[node('')]:[]):s==='a[href*="/user/profile/"]'?(o.noSelf?[]:[node('我')]):s==='input,textarea,[contenteditable="true"]'?(o.draft?[{...node('private draft'),value:'private draft',getBoundingClientRect:()=>o.draftOutside?{...rect,x:600,left:600,right:700,width:100}:rect}]:[]):o.warning?[warning]:[],querySelector:()=>o.qr?{}:null,createTreeWalker:()=>{let n=0;return {nextNode:()=>++n<=(o.scanLimit?1501:o.regionSecret?1:0),currentNode:{parentElement:node(''),textContent:o.regionSecret?'synthetic-only':'ordinary'}}}};
+ const document={title:o.title??'小红书',readyState:'complete',body:{},elementFromPoint:()=>o.occluded?node('overlay'):warning,querySelectorAll:s=>s==='.login-container'?(o.login?[node('请重新登录')]:[]):s==='.user-page .ban .content'?(o.profileWarning?[warning]:[]):s==='.qrcode-img,.login-qrcode,[data-qr-code]'?(o.qr?[{...node(''),getBoundingClientRect:()=>o.qrHidden?{...rect,width:0}:rect}]:[]):s==='img,canvas,video,iframe'?(o.media?[node('')]:[]):s==='a[href*="/user/profile/"]'?(o.noSelf?[]:[node('我')]):s==='input,textarea,[contenteditable="true"]'?(o.draft?[{...node('private draft'),value:'private draft',getBoundingClientRect:()=>o.draftOutside?{...rect,x:600,left:600,right:700,width:100}:rect}]:[]):o.warning&&!o.profileWarning?[warning]:[],querySelector:()=>o.qr?{}:null,createTreeWalker:()=>{let n=0;return {nextNode:()=>++n<=(o.scanLimit?1501:o.regionSecret?1:0),currentNode:{parentElement:node(''),textContent:o.regionSecret?'synthetic-only':'ordinary'}}}};
  const state=o.noState?undefined:{user:{userInfo:{value:{userId:o.sender??'a'.repeat(24),guest:!!o.guest}}}};
  return JSON.parse(vm.runInNewContext('('+js+")(post,sender,'synthetic-only')",{post:'b'.repeat(24),sender:'a'.repeat(24),document,window:{__INITIAL_STATE__:state},location:{origin:o.origin??'https://www.xiaohongshu.com',pathname:o.path??'/explore/'+'b'.repeat(24)},innerWidth:800,innerHeight:600,getComputedStyle:()=>({visibility:'visible',display:'block'}),URL,NodeFilter:{SHOW_TEXT:4}},{timeout:500}));
 }
@@ -16,3 +16,18 @@ test('console/network observation keeps only counts, never arguments, URLs, head
 
 test('safe warning crop excludes outside draft and ignores hidden QR without weakening visible protection',()=>{const safe=inspect({warning:'账号封禁',draft:true,draftOutside:true,qr:true,qrHidden:true});assert.deepEqual(safe.screenshotReasons,[]);assert.equal(safe.scope,'VISIBLE_WARNING');assert.equal(safe.clip.width,300);assert.deepEqual(inspect({warning:'账号封禁',qr:true}).screenshotReasons,['VISIBLE_QR']);});
 test('media, region secret and scan-limit protections have specific auditable subcodes',()=>{for(const [options,reason] of [[{media:true},'UNVERIFIED_MEDIA'],[{regionSecret:true},'REGION_SENSITIVE_TEXT'],[{scanLimit:true},'TEXT_SCAN_LIMIT']])assert.ok(inspect({warning:'账号封禁',...options}).screenshotReasons.includes(reason));});
+
+test('observed account profile ban is recognized only on exact sender profile and remains distinct from login limits',()=>{
+ const warning='接相关投诉该账户违反 《社区规范》 其内容无法查看';
+ const result=inspect({warning,profileWarning:true,path:'/user/profile/'+'a'.repeat(24)});
+ assert.equal(result.pathname,'/user/profile/[SENDER]');assert.equal(result.warnings[0].code,'ACCOUNT_CONTENT_RESTRICTED');assert.equal(result.warnings[0].text,warning);
+ assert.equal(inspect({warning,profileWarning:true,path:'/user/profile/'+'c'.repeat(24)}).warnings.length,0);
+ assert.equal(inspect({warning:'电脑设备登录超限，请重新登录'}).warnings[0].code,'SESSION_LIMIT');
+ assert.ok(inspect({warning,profileWarning:true,path:'/user/profile/'+'a'.repeat(24),login:true}).screenshotReasons.includes('LOGIN_CHALLENGE'));
+ assert.ok(inspect({warning,occluded:true}).screenshotReasons.includes('OCCLUDED_NOTICE'));
+});
+test('profile navigation requires a same-origin exact self link and never visits notification or submit paths',()=>{
+ assert.equal(inspect().selfProfile,true);assert.equal(inspect({noSelf:true}).selfProfile,false);
+ assert.match(src,/profileNavigationAllowed\(dom\)/);assert.match(src,/step\s*<\s*2/);
+ assert.doesNotMatch(src,/Navigate\([^)]*(?:notification|chat|publish)/);
+});

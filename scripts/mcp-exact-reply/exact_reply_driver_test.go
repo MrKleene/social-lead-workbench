@@ -111,3 +111,44 @@ func TestExactReplySelectionFailureOrCancellationCannotAdvanceOrRetry(t *testing
 		}
 	}
 }
+
+func TestExactReplyProfileNavigationStopsOnEveryUnverifiedOrRestrictedState(t *testing.T) {
+	good := restrictionDOM{Identity: "MATCH", SelfProfile: true, Path: "/explore"}
+	if !profileNavigationAllowed(good) {
+		t.Fatal("verified exact self link blocked")
+	}
+	cases := []restrictionDOM{
+		{Identity: "MISMATCH", SelfProfile: true, Path: "/explore"},
+		{Identity: "UNKNOWN", SelfProfile: true, Path: "/explore"},
+		{Identity: "MATCH", SelfProfile: false, Path: "/explore"},
+		{Identity: "MATCH", SelfProfile: true, Path: "/[EXTERNAL_ORIGIN]"},
+		{Identity: "MATCH", SelfProfile: true, Path: "/explore", LoginChallenge: true},
+		{Identity: "MATCH", SelfProfile: true, Path: "/explore", Warnings: []exactreply.RestrictionWarning{{Code: "SESSION_LIMIT", Text: "电脑设备登录超限，请重新登录"}}},
+	}
+	for _, d := range cases {
+		if profileNavigationAllowed(d) {
+			t.Fatalf("unsafe navigation: %#v", d)
+		}
+	}
+}
+
+func TestExactReplyProfileCaptureRevalidationRejectsChangedOrPrivateUI(t *testing.T) {
+	before := restrictionDOM{Identity: "MATCH", Path: "/user/profile/[SENDER]", Warnings: []exactreply.RestrictionWarning{{Code: "ACCOUNT_CONTENT_RESTRICTED", Text: "其内容无法查看"}}}
+	if !safeRestrictionCapture(before, before) {
+		t.Fatal("stable capture rejected")
+	}
+	for _, change := range []func(*restrictionDOM){
+		func(d *restrictionDOM) { d.Identity = "UNKNOWN" }, func(d *restrictionDOM) { d.Path = "/login" },
+		func(d *restrictionDOM) { d.Sensitive = true }, func(d *restrictionDOM) { d.LoginChallenge = true },
+		func(d *restrictionDOM) { d.Clip.X = 42 }, func(d *restrictionDOM) { d.Warnings = nil },
+		func(d *restrictionDOM) {
+			d.Warnings = []exactreply.RestrictionWarning{{Code: "SESSION_LIMIT", Text: "请重新登录"}}
+		},
+	} {
+		after := before
+		change(&after)
+		if safeRestrictionCapture(before, after) {
+			t.Fatal("changed capture accepted")
+		}
+	}
+}
