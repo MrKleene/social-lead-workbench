@@ -1,3 +1,4 @@
+import {provenCaptureNonSubmission} from './capture-recovery';
 import {accountSendObservation} from './send-observation';
 import {postAvailability,postSendBlock} from '../collection/post-availability';
 import {publicPostSnapshot} from '../collection/post-reference';
@@ -70,6 +71,14 @@ export class SingleReplyTestService {
     const priorScope=start?.scope as Record<string,unknown>|undefined;
     const same=priorScope&&['accountId','senderId','postId','commentId','recipientId','comment','content','purpose','protocol','scopeVersion'].every(k=>priorScope[k]===s[k as keyof SingleReplyScope]);
     if(starts.length!==1||ends.length!==1||!same||priorScope?.approvalId===s.approvalId||start?.attemptId!==old.id||end?.attemptId!==old.id||start?.scopeHash!==semanticHash(priorScope)||end?.scopeHash!==start?.scopeHash||end?.result!=='NOT_ATTEMPTED'||end?.submission!=='NOT_ATTEMPTED'||end?.stopped!==true||end?.pause!==null)throw Error('PREVIOUS_SUBMISSION_NOT_PROVEN_ABSENT');
+    if(s.purpose==='CAPTURE_EXACT_COMMENT_RECEIPT_ONCE'){
+     if(!s.recoveryWorkflowId||priorScope?.approvalId!==s.recoveryWorkflowId||priorScope?.previousNotAttemptedId)throw Error('CAPTURE_RECOVERY_SCOPE_MISMATCH');
+     const workflow=await tx.auditLog.findMany({where:{entityId:s.recoveryWorkflowId,action:{in:['BOUNDED_WORKFLOW_AUTHORIZED','BOUNDED_WORKFLOW_FINISHED']}}});
+     const authorized=workflow.filter(e=>e.action==='BOUNDED_WORKFLOW_AUTHORIZED'),finished=workflow.filter(e=>e.action==='BOUNDED_WORKFLOW_FINISHED'),done=finished[0]?.metadata as Record<string,unknown>|undefined;
+     if(authorized.length!==1||finished.length!==1||done?.attemptId!==old.id||done?.kind!=='FAILED'||done?.submission!=='NOT_ATTEMPTED'||done?.stopped!==true)throw Error('CAPTURE_RECOVERY_WORKFLOW_UNPROVEN');
+     const stages=await tx.auditLog.findMany({where:{entityId:old.requestKey,action:'SINGLE_REPLY_EXECUTION_STAGE'},orderBy:{createdAt:'asc'}});
+     if(!provenCaptureNonSubmission(stages.map(e=>e.metadata)))throw Error('CAPTURE_RECOVERY_JOURNAL_UNPROVEN');
+    }
    }else if(blocking.length)throw Error('RECIPIENT_ALREADY_RESERVED_OR_CONTACTED');
    await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${s.accountId} FOR UPDATE`;
    const usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId:s.accountId,day:v.day}}});

@@ -183,3 +183,44 @@ func TestExactReplyURLRoundTripReservedCharacters(t *testing.T) {
 		}
 	}
 }
+
+func TestExactReplySelectedComposerWaitsReadOnlyAndNeverReplaysClick(t *testing.T) {
+	for _, code := range []string{"COMPOSER_BAR_INACTIVE", "COMPOSER_HEADER_MISSING", "COMPOSER_EDITOR_UNFOCUSED", "COMPOSER_PLACEHOLDER_ACTIVE"} {
+		observations, waits := 0, 0
+		err := waitSelectedComposer(context.Background(), func(context.Context) error {
+			observations++
+			if observations < 4 {
+				return errors.New(code)
+			}
+			return nil
+		}, func(context.Context) error { waits++; return nil })
+		if err != nil || observations != 4 || waits != 3 {
+			t.Fatal(code, err, observations, waits)
+		}
+	}
+}
+func TestExactReplySelectedComposerPermanentFailureIsBounded(t *testing.T) {
+	n, w := 0, 0
+	err := waitSelectedComposer(context.Background(), func(context.Context) error { n++; return errors.New("COMPOSER_EDITOR_UNFOCUSED") }, func(context.Context) error { w++; return nil })
+	if err == nil || err.Error() != "COMPOSER_EDITOR_UNFOCUSED" || n != 15 || w != 14 {
+		t.Fatal(err, n, w)
+	}
+}
+func TestExactReplySelectedComposerNeverWaitsThroughUnsafeChanges(t *testing.T) {
+	for _, code := range []string{"COMPOSER_DRAFT_PRESENT", "COMPOSER_AMBIGUOUS", "BINDING_TARGET_MISMATCH", "BINDING_AUTHOR_MISMATCH", "BINDING_ACCOUNT_MISMATCH", "BINDING_EMPTY", "COMPOSER_HIDDEN", "PLATFORM_REFUSED"} {
+		n, w := 0, 0
+		err := waitSelectedComposer(context.Background(), func(context.Context) error { n++; return errors.New(code) }, func(context.Context) error { w++; return nil })
+		if err == nil || err.Error() != code || n != 1 || w != 0 {
+			t.Fatal(code, err, n, w)
+		}
+	}
+}
+func TestExactReplySelectedComposerCancellationPreventsNextRead(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	n := 0
+	err := waitSelectedComposer(ctx, func(context.Context) error { n++; return errors.New("COMPOSER_BAR_INACTIVE") }, func(context.Context) error { cancel(); return ctx.Err() })
+	if !errors.Is(err, context.Canceled) || n != 1 {
+		t.Fatal(err, n)
+	}
+}

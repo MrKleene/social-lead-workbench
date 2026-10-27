@@ -28,7 +28,7 @@ test('missing/hidden/duplicate target, conflicting author and ambiguous reply bu
 test('selected empty editor requires active reply UI; filled editor must preserve exact content',()=>{
  const active={phase:'SELECTED',focused:true,noMarker:true};
  assert.equal(fixture(active),'ACTIVE_MATCH');
- for(const overrides of [{focused:false},{noHeader:true},{noActiveBar:true},{noMarker:false}])assert.equal(fixture({...active,...overrides}),'COMPOSER_NOT_ACTIVE');
+ for(const [overrides,code] of [[{focused:false},'COMPOSER_EDITOR_UNFOCUSED'],[{noHeader:true},'COMPOSER_HEADER_MISSING'],[{noActiveBar:true},'COMPOSER_BAR_INACTIVE'],[{noMarker:false},'COMPOSER_PLACEHOLDER_ACTIVE']])assert.equal(fixture({...active,...overrides}),code);
  assert.equal(fixture({...active,text:'draft'}),'COMPOSER_DRAFT_PRESENT');
  assert.equal(fixture({...active,phase:'FILLED',text:'exact',content:'exact'}),'ACTIVE_MATCH');
  assert.equal(fixture({...active,phase:'FILLED',text:'changed',content:'exact'}),'CONTENT_CHANGED');
@@ -40,7 +40,7 @@ test('readers never mutate; driver checks stable binding before typing and again
  assert.equal((select.match(/humanize.Click/g)||[]).length,1);
  assert.match(select,/emptyBinding:[\s\S]*d\.binding\(ctx, c, "EMPTY"\)/);
  assert.match(select,/matchedBinding:[\s\S]*d\.binding\(ctx, c, "MATCH"\)/);
- assert.match(select,/activeEmpty:[\s\S]*d\.composer\(ctx, c, "SELECTED"\)/);
+ assert.match(select,/activeEmpty:[\s\S]*waitSelectedComposer[\s\S]*d\.composer\(ctx, c, "SELECTED"\)/);
  assert.match(select,/filled:[\s\S]*d\.composer\(ctx, c, "FILLED"\)/);
  const submit=src.split('func (d *ExactReplyDriver) Submit')[1].split('func exactObservation')[0];
  assert.ok(submit.indexOf('d.binding(ctx, c, "MATCH")')<submit.indexOf('humanize.Click'));

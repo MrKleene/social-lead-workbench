@@ -178,6 +178,32 @@ func runReplySelect(ctx context.Context, s replySelectSteps) error {
 	}
 	return ctx.Err()
 }
+
+// At most 15 observations (1.4s of waits). Only transient presentation states
+// may settle. Drafts, ambiguity, identity/binding changes and cancellation stop.
+func waitSelectedComposer(ctx context.Context, probe, wait func(context.Context) error) error {
+	for n := 0; n < 15; n++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		err := probe(ctx)
+		if err == nil {
+			return nil
+		}
+		switch err.Error() {
+		case "COMPOSER_BAR_INACTIVE", "COMPOSER_HEADER_MISSING", "COMPOSER_EDITOR_UNFOCUSED", "COMPOSER_PLACEHOLDER_ACTIVE":
+			if n == 14 {
+				return err
+			}
+			if err := wait(ctx); err != nil {
+				return err
+			}
+		default:
+			return err
+		}
+	}
+	return errors.New("COMPOSER_NOT_ACTIVE")
+}
 func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) error {
 	d.selected = false
 	err := runReplySelect(ctx, replySelectSteps{
@@ -222,7 +248,25 @@ func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) err
 			return exactreply.RecordStage(ctx, "REPLY_SELECTED", nil, nil)
 		},
 		matchedBinding: func(ctx context.Context) error { return d.binding(ctx, c, "MATCH") },
-		activeEmpty:    func(ctx context.Context) error { return d.composer(ctx, c, "SELECTED") },
+		activeEmpty: func(ctx context.Context) error {
+			// A store update can precede the visible editor/focus transition. Poll
+			// only read-only guards; never click/focus/type to force a passing UI.
+			return waitSelectedComposer(ctx, func(ctx context.Context) error {
+				if err := d.binding(ctx, c, "MATCH"); err != nil {
+					return err
+				}
+				return d.composer(ctx, c, "SELECTED")
+			}, func(ctx context.Context) error {
+				timer := time.NewTimer(100 * time.Millisecond)
+				defer timer.Stop()
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-timer.C:
+					return nil
+				}
+			})
+		},
 		input: func(ctx context.Context) error {
 			inputs, err := d.page.Context(ctx).Elements("div.input-box p.content-input")
 			if err != nil || len(inputs) != 1 {
@@ -486,8 +530,11 @@ const exactReplySelectionGuard = `(targetId, authorId, phase="DEFAULT", content=
   if (!container || container.querySelectorAll('p.content-input').length!==1) return 'COMPOSER_AMBIGUOUS';
   const bars=[...container.querySelectorAll('.engage-bar.active')];
   const headers=[...container.querySelectorAll('.reply-content')];
-  if (bars.length!==1 || !visible(bars[0]) || headers.length!==1 || !visible(headers[0]) || document.activeElement!==input) return 'COMPOSER_NOT_ACTIVE';
-  if ([...edit.querySelectorAll('.not-active.inner-when-not-active')].some(visible)) return 'COMPOSER_NOT_ACTIVE';
+  if (bars.length>1 || headers.length>1) return 'COMPOSER_AMBIGUOUS';
+  if (bars.length!==1 || !visible(bars[0])) return 'COMPOSER_BAR_INACTIVE';
+  if (headers.length!==1 || !visible(headers[0])) return 'COMPOSER_HEADER_MISSING';
+  if (document.activeElement!==input) return 'COMPOSER_EDITOR_UNFOCUSED';
+  if ([...edit.querySelectorAll('.not-active.inner-when-not-active')].some(visible)) return 'COMPOSER_PLACEHOLDER_ACTIVE';
   if (phase==='SELECTED' && ((input.textContent||'').length!==0 || [...input.children].some(e=>e.tagName!=='BR'||e.attributes.length||e.textContent))) return 'COMPOSER_DRAFT_PRESENT';
   if (phase==='FILLED' && input.textContent!==content) return 'CONTENT_CHANGED';
   return 'ACTIVE_MATCH';

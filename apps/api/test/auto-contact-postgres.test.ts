@@ -292,3 +292,25 @@ it('restriction arriving after preflight blocks controlled RPC intent without cl
  });
  expect((await f.service.execute(actor,scope)).outcome).toBe('UNKNOWN');expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);
 });
+
+async function boundedCaptureRecoveryFixture(){
+ const f=await oneShotFixture();const scope={...f.scope,scopeVersion:'workbench.single-reply-authorization.v3',purpose:'CAPTURE_EXACT_COMMENT_RECEIPT_ONCE',receiptCapture:'workbench.reply-receipt-capture.v1',excludedPostIds:['e'.repeat(24)],excludedRecipientIds:['f'.repeat(24)]};
+ f.executor.run.mockImplementationOnce(async(_c,before)=>{await before();return {result:{kind:'FAILED',reason:'synthetic composer not ready'},protocolCalls:1,submission:'NOT_ATTEMPTED',identityVerified:true,stopped:true} as any;});
+ await f.service.execute(actor,scope);const old=await db.contactAttempt.findFirstOrThrow(),protocolAttemptId=randomUUID(),at=new Date().toISOString();
+ await db.auditLog.createMany({data:[{actorId:actor.id,entityId:scope.approvalId,action:'BOUNDED_WORKFLOW_AUTHORIZED',metadata:{scope}},{actorId:actor.id,entityId:scope.approvalId,action:'BOUNDED_WORKFLOW_FINISHED',metadata:{kind:'FAILED',attemptId:old.id,submission:'NOT_ATTEMPTED',stopped:true}}]});
+ const metadata=[{stage:'RPC_INTENT',protocolAttemptId},{stage:'RPC_RETURNED',protocolAttemptId,kind:'NOT_SENT',envelopeValid:true},{stage:'TRANSPORT_STOP',protocolAttemptId,stopped:true,journal:{state:'AVAILABLE',records:[{sequence:1,stage:'STARTED',attemptId:protocolAttemptId,at},{sequence:2,stage:'DRIVER_CLOSED',attemptId:protocolAttemptId,at,stopped:true}]}}];
+ for(let i=0;i<metadata.length;i++)await db.auditLog.create({data:{actorId:actor.id,entityId:old.requestKey,action:'SINGLE_REPLY_EXECUTION_STAGE',metadata:metadata[i] as any,createdAt:new Date(Date.now()+i)}});
+ return {...f,old,next:{...scope,approvalId:randomUUID(),previousNotAttemptedId:old.id,recoveryWorkflowId:scope.approvalId}};
+}
+it('explicit capture recovery requires completed bounded workflow and same stopped journal; old row is preserved',async()=>{
+ const f=await boundedCaptureRecoveryFixture();expect((await f.service.execute(actor,f.next)).outcome).toBe('UNKNOWN');expect(await db.contactAttempt.findUnique({where:{id:f.old.id}})).toEqual(f.old);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);await f.service.execute(actor,f.next);expect(f.executor.run).toHaveBeenCalledTimes(2);
+});
+it.each(['missing-workflow','wrong-workflow','unknown-finish','journal-unknown','journal-attempted','missing-close','account-change','content-change'])('capture recovery stops on %s without another execution',async kind=>{
+ const f=await boundedCaptureRecoveryFixture();
+ if(kind==='missing-workflow')await db.auditLog.deleteMany({where:{entityId:f.next.recoveryWorkflowId,action:'BOUNDED_WORKFLOW_FINISHED'}});
+ if(kind==='wrong-workflow')f.next.recoveryWorkflowId=randomUUID();
+ if(kind==='unknown-finish'){const e=await db.auditLog.findFirstOrThrow({where:{entityId:f.next.recoveryWorkflowId,action:'BOUNDED_WORKFLOW_FINISHED'}});await db.auditLog.update({where:{id:e.id},data:{metadata:{...(e.metadata as any),kind:'UNKNOWN'}}});}
+ if(['journal-unknown','journal-attempted','missing-close'].includes(kind)){const events=await db.auditLog.findMany({where:{entityId:f.old.requestKey,action:'SINGLE_REPLY_EXECUTION_STAGE'},orderBy:{createdAt:'asc'}});const event=events[kind==='journal-unknown'?1:2],m=JSON.parse(JSON.stringify(event.metadata));if(kind==='journal-unknown')m.kind='UNKNOWN';if(kind==='journal-attempted')m.journal.records[0].attempted=true;if(kind==='missing-close')m.journal.records.pop();await db.auditLog.update({where:{id:event.id},data:{metadata:m}});}
+ if(kind==='account-change')f.next.accountId='different';if(kind==='content-change')f.next.content='different';
+ await expect(f.service.execute(actor,f.next)).rejects.toThrow();expect(f.executor.run).toHaveBeenCalledTimes(1);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(0);expect(await db.contactAttempt.findUnique({where:{id:f.old.id}})).toEqual(f.old);
+});

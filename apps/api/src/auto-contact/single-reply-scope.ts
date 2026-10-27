@@ -19,9 +19,10 @@ const captureScopeSchema=legacyScopeSchema.extend({
  scopeVersion:z.literal(controlledScopeVersion),purpose:z.literal(controlledPurpose),
  binarySha256:z.string().regex(/^[a-f0-9]{64}$/),
  receiptCapture:z.literal('workbench.reply-receipt-capture.v1'),
- previousNotAttemptedId:z.never().optional(),
+ previousNotAttemptedId:id.optional(),
+ recoveryWorkflowId:z.string().uuid().optional(),
  excludedPostIds:z.array(platformId).min(1).max(100),
  excludedRecipientIds:z.array(platformId).min(1).max(100),
-}).strict().refine(s=>!s.excludedPostIds.includes(s.postId)&&!s.excludedRecipientIds.includes(s.recipientId),'EXCLUDED_TARGET');
+}).strict().refine(s=>!!s.previousNotAttemptedId===!!s.recoveryWorkflowId&&(!s.recoveryWorkflowId||s.recoveryWorkflowId!==s.approvalId),'EXPLICIT_RECOVERY_WORKFLOW_REQUIRED').refine(s=>!s.excludedPostIds.includes(s.postId)&&!s.excludedRecipientIds.includes(s.recipientId),'EXCLUDED_TARGET');
 export const singleReplyScopeSchema=z.union([legacyScopeSchema,captureScopeSchema]);
 export type SingleReplyScope=z.infer<typeof singleReplyScopeSchema>;
