@@ -1,0 +1,29 @@
+// Offline source overlay + tests + reproducible build. Never execute/install candidate.
+import {readFile,writeFile,mkdir,cp,lstat,readdir} from 'node:fs/promises';
+import {resolve,join,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
+const bundle=dirname(fileURLToPath(import.meta.url));
+const [baseArg,outArg,go,modcache]=process.argv.slice(2);if(!baseArg||!outArg||!go||!modcache||process.argv.length!==6)throw Error('Usage: build.mjs REVIEWED_SOURCE NEW_OUTPUT EXISTING_GO EXISTING_MODCACHE');
+const base=resolve(baseArg),out=resolve(outArg),manifest=JSON.parse(await readFile(join(bundle,'base-manifest.json'),'utf8'));
+async function paths(dir,prefix=''){let list=[];for(const e of await readdir(dir,{withFileTypes:true})){const rel=prefix+e.name;if(e.isSymbolicLink())throw Error('SYMLINK');if(e.isDirectory())list.push(...await paths(join(dir,e.name),rel+'/'));else if(e.isFile())list.push(rel);else throw Error('SPECIAL_FILE')}return list.sort()}
+if(JSON.stringify(await paths(base))!==JSON.stringify(Object.keys(manifest).sort()))throw Error('BASE_FILE_SET_CHANGED');
+for(const [rel,hash] of Object.entries(manifest)){if(createHash('sha256').update(await readFile(join(base,rel))).digest('hex')!==hash)throw Error('BASE_CHANGED: '+rel)}
+await mkdir(out,{mode:0o700});for(const d of ['home','tmp','cache'])await mkdir(join(out,d),{mode:0o700});const source=join(out,'source');await cp(base,source,{recursive:true,errorOnExist:true,force:false});
+await cp(join(bundle,'exactreply'),join(source,'exactreply'),{recursive:true});
+for(const f of ['exact_reply_driver.go','exact_reply_driver_test.go'])await cp(join(bundle,f),join(source,'xiaohongshu',f));await cp(join(bundle,'exact_reply_tools.go'),join(source,'exact_reply_tools.go'));
+const registration=join(source,'mcp_server.go'),old=await readFile(registration,'utf8'),needle='func registerTools(server *mcp.Server, appServer *AppServer) {';
+if(old.split(needle).length!==2)throw Error('REGISTRATION_CHANGED');await writeFile(registration,old.replace(needle,needle+'\n registerExactReplyTools(server)'));
+const env={PATH:'/usr/bin:/bin',HOME:join(out,'home'),TMPDIR:join(out,'tmp'),GOCACHE:join(out,'cache'),GOMODCACHE:modcache,GOPROXY:'off',GOSUMDB:'off',GOTOOLCHAIN:'local',GOWORK:'off',GOENV:'off',GOTELEMETRY:'off',CGO_ENABLED:'0',GOOS:'darwin',GOARCH:'arm64'};
+function run(args,log){const r=spawnSync(go,args,{cwd:source,env,encoding:'utf8',maxBuffer:4*1024*1024,timeout:240000});return writeFile(join(out,log),(r.stdout||'')+(r.stderr||'')).then(()=>{if(r.status!==0)throw Error('FAILED: '+log);return r.stdout.trim()})}
+const compiler=await run(['version'],'compiler.log');if(compiler!=='go version go1.24.13 darwin/arm64')throw Error('UNREVIEWED_COMPILER');
+await run(['test','-mod=readonly','-count=1','-v','./exactreply'],'engine-tests.log');
+await run(['test','-mod=readonly','-count=1','-v','-run','^TestExactReply','./xiaohongshu'],'driver-tests.log');
+const version='v2.5.5-local-exact-reply-v1',binary=join(out,'xiaohongshu-mcp-candidate');
+const flags=['build','-mod=readonly','-trimpath','-buildvcs=false','-ldflags=-buildid= -X main.version='+version,'-o',binary,'.'];await run(flags,'build.log');
+const overlay={};for(const f of [...(await paths(join(bundle,'exactreply'))).map(p=>'exactreply/'+p),'exact_reply_driver.go','exact_reply_driver_test.go','exact_reply_tools.go'])overlay[f]=createHash('sha256').update(await readFile(join(bundle,f))).digest('hex');
+await writeFile(join(out,'SOURCE-OVERLAY.json'),JSON.stringify(overlay,null,2)+'\n');
+const overlaySha256=createHash('sha256').update(JSON.stringify(overlay)).digest('hex');
+const sha256=createHash('sha256').update(await readFile(binary)).digest('hex');
+await writeFile(join(out,'BUILD.json'),JSON.stringify({version,compiler,sha256,binary,overlaySha256,baseManifestSha256:createHash('sha256').update(await readFile(join(bundle,'base-manifest.json'))).digest('hex'),installed:false,executed:false,platformValidated:false,confirmedResponseMapping:false,defaultEnabled:false},null,2)+'\n');console.log(JSON.stringify({binary,sha256,installed:false,executed:false}));

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { SendRequest, SendResult } from './contact-sender';
 import { postReferenceSchema } from '../collection/post-reference';
 
-/** Offline protocol boundary only. No transport, binary launch, tool allowlist or DI registration. */
+/** Pure protocol validation; only the separate reviewed transport may supply envelopes. */
 export const XHS_REPLY_PROTOCOL = 'workbench.xhs.exact-reply.v1' as const;
 const platformId = z.string().regex(/^[a-f0-9]{24}$/);
 const opaqueId = z.string().min(1).max(200).regex(/^[A-Za-z0-9:_-]+$/);

@@ -71,7 +71,9 @@ export class AutoContactService {
                 else {
                     await tx.autoContactJob.update({ where: { id: j.id }, data: { status: 'UNKNOWN', reason: '发送进程中断，需核查回执', leaseUntil: null } });
                     await tx.contactAttempt.update({ where: { id: j.attemptId! }, data: { outcome: 'UNKNOWN', resolutionNote: '执行中断，未自动重试', version: { increment: 1 } } });
+                    await tx.autoContactControl.upsert({ where: { platform_mode: { platform: j.platform, mode: j.mode } }, create: { platform: j.platform, mode: j.mode, pauseReason: 'STOP_UNCONFIRMED', pausedAt: now }, update: { pauseReason: 'STOP_UNCONFIRMED', pausedAt: now } });
                     await tx.autoContactControl.updateMany({ where: { platform: j.platform, mode: j.mode, activeJobId: j.id }, data: { activeJobId: null, leaseUntil: null } });
+                    await tx.autoContactRule.updateMany({ where: { platform: j.platform, mode: j.mode }, data: { enabled: false } });
                 }
             }
             const jobs = await tx.autoContactJob.findMany({ where: { mode: this.sender.mode, status: { in: waiting } }, include: { rule: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 100 });
@@ -153,10 +155,10 @@ export class AutoContactService {
         let result: SendResult, timer: ReturnType<typeof setTimeout> | undefined;
         const abort = new AbortController();
         try {
-            result = await Promise.race([this.sender.send(this.request(job), abort.signal), new Promise<SendResult>(resolve => { timer = setTimeout(() => { abort.abort(); resolve({ kind: 'UNKNOWN', reason: '发送超时，未自动重试' }); }, 60000); })]);
+            result = await Promise.race([this.sender.send(this.request(job), abort.signal), new Promise<SendResult>(resolve => { timer = setTimeout(() => { abort.abort(); resolve({ kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' }); }, 60000); })]);
         }
         catch {
-            result = { kind: 'UNKNOWN', reason: '适配器结果未确认，禁止自动重试' };
+            result = { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' };
         }
         finally {
             if (timer)
@@ -183,9 +185,9 @@ export class AutoContactService {
             }
             else {
                 status = 'UNKNOWN';
-                reason = result.kind === 'RISK' ? '平台限制：' + result.reason : '结果未知，保留收件人与原日额度占用';
+                reason = result.kind === 'BLOCKED' ? '执行停止未确认，已暂停发送；保留占用' : result.kind === 'RISK' ? '平台限制：' + result.reason : '结果未知，保留收件人与原日额度占用';
             }
-            if (result.kind === 'RISK') {
+            if (result.kind === 'RISK' || result.kind === 'BLOCKED') {
                 await tx.autoContactControl.upsert({ where: { platform_mode: { platform: j.platform, mode: j.mode } }, create: { platform: j.platform, mode: j.mode, pauseReason: result.reason, pausedAt: await this.now(tx) }, update: { pauseReason: result.reason, pausedAt: await this.now(tx) } });
                 await tx.autoContactRule.updateMany({ where: { platform: j.platform, mode: j.mode }, data: { enabled: false } });
             }

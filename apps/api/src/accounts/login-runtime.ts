@@ -1,3 +1,4 @@
+import type {OwnedReplyEndpoint} from '../auto-contact/xhs-reply-transport';
 import {confirmSessionFile} from './session-save-proof';
 import {privateDirectory,privateFile,isWithin,inspectTools,minimalEnvironment,spawnOwned,stopOwned,windowsDataRoot} from '../../../../runtime/platform.cjs';
 import { XhsHttpTransport, ReadOnlyMcpTransport } from '../collection/mcp/transport';
@@ -11,7 +12,7 @@ import { constants } from 'node:fs';
 import { join,isAbsolute,relative,sep } from 'node:path';
 import { createServer } from 'node:net';
 export type LoginMode = 'real' | 'offline';
-export type SessionDriver = { qr(signal: AbortSignal): Promise<{image: string; seconds: number}>; status(signal: AbortSignal): Promise<{loggedIn: boolean; userId?: string; nickname?: string}>; stop(): Promise<void>; readTransport?(): ReadOnlyMcpTransport; simulate?(scenario: string): void | Promise<void> };
+export type SessionDriver = { qr(signal: AbortSignal): Promise<{image: string; seconds: number}>; status(signal: AbortSignal): Promise<{loggedIn: boolean; userId?: string; nickname?: string}>; stop(): Promise<void>; readTransport?(): ReadOnlyMcpTransport; replyEndpoint?(): OwnedReplyEndpoint; simulate?(scenario: string): void | Promise<void> };
 export const demoImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG5EAAAAASUVORK5CYII=';
 export function parseQr(value: unknown) {
   const v = value as { img?: unknown; timeout?: unknown; is_logged_in?: unknown };
@@ -77,9 +78,14 @@ export class LoginRuntime {
   }
   async openSaved(accountId:string,key:string,signal:AbortSignal,executionRoot?:string){return this.open(accountId,key,signal,true,executionRoot);}
 
+  async openSavedForReply(accountId:string,key:string,signal:AbortSignal,executionRoot:string,reviewedSha256:string){
+    if(process.platform!=='darwin'||this.mode()!=='real'||!this.persistent()||!/^[a-f0-9]{64}$/.test(reviewedSha256))throw Error('REPLY_RUNTIME_DISABLED');
+    return this.open(accountId,key,signal,true,executionRoot,reviewedSha256);
+  }
+
   mode():LoginMode|undefined { const v=process.env.XHS_ACCOUNT_LOGIN_MODE; return v==='real'||v==='offline'?v:undefined; }
   storage(){return process.env.XHS_SESSION_ROOT || (this.mode()==='real'?join(process.env.CRM_PROJECT_ROOT || '', '.local/xhs-qr'):'离线演示：不写平台会话');}
-  async open(accountId:string, attemptId:string, signal:AbortSignal,saved=false,executionRoot?:string):Promise<SessionDriver> {
+  async open(accountId:string, attemptId:string, signal:AbortSignal,saved=false,executionRoot?:string,replySha256?:string):Promise<SessionDriver> {
     if(this.mode()==='offline') {
       let scenario='PENDING',stopped=false;
       const directory=this.persistent()?await this.directory(accountId,attemptId,!saved,executionRoot):undefined;
@@ -94,6 +100,7 @@ export class LoginRuntime {
     const root=process.env.CRM_PROJECT_ROOT || '';
     if(!isAbsolute(root)||await realpath(root)!==root||!/^\w+$/.test(accountId)||!/^[a-f0-9-]{36}$/.test(attemptId))throw Error('INVALID_CONFIGURATION');
     const tools=await inspectTools(process.env.HOME || ''),bin=tools.mcp;
+    if(replySha256&&(!saved||tools.hash!==replySha256))throw Error('REPLY_BINARY_REVIEW_MISMATCH');
     // Saved references are validated by the service before an explicit manual check.
     const local=join(root,'.local'); await mkdir(local,{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});
     const localStat=await lstat(local);if(localStat.isSymbolicLink()||!localStat.isDirectory())throw Error('UNSAFE_SESSION_DIRECTORY');
@@ -104,7 +111,7 @@ export class LoginRuntime {
     const env=minimalEnvironment();
     if(process.platform==='win32')env.LOCALAPPDATA=windowsDataRoot(); // match Go os.UserCacheDir to the OS-known folder
     if(signal.aborted)throw Error('CANCELLED');
-    const child=spawnOwned(bin,['-headless=true','-port',`127.0.0.1:${port}`],{cwd:directory,env:{...env,COOKIES_PATH:join(directory,'cookies.json'),AUTH_TOKEN:token},detached:true,stdio:'ignore'});
+    const child=spawnOwned(bin,['-headless=true','-port',`127.0.0.1:${port}`],{cwd:directory,env:{...env,COOKIES_PATH:join(directory,'cookies.json'),AUTH_TOKEN:token,...(replySha256?{CRM_EXACT_REPLY_ENABLED:'1'}:{})},detached:true,stdio:'ignore'});
     const notify=(kind:string)=>{if(process.connected&&child.pid)try{process.send?.({kind,pid:child.pid});}catch{}};
     notify('OWNED_LOGIN_PROCESS_STARTED');
     let alive=true,stopping:Promise<void>|undefined;const done=new Promise<void>(ok=>{child.once('error',()=>{alive=false;ok();});child.once('exit',()=>{alive=false;ok();queueMicrotask(()=>{void stop();});});});
@@ -130,7 +137,12 @@ export class LoginRuntime {
     try{
       let ready=false;for(let i=0;i<40&&alive&&!signal.aborted;i++){try{ready=(await fetch(endpoint+'/health',{signal:AbortSignal.timeout(200),redirect:'error'})).ok;}catch{}if(ready)break;await new Promise(ok=>setTimeout(ok,100));}
       if(!ready||!alive||signal.aborted)throw Error('PROCESS_START_FAILED');
-      return {qr:async s=>parseQr(await request('/api/v1/login/qrcode',s)),status:async s=>parseStatus(await request('/api/v1/login/status',s)),readTransport:()=>new XhsHttpTransport(new URL(endpoint+'/mcp'),'XHS_MCP',{token,callMs:40000}),stop};
+      return {qr:async s=>parseQr(await request('/api/v1/login/qrcode',s)),status:async s=>parseStatus(await request('/api/v1/login/status',s)),readTransport:()=>new XhsHttpTransport(new URL(endpoint+'/mcp'),'XHS_MCP',{token,callMs:40000}),
+      ...(replySha256?{replyEndpoint:():OwnedReplyEndpoint=>({url:new URL(endpoint+'/mcp'),token,accountId,binarySha256:tools.hash,stop:async()=>{
+        await stop();if(!child.pid||process.platform!=='darwin')return false;
+        // Probe only this freshly spawned owned process group, never a stored PID.
+        for(let i=0;i<10;i++){try{process.kill(-child.pid,0);}catch(error){return (error as NodeJS.ErrnoException).code==='ESRCH';}await new Promise(ok=>setTimeout(ok,50));}return false;
+      }})}:{}),stop};
     }catch(e){await stop();throw e;}
   }
 }

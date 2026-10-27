@@ -1,3 +1,8 @@
+import { DevicesModule } from '../devices/devices';
+import { DeviceService } from '../devices/device.service';
+import { LoginRuntime } from '../accounts/login-runtime';
+import { Db } from '../common/db';
+import { LocalXhsReplySender } from './local-xhs-reply-sender';
 import { Controller, Get, Put, Post, Param, Query, Req, Inject, Module, UseGuards, Header } from '@nestjs/common';
 import { z } from 'zod';
 import { autoContactRuleInput, autoContactToggleInput, contactStatuses } from '@crm/contracts';
@@ -5,7 +10,7 @@ import { AuthModule, SessionGuard, type AuthedRequest } from '../auth/auth';
 import { parse } from '../common/validation';
 import { ContactSettingsService } from './contact-settings.service';
 import { AutoContactService } from './auto-contact.service';
-import { CONTACT_SENDER, UnavailableContactSender } from './contact-sender';
+import { CONTACT_SENDER } from './contact-sender';
 @Controller('auto-contact')
 @UseGuards(SessionGuard)
 class AutoContactController {
@@ -51,6 +56,6 @@ class AutoContactController {
     @Param('id')
     id: string) { const b = parse(z.object({ receipt: z.string().trim().min(1).max(500) }).strict(), r.body); return this.service.reconcile(r.actor, id, b.receipt); }
 }
-@Module({ imports: [AuthModule], controllers: [AutoContactController], providers: [{ provide: CONTACT_SENDER, useClass: UnavailableContactSender }, ContactSettingsService, AutoContactService], exports: [AutoContactService] })
+@Module({ imports: [AuthModule, DevicesModule], controllers: [AutoContactController], providers: [LoginRuntime, { provide: CONTACT_SENDER, useFactory: (db: Db, devices: DeviceService, runtime: LoginRuntime) => new LocalXhsReplySender(db, devices, runtime), inject: [Db, DeviceService, LoginRuntime] }, ContactSettingsService, AutoContactService], exports: [AutoContactService] })
 export class AutoContactModule {
 }
