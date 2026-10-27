@@ -49,7 +49,15 @@ const observationSchema = z.object({
     senderId: platformId,
     contentSha256: digest,
 }).strict();
+// Fixed enums only. Raw platform errors, IDs, URLs, content and tokens are rejected.
+const identityCheck=z.enum(['UNKNOWN','MATCH','MISMATCH']);
+const diagnosticSchema=z.object({
+ stage:z.enum(['VALIDATE','INSPECT','SELECT','RECHECK','SUBMIT','READBACK','CLOSE']),
+ code:z.enum(['INVALID_COMMAND','STATE_UNAVAILABLE','STATE_INVALID','STATE_USER_MISSING','STATE_POST_MISSING','STATE_POST_MISMATCH','STATE_COMMENTS_MISSING','DEPTH_LIMIT','ROW_LIMIT','POST_MISMATCH','EXACT_TARGET_MISSING_OR_AMBIGUOUS','TARGET_MISMATCH','TARGET_CHANGED','COMPOSER_ALREADY_OPEN','EXACT_TARGET_MISSING','AUTHOR_MISMATCH','REPLY_BUTTON_AMBIGUOUS','BUTTON_TARGET_MISMATCH','CONTENT_CHANGED','COMPOSER_CHANGED','SUBMIT_AMBIGUOUS','NOT_SUBMITTED','CANCELLED','DRIVER_ERROR','DRIVER_PANIC','STOP_UNCONFIRMED','UNCONFIRMED','RATE_LIMITED','VERIFICATION','BANNED','PLATFORM_REFUSED']),
+ checks:z.object({post:identityCheck,sender:identityCheck,target:identityCheck,author:identityCheck}).strict(),
+}).strict();
 const common = {
+    diagnostic: diagnosticSchema.optional(),
     protocol: z.literal(XHS_REPLY_PROTOCOL), attemptId: z.string().uuid(),
     requestKey: opaqueId, accountId: opaqueId,
     // A bounded transport must acknowledge termination, including on cancellation.
@@ -73,7 +81,7 @@ const resultSchema = z.discriminatedUnion('kind', [
 const unknown = (): SendResult => ({ kind: 'UNKNOWN', reason: '回复目标、回执或停止状态未确认；保留占用，禁止重发' });
 /** Only a reviewed, account-bound transport may supply this envelope. These fields are
  * checks, not authentication; never accept an envelope from an HTTP body or model output.
- * The currently installed MCP cannot produce this protocol and must remain unavailable. */
+ * Unreviewed binaries and missing capabilities remain unavailable. */
 export function verifyXhsReplyResult(command: XhsReplyCommand, raw: unknown): SendResult {
     const parsed = resultSchema.safeParse(raw);
     if (!parsed.success) return unknown();
@@ -82,7 +90,11 @@ export function verifyXhsReplyResult(command: XhsReplyCommand, raw: unknown): Se
         return unknown();
     if (r.kind === 'RISK') return { kind: 'RISK', reason: r.reason };
     if (!r.processStopped) return unknown();
-    if (r.kind === 'NOT_SENT') return { kind: 'FAILED', reason: '发送前已停止：' + r.reason };
+    if (r.kind === 'NOT_SENT') {
+        const d=r.diagnostic;
+        const detail=d?` [${d.stage}/${d.code}; post=${d.checks.post},sender=${d.checks.sender},target=${d.checks.target},author=${d.checks.author}]`:'';
+        return { kind:'FAILED',reason:'发送前已停止：'+r.reason+detail };
+    }
     const matches = (o: z.infer<typeof observationSchema>) =>
         o.postId === command.postId && o.parentCommentId === command.targetCommentId &&
         o.recipientId === command.recipientId && o.senderId === command.senderId &&

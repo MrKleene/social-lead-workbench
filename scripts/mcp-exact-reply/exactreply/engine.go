@@ -51,7 +51,49 @@ type Submission struct {
 	Response            *Observation
 	Risk                string
 }
+
+// Diagnostics contain fixed enums only: no IDs, URLs, text, tokens or raw errors.
+type IdentityChecks struct {
+	Post   string `json:"post"`
+	Sender string `json:"sender"`
+	Target string `json:"target"`
+	Author string `json:"author"`
+}
+type Diagnostic struct {
+	Stage  string         `json:"stage"`
+	Code   string         `json:"code"`
+	Checks IdentityChecks `json:"checks"`
+}
+
+func checkID(actual, expected string) string {
+	if actual == "" {
+		return "UNKNOWN"
+	}
+	if actual == expected {
+		return "MATCH"
+	}
+	return "MISMATCH"
+}
+func checks(s Snapshot, c Command) IdentityChecks {
+	return IdentityChecks{checkID(s.PostID, c.PostID), checkID(s.SenderID, c.SenderID), checkID(s.TargetID, c.TargetID), checkID(s.TargetAuthor, c.RecipientID)}
+}
+func diagnosticCode(err error) string {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return "CANCELLED"
+	}
+	if err == nil {
+		return "UNCONFIRMED"
+	}
+	switch err.Error() {
+	case "INVALID_COMMAND", "STATE_UNAVAILABLE", "STATE_INVALID", "STATE_USER_MISSING", "STATE_POST_MISSING", "STATE_POST_MISMATCH", "STATE_COMMENTS_MISSING", "DEPTH_LIMIT", "ROW_LIMIT", "POST_MISMATCH", "EXACT_TARGET_MISSING_OR_AMBIGUOUS", "TARGET_MISMATCH", "TARGET_CHANGED", "COMPOSER_ALREADY_OPEN", "EXACT_TARGET_MISSING", "AUTHOR_MISMATCH", "REPLY_BUTTON_AMBIGUOUS", "BUTTON_TARGET_MISMATCH", "CONTENT_CHANGED", "COMPOSER_CHANGED", "SUBMIT_AMBIGUOUS", "NOT_SUBMITTED":
+		return err.Error()
+	default:
+		return "DRIVER_ERROR"
+	}
+}
+
 type Result struct {
+	Diagnostic          *Diagnostic  `json:"diagnostic,omitempty"`
 	Protocol            string       `json:"protocol"`
 	AttemptID           string       `json:"attemptId"`
 	RequestKey          string       `json:"requestKey"`
@@ -109,12 +151,15 @@ func base(c Command) Result {
 func Run(ctx context.Context, c Command, d Driver) (r Result) {
 	r = base(c)
 	submitted := false
+	stage := "VALIDATE"
+	identity := checks(Snapshot{}, c)
 	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 	defer cancel()
 	defer func() {
 		if recover() != nil {
 			r = base(c)
 			r.Reason = "DRIVER_PANIC"
+			r.Diagnostic = &Diagnostic{stage, "DRIVER_PANIC", identity}
 		}
 		closeCtx, stop := context.WithTimeout(context.Background(), 2*time.Second)
 		defer stop()
@@ -122,13 +167,16 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 		if !r.Stopped && r.Kind != "RISK" {
 			r = base(c)
 			r.Reason = "STOP_UNCONFIRMED"
+			r.Diagnostic = &Diagnostic{"CLOSE", "STOP_UNCONFIRMED", identity}
 		}
 	}()
 	fail := func(err error) Result {
 		r = base(c)
+		r.Diagnostic = &Diagnostic{stage, diagnosticCode(err), identity}
 		if code := risk(err); code != "" {
 			r.Kind = "RISK"
 			r.Reason = code
+			r.Diagnostic.Code = code
 			return r
 		}
 		if !submitted {
@@ -147,7 +195,9 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 	if ctx.Err() != nil {
 		return fail(ctx.Err())
 	}
+	stage = "INSPECT"
 	before, err := d.Inspect(ctx, c)
+	identity = checks(before, c)
 	if err != nil {
 		return fail(err)
 	}
@@ -157,10 +207,13 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 	if ctx.Err() != nil {
 		return fail(ctx.Err())
 	}
+	stage = "SELECT"
 	if err = d.Select(ctx, c); err != nil {
 		return fail(err)
 	}
+	stage = "RECHECK"
 	again, err := d.Inspect(ctx, c)
+	identity = checks(again, c)
 	if err != nil {
 		return fail(err)
 	}
@@ -171,6 +224,7 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 		return fail(ctx.Err())
 	}
 	// Once Submit is entered, errors are ambiguous unless the driver proves no click.
+	stage = "SUBMIT"
 	submitted = true
 	s, err := d.Submit(ctx, c)
 	submitted = s.Attempted
@@ -193,6 +247,7 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 		}
 		return r
 	}
+	stage = "READBACK"
 	observed, err := d.Readback(ctx, c, s.Response.ID)
 	if err != nil {
 		return fail(err)
@@ -233,6 +288,7 @@ func (e *Engine) Execute(ctx context.Context, c Command, newDriver func() (Drive
 		r.Kind = "NOT_SENT"
 		r.Phase = "BEFORE_SUBMIT"
 		r.Reason = "TARGET_MISMATCH"
+		r.Diagnostic = &Diagnostic{"VALIDATE", "INVALID_COMMAND", checks(Snapshot{}, c)}
 		r.Stopped = true
 		return r
 	}

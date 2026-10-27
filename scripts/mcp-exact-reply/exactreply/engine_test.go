@@ -19,6 +19,7 @@ func observation(c Command) Observation {
 }
 
 type fake struct {
+	inspectError, selectError                                                       error
 	c                                                                               Command
 	inspects, selected, submitted, closed                                           int
 	bad, change, closeFail, panicClose, panicSubmit, accepted, noResponse, readFail bool
@@ -39,14 +40,14 @@ func (f *fake) Inspect(ctx context.Context, c Command) (Snapshot, error) {
 	if f.existing {
 		s.ExistingIDs[observation(c).ID] = true
 	}
-	return s, nil
+	return s, f.inspectError
 }
 func (f *fake) Select(ctx context.Context, c Command) error {
 	f.selected++
 	if f.cancel != nil {
 		f.cancel()
 	}
-	return nil
+	return f.selectError
 }
 func (f *fake) Submit(ctx context.Context, c Command) (Submission, error) {
 	f.submitted++
@@ -305,5 +306,53 @@ func TestExactReplyCancellationDuringSubmitNeverConfirms(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("cancellation ignored")
+	}
+}
+
+func TestExactReplyDiagnosticsSeparateHistoricalMergedFailures(t *testing.T) {
+	for _, tc := range []struct{ stage, code string }{
+		{"INSPECT", "STATE_POST_MISSING"}, {"INSPECT", "EXACT_TARGET_MISSING_OR_AMBIGUOUS"},
+		{"SELECT", "COMPOSER_ALREADY_OPEN"}, {"SELECT", "AUTHOR_MISMATCH"}, {"SELECT", "BUTTON_TARGET_MISMATCH"},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			f := &fake{}
+			if tc.stage == "INSPECT" {
+				f.inspectError = errors.New(tc.code)
+			} else {
+				f.selectError = errors.New(tc.code)
+			}
+			r := Run(context.Background(), command(), f)
+			if r.Kind != "NOT_SENT" || r.Diagnostic == nil || r.Diagnostic.Stage != tc.stage || r.Diagnostic.Code != tc.code || f.submitted != 0 || !r.Stopped {
+				t.Fatal(r, f)
+			}
+		})
+	}
+}
+func TestExactReplyDiagnosticsDoNotLeakRawError(t *testing.T) {
+	f := &fake{selectError: errors.New("URL https://private.invalid/?token=SECRET and private comment")}
+	r := Run(context.Background(), command(), f)
+	if r.Diagnostic.Code != "DRIVER_ERROR" || r.Diagnostic.Stage != "SELECT" || f.submitted != 0 {
+		t.Fatal(r)
+	}
+}
+func TestExactReplyDiagnosticsIdentityChecksCannotMakeTargetPass(t *testing.T) {
+	f := &fake{bad: true}
+	r := Run(context.Background(), command(), f)
+	if r.Diagnostic.Checks.Target != "MISMATCH" || r.Diagnostic.Checks.Sender != "MATCH" || r.Diagnostic.Stage != "INSPECT" || f.selected != 0 || f.submitted != 0 {
+		t.Fatal(r)
+	}
+	d := checks(Snapshot{}, command())
+	if d.Target != "UNKNOWN" || d.Author != "UNKNOWN" || d.Sender != "UNKNOWN" || d.Post != "UNKNOWN" {
+		t.Fatal(d)
+	}
+}
+func TestExactReplyDiagnosticsInvalidCommandHasNoDriver(t *testing.T) {
+	e := &Engine{}
+	c := command()
+	c.TargetID = "invalid"
+	called := false
+	r := e.Execute(context.Background(), c, func() (Driver, error) { called = true; return &fake{}, nil })
+	if called || r.Diagnostic.Stage != "VALIDATE" || r.Diagnostic.Code != "INVALID_COMMAND" || r.Kind != "NOT_SENT" {
+		t.Fatal(r)
 	}
 }

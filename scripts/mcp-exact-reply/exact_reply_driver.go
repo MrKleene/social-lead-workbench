@@ -31,10 +31,11 @@ func exactURL(c exactreply.Command) string {
 }
 
 type exactState struct {
-	SenderID string    `json:"senderId"`
-	NoteID   string    `json:"noteId"`
-	Comments []Comment `json:"comments"`
-	Blocked  bool      `json:"blocked"`
+	SenderID  string    `json:"senderId"`
+	NoteID    string    `json:"noteId"`
+	Comments  []Comment `json:"comments"`
+	Blocked   bool      `json:"blocked"`
+	StateCode string    `json:"stateCode"`
 }
 
 func (d *ExactReplyDriver) state(ctx context.Context, c exactreply.Command, reload bool) (exactState, error) {
@@ -56,7 +57,10 @@ func (d *ExactReplyDriver) state(ctx context.Context, c exactreply.Command, relo
   const unwrap=v=>v&&v.value!==undefined?v.value:v&&v._rawValue!==undefined?v._rawValue:v;
   if(document.querySelector('.access-wrapper,.error-wrapper,.not-found-wrapper,.blocked-wrapper')) return JSON.stringify({blocked:true});
   const s=window.__INITIAL_STATE__;const u=unwrap(s?.user?.userInfo);const map=unwrap(s?.note?.noteDetailMap);const row=map?.[post];
-  if(!u||u.guest||!row||row.note?.noteId!==post) return '';
+  if(!u||u.guest) return JSON.stringify({stateCode:'STATE_USER_MISSING'});
+  if(!row) return JSON.stringify({senderId:u.userId||u.user_id,stateCode:'STATE_POST_MISSING'});
+  if(row.note?.noteId!==post) return JSON.stringify({senderId:u.userId||u.user_id,noteId:row.note?.noteId,stateCode:'STATE_POST_MISMATCH'});
+  if(!Array.isArray(row.comments?.list)) return JSON.stringify({senderId:u.userId||u.user_id,noteId:row.note.noteId,stateCode:'STATE_COMMENTS_MISSING'});
   return JSON.stringify({senderId:u.userId||u.user_id,noteId:row.note.noteId,comments:row.comments?.list,
     blocked:!!document.querySelector('.access-wrapper,.error-wrapper,.not-found-wrapper,.blocked-wrapper')});
  }`, c.PostID)
@@ -73,6 +77,13 @@ func (d *ExactReplyDriver) state(ctx context.Context, c exactreply.Command, relo
 	}
 	if s.Blocked {
 		return s, exactreply.RiskError("PLATFORM_REFUSED")
+	}
+	switch s.StateCode {
+	case "STATE_USER_MISSING", "STATE_POST_MISSING", "STATE_POST_MISMATCH", "STATE_COMMENTS_MISSING":
+		return s, errors.New(s.StateCode)
+	case "":
+	default:
+		return s, errors.New("STATE_INVALID")
 	}
 	return s, nil
 }
@@ -100,7 +111,7 @@ func exactComments(rows []Comment) ([]Comment, error) {
 func (d *ExactReplyDriver) Inspect(ctx context.Context, c exactreply.Command) (exactreply.Snapshot, error) {
 	s, err := d.state(ctx, c, false)
 	if err != nil {
-		return exactreply.Snapshot{}, err
+		return exactreply.Snapshot{PostID: s.NoteID, SenderID: s.SenderID}, err
 	}
 	rows, err := exactComments(s.Comments)
 	if err != nil {

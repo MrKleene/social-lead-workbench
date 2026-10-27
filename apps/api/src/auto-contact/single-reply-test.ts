@@ -97,7 +97,7 @@ export class SingleReplyTestService {
    const pause=result.kind==='RISK'?result.reason:!outcome.stopped||result.kind==='BLOCKED'?'STOP_UNCONFIRMED':null;
    await tx.autoContactControl.updateMany({where:{platform:'XHS',mode:'REAL',activeJobId:key},data:{activeJobId:null,leaseUntil:null,...(pause?{pauseReason:pause,pausedAt:await contactNow(tx)}:{})}});
    if(pause)await tx.autoContactRule.updateMany({where:{platform:'XHS',mode:'REAL'},data:{enabled:false}});
-   await tx.auditLog.create({data:{actorId:actor.id,entityId:key,action:'SINGLE_REPLY_TEST_FINISHED',metadata:{attemptId:attempt.id,scopeHash,result:failed?'NOT_ATTEMPTED':'UNKNOWN',protocolCalls:outcome.protocolCalls,submission:outcome.submission,identityVerified:outcome.identityVerified,stopped:outcome.stopped,pause}}});
+   await tx.auditLog.create({data:{actorId:actor.id,entityId:key,action:'SINGLE_REPLY_TEST_FINISHED',metadata:{attemptId:attempt.id,scopeHash,result:failed?'NOT_ATTEMPTED':'UNKNOWN',resultReason:result.kind==='CONFIRMED'?'UNCONFIRMED':result.reason,protocolCalls:outcome.protocolCalls,submission:outcome.submission,identityVerified:outcome.identityVerified,stopped:outcome.stopped,pause}}});
   });
   return {reused:false,attemptId:attempt.id,outcome:result.kind==='FAILED'&&outcome.stopped?'FAILED':'UNKNOWN',...outcome};
  }

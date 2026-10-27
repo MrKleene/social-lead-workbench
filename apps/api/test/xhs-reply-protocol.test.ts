@@ -65,3 +65,12 @@ describe('offline exact XHS reply protocol; no live transport', () => {
         expect(Object.keys(toolArguments).sort()).toEqual(['check_login_status', 'get_feed_detail', 'search_feeds']);
     });
 });
+
+it('preserves safe pre-submit stage and identity consistency without leaking arbitrary diagnostic data',()=>{
+ const {command}=fixture();
+ const raw={protocol:XHS_REPLY_PROTOCOL,attemptId:command.attemptId,requestKey:command.requestKey,accountId:command.accountId,processStopped:true,kind:'NOT_SENT',phase:'BEFORE_SUBMIT',reason:'TARGET_MISMATCH',diagnostic:{stage:'INSPECT',code:'STATE_POST_MISSING',checks:{post:'UNKNOWN',sender:'MATCH',target:'UNKNOWN',author:'UNKNOWN'}}};
+ expect(verifyXhsReplyResult(command,raw)).toEqual({kind:'FAILED',reason:'发送前已停止：TARGET_MISMATCH [INSPECT/STATE_POST_MISSING; post=UNKNOWN,sender=MATCH,target=UNKNOWN,author=UNKNOWN]'});
+ for(const diagnostic of [{...raw.diagnostic,url:'https://secret.invalid'}, {...raw.diagnostic,code:'secret raw error'}, {...raw.diagnostic,checks:{...raw.diagnostic.checks,sender:ids.sender}}])expect(verifyXhsReplyResult(command,{...raw,diagnostic}).kind).toBe('UNKNOWN');
+ expect(verifyXhsReplyResult(command,{...raw,accountId:'another'}).kind).toBe('UNKNOWN');
+ expect(verifyXhsReplyResult(command,{...raw,processStopped:false}).kind).toBe('UNKNOWN');
+});
