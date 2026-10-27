@@ -138,35 +138,121 @@ func (d *ExactReplyDriver) Inspect(ctx context.Context, c exactreply.Command) (e
 	}
 	return result, nil
 }
+
+// Each action runs at most once, except explicit read-only rechecks. Keeping the
+// sequence pure allows cancellation/failure injection without a browser account.
+type replySelectSteps struct {
+	idle, target, emptyBinding, click, matchedBinding, activeEmpty, input, filled func(context.Context) error
+}
+
+func runReplySelect(ctx context.Context, s replySelectSteps) error {
+	for _, step := range []func(context.Context) error{s.idle, s.target, s.emptyBinding, s.idle, s.click, s.matchedBinding, s.activeEmpty, s.input, s.matchedBinding, s.filled} {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if step == nil {
+			return errors.New("SELECTION_STEP_MISSING")
+		}
+		if err := step(ctx); err != nil {
+			return err
+		}
+	}
+	return ctx.Err()
+}
 func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	p := d.page.Context(ctx)
-	// Inspect emits only fixed codes, never draft text. An idle default editor is
-	// normal page furniture; its mere presence does not mean an occupied reply.
-	check, err := p.Eval(exactReplySelectionGuard, c.TargetID, c.RecipientID)
+	d.selected = false
+	err := runReplySelect(ctx, replySelectSteps{
+		idle: func(ctx context.Context) error { return d.composer(ctx, c, "DEFAULT") },
+		target: func(ctx context.Context) error {
+			snap, err := d.Inspect(ctx, c)
+			if err != nil {
+				return err
+			}
+			if snap.PostID != c.PostID || snap.SenderID != c.SenderID || snap.TargetID != c.TargetID || snap.TargetAuthor != c.RecipientID {
+				return errors.New("TARGET_CHANGED")
+			}
+			return nil
+		},
+		emptyBinding: func(ctx context.Context) error { return d.binding(ctx, c, "EMPTY") },
+		click: func(ctx context.Context) error {
+			p := d.page.Context(ctx)
+			targets, err := p.Elements("#comment-" + c.TargetID)
+			if err != nil || len(targets) != 1 {
+				return errors.New("EXACT_TARGET_MISSING")
+			}
+			buttons, err := targets[0].Elements(".right .interactions .reply")
+			if err != nil || len(buttons) != 1 {
+				return errors.New("REPLY_BUTTON_AMBIGUOUS")
+			}
+			hit, err := buttons[0].Eval(`() => this.closest('.comment-item')?.id || ''`)
+			if err != nil || hit.Value.Str() != "comment-"+c.TargetID {
+				return errors.New("BUTTON_TARGET_MISMATCH")
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return humanize.Click(buttons[0])
+		},
+		matchedBinding: func(ctx context.Context) error { return d.binding(ctx, c, "MATCH") },
+		activeEmpty:    func(ctx context.Context) error { return d.composer(ctx, c, "SELECTED") },
+		input: func(ctx context.Context) error {
+			inputs, err := d.page.Context(ctx).Elements("div.input-box p.content-input")
+			if err != nil || len(inputs) != 1 {
+				return errors.New("COMPOSER_AMBIGUOUS")
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return humanize.Type(ctx, inputs[0], c.Content)
+		},
+		filled: func(ctx context.Context) error { return d.composer(ctx, c, "FILLED") },
+	})
 	if err != nil {
 		return err
 	}
-	if code := check.Value.Str(); code != "DEFAULT_EMPTY" {
-		return errors.New(code)
-	}
-	// Recheck stable platform identity after inspecting the editor, before input.
-	snap, err := d.Inspect(ctx, c)
-	if err != nil {
-		return err
-	}
-	if snap.PostID != c.PostID || snap.SenderID != c.SenderID || snap.TargetID != c.TargetID || snap.TargetAuthor != c.RecipientID {
-		return errors.New("TARGET_CHANGED")
-	}
+	d.selected = true
+	return nil
+}
+
+func (d *ExactReplyDriver) binding(ctx context.Context, c exactreply.Command, expected string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	// The observed default DOM has no stable reply-to binding. Until a reviewed
-	// reader can verify that binding after selection, do not click merely to try
-	// it. This gate is intentionally NOT a nickname-based acceptance path.
-	return errors.New("COMPOSER_BINDING_UNVERIFIED")
+	v, err := d.page.Context(ctx).Eval(exactReplyBindingGuard, c.PostID, c.TargetID, c.RecipientID, c.SenderID)
+	if err != nil {
+		return err
+	}
+	code := v.Value.Str()
+	if code == expected {
+		return nil
+	}
+	if code == "BINDING_PLATFORM_BLOCKED" {
+		return exactreply.RiskError("PLATFORM_REFUSED")
+	}
+	if code == "EMPTY" {
+		return errors.New("BINDING_EMPTY")
+	}
+	if code == "MATCH" {
+		return errors.New("COMPOSER_TARGET_BOUND")
+	}
+	return errors.New(code)
+}
+func (d *ExactReplyDriver) composer(ctx context.Context, c exactreply.Command, phase string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	v, err := d.page.Context(ctx).Eval(exactReplySelectionGuard, c.TargetID, c.RecipientID, phase, c.Content)
+	if err != nil {
+		return err
+	}
+	expected := "ACTIVE_MATCH"
+	if phase == "DEFAULT" {
+		expected = "DEFAULT_EMPTY"
+	}
+	if v.Value.Str() != expected {
+		return errors.New(v.Value.Str())
+	}
+	return nil
 }
 
 func (d *ExactReplyDriver) Submit(ctx context.Context, c exactreply.Command) (exactreply.Submission, error) {
@@ -177,6 +263,12 @@ func (d *ExactReplyDriver) Submit(ctx context.Context, c exactreply.Command) (ex
 	if !d.selected {
 		return s, errors.New("NOT_SUBMITTED")
 	}
+	if err := d.binding(ctx, c, "MATCH"); err != nil {
+		return s, err
+	}
+	if err := d.composer(ctx, c, "FILLED"); err != nil {
+		return s, err
+	}
 	p := d.page.Context(ctx)
 	inputs, err := p.Elements("div.input-box p.content-input")
 	if err != nil || len(inputs) != 1 {
@@ -186,9 +278,23 @@ func (d *ExactReplyDriver) Submit(ctx context.Context, c exactreply.Command) (ex
 	if err != nil || text != c.Content {
 		return s, errors.New("CONTENT_CHANGED")
 	}
-	buttons, err := p.Elements("div.bottom button.submit")
+	buttons, err := p.Elements(".engage-bar-container .bottom button.submit")
 	if err != nil || len(buttons) != 1 {
 		return s, errors.New("SUBMIT_AMBIGUOUS")
+	}
+	if ctx.Err() != nil {
+		return s, ctx.Err()
+	}
+	ready, err := buttons[0].Eval(`() => !this.disabled && this.getAttribute('aria-disabled') !== 'true' && this.getClientRects().length>0 && getComputedStyle(this).visibility==='visible'`)
+	if err != nil || !ready.Value.Bool() {
+		return s, errors.New("SUBMIT_NOT_READY")
+	}
+	// Last read-only checks directly precede the single possible submit click.
+	if err = d.binding(ctx, c, "MATCH"); err != nil {
+		return s, err
+	}
+	if err = d.composer(ctx, c, "FILLED"); err != nil {
+		return s, err
 	}
 	if ctx.Err() != nil {
 		return s, ctx.Err()
@@ -279,7 +385,7 @@ func (d *ExactReplyDriver) Close(ctx context.Context) error {
 // exactReplySelectionGuard is pure/read-only DOM inspection. The default marker
 // and editor shape were observed on the existing page without clicking/focusing.
 // Missing, hidden, active, bound, populated and ambiguous structures fail closed.
-const exactReplySelectionGuard = `(targetId, authorId) => {
+const exactReplySelectionGuard = `(targetId, authorId, phase="DEFAULT", content="") => {
  const visible = e => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility === 'visible' && getComputedStyle(e).display !== 'none';
  const targets = [...document.querySelectorAll('#comment-' + targetId)];
  if (targets.length !== 1) return 'EXACT_TARGET_MISSING';
@@ -296,6 +402,18 @@ const exactReplySelectionGuard = `(targetId, authorId) => {
  const input = editors[0], box = input.closest('div.input-box'), edit = input.parentElement;
  if (!visible(input)) return 'COMPOSER_HIDDEN';
  if (input.id !== 'content-textarea' || input.getAttribute('contenteditable') !== 'true' || !edit?.matches('.content-edit') || !box) return 'COMPOSER_UNRECOGNIZED';
+ if (phase !== 'DEFAULT') {
+  if (phase !== 'SELECTED' && phase !== 'FILLED') return 'COMPOSER_UNRECOGNIZED';
+  const container=input.closest('.engage-bar-container');
+  if (!container || container.querySelectorAll('p.content-input').length!==1) return 'COMPOSER_AMBIGUOUS';
+  const bars=[...container.querySelectorAll('.engage-bar.active')];
+  const headers=[...container.querySelectorAll('.reply-content')];
+  if (bars.length!==1 || !visible(bars[0]) || headers.length!==1 || !visible(headers[0]) || document.activeElement!==input) return 'COMPOSER_NOT_ACTIVE';
+  if ([...edit.querySelectorAll('.not-active.inner-when-not-active')].some(visible)) return 'COMPOSER_NOT_ACTIVE';
+  if (phase==='SELECTED' && ((input.textContent||'').length!==0 || [...input.children].some(e=>e.tagName!=='BR'||e.attributes.length||e.textContent))) return 'COMPOSER_DRAFT_PRESENT';
+  if (phase==='FILLED' && input.textContent!==content) return 'CONTENT_CHANGED';
+  return 'ACTIVE_MATCH';
+ }
  // Do not silently discard whitespace/zero-width drafts. Only truly zero text
  // (or an empty BR inserted by contenteditable) may pass.
  if ((input.textContent || '').length !== 0 || [...input.children].some(e => e.tagName !== 'BR' || e.attributes.length || e.textContent)) return 'COMPOSER_DRAFT_PRESENT';
@@ -308,4 +426,29 @@ const exactReplySelectionGuard = `(targetId, authorId) => {
  if (markers.length !== 1 || !visible(markers[0]) || markers[0].textContent.trim() !== '说点什么...') return 'COMPOSER_NOT_DEFAULT';
  if ([...edit.children].some(e => e !== input && e !== markers[0])) return 'COMPOSER_UNRECOGNIZED';
  return 'DEFAULT_EMPTY';
+}`
+
+// Public page index.a9f61821.js: onReplyClick emits e.comment; the note
+// store retains it as commentTarget; submitComment uses commentTarget.id.
+// Read only the reviewed store shape. Missing state never means empty. The
+// caller additionally verifies the exact comment in noteDetailMap and the DOM.
+const exactReplyBindingGuard = `(postId,targetId,authorId,senderId) => {
+ const unwrap=v=>v&&v.value!==undefined?v.value:v&&v._rawValue!==undefined?v._rawValue:v;
+ if (document.querySelector('.access-wrapper,.error-wrapper,.not-found-wrapper,.blocked-wrapper')) return 'BINDING_PLATFORM_BLOCKED';
+ if (window.location.origin!=='https://www.xiaohongshu.com' || window.location.pathname!=='/explore/'+postId) return 'BINDING_POST_MISMATCH';
+ const state=window.__INITIAL_STATE__,note=state?.note,user=unwrap(state?.user?.userInfo);
+ if (!state||!note) return 'BINDING_STATE_MISSING';
+ if (!user||user.guest||!(user.userId||user.user_id)) return 'BINDING_USER_MISSING';
+ if ((user.userId||user.user_id)!==senderId) return 'BINDING_ACCOUNT_MISMATCH';
+ const map=unwrap(note?.noteDetailMap);
+ if (map?.[postId]?.note?.noteId!==postId) return 'BINDING_POST_MISMATCH';
+ if (!note || !Object.prototype.hasOwnProperty.call(note,'commentTarget')) return 'BINDING_STATE_MISSING';
+ const target=unwrap(note.commentTarget);
+ if (!target || typeof target!=='object' || Array.isArray(target)) return 'BINDING_INVALID';
+ if (Object.keys(target).length===0) return 'EMPTY';
+ if (typeof target.id!=='string') return 'BINDING_INVALID';
+ if (target.id!==targetId) return 'BINDING_TARGET_MISMATCH';
+ if (target.userInfo?.userId!==authorId) return 'BINDING_AUTHOR_MISMATCH';
+ if (target.noteId!==undefined && target.noteId!==postId) return 'BINDING_POST_MISMATCH';
+ return 'MATCH';
 }`

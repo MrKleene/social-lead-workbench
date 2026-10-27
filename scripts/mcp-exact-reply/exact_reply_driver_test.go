@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/xpzouying/xiaohongshu-mcp/exactreply"
 	"net/url"
+	"reflect"
 	"testing"
 )
 
@@ -53,5 +54,60 @@ func TestExactReplyNoSelectionNeverEntersSubmit(t *testing.T) {
 	result, err := d.Submit(context.Background(), exactreply.Command{})
 	if err == nil || err.Error() != "NOT_SUBMITTED" || result.Attempted {
 		t.Fatal(result, err)
+	}
+}
+
+func TestExactReplySelectionPipelineSyntheticSuccess(t *testing.T) {
+	var events []string
+	action := func(name string) func(context.Context) error {
+		return func(context.Context) error { events = append(events, name); return nil }
+	}
+	steps := replySelectSteps{action("idle"), action("target"), action("empty"), action("click"), action("match"), action("activeEmpty"), action("type"), action("filled")}
+	if err := runReplySelect(context.Background(), steps); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"idle", "target", "empty", "idle", "click", "match", "activeEmpty", "type", "match", "filled"}
+	if !reflect.DeepEqual(events, want) {
+		t.Fatal(events)
+	}
+}
+func TestExactReplySelectionFailureOrCancellationCannotAdvanceOrRetry(t *testing.T) {
+	for stop := 0; stop < 10; stop++ {
+		for _, cancelled := range []bool{false, true} {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			count, clicks, types := 0, 0, 0
+			action := func(name string) func(context.Context) error {
+				return func(context.Context) error {
+					at := count
+					count++
+					if name == "click" {
+						clicks++
+					}
+					if name == "type" {
+						types++
+					}
+					if at == stop {
+						if cancelled {
+							cancel()
+							return nil
+						}
+						return errors.New("synthetic stop")
+					}
+					return nil
+				}
+			}
+			steps := replySelectSteps{action("idle"), action("target"), action("empty"), action("click"), action("match"), action("activeEmpty"), action("type"), action("filled")}
+			err := runReplySelect(ctx, steps)
+			if err == nil || count != stop+1 || clicks > 1 || types > 1 {
+				t.Fatal(stop, cancelled, count, clicks, types, err)
+			}
+			if stop < 4 && clicks != 0 {
+				t.Fatal("clicked after failed prerequisite")
+			}
+			if stop < 7 && types != 0 {
+				t.Fatal("typed before binding + empty editor proof")
+			}
+		}
 	}
 }
