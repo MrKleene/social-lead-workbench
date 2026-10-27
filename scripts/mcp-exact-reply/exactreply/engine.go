@@ -85,7 +85,7 @@ func diagnosticCode(err error) string {
 		return "UNCONFIRMED"
 	}
 	switch err.Error() {
-	case "JOURNAL_UNAVAILABLE", "PREFLIGHT_NAVIGATION_UNVERIFIED", "PREFLIGHT_REFERENCE_UNVERIFIED", "INVALID_COMMAND", "STATE_UNAVAILABLE", "STATE_INVALID", "STATE_USER_MISSING", "STATE_POST_MISSING", "STATE_POST_MISMATCH", "STATE_COMMENTS_MISSING", "DEPTH_LIMIT", "ROW_LIMIT", "POST_MISMATCH", "EXACT_TARGET_MISSING_OR_AMBIGUOUS", "TARGET_MISMATCH", "TARGET_CHANGED", "COMPOSER_ALREADY_OPEN", "COMPOSER_DRAFT_PRESENT", "COMPOSER_HIDDEN", "COMPOSER_ACTIVE", "COMPOSER_TARGET_BOUND", "COMPOSER_NOT_DEFAULT", "COMPOSER_AMBIGUOUS", "COMPOSER_UNRECOGNIZED", "COMPOSER_BINDING_UNVERIFIED", "COMPOSER_NOT_ACTIVE", "BINDING_EMPTY", "BINDING_STATE_MISSING", "BINDING_USER_MISSING", "SUBMIT_NOT_READY", "BINDING_INVALID", "BINDING_TARGET_MISMATCH", "BINDING_AUTHOR_MISMATCH", "BINDING_POST_MISMATCH", "BINDING_ACCOUNT_MISMATCH", "EXACT_TARGET_NOT_VISIBLE", "AUTHOR_AMBIGUOUS", "EXACT_TARGET_MISSING", "AUTHOR_MISMATCH", "REPLY_BUTTON_AMBIGUOUS", "BUTTON_TARGET_MISMATCH", "CONTENT_CHANGED", "COMPOSER_CHANGED", "SUBMIT_AMBIGUOUS", "NOT_SUBMITTED":
+	case "ACCOUNT_CHANGED", "RECEIPT_NOT_UNIQUE", "SELECTION_STEP_MISSING", "RESTRICTION_UNVERIFIED", "JOURNAL_UNAVAILABLE", "PREFLIGHT_NAVIGATION_UNVERIFIED", "PREFLIGHT_REFERENCE_UNVERIFIED", "INVALID_COMMAND", "STATE_UNAVAILABLE", "STATE_INVALID", "STATE_USER_MISSING", "STATE_POST_MISSING", "STATE_POST_MISMATCH", "STATE_COMMENTS_MISSING", "DEPTH_LIMIT", "ROW_LIMIT", "POST_MISMATCH", "EXACT_TARGET_MISSING_OR_AMBIGUOUS", "TARGET_MISMATCH", "TARGET_CHANGED", "COMPOSER_ALREADY_OPEN", "COMPOSER_DRAFT_PRESENT", "COMPOSER_HIDDEN", "COMPOSER_ACTIVE", "COMPOSER_TARGET_BOUND", "COMPOSER_NOT_DEFAULT", "COMPOSER_AMBIGUOUS", "COMPOSER_UNRECOGNIZED", "COMPOSER_BINDING_UNVERIFIED", "COMPOSER_NOT_ACTIVE", "BINDING_EMPTY", "BINDING_STATE_MISSING", "BINDING_USER_MISSING", "SUBMIT_NOT_READY", "BINDING_INVALID", "BINDING_TARGET_MISMATCH", "BINDING_AUTHOR_MISMATCH", "BINDING_POST_MISMATCH", "BINDING_ACCOUNT_MISMATCH", "EXACT_TARGET_NOT_VISIBLE", "AUTHOR_AMBIGUOUS", "EXACT_TARGET_MISSING", "AUTHOR_MISMATCH", "REPLY_BUTTON_AMBIGUOUS", "BUTTON_TARGET_MISMATCH", "CONTENT_CHANGED", "COMPOSER_CHANGED", "SUBMIT_AMBIGUOUS", "NOT_SUBMITTED":
 		return err.Error()
 	default:
 		return "DRIVER_ERROR"
@@ -161,12 +161,33 @@ func Run(ctx context.Context, c Command, d Driver) (r Result) {
 			r.Reason = "DRIVER_PANIC"
 			r.Diagnostic = &Diagnostic{stage, "DRIVER_PANIC", identity}
 		}
-		closeCtx, stop := context.WithTimeout(context.Background(), 2*time.Second)
+		closeCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 		defer stop()
-		r.Stopped = closeSafely(closeCtx, d)
+		if ctx.Err() != nil {
+			_ = RecordStage(ctx, "CANCELLED", nil, nil)
+		}
+		if observer, ok := d.(interface {
+			FinalRestriction(context.Context, Command) error
+		}); ok {
+			// Bounded read on the existing page only, including error/panic paths.
+			if err := finalRestrictionSafely(closeCtx, c, observer.FinalRestriction); risk(err) != "" {
+				r = base(c)
+				r.Kind = "RISK"
+				r.Reason = risk(err)
+				r.Phase = ""
+				r.Diagnostic = &Diagnostic{stage, r.Reason, identity}
+			} else if err != nil && r.Kind == "CONFIRMED" {
+				r = base(c)
+				r.Diagnostic = &Diagnostic{"CLOSE", "RESTRICTION_UNVERIFIED", identity}
+			}
+		}
+		_ = RecordStage(ctx, "BEFORE_CLOSE", nil, nil)
+		stopped := closeSafely(closeCtx, d)
+		r.Stopped = stopped
 		if RecordStage(ctx, "DRIVER_CLOSED", nil, &r.Stopped) != nil && r.Kind != "RISK" {
 			r = base(c)
 			r.Reason = "JOURNAL_UNAVAILABLE"
+			r.Stopped = stopped // preserve actual shutdown acknowledgement
 			r.Diagnostic = &Diagnostic{"CLOSE", "JOURNAL_UNAVAILABLE", identity}
 		}
 		if !r.Stopped && r.Kind != "RISK" {
@@ -378,4 +399,13 @@ func (e *Engine) Status(c Command) Result {
 	}
 	r.Reason = "NO_RECEIPT"
 	return r
+}
+
+func finalRestrictionSafely(ctx context.Context, c Command, inspect func(context.Context, Command) error) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = errors.New("RESTRICTION_UNVERIFIED")
+		}
+	}()
+	return inspect(ctx, c)
 }

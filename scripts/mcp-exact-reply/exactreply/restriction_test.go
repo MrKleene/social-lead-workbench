@@ -103,3 +103,19 @@ func TestRestrictionRedactionAndScreenshotValidation(t *testing.T) {
 		t.Fatal("wrong identity screenshot")
 	}
 }
+
+func TestRestrictionScreenshotNeverExportsViewportOrUnsafeNotice(t *testing.T) {
+	var b bytes.Buffer
+	png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 2, 2)))
+	for _, reason := range []string{"NOTICE_SENSITIVE_TEXT", "EDITABLE_CONTENT", "VISIBLE_QR", "UNVERIFIED_MEDIA", "TEXT_SCAN_LIMIT", "REGION_SENSITIVE_TEXT", "NO_SAFE_REGION"} {
+		o := RestrictionObservation{Identity: "MATCH", Warnings: []RestrictionWarning{{"BANNED", "账号封禁"}}, ScreenshotState: "CAPTURED", ScreenshotReasons: []string{reason}, Screenshot: &RestrictionImage{Mime: "image/png", Data: base64.StdEncoding.EncodeToString(b.Bytes()), Width: 2, Height: 2, Scope: "VISIBLE_WARNING"}}
+		safe := SafeRestrictionObservation(o, restrictionTarget())
+		if safe.Screenshot != nil || len(safe.ScreenshotReasons) != 1 {
+			t.Fatal(reason, safe)
+		}
+	}
+	o := RestrictionObservation{Identity: "MATCH", ScreenshotState: "CAPTURED", Screenshot: &RestrictionImage{Mime: "image/png", Data: base64.StdEncoding.EncodeToString(b.Bytes()), Width: 2, Height: 2, Scope: "VIEWPORT"}}
+	if SafeRestrictionObservation(o, restrictionTarget()).Screenshot != nil {
+		t.Fatal("viewport must never be exported")
+	}
+}

@@ -72,8 +72,16 @@ func registerExactReplyTools(server *mcp.Server) {
 		ctx = exactreply.WithJournal(ctx, journal)
 		r := engine.Execute(ctx, c, func() (exactreply.Driver, error) {
 			b := newBrowser()
+			complete := false
+			defer func() {
+				if !complete {
+					b.Close()
+				}
+			}()
 			p := b.NewPage()
-			return xiaohongshu.NewExactReplyDriver(p, func() { b.Close() }), nil
+			driver := xiaohongshu.NewExactReplyDriver(p, func() { b.Close() })
+			complete = true
+			return driver, nil
 		})
 		return nil, r, nil
 	})

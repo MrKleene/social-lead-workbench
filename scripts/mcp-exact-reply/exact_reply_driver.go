@@ -44,6 +44,9 @@ func (d *ExactReplyDriver) state(ctx context.Context, c exactreply.Command, relo
 		return exactState{}, ctx.Err()
 	}
 	if !d.opened || reload {
+		if err := exactreply.RecordStage(ctx, "NAVIGATION_INTENT", nil, nil); err != nil {
+			return exactState{}, err
+		}
 		if err := p.Navigate(exactURL(c)); err != nil {
 			return exactState{}, err
 		}
@@ -51,6 +54,12 @@ func (d *ExactReplyDriver) state(ctx context.Context, c exactreply.Command, relo
 		if err := p.WaitLoad(); err != nil {
 			return exactState{}, err
 		}
+		if err := exactreply.RecordStage(ctx, "NAVIGATED", nil, nil); err != nil {
+			return exactState{}, err
+		}
+	}
+	if err := d.restrictions(ctx, c); err != nil {
+		return exactState{}, err
 	}
 	// Paths already used by the reviewed login/detail reader; no invented private API.
 	v, err := p.Eval(`(post) => {
@@ -136,6 +145,9 @@ func (d *ExactReplyDriver) Inspect(ctx context.Context, c exactreply.Command) (e
 	if d.before == nil {
 		d.before = result.ExistingIDs
 	}
+	if err := exactreply.RecordStage(ctx, "TARGET_LOCATED", nil, nil); err != nil {
+		return result, err
+	}
 	return result, nil
 }
 
@@ -191,7 +203,16 @@ func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) err
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return humanize.Click(buttons[0])
+			if err := d.restrictions(ctx, c); err != nil {
+				return err
+			}
+			if err := exactreply.RecordStage(ctx, "SELECT_INTENT", nil, nil); err != nil {
+				return err
+			}
+			if err := humanize.Click(buttons[0]); err != nil {
+				return err
+			}
+			return exactreply.RecordStage(ctx, "REPLY_SELECTED", nil, nil)
 		},
 		matchedBinding: func(ctx context.Context) error { return d.binding(ctx, c, "MATCH") },
 		activeEmpty:    func(ctx context.Context) error { return d.composer(ctx, c, "SELECTED") },
@@ -203,7 +224,19 @@ func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) err
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return humanize.Type(ctx, inputs[0], c.Content)
+			if err := d.restrictions(ctx, c); err != nil {
+				return err
+			}
+			if err := exactreply.RecordStage(ctx, "INPUT_INTENT", nil, nil); err != nil {
+				return err
+			}
+			if err := humanize.Type(ctx, inputs[0], c.Content); err != nil {
+				return err
+			}
+			if err := exactreply.RecordStage(ctx, "INPUT_FINISHED", nil, nil); err != nil {
+				return err
+			}
+			return d.restrictions(ctx, c)
 		},
 		filled: func(ctx context.Context) error { return d.composer(ctx, c, "FILLED") },
 	})
@@ -299,9 +332,27 @@ func (d *ExactReplyDriver) Submit(ctx context.Context, c exactreply.Command) (ex
 	if ctx.Err() != nil {
 		return s, ctx.Err()
 	}
+	if err := d.restrictions(ctx, c); err != nil {
+		return s, err
+	}
 	// The click is never retried, including when its acknowledgement is lost.
-	s.Attempted, err = exactreply.SubmitOnce(ctx, func() error { return humanize.Click(buttons[0]) })
+	s.Attempted, err = exactreply.SubmitOnce(ctx, func() error {
+		if err := d.restrictions(ctx, c); err != nil {
+			return err
+		}
+		if err := exactreply.RecordStage(ctx, "SELECT_INTENT", nil, nil); err != nil {
+			return err
+		}
+		if err := humanize.Click(buttons[0]); err != nil {
+			return err
+		}
+		return exactreply.RecordStage(ctx, "REPLY_SELECTED", nil, nil)
+	})
 	if err != nil {
+		return s, err
+	}
+	// Read response notices before any reload can dismiss them.
+	if err := d.restrictions(ctx, c); err != nil {
 		return s, err
 	}
 	fresh, err := d.state(ctx, c, true)
@@ -322,7 +373,7 @@ func (d *ExactReplyDriver) Submit(ctx context.Context, c exactreply.Command) (ex
 			matches++
 		}
 	}
-	s.Accepted = matches == 1
+	_ = matches // DOM candidates are neither platform acceptance nor delivery proof
 	// No reviewed submission-response schema exists in this source. A fresh matching
 	// comment is only a candidate: it cannot prove this request created it. Do NOT
 	// invent an endpoint/response or populate Response from the readback itself.
@@ -452,3 +503,55 @@ const exactReplyBindingGuard = `(postId,targetId,authorId,senderId) => {
  if (target.noteId!==undefined && target.noteId!==postId) return 'BINDING_POST_MISMATCH';
  return 'MATCH';
 }`
+
+// Uses the exact send page. Missing identity is never "clear to send".
+func (d *ExactReplyDriver) restrictions(ctx context.Context, c exactreply.Command) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	v, err := d.page.Context(ctx).Eval(restrictionInspectionDOM, c.PostID, c.SenderID, c.Reference.Token)
+	if err != nil {
+		return errors.New("RESTRICTION_UNVERIFIED")
+	}
+	if len(v.Value.Str()) > 16000 {
+		return errors.New("RESTRICTION_UNVERIFIED")
+	}
+	var dom restrictionDOM
+	if json.Unmarshal([]byte(v.Value.Str()), &dom) != nil {
+		return errors.New("RESTRICTION_UNVERIFIED")
+	}
+	o := exactreply.RestrictionObservation{Identity: dom.Identity, Title: dom.Title, Path: dom.Path, Warnings: dom.Warnings}
+	t := exactreply.RestrictionTarget{SenderID: c.SenderID, PostID: c.PostID, Reference: c.Reference}
+	// Never attribute another account's notice to the sender.
+	if dom.Identity != "MATCH" {
+		o.Warnings = nil
+	}
+	journalErr := exactreply.RecordRestriction(ctx, o, t)
+	if dom.Identity != "MATCH" {
+		return errors.New("RESTRICTION_UNVERIFIED")
+	}
+	for _, w := range dom.Warnings {
+		switch w.Code {
+		case "BANNED", "MUTED":
+			return exactreply.RiskError("BANNED")
+		case "VERIFICATION":
+			return exactreply.RiskError("VERIFICATION")
+		case "RATE_LIMITED":
+			return exactreply.RiskError("RATE_LIMITED")
+		default:
+			return exactreply.RiskError("PLATFORM_REFUSED")
+		}
+	}
+	if journalErr != nil {
+		return journalErr
+	}
+	// Absence of a known notice is an observation only; deployment still requires
+	// independently reviewed send permission and platform response mapping.
+	return nil
+}
+func (d *ExactReplyDriver) FinalRestriction(ctx context.Context, c exactreply.Command) error {
+	if !d.opened {
+		return nil
+	}
+	return d.restrictions(ctx, c)
+}

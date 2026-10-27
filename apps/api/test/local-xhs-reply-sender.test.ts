@@ -1,3 +1,5 @@
+// Eligibility is synthetic in these executor tests; production has no positive permission provider.
+vi.mock('../src/auto-contact/send-observation',async importOriginal=>({...await importOriginal<any>(),accountSendObservation:vi.fn(async()=>({state:'UNKNOWN',canSend:true}))}));
 import 'reflect-metadata';
 import { afterEach, expect, it, vi } from 'vitest';
 import { LocalXhsReplySender } from '../src/auto-contact/local-xhs-reply-sender';

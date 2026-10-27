@@ -1,3 +1,5 @@
+import {accountSendObservation,recordSendExecution} from './send-observation';
+import {executionEventSchema, type ExecutionEvent} from './reply-stage-journal';
 import {postAvailability,postSendBlock} from '../collection/post-availability';
 import type { Db } from '../common/db';
 import type { DeviceService, ExecutionPermit } from '../devices/device.service';
@@ -15,13 +17,15 @@ export class LocalXhsReplySender implements ContactSender {
     constructor(private db: Db, private devices: DeviceService, private runtime: LoginRuntime, private deployment: ExactReplyDeployment = exactReplyDeployment) { }
     capability(platform: string, channel: string) {
         return platform === 'XHS' && channel === 'COMMENT' && process.platform === 'darwin' &&
-            this.deployment.enabled && !!this.deployment.reviewedSha256 &&
+            this.deployment.enabled && this.deployment.responseMappingReviewed === true && this.deployment.sendEligibilityReviewed === true && !!this.deployment.reviewedSha256 &&
             toolPlan(process.env.HOME ?? '').hash === this.deployment.reviewedSha256;
     }
     async healthy(accountId: string) {
         if (!this.capability('XHS', 'COMMENT') || !this.devices.enabled() || this.runtime.mode() !== 'real' || !this.runtime.persistent()) return false;
         const a = await this.db.platformAccount.findUnique({ where: { id: accountId }, include: { sessionReference: true } });
         const ref = a?.sessionReference;
+        const restriction=await accountSendObservation(this.db,accountId,new Date());
+        if(!restriction.canSend)return false;
         return !!a && a.platform === 'XHS' && !a.isDemo && !a.archivedAt && a.status === 'UNCONNECTED' &&
             !!a.loginPlatformUserId && !!a.loginSessionKey && ref?.sessionKey === a.loginSessionKey && ref?.provider === 'real' &&
             ref?.state === 'VERIFIED' && ref.checkedRuntimeId === this.runtime.runtimeId && ref.deviceId === this.runtime.deviceId();
@@ -73,7 +77,7 @@ export class LocalXhsReplySender implements ContactSender {
             driver = await this.runtime.openSavedForReply(request.accountId, initial.account.sessionReference!.sessionKey, combined, permit.root, this.deployment.reviewedSha256!);
             stopped = false;
             if (!driver.replyEndpoint) return { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' };
-            transport = new XhsExactReplyTransport(driver.replyEndpoint(), { enabled: true, reviewedSha256: this.deployment.reviewedSha256! });
+            transport = new XhsExactReplyTransport(driver.replyEndpoint(), { enabled: true, reviewedSha256: this.deployment.reviewedSha256!, requireJournal: true, requireConfirmedMapping: true });
             if (!await transport.connect(combined)) { const failure = transport.connectionFailure(); stopped = await transport.stop(); return stopped || failure.kind === 'RISK' ? failure : { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' }; }
             const current = await this.authorized(request);
             if (!current || current.account.version !== initial.account.version || current.account.loginPlatformUserId !== initial.account.loginPlatformUserId || current.account.sessionReference?.sessionKey !== initial.account.sessionReference?.sessionKey || combined.aborted) {
@@ -81,7 +85,9 @@ export class LocalXhsReplySender implements ContactSender {
             }
             await this.db.$transaction(tx => this.devices.assertPermit(tx, permit!));
             attempted = true;
-            const result = await transport.send(request, { accountId: request.accountId, senderId: current.account.loginPlatformUserId!, postReference: current.reference }, combined);
+            const result = await transport.send(request, { accountId: request.accountId, senderId: current.account.loginPlatformUserId!, postReference: current.reference }, combined, async (event: ExecutionEvent) => {
+                await this.db.$transaction(tx=>recordSendExecution(tx,current.actor.id,request.accountId,request.requestKey,'AUTO_CONTACT_EXECUTION_STAGE',event));
+            });
             stopped = await transport.stop(); return !stopped && result.kind !== 'RISK' ? { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' } : result;
         } catch {
             if (transport) stopped = await transport.stop();

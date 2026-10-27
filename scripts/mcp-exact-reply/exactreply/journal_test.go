@@ -122,7 +122,7 @@ func TestJournalRunRecordsCloseAfterCancel(t *testing.T) {
 	f := &fake{}
 	Run(ctx, command(), f)
 	rows := journalRows(t, p)
-	if len(rows) != 1 || rows[0].Stage != "DRIVER_CLOSED" || rows[0].Stopped == nil {
+	if len(rows) != 3 || rows[0].Stage != "CANCELLED" || rows[1].Stage != "BEFORE_CLOSE" || rows[2].Stage != "DRIVER_CLOSED" || rows[2].Stopped == nil {
 		t.Fatal(rows)
 	}
 }
@@ -155,4 +155,20 @@ type journalRiskDriver struct {
 func (d *journalRiskDriver) Select(ctx context.Context, c Command) error {
 	d.j.Close()
 	return RiskError("VERIFICATION")
+}
+
+func TestJournalRestrictionEvidenceIsSafeAndDurable(t *testing.T) {
+	_, p, ctx := journalFixture(t)
+	target := restrictionTarget()
+	if err := RecordRestriction(ctx, RestrictionObservation{Identity: "MATCH", Title: "synthetic-only https://private.invalid/token", Path: "/explore/[POST]", Warnings: []RestrictionWarning{{"BANNED", "封禁 synthetic-only"}}}, target); err != nil {
+		t.Fatal(err)
+	}
+	rows := journalRows(t, p)
+	if len(rows) != 1 || rows[0].Evidence == nil || rows[0].Evidence.ScreenshotState != "NOT_CAPTURED" {
+		t.Fatal(rows)
+	}
+	raw, _ := os.ReadFile(p)
+	if strings.Contains(string(raw), "synthetic-only") || strings.Contains(string(raw), "private.invalid") {
+		t.Fatal("unsafe evidence")
+	}
 }

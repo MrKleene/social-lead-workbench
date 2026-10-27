@@ -12,6 +12,7 @@ export type OwnedReplyEndpoint = {
     /** Stop the owned MCP/browser process group and confirm it exited. Never signal stored PIDs. */
     stop(): Promise<boolean>;
     readJournal?(attemptId:string):Promise<ReplyJournal>;
+    diagnostics?():{categories:('PANIC'|'TIMEOUT'|'BROWSER_DISCONNECTED'|'OTHER')[];truncated:boolean};
 };
 const capabilitySchema = z.object({
     stageJournal:z.literal(replyJournalProtocol).optional(),
@@ -40,7 +41,7 @@ export class XhsExactReplyTransport {
     private stopping?: Promise<boolean>;
     private requestCount = 0;
     private permittedCall?: { name: typeof tools[number]; arguments: Record<string, unknown> };
-    constructor(private owned: OwnedReplyEndpoint, private approval: { enabled?: boolean; reviewedSha256?: string; requireJournal?:boolean } = {}) {
+    constructor(private owned: OwnedReplyEndpoint, private approval: { enabled?: boolean; reviewedSha256?: string; requireJournal?:boolean; requireConfirmedMapping?:boolean } = {}) {
         const endpoint = endpointUrl(owned.url.href).href;
         if (!/^[a-f0-9]{64}$/.test(owned.token)) throw Error('REPLY_ENDPOINT_AUTH_INVALID');
         this.wire = new StreamableHTTPClientTransport(new URL(endpoint), {
@@ -85,6 +86,7 @@ export class XhsExactReplyTransport {
             this.journalSupported=caps.success&&caps.data.stageJournal===replyJournalProtocol;
             this.ready = caps.success && caps.data.enabled && (!this.approval.requireJournal || (this.journalSupported && !!this.owned.readJournal));
             this.confirmedMapping = caps.success && caps.data.confirmedResponseMapping;
+            if(this.approval.requireConfirmedMapping && !this.confirmedMapping) this.ready=false;
             return this.ready;
         } catch { return false; }
         finally { this.operation = undefined; }
@@ -123,7 +125,7 @@ export class XhsExactReplyTransport {
         const stopped = await this.stop();
         if(record&&intentRecorded){
             const journal=stopped&&this.owned.readJournal?await this.owned.readJournal(command.attemptId).catch(()=>({state:'INVALID' as const,records:[]})):{state:'MISSING' as const,records:[]};
-            try{await record({stage:'TRANSPORT_STOP',protocolAttemptId:command.attemptId,stopped,journal});}catch{if(result.kind!=='RISK')result=unknown();}
+            try{await record({stage:'TRANSPORT_STOP',protocolAttemptId:command.attemptId,stopped,journal,...(this.owned.diagnostics?{processDiagnostics:this.owned.diagnostics()}:{} )});}catch{if(result.kind!=='RISK')result=unknown();}
             if(this.approval.requireJournal&&journal.state!=='AVAILABLE'&&result.kind!=='RISK')result=unknown();
         }
         // Preserve risk even if shutdown is uncertain; both paths pause the workflow.

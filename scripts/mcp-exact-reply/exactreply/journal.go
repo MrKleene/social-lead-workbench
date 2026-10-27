@@ -13,12 +13,13 @@ import (
 const JournalProtocol = "workbench.reply-stage-journal.v1"
 
 type JournalRecord struct {
-	Sequence  int    `json:"sequence"`
-	AttemptID string `json:"attemptId"`
-	Stage     string `json:"stage"`
-	At        string `json:"at"`
-	Attempted *bool  `json:"attempted,omitempty"`
-	Stopped   *bool  `json:"stopped,omitempty"`
+	Sequence  int                  `json:"sequence"`
+	AttemptID string               `json:"attemptId"`
+	Stage     string               `json:"stage"`
+	At        string               `json:"at"`
+	Attempted *bool                `json:"attempted,omitempty"`
+	Stopped   *bool                `json:"stopped,omitempty"`
+	Evidence  *RestrictionEvidence `json:"evidence,omitempty"`
 }
 type Journal struct {
 	mu       sync.Mutex
@@ -63,18 +64,21 @@ func OpenJournal(directory, attempt string) (*Journal, error) {
 func (j *Journal) Close() error { return j.file.Close() }
 func validJournalStage(s string) bool {
 	switch s {
-	case "STARTED", "INSPECTED", "SELECTED", "RECHECKED", "BEFORE_SUBMIT", "ATTEMPTED", "AFTER_SUBMIT", "SUBMIT_FINISHED", "READBACK", "DRIVER_CLOSED":
+	case "NAVIGATION_INTENT", "NAVIGATED", "TARGET_LOCATED", "SELECT_INTENT", "REPLY_SELECTED", "INPUT_INTENT", "INPUT_FINISHED", "CANCELLED", "RESTRICTION_CHECK", "BEFORE_CLOSE", "STARTED", "INSPECTED", "SELECTED", "RECHECKED", "BEFORE_SUBMIT", "ATTEMPTED", "AFTER_SUBMIT", "SUBMIT_FINISHED", "READBACK", "DRIVER_CLOSED":
 		return true
 	}
 	return false
 }
 func (j *Journal) append(stage string, attempted, stopped *bool) error {
+	return j.appendEvidence(stage, attempted, stopped, nil)
+}
+func (j *Journal) appendEvidence(stage string, attempted, stopped *bool, evidence *RestrictionEvidence) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	if j.broken || j.sequence >= 24 || !validJournalStage(stage) {
+	if j.broken || j.sequence >= 64 || !validJournalStage(stage) {
 		return errors.New("JOURNAL_UNAVAILABLE")
 	}
-	b, err := json.Marshal(JournalRecord{j.sequence + 1, j.attempt, stage, time.Now().UTC().Format(time.RFC3339Nano), attempted, stopped})
+	b, err := json.Marshal(JournalRecord{j.sequence + 1, j.attempt, stage, time.Now().UTC().Format(time.RFC3339Nano), attempted, stopped, evidence})
 	if err == nil {
 		var n int
 		b = append(b, '\n')
@@ -128,4 +132,23 @@ func SubmitOnce(ctx context.Context, click func() error) (attempted bool, err er
 	}
 	err = RecordStage(ctx, "AFTER_SUBMIT", nil, nil)
 	return
+}
+
+// Restriction evidence is a bounded safe projection from this exact owned page.
+// Screenshots and raw diagnostics never enter the journal.
+type RestrictionEvidence struct {
+	Identity        string               `json:"identity"`
+	Title           string               `json:"title"`
+	Path            string               `json:"pathname"`
+	Warnings        []RestrictionWarning `json:"warnings"`
+	ScreenshotState string               `json:"screenshotState"`
+}
+
+func RecordRestriction(ctx context.Context, o RestrictionObservation, t RestrictionTarget) error {
+	o = SafeRestrictionObservation(o, t)
+	e := &RestrictionEvidence{o.Identity, o.Title, o.Path, o.Warnings, "NOT_CAPTURED"}
+	if j, ok := ctx.Value(journalKey{}).(*Journal); ok {
+		return j.appendEvidence("RESTRICTION_CHECK", nil, nil, e)
+	}
+	return nil
 }

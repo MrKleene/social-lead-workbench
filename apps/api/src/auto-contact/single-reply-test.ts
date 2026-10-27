@@ -114,7 +114,7 @@ export class SingleReplyTestService {
    // This exact approved candidate has no verified response mapping. Never confirm.
    await tx.contactAttempt.update({where:{id:attempt.id},data:{outcome:failed?'FAILED':'UNKNOWN',resolutionNote:failed?'单次测试：候选确认提交前停止，未发送':'单次测试：未获得可靠平台回执；禁止重发',version:{increment:1}}});
    if(failed)await tx.accountDay.update({where:{accountId_day:{accountId:s.accountId,day:attempt.day}},data:{occupied:{decrement:1}}});
-   const pause=result.kind==='RISK'?result.reason:!outcome.stopped||result.kind==='BLOCKED'?'STOP_UNCONFIRMED':null;
+   const pause=result.kind==='RISK'?result.reason:!outcome.stopped||result.kind==='BLOCKED'?'STOP_UNCONFIRMED':!failed?'SUBMISSION_UNKNOWN':null;
    await tx.autoContactControl.updateMany({where:{platform:'XHS',mode:'REAL',activeJobId:key},data:{activeJobId:null,leaseUntil:null,...(pause?{pauseReason:pause,pausedAt:await contactNow(tx)}:{})}});
    if(pause)await tx.autoContactRule.updateMany({where:{platform:'XHS',mode:'REAL'},data:{enabled:false}});
    await tx.auditLog.create({data:{actorId:actor.id,entityId:key,action:'SINGLE_REPLY_TEST_FINISHED',metadata:{attemptId:attempt.id,scopeHash,result:failed?'NOT_ATTEMPTED':'UNKNOWN',resultReason:result.kind==='CONFIRMED'?'UNCONFIRMED':result.reason,protocolCalls:outcome.protocolCalls,submission:outcome.submission,identityVerified:outcome.identityVerified,stopped:outcome.stopped,pause}}});

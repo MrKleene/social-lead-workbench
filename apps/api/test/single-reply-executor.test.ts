@@ -1,3 +1,5 @@
+// Eligibility is synthetic in these executor tests; production has no positive permission provider.
+vi.mock('../src/auto-contact/send-observation',async importOriginal=>({...await importOriginal<any>(),accountSendObservation:vi.fn(async()=>({state:'UNKNOWN',canSend:true}))}));
 import 'reflect-metadata';
 import {afterEach,expect,it,vi} from 'vitest';
 import {singleReplyBuildHashes,singleReplyScopeVersion,singleReplyPurpose,compatibleSingleReplyScope} from '../src/auto-contact/single-reply-builds';
@@ -43,7 +45,7 @@ it('new scope requires explicit submission purpose and protocol, no default migr
 
 it('persists only validated fixed execution evidence under the same authorization key',async()=>{
  const f=fixture(),events:any[]=[];
- const db:any={auditLog:{create:vi.fn(async(e:any)=>{events.push(e);})},$transaction:vi.fn(async(fn:any)=>fn({}))};
+ const db:any={auditLog:{create:vi.fn(async(e:any)=>{events.push(e);})},$transaction:vi.fn(async(fn:any)=>fn(db))};
  const executor=new LocalSingleReplyExecutor(db,f.devices,f.runtime);vi.spyOn(executor,'capable').mockReturnValue(true);
  f.c.request.requestKey='single-reply:synthetic';
  wire.send.mockImplementation(async(_r:any,_b:any,_s:any,record:any)=>{await record({stage:'RPC_INTENT',protocolAttemptId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'});await expect(record({stage:'RPC_INTENT',protocolAttemptId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',token:'secret'})).rejects.toThrow();return {kind:'UNKNOWN',reason:'synthetic'};});

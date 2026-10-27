@@ -27,7 +27,10 @@ export type AutoContactRule = {
     hash: string;
     pauseReason: string | null;
 };
+export type SendEligibilityView={state:'RESTRICTED'|'VERIFY_REQUIRED'|'RATE_LIMITED'|'REPLY_DISABLED'|'UNKNOWN';canSend:boolean;checkedAt:string|null;stale:boolean;source:string|null;reason:string;evidence:unknown};
 export type ContactAccount = {
+    workbenchStatus?:string;
+    sendEligibility?:SendEligibilityView;
     id: string;
     version: number;
     label: string;
@@ -42,7 +45,9 @@ export type ContactAccount = {
     unknown: number;
     remaining: number;
 };
+export type RecentSendAttempt={id:string;accountLabel:string;outcome:string;day:string;createdAt:string;attemptedAt:string|null;confirmedAt:string|null;platformReceipt:string|null;resolutionNote:string|null;executionEvidence:{at:string;event:unknown}[]};
 export type AutoContactOverview = {
+    recentAttempts?:RecentSendAttempt[];
     rules: AutoContactRule[];
     accounts: ContactAccount[];
     policies: {
@@ -51,6 +56,8 @@ export type AutoContactOverview = {
         revision: number;
     }[];
     capability: {
+        recognition?:string;
+        sending?:string;
         available: boolean;
         reason: string;
     };
@@ -58,6 +65,7 @@ export type AutoContactOverview = {
     day: string;
 };
 export type AutoContactJobView = {
+    executionEvidence?:{at:string;event:unknown}[];
     availability?:import('./post-availability').PostAvailabilityView;
     sourceSnapshot?:unknown;
     id: string;

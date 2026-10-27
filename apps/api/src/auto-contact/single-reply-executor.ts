@@ -1,3 +1,4 @@
+import {accountSendObservation,recordSendExecution} from './send-observation';
 import {executionEventSchema,type ExecutionEvent} from './reply-stage-journal';
 import type { DeviceService, ExecutionPermit } from '../devices/device.service';
 import type { LoginRuntime, SessionDriver } from '../accounts/login-runtime';
@@ -14,19 +15,21 @@ export class LocalSingleReplyExecutor implements SingleReplyExecutor {
   let result:SingleReplyResult['result']={kind:'FAILED',reason:'单次提交前核验未通过'};
   try{
    if(!this.capable(c.scope))throw Error('UNAVAILABLE');
+   const restriction=await accountSendObservation(this.db,c.request.accountId,new Date());
+   if(!restriction.canSend)throw Error('ACCOUNT_SEND_PERMISSION_UNVERIFIED');
    permit=await this.devices.acquire(c.actor,c.request.accountId);
    const combined=AbortSignal.any([signal,permit.signal,AbortSignal.timeout(70000)]);
    if(await this.runtime.inspect(c.request.accountId,c.sessionKey,this.runtime.deviceId(),'real',permit.root)!=='UNVERIFIED')throw Error('SESSION_METADATA_MISMATCH');
    driver=await this.runtime.openSavedForReply(c.request.accountId,c.sessionKey,combined,permit.root,c.scope.binarySha256);stopped=false;
    if(!driver.replyEndpoint)throw Error('ENDPOINT_MISSING');
-   transport=new XhsExactReplyTransport(driver.replyEndpoint(),{enabled:true,reviewedSha256:c.scope.binarySha256,requireJournal:true});
+   transport=new XhsExactReplyTransport(driver.replyEndpoint(),{enabled:true,reviewedSha256:c.scope.binarySha256,requireJournal:true,requireConfirmedMapping:true});
    // Read-only platform login check in this owned candidate process before any write.
    const login=await driver.status(combined);if(!login.loggedIn||login.userId!==c.scope.senderId)throw Error('LIVE_ACCOUNT_MISMATCH');identityVerified=true;
    if(!await transport.connect(combined)){result=transport.connectionFailure();}
    else{
     await this.db.$transaction(tx=>this.devices.assertPermit(tx,permit!));
     if(!combined.aborted&&await beforeSubmit()){
-     const record=async(event:ExecutionEvent)=>{const safe=executionEventSchema.parse(event);await this.db.auditLog.create({data:{actorId:c.actor.id,entityId:c.request.requestKey,action:'SINGLE_REPLY_EXECUTION_STAGE',metadata:safe}});};
+     const record=async(event:ExecutionEvent)=>{await this.db.$transaction(tx=>recordSendExecution(tx,c.actor.id,c.request.accountId,c.request.requestKey,'SINGLE_REPLY_EXECUTION_STAGE',event));};
      protocolCalls=1;result=await transport.send(c.request,c.binding,combined,record);
     }
    }

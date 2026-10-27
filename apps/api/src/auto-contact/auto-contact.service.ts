@@ -175,13 +175,16 @@ export class AutoContactService {
         await this.finish(job.id, result);
     }
     async finish(id: string, raw: SendResult) {
-        const result = normalizeSendResult(raw);
+        let result = normalizeSendResult(raw);
         return this.db.$transaction(async (tx) => {
             await contactLock(tx);
             const j = await tx.autoContactJob.findUnique({ where: { id } });
             if (!j || !['ATTEMPTED', 'UNKNOWN'].includes(j.status) || j.mode !== this.sender.mode)
                 return;
             const a = await tx.contactAttempt.findUniqueOrThrow({ where: { id: j.attemptId! } });
+            // A late failure is not proof that an interrupted attempt never submitted.
+            if ((j.status === 'UNKNOWN' || a.outcome === 'UNKNOWN') && result.kind === 'FAILED')
+                result = { kind: 'UNKNOWN', reason: '既有未知结果不能降级为未提交；保留占用' };
             let status: string, reason: string | null = null, receipt: string | null = null;
             if (result.kind === 'CONFIRMED' && typeof result.receipt === 'string' && result.receipt.length > 0 && result.receipt.length <= 500) {
                 status = j.mode === 'SIMULATION' ? 'SIMULATED_SUCCESS' : 'CONFIRMED';
@@ -195,8 +198,9 @@ export class AutoContactService {
                 status = 'UNKNOWN';
                 reason = result.kind === 'BLOCKED' ? '执行停止未确认，已暂停发送；保留占用' : result.kind === 'RISK' ? '平台限制：' + result.reason : '结果未知，保留收件人与原日额度占用';
             }
-            if (result.kind === 'RISK' || result.kind === 'BLOCKED') {
-                await tx.autoContactControl.upsert({ where: { platform_mode: { platform: j.platform, mode: j.mode } }, create: { platform: j.platform, mode: j.mode, pauseReason: result.reason, pausedAt: await this.now(tx) }, update: { pauseReason: result.reason, pausedAt: await this.now(tx) } });
+            if (status === 'UNKNOWN') {
+                const pause = result.kind === 'RISK' || result.kind === 'BLOCKED' ? result.reason : 'SUBMISSION_UNKNOWN';
+                await tx.autoContactControl.upsert({ where: { platform_mode: { platform: j.platform, mode: j.mode } }, create: { platform: j.platform, mode: j.mode, pauseReason: pause, pausedAt: await this.now(tx) }, update: { pauseReason: pause, pausedAt: await this.now(tx) } });
                 await tx.autoContactRule.updateMany({ where: { platform: j.platform, mode: j.mode }, data: { enabled: false } });
             }
             if (status === 'FAILED')

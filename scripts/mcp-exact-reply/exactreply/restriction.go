@@ -36,15 +36,16 @@ type RestrictionImage struct {
 	Scope  string `json:"scope"`
 }
 type RestrictionObservation struct {
-	Identity        string               `json:"identity"`
-	IdentitySource  string               `json:"identitySource"`
-	Title           string               `json:"title"`
-	Path            string               `json:"pathname"`
-	Warnings        []RestrictionWarning `json:"warnings"`
-	Screenshot      *RestrictionImage    `json:"screenshot,omitempty"`
-	ScreenshotState string               `json:"screenshotState"`
-	ConsoleErrors   int                  `json:"consoleErrors"`
-	NetworkFailures int                  `json:"networkFailures"`
+	Identity          string               `json:"identity"`
+	IdentitySource    string               `json:"identitySource"`
+	Title             string               `json:"title"`
+	Path              string               `json:"pathname"`
+	Warnings          []RestrictionWarning `json:"warnings"`
+	Screenshot        *RestrictionImage    `json:"screenshot,omitempty"`
+	ScreenshotReasons []string             `json:"screenshotReasons,omitempty"`
+	ScreenshotState   string               `json:"screenshotState"`
+	ConsoleErrors     int                  `json:"consoleErrors"`
+	NetworkFailures   int                  `json:"networkFailures"`
 }
 type RestrictionResult struct {
 	Protocol        string                 `json:"protocol"`
@@ -99,7 +100,19 @@ func SafeRestrictionObservation(o RestrictionObservation, t RestrictionTarget) R
 		}
 	}
 	o.Warnings = out
-	o.ScreenshotState = choose(o.ScreenshotState, "CAPTURED", "UNAVAILABLE", "SENSITIVE_UI", "IDENTITY_MISMATCH", "EXTERNAL_ORIGIN", "OVERSIZE", "CANCELLED")
+	o.ScreenshotState = choose(o.ScreenshotState, "CAPTURED", "UNAVAILABLE", "NO_SAFE_REGION", "SENSITIVE_UI", "IDENTITY_MISMATCH", "EXTERNAL_ORIGIN", "OVERSIZE", "CANCELLED")
+	reasons := []string{}
+	for _, reason := range o.ScreenshotReasons {
+		code := choose(reason, "NOTICE_SENSITIVE_TEXT", "EDITABLE_CONTENT", "VISIBLE_QR", "UNVERIFIED_MEDIA", "TEXT_SCAN_LIMIT", "REGION_SENSITIVE_TEXT", "NO_SAFE_REGION")
+		if code == "UNKNOWN" {
+			o.Screenshot = nil
+			o.ScreenshotState = "SENSITIVE_UI"
+		}
+		if code != "UNKNOWN" && len(reasons) < 7 {
+			reasons = append(reasons, code)
+		}
+	}
+	o.ScreenshotReasons = reasons
 	if o.ConsoleErrors < 0 {
 		o.ConsoleErrors = 0
 	}
@@ -114,7 +127,7 @@ func SafeRestrictionObservation(o RestrictionObservation, t RestrictionTarget) R
 	}
 	if o.Screenshot != nil {
 		b, e := base64.StdEncoding.DecodeString(o.Screenshot.Data)
-		valid := e == nil && len(b) <= 1500000 && o.Screenshot.Mime == "image/png" && (o.Screenshot.Scope == "VISIBLE_WARNING" || o.Screenshot.Scope == "VIEWPORT")
+		valid := e == nil && len(b) <= 1500000 && o.Screenshot.Mime == "image/png" && o.Screenshot.Scope == "VISIBLE_WARNING" && len(o.Warnings) > 0 && len(o.ScreenshotReasons) == 0 && o.ScreenshotState == "CAPTURED"
 		if valid {
 			cfg, e := png.DecodeConfig(bytes.NewReader(b))
 			valid = e == nil && cfg.Width > 0 && cfg.Height > 0 && cfg.Width <= 1280 && cfg.Height <= 900 && cfg.Width == o.Screenshot.Width && cfg.Height == o.Screenshot.Height

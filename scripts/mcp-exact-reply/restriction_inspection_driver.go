@@ -42,27 +42,33 @@ const restrictionInspectionDOM = `(post,sender,secret) => {
  const classify=s=>/封禁|封号/.test(s)?'BANNED':/禁言/.test(s)?'MUTED':/验证码|安全验证|身份验证/.test(s)?'VERIFICATION':/频繁|频率|限流/.test(s)?'RATE_LIMITED':/禁止评论|无法评论|评论已关闭|限制评论/.test(s)?'COMMENT_RESTRICTED':/审核中|等待审核/.test(s)?'REVIEW_PENDING':/仅自己可见/.test(s)?'VISIBILITY_RESTRICTED':'ACCESS_ERROR';
  const pattern=/封禁|封号|禁言|验证码|安全验证|身份验证|频繁|频率|限流|禁止评论|无法评论|评论已关闭|限制评论|审核中|等待审核|仅自己可见|访问受限|账号异常/;
  const sensitive=s=>!!s&&(s.includes(secret)||/https?:\/\/|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\d{7,}|[A-Za-z0-9_+/=-]{24,}/.test(s));
- const warnings=[];let clip=null,sensitiveUI=false;
- // Restriction UI only: never scan comment body for keywords as account evidence.
+ const warnings=[];let clip=null;const reasons=[];
+ const add=code=>{if(!reasons.includes(code))reasons.push(code)};
+ // Capture only a visible restriction notice. Ordinary viewport content is never exported.
  const nodes=Array.from(document.querySelectorAll('.access-wrapper,.error-wrapper,.not-found-wrapper,.blocked-wrapper,[role="alert"],[role="dialog"],.toast,.message,.login-container')).filter(visible);
- for(const e of nodes){const text=e.innerText||'';if(!pattern.test(text))continue;if(warnings.length===5)break;warnings.push({code:classify(text),text:text.slice(0,2000)});if(sensitive(text))sensitiveUI=true;if(!clip){const r=e.getBoundingClientRect();clip={x:Math.max(0,r.x),y:Math.max(0,r.y),width:Math.min(r.width,innerWidth-Math.max(0,r.x),1280),height:Math.min(r.height,innerHeight-Math.max(0,r.y),900)}}}
- for(const e of document.querySelectorAll('input,textarea,[contenteditable="true"]'))if(visible(e)&&((e.value||e.textContent||'').length||e.type==='password'))sensitiveUI=true;
- if(document.querySelector('.qrcode-img,.login-qrcode,[data-qr-code]'))sensitiveUI=true;
- // With no notice, check only viewport text for sensitive strings before capture.
- if(!clip){let n=0;const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(n++<1500&&walker.nextNode()){const e=walker.currentNode.parentElement;if(e&&visible(e)&&sensitive(walker.currentNode.textContent||'')){sensitiveUI=true;break}}if(n>=1500)sensitiveUI=true;clip={x:0,y:0,width:Math.min(innerWidth,1280),height:Math.min(innerHeight,900)}}
- return JSON.stringify({identity,identitySource,title:document.title,pathname:path,warnings,sensitiveUI,clip,scope:warnings.length?'VISIBLE_WARNING':'VIEWPORT',ready:document.readyState});
+ for(const e of nodes){const text=e.innerText||'';if(!pattern.test(text))continue;if(warnings.length===5)break;warnings.push({code:classify(text),text:text.slice(0,2000)});if(!clip){const r=e.getBoundingClientRect();clip={x:Math.max(0,r.x),y:Math.max(0,r.y),width:Math.min(r.width,innerWidth-Math.max(0,r.x),1280),height:Math.min(r.height,innerHeight-Math.max(0,r.y),900)};if(sensitive(text))add('NOTICE_SENSITIVE_TEXT')}}
+ const intersects=e=>{if(!visible(e))return false;if(!clip)return true;const r=e.getBoundingClientRect();return r.left<clip.x+clip.width&&r.right>clip.x&&r.top<clip.y+clip.height&&r.bottom>clip.y};
+ for(const e of document.querySelectorAll('input,textarea,[contenteditable="true"]'))if(intersects(e)&&((e.value||e.textContent||'').length||e.type==='password'))add('EDITABLE_CONTENT');
+ for(const e of document.querySelectorAll('.qrcode-img,.login-qrcode,[data-qr-code]'))if(intersects(e))add('VISIBLE_QR');
+ if(clip){
+  for(const e of document.querySelectorAll('img,canvas,video,iframe'))if(intersects(e))add('UNVERIFIED_MEDIA');
+  let n=0;const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+  while(walker.nextNode()){if(++n>1500){add('TEXT_SCAN_LIMIT');break}const e=walker.currentNode.parentElement;if(e&&intersects(e)&&sensitive(walker.currentNode.textContent||''))add('REGION_SENSITIVE_TEXT')}
+ }else add('NO_SAFE_REGION');
+ return JSON.stringify({identity,identitySource,title:document.title,pathname:path,warnings,sensitiveUI:reasons.some(x=>x!=='NO_SAFE_REGION'),screenshotReasons:reasons,clip:clip||{x:0,y:0,width:0,height:0},scope:'VISIBLE_WARNING',ready:document.readyState});
 }`
 
 type restrictionDOM struct {
-	Identity       string                          `json:"identity"`
-	IdentitySource string                          `json:"identitySource"`
-	Title          string                          `json:"title"`
-	Path           string                          `json:"pathname"`
-	Warnings       []exactreply.RestrictionWarning `json:"warnings"`
-	Sensitive      bool                            `json:"sensitiveUI"`
-	Scope          string                          `json:"scope"`
-	Ready          string                          `json:"ready"`
-	Clip           struct {
+	Identity          string                          `json:"identity"`
+	IdentitySource    string                          `json:"identitySource"`
+	Title             string                          `json:"title"`
+	Path              string                          `json:"pathname"`
+	Warnings          []exactreply.RestrictionWarning `json:"warnings"`
+	ScreenshotReasons []string                        `json:"screenshotReasons"`
+	Sensitive         bool                            `json:"sensitiveUI"`
+	Scope             string                          `json:"scope"`
+	Ready             string                          `json:"ready"`
+	Clip              struct {
 		X      float64 `json:"x"`
 		Y      float64 `json:"y"`
 		Width  float64 `json:"width"`
@@ -123,7 +129,7 @@ func (d *RestrictionInspectionDriver) Inspect(ctx context.Context, t exactreply.
 		case <-timer.C:
 		}
 	}
-	o = exactreply.RestrictionObservation{Identity: dom.Identity, IdentitySource: dom.IdentitySource, Title: dom.Title, Path: dom.Path, Warnings: dom.Warnings, ScreenshotState: "UNAVAILABLE", ConsoleErrors: int(d.consoleErrors.Load()), NetworkFailures: int(d.networkFailures.Load())}
+	o = exactreply.RestrictionObservation{Identity: dom.Identity, IdentitySource: dom.IdentitySource, Title: dom.Title, Path: dom.Path, Warnings: dom.Warnings, ScreenshotState: "UNAVAILABLE", ScreenshotReasons: dom.ScreenshotReasons, ConsoleErrors: int(d.consoleErrors.Load()), NetworkFailures: int(d.networkFailures.Load())}
 	// No recovery navigation after a restriction, unknown route or account mismatch.
 	if dom.Identity == "MISMATCH" {
 		o.ScreenshotState = "IDENTITY_MISMATCH"
@@ -131,6 +137,10 @@ func (d *RestrictionInspectionDriver) Inspect(ctx context.Context, t exactreply.
 	}
 	if dom.Path == "/[EXTERNAL_ORIGIN]" {
 		o.ScreenshotState = "EXTERNAL_ORIGIN"
+		return o, nil
+	}
+	if len(dom.Warnings) == 0 {
+		o.ScreenshotState = "NO_SAFE_REGION"
 		return o, nil
 	}
 	if dom.Sensitive {
