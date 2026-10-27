@@ -36,9 +36,29 @@ const exactPreflightDOM = `(target,author) => {
 
 func (d *ExactPreflightDriver) Inspect(ctx context.Context, t exactreply.PreflightTarget) (o exactreply.PreflightObservation, err error) {
 	c := exactreply.Command{AccountID: t.AccountID, SenderID: t.SenderID, PostID: t.PostID, TargetID: t.TargetID, RecipientID: t.RecipientID, Reference: t.Reference}
-	// Existing Inspect does only state/navigation reads. Never call Select or Submit.
-	o.Snapshot, err = d.read.Inspect(ctx, c)
-	o.Sources = exactreply.FieldSources{Identity: "INITIAL_STATE_USER_INFO", Target: "INITIAL_STATE_NOTE_COMMENTS", DOM: "UNOBSERVED"}
+	// One navigation by the existing reader, then bounded state-only samples. No reload.
+	o, err = exactreply.WaitForReadOnlyState(ctx, t, func() (sample exactreply.PreflightObservation, inspectErr error) {
+		sample.Snapshot, inspectErr = d.read.Inspect(ctx, c)
+		sample.Sources = exactreply.FieldSources{Identity: "INITIAL_STATE_USER_INFO", Target: "INITIAL_STATE_NOTE_COMMENTS", DOM: "UNOBSERVED"}
+		if ctx.Err() != nil {
+			return sample, ctx.Err()
+		}
+		v, e := d.read.page.Context(ctx).Eval(exactPreflightPage, t.PostID, t.Reference.Token, t.Reference.Source)
+		if e != nil {
+			if inspectErr != nil {
+				return sample, inspectErr
+			}
+			return sample, e
+		}
+		raw := v.Value.Str()
+		if len(raw) > 2048 || json.Unmarshal([]byte(raw), &sample.Page) != nil {
+			if inspectErr != nil {
+				return sample, inspectErr
+			}
+			return sample, errors.New("STATE_INVALID")
+		}
+		return
+	}, exactreply.ReadOnlySettle)
 	if err != nil {
 		return
 	}

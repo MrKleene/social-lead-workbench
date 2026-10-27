@@ -32,7 +32,7 @@ func (f *readFixture) Inspect(ctx context.Context, t PreflightTarget) (Preflight
 	if f.missing {
 		dom.Target = "MISSING"
 	}
-	return PreflightObservation{s, dom, FieldSources{"INITIAL_STATE_USER_INFO", "INITIAL_STATE_NOTE_COMMENTS", "EXACT_COMMENT_ID_AND_SCOPED_DESCENDANTS"}}, f.err
+	return PreflightObservation{Snapshot: s, DOM: dom, Sources: FieldSources{"INITIAL_STATE_USER_INFO", "INITIAL_STATE_NOTE_COMMENTS", "EXACT_COMMENT_ID_AND_SCOPED_DESCENDANTS"}, Page: PageChecks{Navigation: "EXACT_POST", Token: "MATCH", Source: "MATCH"}}, f.err
 }
 func (f *readFixture) Close(context.Context) error {
 	f.closed++

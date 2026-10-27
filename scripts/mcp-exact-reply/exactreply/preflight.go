@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const PreflightProtocol = "workbench.xhs.exact-preflight.v1"
+const PreflightProtocol = "workbench.xhs.exact-preflight.v2"
 
 // No text, send authorization, request key or submission option exists here.
 type PreflightTarget struct {
@@ -45,6 +45,7 @@ type PreflightObservation struct {
 	Snapshot Snapshot
 	DOM      DOMChecks
 	Sources  FieldSources
+	Page     PageChecks
 }
 type PreflightResult struct {
 	Protocol        string       `json:"protocol"`
@@ -54,10 +55,11 @@ type PreflightResult struct {
 	Sources         FieldSources `json:"sources"`
 	ProcessStopped  bool         `json:"processStopped"`
 	WriteOperations int          `json:"writeOperations"`
+	Page            PageChecks   `json:"page"`
 }
 
 func emptyPreflight(t PreflightTarget) PreflightResult {
-	return PreflightResult{Protocol: PreflightProtocol, Kind: "UNAVAILABLE", Diagnostic: Diagnostic{"VALIDATE", "INVALID_COMMAND", checks(Snapshot{}, t.command())}, DOM: DOMChecks{"UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN"}, Sources: FieldSources{"UNOBSERVED", "UNOBSERVED", "UNOBSERVED"}}
+	return PreflightResult{Protocol: PreflightProtocol, Kind: "UNAVAILABLE", Diagnostic: Diagnostic{"VALIDATE", "INVALID_COMMAND", checks(Snapshot{}, t.command())}, DOM: DOMChecks{"UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN"}, Sources: FieldSources{"UNOBSERVED", "UNOBSERVED", "UNOBSERVED"}, Page: SafePage(PageChecks{})}
 }
 func Preflight(ctx context.Context, t PreflightTarget, newInspector func() (ReadOnlyInspector, error)) (r PreflightResult) {
 	r = emptyPreflight(t)
@@ -102,6 +104,7 @@ func Preflight(ctx context.Context, t PreflightTarget, newInspector func() (Read
 	// Only these enums can cross the boundary, even from malformed drivers.
 	r.DOM = safeDOM(o.DOM)
 	r.Sources = safeSources(o.Sources)
+	r.Page = SafePage(o.Page)
 	if err != nil {
 		r.Diagnostic.Code = diagnosticCode(err)
 		if code := risk(err); code != "" {
@@ -112,6 +115,10 @@ func Preflight(ctx context.Context, t PreflightTarget, newInspector func() (Read
 	}
 	if ctx.Err() != nil {
 		r.Diagnostic.Code = "CANCELLED"
+		return
+	}
+	if r.Page.Navigation != "EXACT_POST" || r.Page.Token != "MATCH" || r.Page.Source != "MATCH" {
+		r.Diagnostic.Code = "PREFLIGHT_REFERENCE_UNVERIFIED"
 		return
 	}
 	if !sameTarget(o.Snapshot, t.command()) {
