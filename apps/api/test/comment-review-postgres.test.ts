@@ -1,3 +1,6 @@
+import {readRunPostFeed} from '../src/collection/run-post-feed';
+import {commentDigest} from '../src/collection/comment-checkpoint';
+import {reviewObservationPolicy} from '@crm/contracts';
 import {semanticInputPolicy,wholePostRequestPolicy} from '@crm/contracts';
 import {previewHash} from '../src/collection/semantic-redaction';
 import {ManualReviewService} from '../src/comment-review/manual-review.service';
@@ -95,7 +98,7 @@ describe('independent comment review: disposable database and mocked provider on
   await expect(policies.prepare(actor,'missing',{version:1,scope:{kind:'ALL'}})).rejects.toThrow();
   await db.modelSettings.deleteMany();await expect(policies.automatic(actor,p.id,{version:p.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'})).rejects.toThrow();expect(transport).not.toHaveBeenCalled();
  });
- async function autoEnabled(){const p=await saved();return policies.automatic(actor,p.id,{version:p.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});}
+
  async function finishedSource(complete=true){const s=await source();await db.capturedPost.update({where:{id:s.p.id},data:{coverage:complete?'COMPLETE':'PARTIAL'}});const run=await db.collectionRun.findUniqueOrThrow({where:{id:s.capture.runId}});await automatic.postFinished(run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete,windowRead:true,stopReason:complete?undefined:'COMMENT_LIMIT'});return s;}
  it('per-post callback schedules only complete coverage; repeated completion and concurrent ticks charge once',async()=>{
   await autoEnabled();const complete=await finishedSource(),partial=await finishedSource(false);
@@ -142,7 +145,7 @@ describe('independent comment review: disposable database and mocked provider on
   await autoEnabled();const s=await wholeSource(6),wire=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/root-scope-wire.json'),'utf8')),d=wire.data.boundedRead;
   if(mode!=='complete'){d.final.ready.rootEndVisible=false;d.retained.ready.rootEndVisible=false;d.chunkSummary.rootEndVisible=false;}
   if(mode==='partial'){d.state='UNKNOWN';d.reason='BUTTON_NOT_FOUND';d.replyStop='BUTTON_NOT_FOUND';}
-  const complete=mode!=='partial';await db.capturedPost.update({where:{id:s.p.id},data:{coverage:complete?'COMPLETE':'PARTIAL',snapshot:{...(s.p.snapshot as object),boundedRead:d}}});
+  const complete=mode!=='partial';await db.collectionRun.update({where:{id:s.capture.runId},data:{metrics:{coverage:{version:1,search:'UNKNOWN',reasons:[],posts:[{postRef:s.p.platformPostId,ordinal:1,saved:6,roots:3,replies:3,complete,reason:complete?'DECLARED_TREE_EXHAUSTED':'BUTTON_NOT_FOUND',boundedRead:d}]}}}});await db.capturedPost.update({where:{id:s.p.id},data:{coverage:complete?'COMPLETE':'PARTIAL',snapshot:{...(s.p.snapshot as object),boundedRead:d}}});
   const run=await db.collectionRun.update({where:{id:s.capture.runId},data:{snapshot:{mode:'XHS_MCP'},status:complete?'COMPLETE':'PARTIAL'}});
   await automatic.postFinished(run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete,windowRead:true,stopReason:complete?undefined:'BUTTON_NOT_FOUND'});
   await Promise.all([automatic.tick(),automatic.tick()]);await automatic.tick();
@@ -234,7 +237,7 @@ describe('original input authorization and historical preservation (mock provide
   if(mode==='whole'){const j=await manual.prepare(actor,p.id,{revision:1,postId:s.p.id});expect((await manual.previewPage(actor,j.id,0)).items[0].comment).toBe(synthetic);await manual.confirm(actor,j.id,wholeInput(j));await manual.tick();}
   if(mode==='batch'){await policies.authorize(actor,{consent:reviewUseConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});const preview=await batch(p.version);expect(preview.payload.items[0].comment).toBe(synthetic);await evaluation.evaluate(actor,p.id,input(preview));}
   if(mode==='auto'){p=await policies.automatic(actor,p.id,{version:p.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});await db.capturedPost.update({where:{id:s.p.id},data:{coverage:'COMPLETE'}});const run=await db.collectionRun.findUniqueOrThrow({where:{id:s.capture.runId}});await automatic.postFinished(run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});await automatic.tick();}
-  expect(transport).toHaveBeenCalledTimes(1);const payload=JSON.parse(JSON.parse(transport.mock.calls[0][1].body as string).messages[1].content);expect(payload.inputPolicyVersion).toBe(semanticInputPolicy);expect(payload.items[0].comment).toBe(synthetic);expect(Object.keys(payload.items[0]).sort()).toEqual(['body','comment','id','missingParent','parent','partial','title','truncated']);
+  expect(transport).toHaveBeenCalledTimes(1);const payload=JSON.parse(JSON.parse(transport.mock.calls[0][1].body as string).messages[1].content);expect(payload.inputPolicyVersion).toBe(semanticInputPolicy);expect(payload.items[0].comment).toBe(synthetic);expect(Object.keys(payload.items[0]).sort()).toEqual(['body','comment','id','missingParent','observation','parent','partial','title','truncated']);
   const row=await db.semanticReview.findFirstOrThrow();expect(row.state).toBe('EVALUATED');expect((row.evaluationInput as any).items[0].comment).toBe(synthetic);expect((row.result as any).evidence[0].quote).toBe(synthetic);expect(await db.contactAttempt.count()).toBe(0);
  });
  it('legacy provider consent does not grant original permission; old batch hash fails even with new consent',async()=>{
@@ -302,4 +305,45 @@ describe('single-request whole-post retry eligibility and frozen history (mock o
   await automatic.postFinished(run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});transport.mockImplementationOnce(async()=>new Response('synthetic',{status:429}));await automatic.tick();await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(JSON.parse(JSON.parse(transport.mock.calls[0][1].body as string).messages[1].content).items).toHaveLength(56);expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'FAILED'});
   await db.auditLog.updateMany({where:{action:'COMMENT_REVIEW_AUTO_CONSENT'},data:{metadata:{policyVersion:on.version}}});const other=await source();await db.capturedPost.update({where:{id:other.p.id},data:{coverage:'COMPLETE'}});const run2=await db.collectionRun.findUniqueOrThrow({where:{id:other.capture.runId}});await automatic.postFinished(run2,{post:{id:other.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoReviewJob.findFirst({where:{postId:other.p.id}})).toMatchObject({status:'CANCELLED'});
  });
+});
+
+async function autoEnabled(){const p=await saved();return policies.automatic(actor,p.id,{version:p.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});}
+async function resumedObservation(){
+ const s=await wholeSource(6),d=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/root-scope-wire.json'),'utf8')).data.boundedRead;
+ const captures=await db.capturedComment.findMany({where:{postId:s.p.id},orderBy:{id:'asc'}}),accountId=randomUUID(),deviceId=randomUUID();
+ const entry={postRef:s.p.platformPostId,ordinal:1,saved:0,roots:0,replies:0,complete:true,reason:'DECLARED_TREE_EXHAUSTED',boundedRead:d,recovery:{confirmedTotal:6,remainingAnchors:0,sequence:1}};
+ const run=await db.collectionRun.create({data:{configId:s.c.id,revision:1,snapshot:{mode:'XHS_MCP'},execution:{accountId,deviceId},requestKey:randomUUID(),scenario:'BASELINE',status:'COMPLETE',capturedPosts:1,capturedCommentsCount:0,metrics:{coverage:{version:1,search:'UNKNOWN',reasons:[],posts:[entry]}}}});
+ const marks=[];for(let i=0;i<captures.length;i++){const c=captures[i],snap={...(c.snapshot as any),parentId:i%2?captures[i-1].platformCommentId:null,parent:i%2?(captures[i-1].snapshot as any).comment:null};captures[i]=await db.capturedComment.update({where:{id:c.id},data:{snapshot:snap}});marks.push({id:snap.commentId,parent:snap.parentId||'',digest:commentDigest(s.p.platformPostId,{id:snap.commentId,userId:snap.userId,text:snap.comment,parentId:snap.parentId||undefined,nickname:'',hasReplies:false})});}
+ await db.capturedPost.update({where:{id:s.p.id},data:{lastRunId:run.id,coverage:'COMPLETE',snapshot:{...(s.p.snapshot as any),boundedRead:d}}});
+ await db.commentReadCheckpoint.create({data:{configId:s.c.id,platformPostId:s.p.platformPostId,accountId,deviceId,revision:1,sequence:1,state:'COMPLETE',checkpoint:{version:1,sequence:1,marks}}});
+ return {...s,run,captures,entry};
+}
+describe('current observation, resumed counts and cross-entry dedup (synthetic only)',()=>{
+ it('zero new rows plus six verified checkpoint rows display 6/0/6 without rewriting originals, and one automatic request uses complete observation',async()=>{
+  const p=await autoEnabled(),s=await resumedObservation(),before=await db.capturedComment.findMany({where:{postId:s.p.id},orderBy:{id:'asc'}});
+  expect((await readRunPostFeed(db,s.c.id,s.run.id)).items[0]).toMatchObject({savedCount:6,rootCount:3,replyCount:3,newCount:0,reusedCount:6,confirmedRecovery:true});
+  await automatic.postFinished(s.run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);
+  const payload=JSON.parse(JSON.parse(transport.mock.calls[0][1].body as string).messages[1].content);expect(payload.observationPolicy).toBe(reviewObservationPolicy);expect(payload.items).toHaveLength(6);expect(payload.items.every((i:any)=>i.partial===false&&i.observation.coverage==='COMPLETE')).toBe(true);
+  const rows=await db.semanticReview.findMany();expect(rows.every(r=>(r.snapshot as any).coverage==='PARTIAL'&&(r.evaluationInput as any).items.every((i:any)=>i.partial===false))).toBe(true);expect(await db.capturedComment.findMany({where:{postId:s.p.id},orderBy:{id:'asc'}})).toEqual(before);
+ });
+ it('manual preview, provider payload and historical evidence agree; later observation invalidates a pending confirmation',async()=>{
+  const p=await saved(),s=await resumedObservation(),j=await manual.prepare(actor,p.id,{revision:1,postId:s.p.id}),preview=await manual.previewPage(actor,j.id,0);expect(preview.items.every(i=>i.observation?.coverage==='COMPLETE'&&!i.partial)).toBe(true);
+  await db.collectionRun.update({where:{id:s.run.id},data:{cancelRequested:true}});await expect(manual.confirm(actor,j.id,wholeInput(j))).rejects.toThrow();expect(transport).not.toHaveBeenCalled();
+  const fresh=await manual.prepare(actor,p.id,{revision:1,postId:s.p.id});expect(fresh.id).not.toBe(j.id);expect((await manual.previewPage(actor,fresh.id,0)).items.every(i=>i.observation?.coverage==='UNKNOWN'&&i.partial)).toBe(true);
+ });
+ it('manual success is reused by automatic and by another search source; observation-only change never causes implicit paid rerun',async()=>{
+  const p=await saved(),s=await resumedObservation(),j=await manual.prepare(actor,p.id,{revision:1,postId:s.p.id});await manual.confirm(actor,j.id,wholeInput(j));await manual.tick();expect(transport).toHaveBeenCalledTimes(1);const history=await db.semanticReview.findMany({orderBy:{id:'asc'}});
+  const on=await policies.automatic(actor,p.id,{version:p.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});
+  await automatic.postFinished(s.run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'COMPLETED',processed:0});
+  const other=await source('其他搜索','合成专业',s.captures[0].contentHash);expect((await policies.prepare(actor,p.id,{version:on.version,scope:{kind:'POSTS',postIds:[other.p.id]}},true)).count).toBe(0);
+  expect(await db.semanticReview.findMany({orderBy:{id:'asc'}})).toEqual(history);
+  const changed=await policies.save(actor,p.id,{version:on.version,target:target+'，仅判断明确名称'});expect((await policies.prepare(actor,p.id,{version:changed.version,scope:{kind:'POSTS',postIds:[s.p.id]}},true)).count).toBe(6);expect(transport).toHaveBeenCalledTimes(1);
+ });
+ it('evidence changed between reservation and dispatch blocks provider access and keeps historical capture unchanged',async()=>{
+  const p=await enabled(),s=await resumedObservation(),preview=await batch(p.version,[s.p.id]),before=await db.capturedComment.findMany({where:{postId:s.p.id},orderBy:{id:'asc'}});
+  const original=db.$transaction.bind(db);let transactions=0;const spy=vi.spyOn(db,'$transaction').mockImplementation((async(...args:any[])=>{const r=await (original as any)(...args);if(++transactions===1)await db.collectionRun.update({where:{id:s.run.id},data:{cancelRequested:true}});return r;}) as any);
+  try{expect(await evaluation.evaluate(actor,p.id,input(preview))).toMatchObject({status:'FAILED',errorCode:'REVIEW_CHANGED'});expect(transport).not.toHaveBeenCalled();expect(await db.capturedComment.findMany({where:{postId:s.p.id},orderBy:{id:'asc'}})).toEqual(before);}finally{spy.mockRestore();}
+ });
+ it('automatic success is reused by manual without creating another payable scope',async()=>{const p=await autoEnabled(),s=await resumedObservation();await automatic.postFinished(s.run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);const j=await manual.prepare(actor,p.id,{revision:1,postId:s.p.id});expect(j).toMatchObject({pending:0,skipped:6,maxCalls:0});await manual.confirm(actor,j.id,wholeInput(j));await manual.tick();expect(transport).toHaveBeenCalledTimes(1);});
+ it.each(['old-preview','changed-after-confirm','old-auto-policy'])('blocks %s without new provider use',async mode=>{const p=await autoEnabled(),s=await resumedObservation();if(mode==='old-auto-policy'){await automatic.postFinished(s.run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});await db.autoReviewJob.updateMany({data:{inputPolicyVersion:semanticInputPolicy}});await automatic.tick();expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'CANCELLED'});}else{const j=await manual.prepare(actor,p.id,{revision:1,postId:s.p.id});if(mode==='old-preview'){const stored=await db.manualReviewJob.findUniqueOrThrow({where:{id:j.id}}),payload=stored.preview as any;delete payload.observationPolicy;await db.manualReviewJob.update({where:{id:j.id},data:{preview:payload}});await expect(manual.confirm(actor,j.id,wholeInput(j))).rejects.toThrow();}else{await manual.confirm(actor,j.id,wholeInput(j));await db.collectionRun.update({where:{id:s.run.id},data:{cancelRequested:true}});await manual.tick();}}expect(transport).not.toHaveBeenCalled();});
 });

@@ -1,8 +1,6 @@
-import {prepareOutbound} from '../collection/semantic-redaction';
-import type {SemanticSnapshot,SemanticRules} from '@crm/contracts';
 import {Inject,Injectable} from '@nestjs/common';
 import {randomUUID} from 'node:crypto';
-import {outputFailureReason,semanticBatchConsent,semanticInputPolicy} from '@crm/contracts';
+import {outputFailureReason,semanticBatchConsent,autoReviewInputPolicy} from '@crm/contracts';
 import type {CollectionRun} from '@prisma/client';
 import {Db} from '../common/db';
 import type {PostRead,ReadResult} from '../collection/collector';
@@ -19,7 +17,7 @@ export class AutoReviewService {
    const posts=await tx.capturedPost.findMany({where:{configId:run.configId,lastRunId:run.id,platformPostId:entry.post.id}});
    for(const policy of policies)for(const post of posts){
     const complete=entry.windowRead&&entry.complete&&post.coverage==='COMPLETE';
-    await tx.autoReviewJob.createMany({data:[{policyId:policy.id,policyVersion:policy.version,inputPolicyVersion:semanticInputPolicy,runId:run.id,postId:post.id,status:complete?'PENDING':'SKIPPED',reason:complete?'等待预算与调用间隔':`覆盖未通过：${entry.stopReason||'评论范围不完整'}`}],skipDuplicates:true});
+    await tx.autoReviewJob.createMany({data:[{policyId:policy.id,policyVersion:policy.version,inputPolicyVersion:autoReviewInputPolicy,runId:run.id,postId:post.id,status:complete?'PENDING':'SKIPPED',reason:complete?'等待预算与调用间隔':`覆盖未通过：${entry.stopReason||'评论范围不完整'}`}],skipDuplicates:true});
    }
   });
  }

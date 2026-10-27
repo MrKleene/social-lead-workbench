@@ -1,13 +1,15 @@
+import {prepareReviewOutbound} from './review-observation';
+import {semanticHash} from '../collection/capture-archive';
 import {outputFailureReason,modelOutputFailure,wholePostRequestPolicy} from '@crm/contracts';
 import {assertManualReview} from './manual-review.guard';
 import {assertAutoReview} from './auto-review.guard';
 import {ConflictException,Inject,Injectable,NotFoundException,Optional} from '@nestjs/common';
 import {Prisma} from '@prisma/client';
-import {semanticEvaluateRequestSchema,semanticBatchConsent,SemanticEvaluateRequest,SemanticSnapshot,SemanticRules} from '@crm/contracts';
+import {semanticEvaluateRequestSchema,semanticBatchConsent,SemanticEvaluateRequest} from '@crm/contracts';
 import {Db} from '../common/db';
 import {Actor,requireAdmin} from '../auth/security';
 import {QwenError,QwenTransport,requestQwen} from '../collection/qwen-provider';
-import {prepareOutbound,previewHash,validateQwenEvidence} from '../collection/semantic-redaction';
+import {previewHash,validateQwenEvidence} from '../collection/semantic-redaction';
 import {qwenModel} from '../../../../runtime/qwen-models.cjs';
 import {ReviewPolicyService,ReviewDb,lockReview} from './review-policy.service';
 import {wholePostCapacity,wholePostCapacityMessage,WHOLE_POST_LEASE} from '../collection/whole-post-capacity';
@@ -20,8 +22,7 @@ export class ReviewEvaluationService {
   const settings=await this.policies.models.resolve(db);
   const rows=await db.semanticReview.findMany({where:{id:{in:reviewIds},policyId:id,policyRevision:policy.revision,selectedModel:settings.status.model,reviewStatus:'PENDING',OR:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:{id:'asc'}});
   if(!rows.length||rows.length!==reviewIds.length||new Set(reviewIds).size!==reviewIds.length||(!wholePost&&rows.length>5))throw new ConflictException('批次已变化，请重新选择已有评论');
-  const inputs=rows.map(r=>({id:r.id,snapshot:r.snapshot as unknown as SemanticSnapshot,rules:r.rules as unknown as SemanticRules}));
-  let payload;try{payload=prepareOutbound(inputs,wholePost);if(wholePost)payload.requestPolicy=wholePostRequestPolicy;if(!wholePost&&Buffer.byteLength(JSON.stringify(payload))>48000)throw new QwenError('PAYLOAD_LIMIT');}catch{throw new ConflictException('评论为空、单条输入超限或上下文安全检查未通过；已阻止外发，原文保留');}
+  let payload,inputs;try{({payload,inputs}=await prepareReviewOutbound(db,rows,wholePost));if(wholePost)payload.requestPolicy=wholePostRequestPolicy;if(!wholePost&&Buffer.byteLength(JSON.stringify(payload))>48000)throw new QwenError('PAYLOAD_LIMIT');}catch{throw new ConflictException('评论为空、单条输入超限或上下文安全检查未通过；已阻止外发，原文保留');}
   if(wholePost&&!wholePostCapacity(payload,settings.status.model).fits)throw new ConflictException(wholePostCapacityMessage);
   return {wholePost,policy,settings,rows,inputs,payload,hash:previewHash(payload,rows,policy.revision,`${id}:${manual?policy.revision:policy.version}:${settings.status.model}:${settings.configurationVersion}:${qwenModel(settings.status.model)?.priceVersion}`)};
  }
@@ -47,6 +48,8 @@ export class ReviewEvaluationService {
     const metadata=await this.policies.models.resolve(tx);if(!metadata.status.authorized||metadata.configurationVersion!==b.settings.configurationVersion)throw new QwenError('MODEL_SETTINGS_CHANGED');
     if(autoJobId)await assertAutoReview(tx,autoJobId,metadata.configurationVersion);
     if(manualJobId)await assertManualReview(tx,manualJobId,metadata.configurationVersion,b.rows.map(r=>r.id),b.payload);
+    const current=await prepareReviewOutbound(tx,b.rows,b.wholePost);if(b.wholePost)current.payload.requestPolicy=wholePostRequestPolicy;
+    if(semanticHash(current.payload)!==semanticHash(b.payload))throw new QwenError('REVIEW_CHANGED');
     const settings=await this.policies.models.resolve(tx,true,semanticBatchConsent);
     flight=requestQwen(settings,b.payload,this.options?.transport,'comment-first').then(response=>({response}),error=>({error}));
    });

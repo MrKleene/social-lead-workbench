@@ -14,7 +14,9 @@ export type SemanticReviewPage={configured:boolean;provider:string;connection?:S
 
 export const semanticInputPolicy='comment-original-context-redacted-v2' as const;
 export const wholePostRequestPolicy='whole-post-single-request-v1' as const;
-export type SemanticOutbound={requestPolicy?:string;inputPolicyVersion?:string;redactionVersion:string;target:string;items:{id:string;title:string;body:string;comment:string;parent:string|null;missingParent:boolean;partial:boolean;truncated:boolean}[]};
+export const reviewObservationPolicy='current-capture-observation-v1';
+export const autoReviewInputPolicy=semanticInputPolicy+'+'+reviewObservationPolicy;
+export type SemanticOutbound={observationPolicy?:string;requestPolicy?:string;inputPolicyVersion?:string;redactionVersion:string;target:string;items:{observation?:{coverage:'COMPLETE'|'PARTIAL'|'UNKNOWN';evidenceHash:string};id:string;title:string;body:string;comment:string;parent:string|null;missingParent:boolean;partial:boolean;truncated:boolean}[]};
 export type SemanticConnection={state:'DISABLED'|'UNAUTHORIZED'|'BUDGET_REQUIRED'|'UNCONFIGURED'|'INVALID_CONFIG'|'READY';message:string;model:string;region:'cn-beijing';authorized?:boolean;priceVersion?:string;priceDescription?:string;dailyLimit:number|null;batchLimit:number;automaticRetries:0;timeoutSeconds:number};
 export type SemanticUsage={requests:number;dailyLimit:number|null;inputTokens:number;outputTokens:number;unknownUsage:number;lastStatus:string|null;canCall:boolean};
 export type SemanticPreview={hash:string;revision:number;payload:SemanticOutbound;count:number;reviewIds?:string[];connection:SemanticConnection;usage:SemanticUsage};

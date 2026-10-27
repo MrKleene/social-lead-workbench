@@ -1,3 +1,4 @@
+import {autoReviewInputPolicy} from '@crm/contracts';
 import 'reflect-metadata';
 import {describe,it,expect,vi} from 'vitest';
 import {semanticBatchConsent,semanticInputPolicy,wholePostRequestPolicy,modelOutputFailure,outputFailureReason,displayReviewFailure,isBatchOutputFailure} from '@crm/contracts';
@@ -69,8 +70,9 @@ function harness(bad:boolean){
   semanticReview:{findMany:async()=>rows,updateMany:vi.fn(async()=>({count:1})),count:async()=>rows.length},
   semanticModelCall:{findUnique:async()=>call,aggregate:async()=>({_count:{_all:0},_sum:{}}),findFirst:async()=>null,count:async()=>0,create:vi.fn(async({data}:any)=>{call={id:'call',...data};return call;}),update:vi.fn(async({data}:any)=>Object.assign(call,data))},
   auditLog:{findFirst:async()=>({metadata:{requestPolicy:wholePostRequestPolicy}}),create:vi.fn(async()=>({}))},user:{findUnique:async()=>({role:'ADMIN'})},
-  autoReviewJob:{findUnique:async()=>({id:'auto',policyId:'workspace',policyVersion:1,status:'PROCESSING',inputPolicyVersion:semanticInputPolicy,postId:'post',runId:'run'})},
-  collectionRun:{findUnique:async()=>({id:'run',status:'COMPLETE',revision:1,config,cancelRequested:false,snapshot:{mode:'MOCK'}})},
+  autoReviewJob:{findUnique:async()=>({id:'auto',policyId:'workspace',policyVersion:1,status:'PROCESSING',inputPolicyVersion:autoReviewInputPolicy,postId:'post',runId:'run'})},
+  capturedComment:{findMany:async()=>[]},commentReadCheckpoint:{findMany:async()=>[]},
+  collectionRun:{findMany:async()=>[],findUnique:async()=>({id:'run',status:'COMPLETE',revision:1,config,cancelRequested:false,snapshot:{mode:'MOCK'}})},
   capturedPost:{findUnique:async()=>({coverage:'COMPLETE',lastRunId:'run',snapshot:{}})},
   manualReviewJob:{findUnique:async()=>({id:'manual',status:'PROCESSING',policy,policyRevision:1,modelVersion:1,actorId:'admin',batchIds:rows.map(r=>r.id),items:rows.map(r=>({reviewId:r.id,reviewVersion:r.version})),preview:{...payload,requestPolicy:wholePostRequestPolicy,items:payload.items.map((item,i)=>({...item,id:rows[i].id}))}})},
  };
@@ -85,6 +87,7 @@ describe('all paid entry points share output validation without a real provider'
   const service=mode==='legacy'?new QwenMatchingService(db,{settings:()=>qwenSettings(env),transport}):new ReviewEvaluationService(db,policies,{transport});
   const id=mode==='legacy'?'config':'workspace';
   const preview=mode==='legacy'?await (service as QwenMatchingService).preview(actor,id):await (service as ReviewEvaluationService).preview(actor,id,inputs.map(r=>r.id),mode==='manual-post',mode==='manual-post'||mode==='automatic');
+  if(mode==='manual-post'){const original=db.manualReviewJob.findUnique;db.manualReviewJob.findUnique=async()=>({...await original(),preview:{...preview.payload,items:preview.payload.items.map((item,i)=>({...item,id:inputs[i].id}))}});}
   const request={requestKey:'00000000-0000-4000-8000-000000000001',previewHash:preview.hash,reviewIds:inputs.map(r=>r.id),priceVersion:'beijing-2026-10-21',consent:semanticBatchConsent};
   const run=()=>mode==='legacy'?(service as QwenMatchingService).evaluate(actor,id,request):(service as ReviewEvaluationService).evaluate(actor,id,request,mode==='automatic'?'auto':undefined,mode==='manual-post'?'manual':undefined);
   const result=await run();expect(result.status).toBe(bad?'FAILED':'COMPLETED');expect(transport).toHaveBeenCalledTimes(1);
