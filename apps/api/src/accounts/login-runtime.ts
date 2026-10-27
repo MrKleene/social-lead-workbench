@@ -83,9 +83,15 @@ export class LoginRuntime {
     return this.open(accountId,key,signal,true,executionRoot,reviewedSha256);
   }
 
+  /** Read-only diagnostic process: no sender enable flag and only preflight MCP registration. */
+  async openSavedForPreflight(accountId:string,key:string,signal:AbortSignal,executionRoot:string,reviewedSha256:string){
+    if(process.platform!=='darwin'||this.mode()!=='real'||!this.persistent()||!/^[a-f0-9]{64}$/.test(reviewedSha256))throw Error('PREFLIGHT_RUNTIME_DISABLED');
+    return this.open(accountId,key,signal,true,executionRoot,reviewedSha256,true);
+  }
+
   mode():LoginMode|undefined { const v=process.env.XHS_ACCOUNT_LOGIN_MODE; return v==='real'||v==='offline'?v:undefined; }
   storage(){return process.env.XHS_SESSION_ROOT || (this.mode()==='real'?join(process.env.CRM_PROJECT_ROOT || '', '.local/xhs-qr'):'离线演示：不写平台会话');}
-  async open(accountId:string, attemptId:string, signal:AbortSignal,saved=false,executionRoot?:string,replySha256?:string):Promise<SessionDriver> {
+  async open(accountId:string, attemptId:string, signal:AbortSignal,saved=false,executionRoot?:string,replySha256?:string,preflightOnly=false):Promise<SessionDriver> {
     if(this.mode()==='offline') {
       let scenario='PENDING',stopped=false;
       const directory=this.persistent()?await this.directory(accountId,attemptId,!saved,executionRoot):undefined;
@@ -111,7 +117,7 @@ export class LoginRuntime {
     const env=minimalEnvironment();
     if(process.platform==='win32')env.LOCALAPPDATA=windowsDataRoot(); // match Go os.UserCacheDir to the OS-known folder
     if(signal.aborted)throw Error('CANCELLED');
-    const child=spawnOwned(bin,['-headless=true','-port',`127.0.0.1:${port}`],{cwd:directory,env:{...env,COOKIES_PATH:join(directory,'cookies.json'),AUTH_TOKEN:token,...(replySha256?{CRM_EXACT_REPLY_ENABLED:'1'}:{})},detached:true,stdio:'ignore'});
+    const child=spawnOwned(bin,['-headless=true','-port',`127.0.0.1:${port}`],{cwd:directory,env:{...env,COOKIES_PATH:join(directory,'cookies.json'),AUTH_TOKEN:token,...(preflightOnly?{CRM_EXACT_PREFLIGHT_ONLY:'1'}:replySha256?{CRM_EXACT_REPLY_ENABLED:'1'}:{})},detached:true,stdio:'ignore'});
     const notify=(kind:string)=>{if(process.connected&&child.pid)try{process.send?.({kind,pid:child.pid});}catch{}};
     notify('OWNED_LOGIN_PROCESS_STARTED');
     let alive=true,stopping:Promise<void>|undefined;const done=new Promise<void>(ok=>{child.once('error',()=>{alive=false;ok();});child.once('exit',()=>{alive=false;ok();queueMicrotask(()=>{void stop();});});});
