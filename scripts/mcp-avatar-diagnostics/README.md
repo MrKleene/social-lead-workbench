@@ -76,3 +76,8 @@ node scripts/mcp-avatar-diagnostics/build-candidate.mjs /absolute/path/to/review
 API/worker 从 43058/43057 正常退出（API SIGTERM，worker 0，supervisor CLEANUP_COMPLETE/EXIT 0），恢复为 43710/43709。原前端 PID 3438 和数据库/Redis 启动时间不变；健康与网页 200、队列空闲、worker 等待任务，17 项审核策略离线测试通过。前后均 1 条失败采集历史、0 帖/评论、2 个账号、1 份本机会话和配置，模型调用/联系记录 0；14 项既有迁移无新增执行。
 
 后续测试入口：`http://127.0.0.1:63968/work?module=runs`，教培 → 采集设置把本轮最多帖子数选为 1 → 完成设置 → 开始采集 → 选择原账号并确认本轮只读授权 → 确认并开始一次。保留 1 轮、1 评论窗口及服务端 0 次主评翻页/8 次回复尝试/15 秒预算；LLM 和外发仍关闭。测试由协调的浏览器线程执行，本部署线程未发起搜索或采集；搜索真实故障仍待该次结果验证。
+
+
+## 根讨论范围闭合候选（2026-10-27，未安装）
+
+`v2.5.5-local-root-reply-scope` 保留缺失回复字段，只有根讨论声明/加载/实际归属一致且页尾、范围、无按钮、hasMore=false、总数等证据共同成立，才接受根列表闭合证明。嵌套未知与中断仍拒绝。可选 `rootScopedLeafGroups` 需要配套工作台契约。完整测试、哈希和待授权安装步骤见 [交付记录](../../docs/ROOT-REPLY-COVERAGE-2026-10-27.md)。
