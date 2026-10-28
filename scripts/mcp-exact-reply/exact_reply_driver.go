@@ -9,21 +9,29 @@ import (
 	"github.com/xpzouying/xiaohongshu-mcp/exactreply"
 	"github.com/xpzouying/xiaohongshu-mcp/humanize"
 	"net/url"
+	"sync"
 	"time"
 )
 
 // ExactReplyDriver only touches the exact comment. No author, nickname, text or
 // notification fallback. Missing/unrecognized state is a pre-submit rejection.
+// Selection capability has no typing, submission, or receipt methods.
+type exactReplyPage struct {
+	page                   *rod.Page
+	closeBrowser           func()
+	opened, profileChecked bool
+	before                 map[string]bool
+	openMu                 sync.Mutex
+	openUsed               bool
+	trace                  exactreply.SelectionTrace
+}
 type ExactReplyDriver struct {
-	page             *rod.Page
-	closeBrowser     func()
-	opened, selected bool
-	profileChecked   bool
-	before           map[string]bool
+	*exactReplyPage
+	selected bool
 }
 
 func NewExactReplyDriver(p *rod.Page, closeBrowser func()) *ExactReplyDriver {
-	return &ExactReplyDriver{page: p, closeBrowser: closeBrowser}
+	return &ExactReplyDriver{exactReplyPage: &exactReplyPage{page: p, closeBrowser: closeBrowser}}
 }
 func exactURL(c exactreply.Command) string {
 	q := url.Values{}
@@ -40,7 +48,7 @@ type exactState struct {
 	StateCode string    `json:"stateCode"`
 }
 
-func (d *ExactReplyDriver) state(ctx context.Context, c exactreply.Command, reload bool) (exactState, error) {
+func (d *exactReplyPage) state(ctx context.Context, c exactreply.Command, reload bool) (exactState, error) {
 	p := d.page.Context(ctx)
 	if ctx.Err() != nil {
 		return exactState{}, ctx.Err()
@@ -125,7 +133,7 @@ func exactComments(rows []Comment) ([]Comment, error) {
 	err := visit(rows, 0)
 	return out, err
 }
-func (d *ExactReplyDriver) Inspect(ctx context.Context, c exactreply.Command) (exactreply.Snapshot, error) {
+func (d *exactReplyPage) Inspect(ctx context.Context, c exactreply.Command) (exactreply.Snapshot, error) {
 	s, err := d.state(ctx, c, false)
 	if err != nil {
 		return exactreply.Snapshot{PostID: s.NoteID, SenderID: s.SenderID}, err
@@ -161,12 +169,12 @@ func (d *ExactReplyDriver) Inspect(ctx context.Context, c exactreply.Command) (e
 
 // Each action runs at most once, except explicit read-only rechecks. Keeping the
 // sequence pure allows cancellation/failure injection without a browser account.
-type replySelectSteps struct {
-	idle, target, emptyBinding, click, initialBinding, matchedBinding, activeEmpty, input, filled func(context.Context) error
-}
+type replyOpenSteps struct{ idle, target, emptyBinding, click, initialBinding, activeEmpty func(context.Context) error }
+type replyInputSteps struct{ input, matchedBinding, filled func(context.Context) error }
+type replySelectSteps struct{ idle, target, emptyBinding, click, initialBinding, matchedBinding, activeEmpty, input, filled func(context.Context) error }
 
-func runReplySelect(ctx context.Context, s replySelectSteps) error {
-	for _, step := range []func(context.Context) error{s.idle, s.target, s.emptyBinding, s.idle, s.click, s.initialBinding, s.activeEmpty, s.input, s.matchedBinding, s.filled} {
+func runSteps(ctx context.Context, steps ...func(context.Context) error) error {
+	for _, step := range steps {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -178,6 +186,18 @@ func runReplySelect(ctx context.Context, s replySelectSteps) error {
 		}
 	}
 	return ctx.Err()
+}
+func runReplyOpen(ctx context.Context, s replyOpenSteps) error {
+	return runSteps(ctx, s.idle, s.target, s.emptyBinding, s.idle, s.click, s.initialBinding, s.activeEmpty)
+}
+func runReplyInput(ctx context.Context, s replyInputSteps) error {
+	return runSteps(ctx, s.input, s.matchedBinding, s.filled)
+}
+func runReplySelect(ctx context.Context, s replySelectSteps) error {
+	if err := runReplyOpen(ctx, replyOpenSteps{s.idle, s.target, s.emptyBinding, s.click, s.initialBinding, s.activeEmpty}); err != nil {
+		return err
+	}
+	return runReplyInput(ctx, replyInputSteps{s.input, s.matchedBinding, s.filled})
 }
 
 // At most 15 observations (1.4s of waits). Only transient presentation states
@@ -255,9 +275,20 @@ func replyRenderWait(ctx context.Context) error {
 		return nil
 	}
 }
-func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) error {
-	d.selected = false
-	err := runReplySelect(ctx, replySelectSteps{
+
+// Single use even after a failed selection; callers cannot retry a possibly dispatched click.
+func (d *exactReplyPage) openReply(ctx context.Context, c exactreply.Command) error {
+	d.openMu.Lock()
+	defer d.openMu.Unlock()
+	if d.openUsed {
+		return errors.New("SELECTION_ALREADY_USED")
+	}
+	d.openUsed = true
+	d.trace.ClickEvent = "NOT_OBSERVED"
+	if err := d.recordSelection(ctx, c, "SELECTION_BEFORE"); err != nil {
+		return err
+	}
+	err := runReplyOpen(ctx, replyOpenSteps{
 		idle: func(ctx context.Context) error { return d.composer(ctx, c, "DEFAULT") },
 		target: func(ctx context.Context) error {
 			snap, err := d.Inspect(ctx, c)
@@ -303,9 +334,6 @@ func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) err
 			if err := d.restrictions(ctx, c); err != nil {
 				return err
 			}
-			if err := d.recordSelection(ctx, c, "SELECTION_BEFORE"); err != nil {
-				return err
-			}
 			if err := exactreply.RecordStage(ctx, "SELECT_INTENT", nil, nil); err != nil {
 				return err
 			}
@@ -326,7 +354,6 @@ func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) err
 			}, func(ctx context.Context) error { return d.composer(ctx, c, "BINDING_PENDING") }, replyRenderWait,
 				func(ctx context.Context, stage string) error { return exactreply.RecordStage(ctx, stage, nil, nil) })
 		},
-		matchedBinding: func(ctx context.Context) error { return d.binding(ctx, c, "MATCH") },
 		activeEmpty: func(ctx context.Context) error {
 			// A store update can precede the visible editor/focus transition. Poll
 			// only read-only guards; never click/focus/type to force a passing UI.
@@ -346,6 +373,26 @@ func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) err
 				}
 			})
 		},
+	})
+	if err == nil {
+		err = d.restrictions(ctx, c)
+	}
+	if ctx.Err() == nil {
+		if e := d.recordSelection(ctx, c, "SELECTION_STOPPED"); e != nil {
+			return e
+		}
+	}
+	return err
+}
+func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) error {
+	d.selected = false
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err := d.openReply(ctx, c); err != nil {
+		return err
+	}
+	err := runReplyInput(ctx, replyInputSteps{
 		input: func(ctx context.Context) error {
 			inputs, err := d.page.Context(ctx).Elements("div.input-box p.content-input")
 			if err != nil || len(inputs) != 1 {
@@ -368,21 +415,17 @@ func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) err
 			}
 			return d.restrictions(ctx, c)
 		},
-		filled: func(ctx context.Context) error { return d.composer(ctx, c, "FILLED") },
+		matchedBinding: func(ctx context.Context) error { return d.binding(ctx, c, "MATCH") },
+		filled:         func(ctx context.Context) error { return d.composer(ctx, c, "FILLED") },
 	})
 	if err != nil {
-		if ctx.Err() == nil {
-			if diagnosticErr := d.recordSelection(ctx, c, "SELECTION_STOPPED"); diagnosticErr != nil {
-				return diagnosticErr
-			}
-		}
 		return err
 	}
 	d.selected = true
 	return nil
 }
 
-func (d *ExactReplyDriver) binding(ctx context.Context, c exactreply.Command, expected string) error {
+func (d *exactReplyPage) binding(ctx context.Context, c exactreply.Command, expected string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -405,7 +448,7 @@ func (d *ExactReplyDriver) binding(ctx context.Context, c exactreply.Command, ex
 	}
 	return errors.New(code)
 }
-func (d *ExactReplyDriver) composer(ctx context.Context, c exactreply.Command, phase string) error {
+func (d *exactReplyPage) composer(ctx context.Context, c exactreply.Command, phase string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -573,7 +616,7 @@ func (d *ExactReplyDriver) Readback(ctx context.Context, c exactreply.Command, r
 	}
 	return found, nil
 }
-func (d *ExactReplyDriver) Close(ctx context.Context) error {
+func (d *exactReplyPage) Close(ctx context.Context) error {
 	// Cancellable page contexts stop future operations; browser shutdown must also
 	// finish before the engine reports stopped. Uncertain close poisons the instance.
 	done := make(chan bool, 1)
@@ -675,7 +718,7 @@ const exactReplyBindingGuard = `(postId,targetId,authorId,senderId) => {
 }`
 
 // Uses the exact send page. Missing identity is never "clear to send".
-func (d *ExactReplyDriver) restrictions(ctx context.Context, c exactreply.Command) error {
+func (d *exactReplyPage) restrictions(ctx context.Context, c exactreply.Command) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -728,7 +771,7 @@ func (d *ExactReplyDriver) FinalRestriction(ctx context.Context, c exactreply.Co
 
 // Runs on the exact owned send page before target navigation/editor access. It
 // detects restrictions, never supplies the missing positive send qualification.
-func (d *ExactReplyDriver) profileRestrictions(ctx context.Context, c exactreply.Command) error {
+func (d *exactReplyPage) profileRestrictions(ctx context.Context, c exactreply.Command) error {
 	inspector := NewRestrictionInspectionDriver(d.page, func() {})
 	inspector.textOnly = true
 	defer func() {
@@ -767,7 +810,7 @@ func profileSendBlock(o exactreply.RestrictionObservation) error {
 // One physical click at the verified point; no jitter, JS click, focus forcing,
 // retry or alternate selector. Hover/layout/virtual-list changes are rechecked
 // before mouse down. A successful dispatch is not a binding or delivery proof.
-func (d *ExactReplyDriver) clickExactReply(ctx context.Context, c exactreply.Command, button *rod.Element) error {
+func (d *exactReplyPage) clickExactReply(ctx context.Context, c exactreply.Command, button *rod.Element) error {
 	p := d.page.Context(ctx)
 	top, err := p.Eval(`() => window === window.top`)
 	if err != nil || !top.Value.Bool() {
@@ -832,6 +875,16 @@ func (d *ExactReplyDriver) clickExactReply(ctx context.Context, c exactreply.Com
 	if err = ctx.Err(); err != nil {
 		return err
 	}
+	if err = d.recordSelection(ctx, c, "SELECTION_SCROLLED"); err != nil {
+		return err
+	}
+	if err = exactreply.RecordStage(ctx, "SELECT_CLICK_INTENT", nil, nil); err != nil {
+		return err
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	d.trace.ClickAttempted = true
 	clickErr := p.Mouse.Click(proto.InputMouseButtonLeft, 1)
 	event, e := p.Evaluate(rod.Eval(`() => this.read()`).This(observer))
 	stage := "SELECT_EVENT_UNAVAILABLE"
@@ -847,6 +900,7 @@ func (d *ExactReplyDriver) clickExactReply(ctx context.Context, c exactreply.Com
 			stage = "SELECT_EVENT_MULTIPLE"
 		}
 	}
+	d.trace.ClickEvent = stage
 	if err = exactreply.RecordStage(ctx, stage, nil, nil); err != nil {
 		return err
 	}
@@ -877,7 +931,7 @@ const exactReplyPointGuard = `(targetId,x,y) => {
  return 'EXACT';
 }`
 
-func (d *ExactReplyDriver) selection(ctx context.Context, c exactreply.Command) (exactreply.SelectionEvidence, error) {
+func (d *exactReplyPage) selection(ctx context.Context, c exactreply.Command) (exactreply.SelectionEvidence, error) {
 	var s exactreply.SelectionEvidence
 	v, err := d.page.Context(ctx).Eval(exactReplySelectionObservation, c.TargetID, c.RecipientID)
 	if err != nil || len(v.Value.Str()) > 2048 {
@@ -888,10 +942,18 @@ func (d *ExactReplyDriver) selection(ctx context.Context, c exactreply.Command) 
 	}
 	return s, nil
 }
-func (d *ExactReplyDriver) recordSelection(ctx context.Context, c exactreply.Command, stage string) error {
+func (d *exactReplyPage) recordSelection(ctx context.Context, c exactreply.Command, stage string) error {
 	s, err := d.selection(ctx, c)
 	if err != nil {
 		return err
+	}
+	switch stage {
+	case "SELECTION_BEFORE":
+		d.trace.Before = &s
+	case "SELECTION_SCROLLED":
+		d.trace.Scrolled = &s
+	default:
+		d.trace.After = &s
 	}
 	return exactreply.RecordSelection(ctx, stage, s)
 }
@@ -902,6 +964,7 @@ func (d *ExactReplyDriver) recordSelection(ctx context.Context, c exactreply.Com
 const exactReplySelectionObservation = `(targetId,authorId) => {
  const nodes=[...document.querySelectorAll('#comment-'+targetId)];
  const o={frame:window===window.top?'TOP':'SUBFRAME',target:nodes.length===0?'MISSING':nodes.length===1?'UNIQUE':'AMBIGUOUS',depth:'UNKNOWN',button:'MISSING',centerHit:'UNAVAILABLE',component:'ABSENT',handler:'ABSENT',bindingShape:'MISSING',binding:'INVALID',editor:'ABSENT',replyUI:'INACTIVE',focused:false};
+ if(typeof innerWidth==='number')o.viewport={width:Math.round(innerWidth),height:Math.round(innerHeight),scrollX:Math.max(0,Math.round(scrollX)),scrollY:Math.max(0,Math.round(scrollY))};
  if(nodes.length===1){
   const target=nodes[0];o.depth=target.parentElement?.closest('.comment-item')?'REPLY':'ROOT';
   const buttons=[...target.querySelectorAll('.right .interactions .reply')].filter(e=>e.closest('.comment-item')===target);

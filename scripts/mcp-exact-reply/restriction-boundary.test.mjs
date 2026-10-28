@@ -33,7 +33,7 @@ test('profile navigation requires a same-origin exact self link and never visits
 });
 
 test('send driver checks identity-bound profile before post navigation and persists safe text before any editor work',()=>{
- const driver=read('exact_reply_driver.go');const state=driver.split('func (d *ExactReplyDriver) state')[1].split('func exactComments')[0];
+ const driver=read('exact_reply_driver.go');const state=driver.split('func (d *exactReplyPage) state')[1].split('func exactComments')[0];
  assert.ok(state.indexOf('d.profileRestrictions(ctx, c)')<state.indexOf('p.Navigate(exactURL(c))'));
  assert.match(driver,/NewRestrictionInspectionDriver\(d.page, func\(\) \{\}\)/);
  assert.match(driver,/inspector.textOnly = true/);

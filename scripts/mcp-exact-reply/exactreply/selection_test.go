@@ -10,7 +10,7 @@ import (
 )
 
 func selectionFixture() SelectionEvidence {
-	return SelectionEvidence{"TOP", "UNIQUE", "ROOT", "EXACT", "EXACT", "MATCH", "PRESENT", "VALUE_REF", "EMPTY", "EMPTY", "INACTIVE", false}
+	return SelectionEvidence{nil, "TOP", "UNIQUE", "ROOT", "EXACT", "EXACT", "MATCH", "PRESENT", "VALUE_REF", "EMPTY", "EMPTY", "INACTIVE", false}
 }
 func TestSelectionEvidenceOnlyFixedEnums(t *testing.T) {
 	s := selectionFixture()

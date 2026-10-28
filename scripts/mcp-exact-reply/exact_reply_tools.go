@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/xpzouying/xiaohongshu-mcp/exactreply"
 	"github.com/xpzouying/xiaohongshu-mcp/xiaohongshu"
@@ -89,3 +91,41 @@ func registerExactReplyTools(server *mcp.Server) {
 		return nil, engine.Status(c), nil
 	})
 }
+
+// Diagnostic mode is exclusive. The process exposes no sender or legacy HTTP actions.
+func registerSelectionDiagnosticTool(server *mcp.Server) {
+	registerSelectionDiagnosticFactory(server, func() (exactreply.SelectionInspector, error) {
+		b := newBrowser()
+		complete := false
+		defer func() {
+			if !complete {
+				b.Close()
+			}
+		}()
+		p := b.NewPage()
+		d := xiaohongshu.NewSelectionDiagnosticDriver(p, func() { b.Close() })
+		complete = true
+		return d, nil
+	})
+}
+func registerSelectionDiagnosticFactory(server *mcp.Server, factory func() (exactreply.SelectionInspector, error)) {
+	engine := &exactreply.SelectionDiagnosticEngine{}
+	mcp.AddTool(server, &mcp.Tool{Name: "workbench_reply_selection_diagnostic", Description: exactreply.SelectionDiagnosticProtocol + " one reply-control click; observe and close; no input or submit", InputSchema: json.RawMessage(selectionDiagnosticSchema), Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(false)}}, func(ctx context.Context, req *mcp.CallToolRequest, t exactreply.SelectionTarget) (*mcp.CallToolResult, any, error) {
+		directory, err := os.Getwd()
+		if err != nil {
+			return nil, nil, err
+		}
+		if !t.Valid() {
+			return nil, nil, fmtSelectionInvalid()
+		}
+		journal, err := exactreply.OpenJournal(directory, t.InspectionID)
+		if err != nil {
+			return nil, nil, fmtSelectionInvalid()
+		}
+		defer journal.Close()
+		return nil, engine.Execute(exactreply.WithJournal(ctx, journal), t, factory), nil
+	})
+}
+func fmtSelectionInvalid() error { return errors.New("SELECTION_DIAGNOSTIC_UNAVAILABLE") }
+
+const selectionDiagnosticSchema = `{"type":"object","additionalProperties":false,"required":["protocol","inspectionId","accountId","senderId","postId","targetCommentId","recipientId","postReference","maxReplySelections","maxInputs","maxSubmissions"],"properties":{"protocol":{"type":"string","const":"workbench.xhs.reply-selection-diagnostic.v1"},"inspectionId":{"type":"string","pattern":"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"},"accountId":{"type":"string","pattern":"^[A-Za-z0-9:_-]{1,200}$"},"senderId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"postId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"targetCommentId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"recipientId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"postReference":{"type":"object","additionalProperties":false,"required":["postId","token","source"],"properties":{"postId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"token":{"type":"string","minLength":1,"maxLength":4096,"pattern":"^[A-Za-z0-9_+/=-]+$"},"source":{"type":"string","enum":["pc_feed","pc_search"]}}},"maxReplySelections":{"type":"integer","const":1},"maxInputs":{"type":"integer","const":0},"maxSubmissions":{"type":"integer","const":0}}}`

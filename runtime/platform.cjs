@@ -55,7 +55,7 @@ async function guardCurrentProcess(){
  // stdin EOF when Node exits closes the owned job and its descendants. No service or scheduled task.
  child.unref();child.stdin.unref();child.stdout.unref();
 }
-const reviewed={macMcp:'549ad010337ca8b651257c6397f20cfb592910bfa152448c080a4c3c47ada70c',winMcp:windowsTools.mcpSha256};
+const reviewed={macMcp:'5d5bc631c9b783c26ea1a348bde34b1eb62dce46738dcb851130fdc216c31c8a',winMcp:windowsTools.mcpSha256};
 const browserVersion='148.0.7778.215';
 function toolPlan(home,platform=process.platform,localData){
  if(platform==='win32'){windowsPath(localData);return {mcp:path.win32.join(localData,'SocialLeadWorkbench','tools','xiaohongshu-mcp-windows-amd64.exe'),browserBase:path.win32.join(localData,'xiaohongshu-mcp','browser',browserVersion),hash:reviewed.winMcp};}

@@ -16,7 +16,7 @@ test('registered preflight has no call path to send engine; narrow driver has on
  assert.doesNotMatch(source,/\.Select\(|\.Submit\(|humanize\.|\.Input\(|\.Click\(|\.Type\(/);
  const methods=[...source.matchAll(/func \(d \*ExactPreflightDriver\)\s+(\w+)/g)].map(x=>x[1]);assert.deepEqual(methods,['Inspect','Close']);
  assert.doesNotMatch(js,/\.click\(|\.focus\(|\.dispatchEvent\(|\bfetch\(|XMLHttpRequest|\.scroll|textContent\s*=/);
- const inspection=read('exact_reply_driver.go').split('func (d *ExactReplyDriver) Select')[0];assert.doesNotMatch(inspection,/humanize\.|\.Click\(|\.Input\(|\.Select\(|\.Submit\(/);
+ const inspection=read('exact_reply_driver.go').split('func (d *exactReplyPage) openReply')[0];assert.doesNotMatch(inspection,/humanize\.|\.Click\(|\.Input\(|\.Select\(|\.Submit\(/);
 });
 const pageSource=read('exact_preflight_page.go'),pageJS=pageSource.match(/const exactPreflightPage = `([\s\S]*?)`/)[1];
 function pageProbe({href='https://www.xiaohongshu.com/explore/post?xsec_token=synthetic%2B%2F%3D&xsec_source=pc_feed',state={note:{noteDetailMap:{post:{note:{noteId:'post'}}}}},readyState='complete'}={}){return JSON.parse(vm.runInNewContext('('+pageJS+")('post','synthetic+/=','pc_feed')",{window:{location:{href},__INITIAL_STATE__:state},document:{readyState},URL},{timeout:500}));}

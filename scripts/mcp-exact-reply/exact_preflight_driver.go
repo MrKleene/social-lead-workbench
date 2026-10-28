@@ -9,12 +9,12 @@ import (
 )
 
 // A new named type, NOT an embedded send driver: callers see only Inspect/Close.
-type ExactPreflightDriver struct{ read *ExactReplyDriver }
+type ExactPreflightDriver struct{ read *exactReplyPage }
 
 func NewExactPreflightDriver(p *rod.Page, closeBrowser func()) *ExactPreflightDriver {
 	// Diagnostic-only reader retains its original one-post navigation scope.
 	// This type exposes no Select/Submit and cannot grant sending permission.
-	return &ExactPreflightDriver{read: &ExactReplyDriver{page: p, closeBrowser: closeBrowser, profileChecked: true}}
+	return &ExactPreflightDriver{read: &exactReplyPage{page: p, closeBrowser: closeBrowser, profileChecked: true}}
 }
 
 var _ exactreply.ReadOnlyInspector = (*ExactPreflightDriver)(nil)
