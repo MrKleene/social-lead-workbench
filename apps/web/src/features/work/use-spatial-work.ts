@@ -40,7 +40,7 @@ export function useSpatialWork() {
   const selectedConfig = configs.find(c => c.id === params.get('config')) || configs.find(c => c.enabled) || configs[0];
   return { detailScroll, accounts, admin, id, view, work, active, rows, page, pages, configs, selectedConfig, openModule, setView, closeDetail, openLead,
     openCollectionSettings:()=>navigate(`/work?module=runs${selectedConfig?`&config=${encodeURIComponent(selectedConfig.id)}`:''}&panel=collection-settings`),
-    overview: () => navigate(selectedConfig ? `/work?config=${selectedConfig.id}` : '/work'), setConfig: (config: string) => setParams(p => { p.set('config', config); return p; }),
+    overview: () => navigate(selectedConfig ? `/work?config=${selectedConfig.id}` : '/work'), setConfig: (config: string) => setParams(p => { p.set('config', config);p.delete('run');p.delete('fresh'); return p; }),
     setPage: (next: number) => { setPagination(current=>({...current,[pageKey]:Math.max(0,Math.min(next,pages-1))})); if(id) closeDetail(); },
     unread: (work.notices.data || []).filter(n => !n.reads.length),
   };

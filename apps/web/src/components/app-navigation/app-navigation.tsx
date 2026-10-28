@@ -1,16 +1,22 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {Link} from 'react-router-dom';
-import {DropdownMenu} from 'radix-ui';
-import {Archive,Bell,BriefcaseBusiness,Check,ChevronDown,ContactRound,House,ListChecks,LogOut,MessageSquare,Play,ScanLine,Settings2,ShieldCheck,UsersRound} from 'lucide-react';
+import {Archive,Bell,BriefcaseBusiness,ContactRound,House,ListChecks,LogOut,MessageSquare,Play,ScanLine,Send,Settings2,ShieldCheck,UsersRound,ArrowUpRight} from 'lucide-react';
+import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import type {useWorkspaceMotion} from '@/features/work/use-workspace-motion';
 import {useAppNavigation} from './use-app-navigation';
-const icons:Record<string,typeof House>={overview:House,runs:Play,archive:Archive,review:ScanLine,'reply-history':MessageSquare,matches:UsersRound,follow:BriefcaseBusiness,'all-leads':UsersRound,tasks:ListChecks,templates:MessageSquare,notices:Bell,accounts:ContactRound,settings:Settings2,platforms:ShieldCheck};
+const icons:Record<string,typeof House>={overview:House,runs:Play,archive:Archive,review:ScanLine,'reply-history':MessageSquare,'auto-contact':Send,matches:UsersRound,follow:BriefcaseBusiness,'all-leads':UsersRound,tasks:ListChecks,templates:MessageSquare,notices:Bell,accounts:ContactRound,settings:Settings2,platforms:ShieldCheck};
 type Props={admin:boolean;name:string;motion:ReturnType<typeof useWorkspaceMotion>;loggingOut:boolean;onLogout:()=>void};
 export function AppNavigation({admin,name,motion,loggingOut,onLogout}:Props){
- const n=useAppNavigation(admin),[open,setOpen]=useState(false);
- useEffect(()=>{setOpen(false);},[n.locationKey]);
- return <><nav ref={n.scroll} className="app-primary-navigation" aria-label="常用导航">{n.primary.map(item=>{const Icon=icons[item.id];return <Link key={item.id} to={n.href(item)} aria-current={n.active===item.id?'page':undefined}><Icon size={16} aria-hidden="true"/><span>{item.label}</span></Link>;})}</nav>
- <div className="app-header-actions"><DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}><DropdownMenu.Trigger asChild><button type="button" className="app-more-trigger" data-active={!!n.currentSecondary} aria-label={n.currentSecondary?`更多导航，当前：${n.currentSecondary.label}`:'更多导航'} title={n.currentSecondary?`更多导航 · 当前：${n.currentSecondary.label}`:'更多导航'}><span>{n.currentSecondary?.label||'更多'}</span><ChevronDown size={15} aria-hidden="true"/></button></DropdownMenu.Trigger>
- <DropdownMenu.Portal><DropdownMenu.Content className="app-navigation-menu" align="end" sideOffset={10} collisionPadding={12} aria-label="更多导航"><DropdownMenu.Label className="app-menu-user"><strong>{name}</strong><span>{admin?'管理员':'销售'}</span></DropdownMenu.Label><DropdownMenu.Separator className="app-menu-separator"/>{['工作管理','设置'].map(group=><DropdownMenu.Group key={group}><DropdownMenu.Label className="app-menu-label">{group}</DropdownMenu.Label>{n.secondary.filter(item=>item.group===group).map(item=>{const Icon=icons[item.id];return <DropdownMenu.Item asChild key={item.id}><Link className="app-menu-item" to={n.href(item)} aria-current={n.active===item.id?'page':undefined}><Icon size={16} aria-hidden="true"/><span>{item.label}</span>{n.active===item.id&&<Check size={15} aria-hidden="true"/>}</Link></DropdownMenu.Item>;})}</DropdownMenu.Group>)}<DropdownMenu.Separator className="app-menu-separator"/><DropdownMenu.CheckboxItem className="app-menu-item" checked={!motion.reduced} onCheckedChange={motion.toggle}><span className="app-motion-check"><DropdownMenu.ItemIndicator><Check size={14}/></DropdownMenu.ItemIndicator></span><span>界面动效</span><small>{motion.reduced?'关闭':'开启'}</small></DropdownMenu.CheckboxItem></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root>
- <button type="button" className="app-logout" aria-label="退出登录" title="退出登录" disabled={loggingOut} onClick={onLogout}><LogOut size={17}/></button></div></>;
+ const n=useAppNavigation(admin),[panel,setPanel]=useState<'工作管理'|'设置'|null>(null);
+ useEffect(()=>{setPanel(null);},[n.locationKey]);
+ const trigger=useRef<HTMLButtonElement|null>(null);
+ const items=n.primary;
+ const navigation=(dock=false)=><nav ref={dock?undefined:n.scroll} className={dock?'simple-dock':'app-primary-navigation'} aria-label={dock?'业务快捷入口':'常用导航'}>
+   {items.map(item=>{const Icon=icons[item.id];return <Link key={item.id} to={n.href(item)} aria-current={n.active===item.id||item.id==='overview'&&n.active==='runs'?'page':undefined}><Icon size={17} aria-hidden="true"/><span>{item.label}</span></Link>;})}
+   {(['工作管理','设置'] as const).map(group=>{const Icon=group==='设置'?Settings2:UsersRound;return <button type="button" key={group} aria-label={dock?'快捷'+(group==='设置'?'设置':'业务'):(group==='设置'?'设置':'业务')} aria-haspopup="dialog" aria-expanded={panel===group} data-active={n.active!=='runs'&&n.currentSecondary?.group===group} onClick={e=>{trigger.current=e.currentTarget;setPanel(group);}}><Icon size={17}/><span>{group==='设置'?'设置':'业务'}</span></button>;})}
+ </nav>;
+ return <>{navigation()}<div className="app-header-actions"><span className="simple-role">{admin?'获客工作台':'销售工作台'}</span><button type="button" className="app-logout" aria-label="退出登录" title="退出登录" disabled={loggingOut} onClick={onLogout}><LogOut size={17}/></button></div>
+ {navigation(true)}
+ <Sheet open={!!panel} onOpenChange={open=>{if(!open)setPanel(null);}}><SheetContent className="navigation-dialog" onCloseAutoFocus={e=>{e.preventDefault();trigger.current?.focus({preventScroll:true});}}><SheetHeader><SheetTitle>{panel==='设置'?'设置':'业务'}</SheetTitle><SheetDescription>{panel==='设置'?'账号、搜索、模型与工作偏好。':'查看原文之后，继续处理线索与跟进。'}</SheetDescription></SheetHeader><div className="navigation-dialog-body"><div className="navigation-grid">{n.secondary.filter(item=>item.group===panel).map(item=>{const Icon=icons[item.id];return <Link key={item.id} to={n.href(item)} aria-current={n.active===item.id?'page':undefined}><Icon size={20}/><span>{item.label}</span><ArrowUpRight size={15}/></Link>;})}</div>{panel==='设置'&&<div className="navigation-preferences"><span>{name} · {admin?'管理员':'销售'}</span><label><input type="checkbox" checked={!motion.reduced} onChange={motion.toggle}/>界面动效</label><small>遵循系统减少动效偏好，也可在这里切换。</small></div>}</div></SheetContent></Sheet>
+ </>;
 }

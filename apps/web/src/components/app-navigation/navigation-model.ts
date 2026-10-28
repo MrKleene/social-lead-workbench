@@ -2,14 +2,15 @@ import {activeWorkModule,type SpaceModule} from '../../features/work/navigation-
 export type NavigationItem={id:string;label:string;path:string;module?:SpaceModule;adminOnly?:boolean;group?:string};
 export const primaryNavigation:NavigationItem[]=[
  {id:'overview',label:'工作台',path:'/work'},
- {id:'runs',label:'采集任务',path:'/work?module=runs',module:'runs',adminOnly:true},
  {id:'archive',label:'采集信息',path:'/work?module=archive',module:'archive',adminOnly:true},
  {id:'reply-history',label:'回复记录',path:'/reply-history',adminOnly:true},
- {id:'review',label:'评论审核',path:'/comment-review',adminOnly:true},
- {id:'matches',label:'线索池',path:'/work?module=matches',module:'matches'},
- {id:'follow',label:'销售跟进',path:'/work?module=follow',module:'follow'},
 ];
 export const secondaryNavigation:NavigationItem[]=[
+ {id:'runs',label:'采集任务',path:'/work?module=runs',module:'runs',adminOnly:true,group:'工作管理'},
+ {id:'review',label:'评论审核',path:'/comment-review',adminOnly:true,group:'工作管理'},
+ {id:'auto-contact',label:'自动回复与账号矩阵',path:'/auto-contact',adminOnly:true,group:'工作管理'},
+ {id:'matches',label:'线索池',path:'/work?module=matches',module:'matches',group:'工作管理'},
+ {id:'follow',label:'销售跟进',path:'/work?module=follow',module:'follow',group:'工作管理'},
  {id:'all-leads',label:'全部线索',path:'/leads',group:'工作管理'},
  {id:'tasks',label:'人工任务',path:'/tasks',group:'工作管理'},
  {id:'templates',label:'联系与回复',path:'/work?module=templates',module:'templates',adminOnly:true,group:'工作管理'},
@@ -22,6 +23,7 @@ export const isWorkPath=(path:string)=>/^\/work(?:\/|$)/.test(path);
 export function activeNavigation(path:string,search:string,admin:boolean){
  if(isWorkPath(path))return activeWorkModule(search,path.split('/')[2],admin)||'overview';
  if(/^\/reply-history(?:\/|$)/.test(path))return admin?'reply-history':null;
+ if(path==='/auto-contact')return admin?'auto-contact':null;
  if(/^\/comment-review(?:\/|$)/.test(path))return admin?'review':null;
  if(/^\/leads(?:\/|$)/.test(path))return 'all-leads';
  if(path==='/tasks')return 'tasks';

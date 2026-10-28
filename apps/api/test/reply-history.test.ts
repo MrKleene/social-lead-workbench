@@ -2,6 +2,20 @@ import 'reflect-metadata';
 import {expect,it,vi} from 'vitest';
 import {replyHistoryItem} from '../src/auto-contact/reply-history';
 import {ContactSettingsService} from '../src/auto-contact/contact-settings.service';
+it('task-scoped queue keeps mode/status, pagination and administrator restrictions',async()=>{
+ const db:any={autoContactJob:{findMany:vi.fn(async()=>[]),count:vi.fn(async()=>0)},contactAttempt:{findMany:vi.fn(async()=>[])},platformAccount:{findMany:vi.fn(async()=>[])},auditLog:{findMany:vi.fn(async()=>[])}};
+ const service=new ContactSettingsService(db,{mode:'REAL'} as any);
+ await expect(service.jobs({role:'SALES'} as any,0,undefined,'run-old')).rejects.toThrow();
+ expect(db.autoContactJob.findMany).not.toHaveBeenCalled();
+ await service.jobs({role:'ADMIN'} as any,20,'UNKNOWN','run-old');
+ const where={mode:'REAL',status:'UNKNOWN',review:{runId:'run-old'}};
+ expect(db.autoContactJob.findMany).toHaveBeenCalledWith(expect.objectContaining({where,skip:20,take:20}));
+ expect(db.autoContactJob.count).toHaveBeenCalledWith({where});
+ await service.jobs({role:'ADMIN'} as any,0);
+ expect(db.autoContactJob.count).toHaveBeenLastCalledWith({where:{mode:'REAL'}});
+ db.autoContactJob.findMany.mockRejectedValueOnce(Error('offline'));
+ await expect(service.jobs({role:'ADMIN'} as any,0,undefined,'missing')).rejects.toThrow('offline');
+});
 const now=new Date('2026-10-28T15:07:20Z'),sender='a'.repeat(24),post='b'.repeat(24),comment='c'.repeat(24),recipient='d'.repeat(24),protocol='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
 const attempt:any={id:'attempt',requestKey:'single:1',jobId:null,mode:'REAL',channel:'COMMENT',outcome:'CONFIRMED',content:'回复原文 <script>alert(1)</script>',day:'REAL:Asia/Shanghai:2026-10-28',createdAt:now,attemptedAt:now,confirmedAt:now,platformReceipt:'e'.repeat(24),resolutionNote:'已确认',historySnapshot:{platform:'XHS',senderPlatformId:sender,accountLabel:'小红书 · 待扫码',recipientId:recipient,postId:post,commentId:comment,source:{post:{title:'原帖标题',sourceReference:{token:'never-expose'}},comment:{userId:recipient,commentId:comment,authorNickname:'原收件人',comment:'原评论'}}}};
 function journal(identity='MATCH',title='Te Fure - 小红书',path='/user/profile/[SENDER]') {return {action:'SINGLE_REPLY_EXECUTION_STAGE',createdAt:now,metadata:{stage:'TRANSPORT_STOP',protocolAttemptId:protocol,stopped:true,journal:{state:'AVAILABLE',records:[{sequence:1,attemptId:protocol,stage:'RESTRICTION_CHECK',at:now.toISOString(),evidence:{identity,title,pathname:path,warnings:[],screenshotState:'NOT_CAPTURED'}}]}}};}

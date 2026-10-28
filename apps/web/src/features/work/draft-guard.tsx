@@ -6,7 +6,7 @@ const DraftContext = createContext<{ drafts: Map<symbol,DraftKind>; confirmLeave
 export function DraftGuardProvider({children}:{children:ReactNode}) {
  const drafts=useRef(new Map<symbol,DraftKind>()).current;
  const confirmLeave=useCallback(()=>!drafts.size||window.confirm('还有未保存的修改。离开会丢弃这些修改，确定离开吗？'),[drafts]);
- const blocker=useBlocker(({currentLocation,nextLocation})=>shouldProtectDrafts([...drafts.values()],currentLocation.pathname,nextLocation.pathname));
+ const blocker=useBlocker(({currentLocation,nextLocation})=>shouldProtectDrafts([...drafts.values()],currentLocation.pathname,nextLocation.pathname)||drafts.size>0&&currentLocation.pathname==='/work'&&nextLocation.pathname==='/work'&&['run','policy'].some(key=>new URLSearchParams(currentLocation.search).get(key)!==new URLSearchParams(nextLocation.search).get(key)));
  useEffect(()=>{if(blocker.state==='blocked'){if(confirmLeave())blocker.proceed();else blocker.reset();}},[blocker,confirmLeave]);
  useEffect(()=>{const before=(event:BeforeUnloadEvent)=>{if(drafts.size){event.preventDefault();event.returnValue='';}};window.addEventListener('beforeunload',before);return()=>window.removeEventListener('beforeunload',before);},[drafts]);
  return <DraftContext.Provider value={{drafts,confirmLeave}}>{children}</DraftContext.Provider>;

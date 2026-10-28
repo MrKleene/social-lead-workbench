@@ -19,6 +19,7 @@ import "./features/work/mist.css";
 import "./features/auth/login.css";
 import "./features/work/ui-consistency.css";
 import "./components/app-navigation/app-navigation.css";
+import "./features/work/simple.css";
 
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 10000 } },

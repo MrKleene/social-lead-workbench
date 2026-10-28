@@ -48,7 +48,7 @@ class AutoContactController {
     @Req()
     r: AuthedRequest,
     @Query()
-    q: unknown) { const b = parse(z.object({ offset: z.coerce.number().int().min(0).max(1000000).default(0), status: z.enum(contactStatuses).optional() }).strict(), q); return this.settings.jobs(r.actor, b.offset, b.status); }
+    q: unknown) { const b = parse(z.object({ offset: z.coerce.number().int().min(0).max(1000000).default(0), status: z.enum(contactStatuses).optional(), runId:z.string().min(1).max(200).optional() }).strict(), q); return this.settings.jobs(r.actor, b.offset, b.status, b.runId); }
     @Post('jobs/:id/cancel')
     cancel(
     @Req()
