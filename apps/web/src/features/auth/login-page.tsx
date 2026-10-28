@@ -11,12 +11,13 @@ import {
 } from "@/components/ui/field";
 import { ErrorNotice } from "@/components/feedback";
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, sessionError } = useAuth();
+  const [remember, setRemember] = useState(false);
   const [email, setEmail] = useState(""),
     [password, setPassword] = useState("");
   function submit(e: FormEvent) {
     e.preventDefault();
-    login.mutate({ email, password }, { onSettled: () => setPassword("") });
+    login.mutate({ email, password, remember }, { onSettled: () => setPassword("") });
   }
   return (
     <main className="login-screen mist-login">
@@ -77,7 +78,11 @@ export function LoginPage() {
               </FieldDescription>
             </Field>
           </FieldGroup>
-          <ErrorNotice error={login.error} />
+          <label className="login-remember">
+            <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
+            <span>在此设备记住登录 30 天<small>仅在自己的设备上勾选；退出登录即失效。</small></span>
+          </label>
+          <ErrorNotice error={login.error || sessionError} />
           <Button className="w-full" type="submit" disabled={login.isPending}>
             {login.isPending ? "正在验证…" : "登录工作台"}
             <ArrowRight data-icon="inline-end" />

@@ -7,6 +7,7 @@ import {
   Injectable,
   Module,
   Post,
+  Param,
   Req,
   Res,
   UnauthorizedException,
@@ -24,21 +25,21 @@ import {
   hashPassword,
   token,
   verifyPassword,
+  requireAdmin,
 } from "./security";
 import { parse } from "../common/validation";
 import { z } from "zod";
+import { lockUser, revokeCookies, revokeUserAuth, rotateRefresh, sessionExpiry, SESSION_MS, REMEMBER_MS } from "./remember-login";
 export type AuthedRequest = Request & {
   actor: Actor;
   sessionId: string;
   csrfToken: string;
 };
-const actorSelect = { id: true, name: true, email: true, role: true } as const;
-const cookieOptions = () => ({
+export const cookieOptions = (path = "/api") => ({
   httpOnly: true,
   sameSite: "strict" as const,
-  secure: process.env.COOKIE_SECURE === "true",
-  path: "/api",
-  maxAge: 8 * 60 * 60 * 1000,
+  secure: process.env.COOKIE_SECURE === "true" || !!process.env.APP_ORIGIN?.startsWith("https://"),
+  path,
 });
 @Injectable()
 export class SessionGuard implements CanActivate {
@@ -49,10 +50,11 @@ export class SessionGuard implements CanActivate {
     assertSession(typeof raw === "string" && raw.length === 64);
     const session = await this.db.session.findUnique({
       where: { id: digest(raw) },
-      include: { user: true },
+      include: { user: true, refreshGrant: true },
     });
     assertSession(
-      !!session && session.expiresAt > new Date() && session.user.active,
+      !!session && session.expiresAt > new Date() && session.user.active &&
+        (!session.refreshGrantId || (!!session.refreshGrant && !session.refreshGrant.revokedAt && session.refreshGrant.expiresAt > new Date())),
     );
     if (!session) throw new UnauthorizedException();
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
@@ -75,7 +77,7 @@ export class SessionGuard implements CanActivate {
 export class AuthService {
   private dummy = hashPassword(token());
   constructor(@Inject(Db) private db: Db) {}
-  async login(email: string, password: string, ip: string) {
+  async login(email: string, password: string, ip: string, remember = false) {
     const window = Math.floor(Date.now() / 900000);
     for (const [key, limit] of [
       [`ip:${ip}`, 30],
@@ -101,13 +103,23 @@ export class AuthService {
       throw new UnauthorizedException("邮箱或密码错误");
     const raw = token(),
       csrfToken = token();
+    const refreshRaw = remember ? token() : null;
+    const rememberUntil = remember ? new Date(Date.now() + REMEMBER_MS) : null;
     await this.db.$transaction(async (tx) => {
+      await lockUser(tx, user.id);
+      const current = await tx.user.findUnique({ where: { id: user.id } });
+      if (!current?.active || current.passwordHash !== user.passwordHash) throw new UnauthorizedException("请重新登录");
+      const grant = refreshRaw && rememberUntil ? await tx.refreshGrant.create({ data: {
+        userId: user.id, csrfToken, expiresAt: rememberUntil,
+        tokens: { create: { id: digest(refreshRaw) } },
+      } }) : null;
       await tx.session.create({
         data: {
           id: digest(raw),
           userId: user.id,
           csrfToken,
-          expiresAt: new Date(Date.now() + 8 * 3600000),
+          expiresAt: sessionExpiry(Date.now(), rememberUntil ?? undefined),
+          refreshGrantId: grant?.id,
         },
       });
       await tx.auditLog.create({
@@ -116,6 +128,8 @@ export class AuthService {
     });
     return {
       raw,
+      refreshRaw,
+      rememberUntil,
       csrfToken,
       user: {
         id: user.id,
@@ -147,6 +161,7 @@ export class AuthController {
             .max(254)
             .transform((v) => v.toLowerCase()),
           password: z.string().min(1).max(256),
+          remember: z.boolean().default(false),
         })
         .strict(),
       req.body,
@@ -155,25 +170,47 @@ export class AuthController {
       body.email,
       body.password,
       req.ip || "unknown",
+      body.remember,
     );
-    if (typeof req.cookies?.crm_session === "string")
-      await this.db.session.deleteMany({
-        where: { id: digest(req.cookies.crm_session) },
-      });
-    res.cookie("crm_session", result.raw, cookieOptions());
+    await revokeCookies(this.db, req.cookies?.crm_session, req.cookies?.crm_refresh);
+    res.setHeader("Cache-Control", "no-store");
+    res.cookie("crm_session", result.raw, { ...cookieOptions(), maxAge: SESSION_MS });
+    if (result.refreshRaw && result.rememberUntil) res.cookie("crm_refresh", result.refreshRaw, { ...cookieOptions("/api/auth"), expires: result.rememberUntil });
+    else res.clearCookie("crm_refresh", cookieOptions("/api/auth"));
     return { user: result.user, csrfToken: result.csrfToken };
   }
-  @Get("me") @UseGuards(SessionGuard) me(@Req() req: AuthedRequest) {
+  @Get("me") @UseGuards(SessionGuard) me(@Req() req: AuthedRequest, @Res({ passthrough: true }) res: Response) {
+    res.setHeader("Cache-Control", "no-store");
     return { user: req.actor, csrfToken: req.csrfToken };
   }
-  @Post("logout") @UseGuards(SessionGuard) async logout(
-    @Req() req: AuthedRequest,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    await this.db.session.deleteMany({ where: { id: req.sessionId } });
+  @Post("refresh") async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    this.assertAuthRequest(req);
+    res.setHeader("Cache-Control", "no-store");
+    const result = await rotateRefresh(this.db, req.cookies?.crm_refresh, req.ip || "unknown");
+    res.cookie("crm_session", result.raw, { ...cookieOptions(), expires: result.expiresAt });
+    res.cookie("crm_refresh", result.refreshRaw, { ...cookieOptions("/api/auth"), expires: result.rememberUntil });
+    return { user: result.user, csrfToken: result.csrfToken };
+  }
+  @Post("logout") async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    // Origin + JSON/custom header protects logout even after the short session expires.
+    this.assertAuthRequest(req);
+    await revokeCookies(this.db, req.cookies?.crm_session, req.cookies?.crm_refresh);
+    res.setHeader("Cache-Control", "no-store");
     res.clearCookie("crm_session", cookieOptions());
+    res.clearCookie("crm_refresh", cookieOptions("/api/auth"));
     return { ok: true };
   }
+  @Post("users/:userId/revoke") @UseGuards(SessionGuard)
+  async revoke(@Req() req: AuthedRequest, @Param("userId") userId: string) {
+    requireAdmin(req.actor);
+    await revokeUserAuth(this.db, userId);
+    return { ok: true };
+  }
+  private assertAuthRequest(req: Request) {
+    assertOrigin(req.get("origin"));
+    if (!req.is("application/json") || (req.get("x-crm-auth") !== "1" && !req.get("x-csrf-token"))) throw new ForbiddenException("登录请求校验失败");
+  }
+
 }
 @Module({
   controllers: [AuthController],
