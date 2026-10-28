@@ -4,7 +4,7 @@ import {DropdownMenu} from 'radix-ui';
 import {Archive,Bell,BriefcaseBusiness,Check,ChevronDown,ContactRound,House,ListChecks,LogOut,MessageSquare,Play,ScanLine,Settings2,ShieldCheck,UsersRound} from 'lucide-react';
 import type {useWorkspaceMotion} from '@/features/work/use-workspace-motion';
 import {useAppNavigation} from './use-app-navigation';
-const icons:Record<string,typeof House>={overview:House,runs:Play,archive:Archive,review:ScanLine,matches:UsersRound,follow:BriefcaseBusiness,'all-leads':UsersRound,tasks:ListChecks,templates:MessageSquare,notices:Bell,accounts:ContactRound,settings:Settings2,platforms:ShieldCheck};
+const icons:Record<string,typeof House>={overview:House,runs:Play,archive:Archive,review:ScanLine,'reply-history':MessageSquare,matches:UsersRound,follow:BriefcaseBusiness,'all-leads':UsersRound,tasks:ListChecks,templates:MessageSquare,notices:Bell,accounts:ContactRound,settings:Settings2,platforms:ShieldCheck};
 type Props={admin:boolean;name:string;motion:ReturnType<typeof useWorkspaceMotion>;loggingOut:boolean;onLogout:()=>void};
 export function AppNavigation({admin,name,motion,loggingOut,onLogout}:Props){
  const n=useAppNavigation(admin),[open,setOpen]=useState(false);

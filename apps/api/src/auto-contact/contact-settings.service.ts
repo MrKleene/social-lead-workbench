@@ -1,9 +1,10 @@
+import {replyHistoryItem} from './reply-history';
 import {accountSendObservation} from './send-observation';
 import {executionEventSchema} from './reply-stage-journal';
 import {postAvailability} from '../collection/post-availability';
 import {unknownPostAvailability} from '@crm/contracts';
 import { Inject, Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type ContactOutcome } from '@prisma/client';
 import { autoContactConsent, contactTimezone, type AutoContactRuleInput } from '@crm/contracts';
 import { Db } from '../common/db';
 import { requireAdmin, type Actor } from '../auth/security';
@@ -45,13 +46,32 @@ export class ContactSettingsService {
             const recent=await tx.contactAttempt.findMany({where:{mode:this.sender.mode},orderBy:{createdAt:'desc'},take:20,select:{id:true,requestKey:true,accountIdSnapshot:true,outcome:true,day:true,createdAt:true,attemptedAt:true,confirmedAt:true,platformReceipt:true,resolutionNote:true}});
             const stages=await tx.auditLog.findMany({where:{entityId:{in:recent.map(a=>a.requestKey)},action:{in:['SINGLE_REPLY_EXECUTION_STAGE','AUTO_CONTACT_EXECUTION_STAGE']}},orderBy:{createdAt:'asc'},take:500});
             const observations=new Map(await Promise.all(accounts.map(async a=>[a.id,await accountSendObservation(tx,a.id,now)] as const)));
-            return { recentAttempts:recent.map(a=>({...a,createdAt:a.createdAt.toISOString(),accountLabel:accounts.find(x=>x.id===a.accountIdSnapshot)?.label??'历史账号',executionEvidence:stages.filter(s=>s.entityId===a.requestKey).flatMap(s=>{const parsed=executionEventSchema.safeParse(s.metadata);return parsed.success?[{at:s.createdAt.toISOString(),event:parsed.data}]:[]})})), rules: rules.map(r => ({ ...r, hash: ruleHash(r), pauseReason: controls.find(c => c.platform === r.platform)?.pauseReason ?? null })), accounts: accounts.map(a => { const aa = attempts.filter(t => (t.accountIdSnapshot ?? t.ledger.accountId) === a.id), occupied = a.usage[0]?.occupied ?? 0; return { id: a.id, version: a.version, label: a.label, platform: a.platform, isDemo: a.isDemo, workbenchStatus:a.status, sendEligibility:observations.get(a.id), dailyLimit: a.dailyLimit, healthy: !a.archivedAt && a.status === 'UNCONNECTED' && (this.sender.mode === 'SIMULATION' ? a.isDemo && !a.loginSessionKey : !a.isDemo && a.sessionReference?.state === 'VERIFIED' && Boolean(observations.get(a.id)?.canSend)), occupied, confirmed: aa.filter(t => ['CONFIRMED', 'SIMULATED_SUCCESS'].includes(t.outcome)).length, reserved: aa.filter(t => ['RESERVED', 'ATTEMPTED'].includes(t.outcome)).length, unknown: aa.filter(t => t.outcome === 'UNKNOWN').length, remaining: Math.max(0, Math.min(a.dailyLimit, ((rules[0]?.accountLimits as {
+            return { recentAttempts:recent.map(a=>({...a,createdAt:a.createdAt.toISOString(),accountLabel:accounts.find(x=>x.id===a.accountIdSnapshot)?.label??'历史账号',executionEvidence:stages.filter(s=>s.entityId===a.requestKey).flatMap(s=>{const parsed=executionEventSchema.safeParse(s.metadata);return parsed.success?[{at:s.createdAt.toISOString(),event:parsed.data}]:[]})})), rules: rules.map(r => ({ ...r, hash: ruleHash(r), pauseReason: controls.find(c => c.platform === r.platform)?.pauseReason ?? null })), accounts: accounts.map(a => { const aa = attempts.filter(t => (t.accountIdSnapshot ?? t.ledger.accountId) === a.id), occupied = a.usage[0]?.occupied ?? 0; return { id: a.id, version: a.version, label: a.loginPlatformUserId && a.loginNickname?.trim() ? a.loginNickname.trim() : a.label, platform: a.platform, isDemo: a.isDemo, workbenchStatus:a.status, sendEligibility:observations.get(a.id), dailyLimit: a.dailyLimit, healthy: !a.archivedAt && a.status === 'UNCONNECTED' && (this.sender.mode === 'SIMULATION' ? a.isDemo && !a.loginSessionKey : !a.isDemo && a.sessionReference?.state === 'VERIFIED' && Boolean(observations.get(a.id)?.canSend)), occupied, confirmed: aa.filter(t => ['CONFIRMED', 'SIMULATED_SUCCESS'].includes(t.outcome)).length, reserved: aa.filter(t => ['RESERVED', 'ATTEMPTED'].includes(t.outcome)).length, unknown: aa.filter(t => t.outcome === 'UNKNOWN').length, remaining: Math.max(0, Math.min(a.dailyLimit, ((rules[0]?.accountLimits as {
                         id: string;
                         dailyLimit: number;
                     }[] | undefined)?.find(x => x.id === a.id)?.dailyLimit ?? a.dailyLimit)) - occupied), authorizedLimit: Math.min(a.dailyLimit, ((rules[0]?.accountLimits as {
                         id: string;
                         dailyLimit: number;
                     }[] | undefined)?.find(x => x.id === a.id)?.dailyLimit ?? a.dailyLimit)) }; }), policies: await tx.commentReviewPolicy.findMany({ select: { id: true, revision: true, target: true } }), capability: { available: ['XHS', 'DOUYIN'].some(p => ['COMMENT', 'DM'].some(c => this.sender.capability(p, c))), reason: senderUnavailable, recognition:'OFFLINE_TESTED',sending:this.sender.mode==='SIMULATION'?'SIMULATION_ONLY':'UNVERIFIED' }, timezone: contactTimezone, day: shanghaiDay(now) };
+        });
+    }
+    async history(actor: Actor, offset = 0, outcome?: ContactOutcome | 'NOT_ATTEMPTED') {
+        requireAdmin(actor);
+        return this.db.$transaction(async tx => {
+            const where: Prisma.ContactAttemptWhereInput = {mode: this.sender.mode, ...(outcome && outcome !== 'NOT_ATTEMPTED' ? {outcome} : {})};
+            if (outcome === 'NOT_ATTEMPTED') {
+                const proofs = await tx.auditLog.findMany({where:{action:'SINGLE_REPLY_TEST_FINISHED',AND:[{metadata:{path:['result'],equals:'NOT_ATTEMPTED'}},{metadata:{path:['submission'],equals:'NOT_ATTEMPTED'}},{metadata:{path:['stopped'],equals:true}}]},select:{entityId:true,metadata:true}});
+                const pairs = proofs.flatMap(p=>{const m=p.metadata as Record<string,unknown>;return typeof m?.attemptId==='string'?[{id:m.attemptId,requestKey:p.entityId}]:[];});
+                Object.assign(where,{outcome:'FAILED',confirmedAt:null,platformReceipt:null,OR:pairs});
+            }
+            const [attempts, total, allTotal, confirmedTotal] = await Promise.all([
+                tx.contactAttempt.findMany({where, orderBy: [{createdAt: 'desc'}, {id: 'desc'}], skip: offset, take: 20,
+                    select: {id:true,requestKey:true,jobId:true,mode:true,channel:true,outcome:true,content:true,day:true,createdAt:true,attemptedAt:true,confirmedAt:true,platformReceipt:true,resolutionNote:true,historySnapshot:true}}),
+                tx.contactAttempt.count({where}), tx.contactAttempt.count({where:{mode:this.sender.mode}}),
+                tx.contactAttempt.count({where:{mode:this.sender.mode,outcome:'CONFIRMED'}}),
+            ]);
+            const audit = await tx.auditLog.findMany({where:{entityId:{in:attempts.map(a=>a.requestKey)},action:{in:['SINGLE_REPLY_EXECUTION_STAGE','AUTO_CONTACT_EXECUTION_STAGE','SINGLE_REPLY_TEST_FINISHED']}},orderBy:[{createdAt:'asc'},{id:'asc'}]});
+            return {items:attempts.map(a=>replyHistoryItem(a,audit.filter(x=>x.entityId===a.requestKey))), total, allTotal, confirmedTotal, offset, limit:20, mode:this.sender.mode};
         });
     }
     async save(actor: Actor, id: string, input: AutoContactRuleInput) {

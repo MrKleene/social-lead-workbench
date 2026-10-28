@@ -36,6 +36,12 @@ class AutoContactController {
     r: AuthedRequest,
     @Param('id')
     id: string) { return this.settings.toggle(r.actor, id, parse(autoContactToggleInput, r.body)); }
+    @Get('attempts')
+    @Header('Cache-Control', 'no-store, private')
+    history(@Req() r: AuthedRequest, @Query() q: unknown) {
+        const b = parse(z.object({offset:z.coerce.number().int().min(0).max(1000000).default(0), outcome:z.enum(['NOT_ATTEMPTED','CONFIRMED','FAILED','UNKNOWN','RESERVED','ATTEMPTED','CANCELLED','SIMULATED_SUCCESS']).optional()}).strict(),q);
+        return this.settings.history(r.actor,b.offset,b.outcome);
+    }
     @Get('jobs')
     @Header('Cache-Control', 'no-store, private')
     jobs(

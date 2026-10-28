@@ -4,6 +4,7 @@ export const primaryNavigation:NavigationItem[]=[
  {id:'overview',label:'工作台',path:'/work'},
  {id:'runs',label:'采集任务',path:'/work?module=runs',module:'runs',adminOnly:true},
  {id:'archive',label:'采集信息',path:'/work?module=archive',module:'archive',adminOnly:true},
+ {id:'reply-history',label:'回复记录',path:'/reply-history',adminOnly:true},
  {id:'review',label:'评论审核',path:'/comment-review',adminOnly:true},
  {id:'matches',label:'线索池',path:'/work?module=matches',module:'matches'},
  {id:'follow',label:'销售跟进',path:'/work?module=follow',module:'follow'},
@@ -20,6 +21,7 @@ export const secondaryNavigation:NavigationItem[]=[
 export const isWorkPath=(path:string)=>/^\/work(?:\/|$)/.test(path);
 export function activeNavigation(path:string,search:string,admin:boolean){
  if(isWorkPath(path))return activeWorkModule(search,path.split('/')[2],admin)||'overview';
+ if(/^\/reply-history(?:\/|$)/.test(path))return admin?'reply-history':null;
  if(/^\/comment-review(?:\/|$)/.test(path))return admin?'review':null;
  if(/^\/leads(?:\/|$)/.test(path))return 'all-leads';
  if(path==='/tasks')return 'tasks';

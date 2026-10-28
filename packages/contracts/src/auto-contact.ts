@@ -105,3 +105,13 @@ export type AutoContactJobView = {
         resolutionNote: string | null;
     };
 };
+
+export type ReplyHistoryItem = {
+    id: string; mode: string; channel: string; origin: 'RULE' | 'SINGLE_TEST'; outcome: string; displayStatus: string;
+    senderId: string | null; senderName: string | null; senderNameSource: string;
+    recipientId: string | null; recipientName: string | null; postId: string | null; postTitle: string | null; postUrl: string | null;
+    commentId: string | null; originalComment: string | null; content: string;
+    createdAt: string; attemptedAt: string | null; confirmedAt: string | null; platformReceipt: string | null; reason: string | null; day: string;
+    executionEvidence: { at: string; event: unknown }[];
+};
+export type ReplyHistoryPage = { items: ReplyHistoryItem[]; total: number; allTotal: number; confirmedTotal: number; offset: number; limit: number; mode: string };

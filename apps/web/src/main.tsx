@@ -1,3 +1,4 @@
+import {ReplyHistoryPage} from '@/features/auto-contact/reply-history-page';
 import {AutoContactPage} from '@/features/auto-contact/auto-contact-page';
 import {CommentReviewPage} from '@/features/comment-review/comment-review-page';
 import React from "react";
@@ -38,6 +39,7 @@ function App() {
         <Route path="/work/:id?" element={<WorkPage />} />
         <Route path="/templates" element={<Navigate to={legacyWorkspacePath("templates")} replace/>} />
         <Route path="/collection/:configId?" element={<LegacySettings />} />
+        <Route path="/reply-history" element={<ReplyHistoryPage />} />
         <Route path="/auto-contact" element={<AutoContactPage />} />
         <Route path="/comment-review" element={<CommentReviewPage />} />
         <Route path="/leads/:id?" element={<LeadsPage />} />
