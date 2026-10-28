@@ -314,3 +314,23 @@ it.each(['missing-workflow','wrong-workflow','unknown-finish','journal-unknown',
  if(kind==='account-change')f.next.accountId='different';if(kind==='content-change')f.next.content='different';
  await expect(f.service.execute(actor,f.next)).rejects.toThrow();expect(f.executor.run).toHaveBeenCalledTimes(1);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(0);expect(await db.contactAttempt.findUnique({where:{id:f.old.id}})).toEqual(f.old);
 });
+
+import {CapturedReplyReconciliation} from '../src/auto-contact/captured-reply-reconciliation';
+import {captureEvents} from './captured-reply-fixture';
+import {createHash} from 'node:crypto';
+async function capturedConfirmationFixture(){
+ const f=await oneShotFixture();const scope={...f.scope,scopeVersion:'workbench.single-reply-authorization.v3',purpose:'CAPTURE_EXACT_COMMENT_RECEIPT_ONCE',receiptCapture:'workbench.reply-receipt-capture.v1',excludedPostIds:['e'.repeat(24)],excludedRecipientIds:['f'.repeat(24)]};await f.service.execute(actor,scope);
+ const attempt=await db.contactAttempt.findFirstOrThrow(),replyId='e'.repeat(24),protocol=randomUUID(),readbackRequestId=randomUUID(),at=new Date(Date.now()).toISOString();
+ for(const metadata of captureEvents(protocol,replyId,at))await db.auditLog.create({data:{actorId:actor.id,entityId:attempt.requestKey,action:'SINGLE_REPLY_EXECUTION_STAGE',metadata}});
+ const verified=await db.auditLog.create({data:{actorId:actor.id,entityId:readbackRequestId,action:'ACCOUNT_TASK_LOGIN_CHECK_RESULT',metadata:{state:'VERIFIED',purpose:'task-start'}}});
+ const proof={source:'OWNED_MCP_BOUNDED_READBACK',attemptId:attempt.id,readbackRequestId,accountId:f.account.id,senderId:scope.senderId,postId:scope.postId,commentId:scope.commentId,recipientId:scope.recipientId,replyId,contentSha256:createHash('sha256').update(scope.content).digest('hex'),observedAt:new Date(Math.max(Date.now(),verified.createdAt.getTime())).toISOString(),identityVerified:true,stopped:true,matches:1};
+ return {...f,attempt,proof,reconciler:new CapturedReplyReconciliation(db)};
+}
+it('captured response plus independent exact readback confirms once and preserves locks/quota/other UNKNOWN',async()=>{
+ const f=await capturedConfirmationFixture(),usage=await db.accountDay.findMany(),ledger=await db.contactLedger.findMany(),control=await db.autoContactControl.findMany();const old=await db.contactAttempt.create({data:{ledgerId:f.attempt.ledgerId,requestKey:'old-unknown',kind:'FIRST',mode:'REAL',channel:'COMMENT',content:'old',outcome:'UNKNOWN',day:'old',actorId:actor.id,accountIdSnapshot:f.account.id}});
+ expect(await f.reconciler.confirm(actor,f.proof)).toMatchObject({outcome:'CONFIRMED',reused:false,replyId:f.proof.replyId});expect(await f.reconciler.confirm(actor,f.proof)).toMatchObject({reused:true});expect(await db.accountDay.findMany()).toEqual(usage);expect(await db.contactLedger.findMany()).toEqual(ledger);expect(await db.autoContactControl.findMany()).toEqual(control);expect(await db.contactAttempt.findUnique({where:{id:old.id}})).toEqual(old);expect(await db.auditLog.count({where:{action:'SINGLE_REPLY_CAPTURE_RECONCILED'}})).toBe(1);expect(f.executor.run).toHaveBeenCalledTimes(1);
+});
+it.each(['reply','sender','recipient','content','target','post','expired','missing-login','missing-receipt','not-closed','no-match'])('reconciliation refuses %s without releasing quota or changing UNKNOWN',async kind=>{
+ const f=await capturedConfirmationFixture();const p:any={...f.proof};if(kind==='reply')p.replyId='f'.repeat(24);if(kind==='sender')p.senderId='f'.repeat(24);if(kind==='recipient')p.recipientId='f'.repeat(24);if(kind==='content')p.contentSha256='f'.repeat(64);if(kind==='target')p.commentId='f'.repeat(24);if(kind==='post')p.postId='f'.repeat(24);if(kind==='expired')p.observedAt=new Date(0).toISOString();if(kind==='missing-login')await db.auditLog.deleteMany({where:{entityId:p.readbackRequestId}});if(kind==='missing-receipt')await db.auditLog.deleteMany({where:{entityId:f.attempt.requestKey,action:'SINGLE_REPLY_EXECUTION_STAGE'}});if(kind==='not-closed')p.stopped=false;if(kind==='no-match')p.matches=0;
+ await expect(f.reconciler.confirm(actor,p)).rejects.toThrow();expect(await db.contactAttempt.findUnique({where:{id:f.attempt.id}})).toEqual(f.attempt);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);expect(await db.auditLog.count({where:{action:'SINGLE_REPLY_CAPTURE_RECONCILED'}})).toBe(0);
+});
