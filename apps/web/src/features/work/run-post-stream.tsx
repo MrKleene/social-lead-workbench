@@ -1,3 +1,5 @@
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
 import {commentCoverage} from '../collection/collection-outcome';
 import {savedTitleLabel} from '@/features/collection/saved-text';
 import {useEffect,useRef,useState} from 'react';
@@ -35,11 +37,11 @@ export function RunPostStream({configId,run,visible}:{configId:string;run:Run;vi
  if(feed.unsupported)return <p className="run-post-notice" role="status">逐篇明细需后台升级；本轮总进度仍可查看。</p>;
  if(data?.availability==='SUPERSEDED')return <p className="run-post-notice">旧任务未保留完整的逐篇快照，请从采集信息查看现存原文。</p>;
  return <section className="run-post-feed" aria-label="本轮帖子信息流">
-  <div className="run-post-feed-head"><span>已保存帖子 · {items.length} 篇</span><button onClick={()=>void feed.refetch()} className="info-text-action">刷新帖子</button></div>
-  {feed.isError&&<p role="alert" className="run-post-notice">帖子明细读取失败，已有内容可能未更新。<button onClick={()=>void feed.refetch()}>重试</button></p>}
+  <div className="run-post-feed-head"><span>已保存帖子 · {items.length} 篇</span><Button variant="ghost" size="content" onClick={()=>void feed.refetch()} className="info-text-action">刷新帖子</Button></div>
+  {feed.isError&&<Alert role="alert" className="run-post-notice"><AlertDescription>帖子明细读取失败，已有内容可能未更新。<Button variant="ghost" size="content" onClick={()=>void feed.refetch()}>重试</Button></AlertDescription></Alert>}
   {data?.limited&&<p className="run-post-notice">明细超出本次返回范围，数量暂不汇总。</p>}
   <div ref={viewport} tabIndex={0} role="region" aria-label="逐篇帖子列表" className="run-post-list" onScroll={e=>{const el=e.currentTarget;following.current=el.scrollHeight-el.clientHeight-el.scrollTop<64;if(following.current)setUnseen(false);}}>
-   {items.map((p,i)=><article key={p.platformPostId} data-run-post={p.platformPostId} className="run-post-card"><div className="run-post-number">{p.readOrdinal?`读取 ${p.readOrdinal}`:`存档 ${i+1}`} </div><div className="run-post-content"><div className="run-post-title-row"><button className="run-post-title" onClick={e=>{returnFocus.current=e.currentTarget;setSelected(p.platformPostId);}}>{savedTitleLabel(p.title)}</button><PostCover url={p.coverUrl}/></div><SavedText text={savedSourceText(p.body)} limit={180} label="正文"/><PostFacts post={p} run={run}/></div></article>)}
+   {items.map((p,i)=><article key={p.platformPostId} data-run-post={p.platformPostId} className="run-post-card"><div className="run-post-number">{p.readOrdinal?`读取 ${p.readOrdinal}`:`存档 ${i+1}`} </div><div className="run-post-content"><div className="run-post-title-row"><Button variant="ghost" size="content" className="run-post-title" onClick={e=>{returnFocus.current=e.currentTarget;setSelected(p.platformPostId);}}>{savedTitleLabel(p.title)}</Button><PostCover url={p.coverUrl}/></div><SavedText text={savedSourceText(p.body)} limit={180} label="正文"/><PostFacts post={p} run={run}/></div></article>)}
    {!items.length&&!feed.isError&&<p className="run-post-notice">{['RUNNING','QUEUED'].includes(run.status)?'等待首篇帖子返回；不会预猜正在读取的内容。':'本轮没有可返回的帖子原文。'}</p>}
   </div>
   {unseen&&<Button className="run-post-new" variant="outline" onClick={()=>{following.current=true;viewport.current?.scrollTo({top:viewport.current.scrollHeight,behavior:'instant'});setUnseen(false);}}>有新帖子 · 查看</Button>}

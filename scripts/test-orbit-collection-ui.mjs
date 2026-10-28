@@ -1,3 +1,4 @@
+import {controlValue} from './ui-controls.mjs';
 // Isolated virtual HTTP state only. Never contacts production or any platform/model.
 import {createServer} from 'node:http';
 import {readFile,mkdtemp,writeFile} from 'node:fs/promises';
@@ -35,13 +36,13 @@ try{
   await page.locator('.app-primary-navigation').waitFor();assert.equal(await page.locator('.app-primary-navigation').count(),1);assert.equal(await page.locator('.aurora-dock').count(),0);
   await page.getByRole('button',{name:'自动化采集',exact:true}).click();await page.getByRole('button',{name:'配置关键词',exact:true}).click();await page.getByRole('heading',{name:'新增关键词配置',exact:true}).waitFor();
   if(narrow)assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  assert.equal(await page.getByLabel('搜索关键词',{exact:true}).inputValue(),'');
+  assert.equal(await controlValue(page.getByLabel('搜索关键词',{exact:true})),'');
   await page.getByLabel('配置名称',{exact:true}).fill('虚构组');await page.getByLabel('搜索关键词',{exact:true}).fill('虚构用户自定义');await page.getByRole('button',{name:'保存配置',exact:true}).click();
   await page.getByRole('button',{name:'完成设置',exact:true}).click();await page.getByRole('button',{name:'开始采集',exact:true}).waitFor();assert(await page.getByRole('button',{name:'开始采集',exact:true}).isEnabled());assert.equal(await page.getByLabel('本轮最多帖子数',{exact:true}).count(),0);
   await page.getByRole('button',{name:'开始采集',exact:true}).click();await page.getByRole('button',{name:'停止采集',exact:true}).click();
   await page.getByRole('button',{name:'查看采集信息',exact:true}).click();await page.getByRole('heading',{name:'采集信息',exact:true}).waitFor();await page.locator('[data-post=fictional-post]').click();await page.getByText('虚构：设备怎么选择？',{exact:true}).waitFor();
   await page.getByRole('button',{name:'父评论未保存于本次读取范围 · 查看上下文',exact:true}).click();await page.getByRole('dialog',{name:'父评论上下文'}).getByText('当前查找范围内没有找到相关原文',{exact:true}).waitFor();await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});await page.getByRole('button',{name:'评论 1 的来源与证据',exact:true}).click();await page.getByRole('dialog').getByText('父评论 ID',{exact:true}).waitFor();await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'返回帖子列表',exact:true}).click();await page.getByLabel('搜索采集原文',{exact:true}).fill('设备');await page.locator('.app-primary-navigation').getByRole('link',{name:'工作台',exact:true}).click();await page.locator('.app-primary-navigation').getByRole('link',{name:'采集信息',exact:true}).click();await page.getByRole('heading',{name:'采集信息',exact:true}).waitFor();assert.equal(await page.getByLabel('搜索采集原文',{exact:true}).inputValue(),'设备');
+  await page.getByRole('button',{name:'返回帖子列表',exact:true}).click();await page.getByLabel('搜索采集原文',{exact:true}).fill('设备');await page.locator('.app-primary-navigation').getByRole('link',{name:'工作台',exact:true}).click();await page.locator('.app-primary-navigation').getByRole('link',{name:'采集信息',exact:true}).click();await page.getByRole('heading',{name:'采集信息',exact:true}).waitFor();assert.equal(await controlValue(page.getByLabel('搜索采集原文',{exact:true})),'设备');
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:join(out,`results-${narrow}.png`)});report.checks.push('custom keyword save → LLM-off mock run → pause → independent original/parent evidence and retained filter '+narrow);
   configs=[{...configs[0],mode:'XHS_MCP',activeRunId:null}];await page.goto(base+'/work?module=runs');await page.getByText('请登录或恢复一个可用账号',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:/确认并开始/}).count(),0);report.checks.push('real mode missing eligible account blocks execution without requiring LLM '+narrow);
   await context.close();

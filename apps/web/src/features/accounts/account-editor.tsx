@@ -1,3 +1,7 @@
+import { FieldGroup } from '@/components/ui/field';
+import { FormField } from '@/components/form-field';
+import { SelectField, SelectOption } from '@/components/select-field';
+import { Input } from '@/components/ui/input';
 import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -44,52 +48,52 @@ export function AccountEditor({
     });
   };
   return (
-    <form className="account-form" onSubmit={submit}>
+    <form className="account-form" onSubmit={submit}><FieldGroup className="form-fields">
       <h3>{account ? "账号元数据" : "添加模拟账号"}</h3>
-      <label>
+      <FormField>
         平台
-        <select
+        <SelectField
           aria-label="平台"
           disabled={!!account}
           value={value.platform}
-          onChange={(e) =>
-            setValue({ ...value, platform: e.target.value as "XHS" | "DOUYIN" })
+          onValueChange={(e) =>
+            setValue({ ...value, platform: e as "XHS" | "DOUYIN" })
           }
         >
-          <option value="XHS">小红书</option>
-          <option value="DOUYIN">抖音</option>
-        </select>
-      </label>
-      <label>
+          <SelectOption value="XHS">小红书</SelectOption>
+          <SelectOption value="DOUYIN">抖音</SelectOption>
+        </SelectField>
+      </FormField>
+      <FormField>
         别名
-        <input
+        <Input
           required
           maxLength={80}
           value={value.label}
           onChange={(e) => setValue({ ...value, label: e.target.value })}
         />
-      </label>
-      <label>
+      </FormField>
+      <FormField>
         负责人
-        <select
+        <SelectField
           aria-label="负责人"
           disabled={users.isPending || users.isError}
           value={value.ownerId}
-          onChange={(e) => setValue({ ...value, ownerId: e.target.value })}
+          onValueChange={(e) => setValue({ ...value, ownerId: e })}
         >
-          <option value="">未分配</option>
+          <SelectOption value="">未分配</SelectOption>
           {users.data
             ?.filter((u) => u.role === "SALES")
             .map((u) => (
-              <option key={u.id} value={u.id}>
+              <SelectOption key={u.id} value={u.id}>
                 {u.name}
-              </option>
+              </SelectOption>
             ))}
-        </select>
-      </label>
-      <label>
+        </SelectField>
+      </FormField>
+      <FormField>
         内部每日额度（UTC）
-        <input
+        <Input
           type="number"
           min={0}
           max={1000}
@@ -99,29 +103,29 @@ export function AccountEditor({
             setValue({ ...value, dailyLimit: Number(e.target.value) })
           }
         />
-      </label>
-      <label>
+      </FormField>
+      <FormField>
         模拟分配状态
-        <select
+        <SelectField
           aria-label="模拟分配状态"
           value={value.status}
-          onChange={(e) =>
-            setValue({ ...value, status: e.target.value as Account["status"] })
+          onValueChange={(e) =>
+            setValue({ ...value, status: e as Account["status"] })
           }
         >
-          <option value="UNCONNECTED">模拟可分配 · 平台未登录</option>
-          <option value="PAUSED">暂停</option>
-          <option value="RESTRICTED">受限 / 验证 / 封禁</option>
-        </select>
-      </label>
-      <label>
+          <SelectOption value="UNCONNECTED">模拟可分配 · 平台未登录</SelectOption>
+          <SelectOption value="PAUSED">暂停</SelectOption>
+          <SelectOption value="RESTRICTED">受限 / 验证 / 封禁</SelectOption>
+        </SelectField>
+      </FormField>
+      <FormField>
         暂停或处理说明
-        <input
+        <Input
           maxLength={300}
           value={value.pauseReason}
           onChange={(e) => setValue({ ...value, pauseReason: e.target.value })}
         />
-      </label>
+      </FormField>
       <p className="helper-text">
         额度仅供内部管理，不保证平台安全额度。耗尽后暂停接收新模拟任务。
       </p>
@@ -138,6 +142,6 @@ export function AccountEditor({
           </Button>
         )}
       </div>
-    </form>
+    </FieldGroup></form>
   );
 }

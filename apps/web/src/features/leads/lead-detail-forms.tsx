@@ -1,3 +1,7 @@
+import {Badge} from '@/components/ui/badge';
+
+import { FormField } from '@/components/form-field';
+import { SelectField, SelectOption } from '@/components/select-field';
 import {InfoSection,InfoDrawer} from '@/components/information-panel';
 import {assessmentLabels} from '@crm/contracts';
 import { useDraftGuard } from '@/features/work/draft-guard';
@@ -89,7 +93,7 @@ export function DetailForms({
         <h3><FileText size={16} />需求依据</h3>
         {lead.identity.comments?.map((comment) => (
           <blockquote key={comment.id}>
-            <div className="source-flags">{comment.parentPlatformCommentId&&<span className="soft-tag">楼中楼回复</span>}{comment.matches?.map((m,i)=><span className="soft-tag" key={i}>规则 · {assessmentLabels[m.classification]||m.classification} · {m.keywords.join('、')}{m.isBaseline?' · 首次记录':''}</span>)}</div>
+            <div className="source-flags">{comment.parentPlatformCommentId&&<Badge variant="secondary" className="soft-tag">楼中楼回复</Badge>}{comment.matches?.map((m,i)=><Badge variant="secondary" className="soft-tag" key={i}>规则 · {assessmentLabels[m.classification]||m.classification} · {m.keywords.join('、')}{m.isBaseline?' · 首次记录':''}</Badge>)}</div>
             <p>{comment.originalText}</p>
             <footer>
               {comment.post.title}
@@ -118,7 +122,7 @@ export function DetailForms({
                 "人工核验已记录",
               );
             }}
-          >
+          ><FieldGroup className="form-fields">
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="review">人工核验说明</FieldLabel>
@@ -139,7 +143,7 @@ export function DetailForms({
                 保存人工核验
               </Button>
             </FieldGroup>
-          </form>
+          </FieldGroup></form>
         )}
       </section>
       <InfoSection className="secondary-actions" title={<>交给销售 / 负责人分配</>}><section>
@@ -161,25 +165,25 @@ export function DetailForms({
                 "负责人已更新",
               );
             }}
-          >
-            <label className="sr-only" htmlFor="owner">
+          ><FieldGroup className="form-fields">
+            <FormField className="sr-only" htmlFor="owner">
               销售负责人
-            </label>
-            <select
+            </FormField>
+            <SelectField
               id="owner"
               value={owner}
-              onChange={(e) => {
+              onValueChange={(e) => {
                 beginEdit();
-                setOwner(e.target.value);
+                setOwner(e);
               }}
             >
-              <option value="">未分配</option>
+              <SelectOption value="">未分配</SelectOption>
               {state.users.map((u) => (
-                <option key={u.id} value={u.id}>
+                <SelectOption key={u.id} value={u.id}>
                   {u.name}
-                </option>
+                </SelectOption>
               ))}
-            </select>
+            </SelectField>
             <Button
               disabled={
                 state.mutation.isPending || state.usersLoading || !!state.usersError || owner === (lead.owner?.id || "")
@@ -187,7 +191,7 @@ export function DetailForms({
             >
               分配 / 转交
             </Button>
-          </form>
+          </FieldGroup></form>
         ) : (
           <p>{lead.owner?.name || "未分配"}</p>
         )}
@@ -199,7 +203,7 @@ export function DetailForms({
       <InfoSection className="secondary-actions" title={<>沟通记录、跟进时间线和人工任务</>}><div className="detail-panel">
       <section>
         <h3><MessageSquare size={16} />销售沟通记录</h3>
-        <form onSubmit={followup}>
+        <form onSubmit={followup}><FieldGroup className="form-fields">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="followup">沟通内容</FieldLabel>
@@ -231,27 +235,27 @@ export function DetailForms({
               </Field>
               <Field>
                 <FieldLabel htmlFor="stage">销售线索阶段</FieldLabel>
-                <select
+                <SelectField
                   id="stage"
                   value={status}
-                  onChange={(e) => {
+                  onValueChange={(e) => {
                     beginEdit();
-                    setStatus(e.target.value as Lead["status"]);
+                    setStatus(e as Lead["status"]);
                   }}
                 >
                   {Object.entries(statusLabel).map(([value, label]) => (
-                    <option key={value} value={value}>
+                    <SelectOption key={value} value={value}>
                       {label}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </SelectField>
               </Field>
             </div>
             <Button disabled={state.mutation.isPending}>
               {state.mutation.isPending ? "保存中…" : "保存沟通记录"}
             </Button>
           </FieldGroup>
-        </form>
+        </FieldGroup></form>
       </section>
       <section>
         <h3>
@@ -297,7 +301,7 @@ export function DetailForms({
               "任务已创建",
             );
           }}
-        >
+        ><FieldGroup className="form-fields">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="task">任务名称</FieldLabel>
@@ -317,7 +321,7 @@ export function DetailForms({
               创建任务
             </Button>
           </FieldGroup>
-        </form>
+        </FieldGroup></form>
       </section>
       </div></InfoSection>
     </div>

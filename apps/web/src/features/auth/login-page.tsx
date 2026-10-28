@@ -1,3 +1,6 @@
+
+import { FormField } from '@/components/form-field';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useState, FormEvent } from "react";
 import { ArrowRight, Layers, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useAuth } from "./use-auth";
@@ -43,7 +46,7 @@ export function LoginPage() {
         </p>
       </section>
       <section className="login-form-wrap">
-        <form onSubmit={submit} className="login-form">
+        <form onSubmit={submit} className="login-form"><FieldGroup className="form-fields">
           <div className="login-symbol">
             <LockKeyhole />
           </div>
@@ -78,10 +81,10 @@ export function LoginPage() {
               </FieldDescription>
             </Field>
           </FieldGroup>
-          <label className="login-remember">
-            <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
+          <FormField className="login-remember">
+            <Checkbox  checked={remember} onCheckedChange={e => setRemember((e === true))} />
             <span>在此设备记住登录 30 天<small>仅在自己的设备上勾选；退出登录即失效。</small></span>
-          </label>
+          </FormField>
           <ErrorNotice error={login.error || sessionError} />
           <Button className="w-full" type="submit" disabled={login.isPending}>
             {login.isPending ? "正在验证…" : "登录工作台"}
@@ -90,7 +93,7 @@ export function LoginPage() {
           <p className="login-disclaimer">
             登录不会启动采集、模型调用或发送消息。
           </p>
-        </form>
+        </FieldGroup></form>
       </section>
     </main>
   );

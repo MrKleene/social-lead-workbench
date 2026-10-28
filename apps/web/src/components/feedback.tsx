@@ -1,5 +1,6 @@
 import { AlertCircle, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {Spinner} from './ui/spinner';
 import { Skeleton } from "@/components/ui/skeleton";
 export function ErrorNotice({ error }: { error: unknown }) {
   return error ? (
@@ -24,7 +25,7 @@ export function DemoNotice() {
 export function Loading() {
   return (
     <div className="loading-stack" role="status" aria-live="polite" aria-label="加载中">
-      <span className="sr-only">正在加载，请稍候</span>
+      <span className="loading-caption"><Spinner aria-hidden="true"/>正在加载，请稍候</span>
       <Skeleton className="h-16 w-full" />
       <Skeleton className="h-36 w-full" />
       <Skeleton className="h-36 w-full" />

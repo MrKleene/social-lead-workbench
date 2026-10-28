@@ -1,3 +1,4 @@
+import { Empty } from '@/components/ui/empty';
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, Pause, RotateCcw, ListChecks } from "lucide-react";
@@ -20,7 +21,7 @@ export function TasksPage() {
           <span className="eyebrow">团队协作 · TASKS</span><h1>任务中心</h1>
           <p>把每一次人工核验和跟进，落实为清晰的下一步。</p>
         </div>
-        <span className="heading-pill"><ListChecks size={16} />人工跟进工作流</span>
+        <Badge variant="secondary" className="heading-pill"><ListChecks size={16} />人工跟进工作流</Badge>
       </div>
       <DemoNotice />
       <ErrorNotice error={query.error || update.error} />
@@ -100,11 +101,11 @@ export function TasksPage() {
           ))
         )}
         {!query.isPending && !query.isError && rows.length === 0 && (
-          <div className="empty-state">
+          <Empty className="empty-state">
             <ListChecks />
             <h3>当前分类暂无任务</h3>
             <p>在自己的线索详情中创建人工跟进任务。</p>
-          </div>
+          </Empty>
         )}
       </section>
     </>

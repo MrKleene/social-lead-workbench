@@ -1,7 +1,8 @@
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {safeBoundedReadReport,boundedReadLabels} from '@crm/contracts';
 import {BoundedReadEvidence} from './bounded-read-evidence';
 export function BoundedCheckResult({value}:{value:unknown}){
- const d=safeBoundedReadReport(value);if(!d)return <p role="alert">未取得有效展开诊断，不能确认展开结果。</p>;
+ const d=safeBoundedReadReport(value);if(!d)return <Alert role="alert"><AlertDescription>未取得有效展开诊断，不能确认展开结果。</AlertDescription></Alert>;
  const s=d.retained,gaps=s.groups.filter(g=>g.declared.value!==null&&g.loaded.value!==null&&g.declared.value>g.loaded.value);
  return <div aria-label="回复展开结果"><p>{boundedReadLabels[d.reason]}；不代表全部评论。</p>
  <p>回复展开尝试 {d.replyActions} 次 · 平台声明 {d.final.total.value??'未知'} 条（口径未确认） · 本次读取 {s.loaded?.uniqueKnown??'未知'} 条唯一评论/回复。</p>

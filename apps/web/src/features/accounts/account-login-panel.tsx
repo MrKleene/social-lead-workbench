@@ -1,3 +1,6 @@
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { FormField } from '@/components/form-field';
+import { Checkbox } from '@/components/ui/checkbox';
 import {InfoDialog} from '@/components/information-panel';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -12,8 +15,8 @@ export function AccountLoginPanel({accountId,capabilities,onDone,replacement=fal
   return <section className="account-login-panel" aria-label="账号扫码登录">
     <h3>{capabilities.mode==='offline'?'离线扫码流程演示 · 不连接平台':replacement?'重新扫码登录':'小红书扫码登录'}</h3>
     <p>{capabilities.mode==='offline'?'离线演示，不连接平台。':'扫码确认后，登录信息由平台工具保存在本机，用于下次恢复。'}</p>
-    {replacementAllowed&&!login.busy&&login.view?.state!=='VERIFIED'&&<><label className="login-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>{consentText}</label><Button disabled={!consent} onClick={()=>{setConsent(false);void login.start(replacement);}}>{login.view?'重新确认并获取新二维码':'确认并生成二维码'}</Button></>}
-    {!replacementAllowed&&<p role="alert">后台更新后才能重新扫码，原会话保留。</p>}
+    {replacementAllowed&&!login.busy&&login.view?.state!=='VERIFIED'&&<><FormField className="login-consent"><Checkbox  checked={consent} onCheckedChange={e=>setConsent((e === true))}/>{consentText}</FormField><Button disabled={!consent} onClick={()=>{setConsent(false);void login.start(replacement);}}>{login.view?'重新确认并获取新二维码':'确认并生成二维码'}</Button></>}
+    {!replacementAllowed&&<Alert role="alert"><AlertDescription>后台更新后才能重新扫码，原会话保留。</AlertDescription></Alert>}
     {replacement&&<p>请使用原小红书账号。取消或保存失败不会替换原会话。</p>}
     {login.view&&<p role="status">{capabilities.mode==='offline'?'【离线模拟】':''}{labels[login.view.state]||login.view.state}{login.view.reason&&reasons[login.view.reason]?`：${reasons[login.view.reason]}`:''}</p>}
     {login.image&&<div className="login-qr">{capabilities.mode==='offline'?<div className="offline-qr-placeholder" role="img" aria-label="离线演示图案，不可扫码">离线演示<br/>不可扫码</div>:<img src={login.image} alt="本次小红书登录二维码" referrerPolicy="no-referrer"/>}<p>本次二维码剩余 {login.seconds} 秒；过期后需手动重新确认。</p></div>}
@@ -21,6 +24,6 @@ export function AccountLoginPanel({accountId,capabilities,onDone,replacement=fal
     {capabilities.mode==='offline'&&login.view?.state==='WAITING'&&<div className="action-row"><Button onClick={()=>void login.simulate('SUCCESS')}>模拟扫码成功（离线）</Button><Button variant="outline" onClick={()=>void login.simulate('EXPIRED')}>模拟过期（离线）</Button></div>}
     {login.view?.state==='VERIFIED'&&<><p>{capabilities.persistent?(login.view.localSaved?'已保存到本机，下次可恢复登录。':'本机会话已登记，保存状态待检查。'):'当前环境不支持重启后恢复。'}</p>{onDone&&<Button onClick={onDone}>返回账号</Button>}</>}
     <InfoDialog  title={<>本机保存与使用范围</>}><p>登录信息保存在实际执行电脑的私有会话目录，按账号隔离；不在浏览器中保存。正常重启保留本地文件，重启后需主动检查登录状态。</p>{capabilities.device&&<p>执行电脑：{capabilities.device.name} · {capabilities.device.online?'在线':'离线'}</p>}<p>取消、关闭此窗口或隐藏页面会停止等待；已写入的本地会话可能保留。采集需另行单次授权，评论与私信发送关闭。</p></InfoDialog>
-    {login.error&&<p role="alert">{login.error}</p>}
+    {login.error&&<Alert role="alert"><AlertDescription>{login.error}</AlertDescription></Alert>}
   </section>;
 }

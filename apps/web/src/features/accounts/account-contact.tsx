@@ -1,3 +1,6 @@
+import { FormField } from '@/components/form-field';
+import { SelectField, SelectOption } from '@/components/select-field';
+import { Textarea } from '@/components/ui/textarea';
 import { useDraftGuard } from "@/features/work/draft-guard";
 import { Button } from "@/components/ui/button";
 import { ErrorNotice } from "@/components/feedback";
@@ -41,23 +44,23 @@ export function AccountContact({ lead }: { lead: Lead }) {
       {data.manuallyRecorded && (
         <p>存在人工联系记录：阻止重复首次联系；不属于平台确认成功。</p>
       )}
-      <label>
+      <FormField>
         手动选择账号
-        <select
+        <SelectField
           aria-label="手动选择账号"
           value={s.accountId}
-          onChange={(e) => s.setAccountId(e.target.value)}
+          onValueChange={(e) => s.setAccountId(e)}
           disabled={pending}
         >
-          <option value="">请选择账号</option>
+          <SelectOption value="">请选择账号</SelectOption>
           {candidates.map((a) => (
-            <option value={a.id} key={a.id} disabled={!a.available}>
+            <SelectOption value={a.id} key={a.id} disabled={!a.available}>
               {a.label} · {a.occupied}/{a.dailyLimit}
               {!a.available ? " · 暂停" : ""}
-            </option>
+            </SelectOption>
           ))}
-        </select>
-      </label>
+        </SelectField>
+      </FormField>
       <div className="action-row">
         <Button
           size="sm"
@@ -76,16 +79,16 @@ export function AccountContact({ lead }: { lead: Lead }) {
         </Button>
       </div>
       {!data.reviewed && <p className="helper-text">须先完成人工审核。</p>}
-      <label>
+      <FormField>
         核查 / 勿联系依据
-        <textarea
+        <Textarea
           aria-label="核查或勿联系依据"
           minLength={5}
           maxLength={500}
           value={s.note}
           onChange={(e) => s.setNote(e.target.value)}
         />
-      </label>
+      </FormField>
       <div className="action-row">
         <Button
           size="sm"

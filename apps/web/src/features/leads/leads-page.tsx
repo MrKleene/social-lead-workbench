@@ -1,3 +1,5 @@
+import { SelectField, SelectOption } from '@/components/select-field';
+import { Empty } from '@/components/ui/empty';
 import { useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -43,7 +45,7 @@ export function LeadsPage() {
       <DemoNotice />
       <LeadOverview total={state.total} pending={state.pending} following={state.following} loading={state.query.isPending} />
       <section className="table-panel" aria-label="线索列表">
-        <div className="list-heading"><div><h2>全部线索 <span>{state.rows.length}</span></h2><p>需求、负责人和下一步，在这里有序流转。</p></div><span className="list-scope"><SlidersHorizontal size={14} />灵活筛选</span></div>
+        <div className="list-heading"><div><h2>全部线索 <span>{state.rows.length}</span></h2><p>需求、负责人和下一步，在这里有序流转。</p></div><Badge variant="secondary" className="list-scope"><SlidersHorizontal size={14} />灵活筛选</Badge></div>
         <div className="list-controls">
         <div className="list-tabs">
           <SegmentedControl label="线索状态" value={state.status} onChange={state.setStatus} options={[
@@ -62,15 +64,15 @@ export function LeadsPage() {
             />
           </div>
           <div className="filters">
-            <select
+            <SelectField
               aria-label="来源平台"
               value={state.platform}
-              onChange={(e) => state.setPlatform(e.target.value)}
+              onValueChange={(e) => state.setPlatform(e)}
             >
-              <option value="all">全部平台</option>
-              <option value="XHS">小红书</option>
-              <option value="DOUYIN">抖音</option>
-            </select>
+              <SelectOption value="all">全部平台</SelectOption>
+              <SelectOption value="XHS">小红书</SelectOption>
+              <SelectOption value="DOUYIN">抖音</SelectOption>
+            </SelectField>
             {filtered && <Button variant="ghost" size="sm" onClick={() => { state.setSearch(""); state.setPlatform("all"); state.setStatus("all"); }}>重置筛选</Button>}
 
           </div>
@@ -106,12 +108,12 @@ export function LeadsPage() {
                         {lead.identity.nickname.slice(0, 1)}
                       </span>
                       <div>
-                        <button
+                        <Button variant="ghost" size="content"
                           className="text-link lead-name"
                           onClick={() => navigate(`/leads/${lead.id}`)}
                         >
                           {lead.identity.nickname}
-                        </button>
+                        </Button>
                         <p>{lead.summary}</p>
                       </div>
                     </div>
@@ -162,11 +164,11 @@ export function LeadsPage() {
         {!state.query.isPending &&
           !state.query.isError &&
           state.rows.length === 0 && (
-            <div className="empty-state">
+            <Empty className="empty-state">
               <Search />
               <h3>暂无匹配线索</h3>
               <p>调整筛选条件，或等待管理员分配线索。</p>
-            </div>
+            </Empty>
           )}
         <div className="table-footer">
           <span role="status" aria-live="polite">共 {state.rows.length} 条 · 仅显示你有权访问的线索</span>

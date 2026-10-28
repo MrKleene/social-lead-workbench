@@ -6,6 +6,7 @@ import { XIcon } from "lucide-react";
 import { Dialog as SheetPrimitive } from "radix-ui";
 
 const SheetState = React.createContext<{open:boolean;change:(open:boolean)=>void;depth:number}|null>(null);
+export function useDialogLayer() { return 51 + (React.useContext(SheetState)?.depth ?? 0) * 2; }
 function Sheet({open:controlled,defaultOpen=false,onOpenChange, ...props}: React.ComponentProps<typeof SheetPrimitive.Root>) {
   const parent=React.useContext(SheetState);
   const [local,setLocal]=React.useState(defaultOpen),open=controlled??local,depth=(parent?.depth??0)+1;
@@ -42,6 +43,7 @@ function SheetOverlay({
       data-slot="sheet-overlay"
       onPointerDown={event=>{
         onPointerDown?.(event);
+        if(document.querySelector('[data-slot=select-content][data-state=open], [data-slot=popover-content][data-state=open], [data-slot=alert-dialog-content][data-state=open]'))return;
         if(event.target!==event.currentTarget||event.defaultPrevented||event.button!==0)return;
         // The clicked backdrop belongs to exactly one dialog, including nesting.
         event.stopPropagation();event.preventDefault();state?.change(false);
@@ -76,6 +78,7 @@ function SheetContent({
     if(!state?.open)return;
     const escape=(event:KeyboardEvent)=>{
       if(event.key!=='Escape')return;
+      if(document.querySelector('[data-slot=select-content][data-state=open], [data-slot=popover-content][data-state=open], [data-slot=alert-dialog-content][data-state=open]'))return;
       const focused=event.target instanceof Element?event.target.closest('[data-slot="sheet-content"]'):null;
       const top=focused??Array.from(document.querySelectorAll<HTMLElement>('[data-slot="sheet-content"][data-state="open"]')).filter(node=>node.getAttribute('aria-hidden')!=='true').at(-1);
       if(top!==content.current)return;

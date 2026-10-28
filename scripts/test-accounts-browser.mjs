@@ -1,3 +1,4 @@
+import {selectOption,controlValue} from './ui-controls.mjs';
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync, readFileSync, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -93,7 +94,7 @@ try {
   await wait(700);
   await page.getByRole("button", { name: "添加模拟账号", exact: true }).click();
   await page.getByLabel("别名", { exact: true }).fill("小红书 · 模拟顾问一号");
-  await page.getByLabel("负责人", { exact: true }).selectOption(sales.id);
+  await selectOption(page.getByLabel("负责人", { exact: true }), sales.id);
   await page.getByRole("button", { name: "保存元数据", exact: true }).click();
   await until(async () => (await page.locator(".account-card").count()) === 1);
   await api("/accounts", "POST", {
@@ -121,13 +122,13 @@ try {
   await page.locator(".node-templates").click();
   await page.locator(".node-accounts").click();
   assert.equal(
-    await page.getByLabel("别名", { exact: true }).inputValue(),
+    await controlValue(page.getByLabel("别名", { exact: true })),
     "尚未保存的模拟草稿",
   );
   page.once("dialog", (d) => d.dismiss());
   await page.locator(".account-card").nth(1).click();
   assert.equal(
-    await page.getByLabel("别名", { exact: true }).inputValue(),
+    await controlValue(page.getByLabel("别名", { exact: true })),
     "尚未保存的模拟草稿",
   );
   await page.getByLabel("别名", { exact: true }).fill("小红书 · 模拟顾问一号");
@@ -199,7 +200,7 @@ try {
   await page.getByRole("heading", { name: "联系账号与去重（模拟）" }).waitFor();
   const accounts = (await api("/accounts")).accounts,
     first = accounts.find((a) => a.label === "小红书 · 模拟顾问一号");
-  await page.getByLabel("手动选择账号").selectOption(first.id);
+  await selectOption(page.getByLabel("手动选择账号"), first.id);
   await page
     .getByRole("button", { name: "预留模拟首次联系", exact: true })
     .click();

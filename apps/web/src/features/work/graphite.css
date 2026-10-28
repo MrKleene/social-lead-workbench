@@ -37,7 +37,7 @@ html[data-crm-theme="graphite"] {
 [data-crm-theme="graphite"] [data-slot="button"][data-variant="ghost"] { color: #aac6d3; }
 [data-crm-theme="graphite"] [data-slot="button"][data-variant="ghost"]:hover { background: #263c48; color: #f0faff; }
 [data-crm-theme="graphite"] button:active:not(:disabled) { transform: none !important; }
-[data-crm-theme="graphite"] :is(input,textarea,select,.detail-panel textarea,.detail-panel input,.owner-form select) { color: #e5eff5; background-color: #111c24; border-color: #3a515f; font-size: 13px; }
+[data-crm-theme="graphite"] :is(input,textarea,:is(select, [data-slot=select-trigger]),.detail-panel textarea,.detail-panel input,.owner-form :is(select, [data-slot=select-trigger])) { color: #e5eff5; background-color: #111c24; border-color: #3a515f; font-size: 13px; }
 [data-crm-theme="graphite"] :is(input,textarea)::placeholder { color: #8196a6; }
 [data-crm-theme="graphite"] :is(input[type="checkbox"],input[type="radio"]) { accent-color: #70dfeb; }
 [data-crm-theme="graphite"] :is(label,[data-slot="field-label"]) { color: #c1d2de; }
@@ -87,7 +87,7 @@ html[data-crm-theme="graphite"] {
 .console-title > a { color: #8ddbe6; font-size: 12px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .collection-console .collection-runbar { display: flex; align-items: end; gap: 12px; padding: 0; margin: 16px 0 13px; flex-wrap: wrap; }
 .collection-console .collection-runbar > label { display: grid; gap: 6px; flex: 1; min-width: 180px; font-size: 11px; }
-.collection-console select { width: 100%; height: 38px; }
+.collection-console :is(select, [data-slot=select-trigger]) { width: 100%; height: 38px; }
 .collection-console .start-collection { height: 38px; padding-inline: 18px; }
 .console-terms { margin: 0; display: grid; gap: 5px; font-size: 12px; }
 .console-terms > div { display: flex; gap: 14px; }

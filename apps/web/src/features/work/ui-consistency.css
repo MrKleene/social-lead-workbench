@@ -1,12 +1,12 @@
 /* Mist interaction contract. Import after feature styles so each control has one focus owner. */
 :root, html[data-crm-theme=mist] { --input: #82928e; --focus: #0d735f; --color-muted-foreground: var(--muted-foreground); }
 /* Text fields use a solid perimeter, joined to their border; no ring/shadow halo. */
-:root :is(input:not([type=checkbox]):not([type=radio]), textarea, select) {
+:root :is(input:not([type=checkbox]):not([type=radio]), textarea, :is(select, [data-slot=select-trigger])) {
   border-color: var(--input);
   border-radius: 8px;
   color: var(--foreground);
 }
-:root :is(input, textarea, select):focus {
+:root :is(input, textarea, :is(select, [data-slot=select-trigger])):focus {
   outline: 2px solid var(--focus);
   outline-offset: -1px;
   border-color: var(--focus);
@@ -25,10 +25,10 @@
   outline-offset: 2px;
   box-shadow: none;
 }
-:root :is(input, textarea, select)[aria-invalid=true] {
+:root :is(input, textarea, :is(select, [data-slot=select-trigger]))[aria-invalid=true] {
   border-color: var(--destructive);
 }
-:root :is(input, textarea, select)[aria-invalid=true]:focus {
+:root :is(input, textarea, :is(select, [data-slot=select-trigger]))[aria-invalid=true]:focus {
   outline-color: var(--destructive);
 }
 /* Icon + input search fields have ONE owner: the enclosing visible field. */
@@ -61,7 +61,7 @@ html[data-crm-theme=mist] :is(.space-search-small, .info-comment-search) input:f
   background: var(--secondary);
   color: var(--accent-foreground);
 }
-:root .segmented button[aria-pressed=true] { color: var(--accent-foreground); }
+:root .segmented button:is([aria-pressed=true],[data-state=on]) { color: var(--accent-foreground); }
 :root th { color: var(--muted-foreground) !important; }
 :root .status-PENDING_REVIEW { color: #80591e !important; }
 :root .status-FOLLOWING { color: #116c5c !important; }
@@ -85,12 +85,12 @@ html[data-crm-theme=mist] :is(.space-search-small, .info-comment-search) input:f
   .platform-grid { grid-template-columns: minmax(0, 1fr); }
   .capability-head { flex-wrap: wrap; gap: 10px; }
   .owner-form { flex-wrap: wrap; }
-  .owner-form select { min-width: 0; }
+  .owner-form :is(select, [data-slot=select-trigger]) { min-width: 0; }
   .action-row { flex-wrap: wrap; }
 }
 @media (forced-colors: active) {
   :root { --focus: Highlight; --input: ButtonText; }
-  :root :is(input, textarea, select)[aria-invalid=true]:focus { outline-color: Highlight; }
+  :root :is(input, textarea, :is(select, [data-slot=select-trigger]))[aria-invalid=true]:focus { outline-color: Highlight; }
 }
 :root .upcoming-item { min-width: 0; }
 :root .upcoming-item > div { min-width: 0; }

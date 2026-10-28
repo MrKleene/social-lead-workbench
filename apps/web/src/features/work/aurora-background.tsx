@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import {useEffect,useRef,useState} from 'react';
 type View = 'overview' | 'review' | 'handoff';
 const vertex=`attribute vec2 position;void main(){gl_Position=vec4(position,0.,1.);}`;
@@ -45,5 +46,5 @@ export function SpaceBackdrop({view,quiet}:{view:View;quiet:boolean}){
   }catch{fail();shaders.forEach(s=>gl?.deleteShader(s));if(buffer)gl?.deleteBuffer(buffer);if(program)gl?.deleteProgram(program);}
  },[staticMode]);
  useEffect(()=>{ref.current?.dispatchEvent(new Event('space-wake'));},[view,quiet]);
- return <><div className={`space-backdrop ${failed||staticMode?'is-fallback':''}`} aria-hidden="true"><canvas ref={ref}/><div className="space-vignette"/></div><button className="render-mode" onClick={()=>setStaticMode(v=>!v)} aria-pressed={staticMode}>{failed?'WebGL 不可用 · 静态背景':staticMode?'静态背景 · 点击恢复':'WebGL 光场 · 切换静态'}</button></>;
+ return <><div className={`space-backdrop ${failed||staticMode?'is-fallback':''}`} aria-hidden="true"><canvas ref={ref}/><div className="space-vignette"/></div><Button variant="ghost" size="content" className="render-mode" onClick={()=>setStaticMode(v=>!v)} aria-pressed={staticMode}>{failed?'WebGL 不可用 · 静态背景':staticMode?'静态背景 · 点击恢复':'WebGL 光场 · 切换静态'}</Button></>;
 }

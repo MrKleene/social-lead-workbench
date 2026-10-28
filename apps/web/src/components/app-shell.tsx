@@ -1,3 +1,4 @@
+import {TooltipProvider} from './ui/tooltip';
 import {useEffect,useRef} from 'react';
 import {Link,Outlet,useLocation} from 'react-router-dom';
 import {Layers} from 'lucide-react';
@@ -9,7 +10,7 @@ import {ErrorNotice} from './feedback';
 import {DraftGuardProvider,useConfirmWorkspaceLeave} from '@/features/work/draft-guard';
 import {AppNavigation} from './app-navigation/app-navigation';
 import {isWorkPath} from './app-navigation/navigation-model';
-export function AppShell(){return <DraftGuardProvider><ShellContent/></DraftGuardProvider>;}
+export function AppShell(){return <TooltipProvider><DraftGuardProvider><ShellContent/></DraftGuardProvider></TooltipProvider>;}
 function ShellContent(){
  const confirmLeave=useConfirmWorkspaceLeave(),motion=useWorkspaceMotion(),{user,logout}=useAuth(),location=useLocation();useEvents(!!user);
  const previousLocation=useRef(location.key);
@@ -18,7 +19,7 @@ function ShellContent(){
  const phase=module==='follow'?'handoff':module||location.pathname!=='/work'?'review':'overview';
  return <AuroraMotionContext.Provider value={motion.reduced}><div className="space-shell" data-phase={phase}>
  <a className="aurora-skip" href="#workspace-main">跳到工作内容</a>
- <header className="space-topbar app-topbar"><Link className="app-brand" to="/work"><Layers aria-hidden="true"/><span><strong>Social Lead</strong><small>轻序 · AI 辅助获客</small></span></Link><AppNavigation admin={user?.role==='ADMIN'} name={user?.name||''} motion={motion} loggingOut={logout.isPending} onLogout={()=>{if(confirmLeave())logout.mutate();}}/></header>
+ <header className="space-topbar app-topbar"><Link className="app-brand" to="/work"><Layers aria-hidden="true"/><span><strong>Social Lead</strong><small>轻序 · AI 辅助获客</small></span></Link><AppNavigation admin={user?.role==='ADMIN'} name={user?.name||''} motion={motion} loggingOut={logout.isPending} onLogout={async()=>{if(await confirmLeave())logout.mutate();}}/></header>
  <main id="workspace-main" tabIndex={-1} className={spatial?'space-page':'page space-document'} key={location.pathname.split('/')[1]}><ErrorNotice error={logout.error}/>{!spatial&&<Link className="back-to-space" to="/work">← 返回工作台</Link>}<Outlet/></main>
  </div></AuroraMotionContext.Provider>;
 }

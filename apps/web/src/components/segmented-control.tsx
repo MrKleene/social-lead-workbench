@@ -1,6 +1,7 @@
+import {ToggleGroup,ToggleGroupItem} from './ui/toggle-group';
 import type { CSSProperties } from "react";
 
-/** Native toggle buttons keep keyboard behavior familiar without implying ARIA tabs. */
+/** Single-choice filters support roving focus without implying page tabs. */
 export function SegmentedControl({ label, value, options, onChange }: {
   label: string;
   value: string;
@@ -8,15 +9,14 @@ export function SegmentedControl({ label, value, options, onChange }: {
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="segmented" role="group" aria-label={label}
+    <ToggleGroup type="single" value={value} onValueChange={next=>{if(next)onChange(next);}} className="segmented" aria-label={label}
       style={{ "--segments": options.length, "--selected": Math.max(0, options.findIndex(v => v.value === value)) } as CSSProperties}>
       <span className="segment-indicator" aria-hidden="true" />
       {options.map(option => (
-        <button type="button" key={option.value} aria-pressed={option.value === value}
-          onClick={() => onChange(option.value)}>
+        <ToggleGroupItem key={option.value} value={option.value}>
           {option.label}{option.count !== undefined && <span>{option.count}</span>}
-        </button>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   );
 }
