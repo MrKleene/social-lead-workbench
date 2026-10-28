@@ -1,3 +1,6 @@
+import {useQuery} from '@tanstack/react-query';
+import type {AutoContactOverview} from '@crm/contracts';
+import {api} from '@/lib/api';
 import {useNavigate} from 'react-router-dom';
 import {collectionOutcome} from '@/features/collection/collection-outcome';
 import {ArrowRight,Search,ContactRound,Archive,Play,SlidersHorizontal,Clock3} from 'lucide-react';
@@ -10,12 +13,13 @@ import {journeyStages,type JourneyStage} from './journey-model';
 import type {SpatialState} from './use-spatial-work';
 export function OrbitOverview({state:s}:{state:SpatialState}) {
  const navigate=useNavigate(),readiness=useMcpReadiness(s.admin),review=useReviewOverview(s.admin&&!s.active),reduced=useAuroraReduced();
+ const contact=useQuery({queryKey:['auto-contact'],queryFn:()=>api<AutoContactOverview>('/auto-contact'),enabled:s.admin&&!s.active,refetchInterval:5000}),rule=contact.data?.rules[0];
  const recent=s.configs.flatMap(c=>c.runs.map(r=>({...r,config:c.name,configId:c.id}))).sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)).slice(0,3);
  const latest=recent[0],policy=review.data?.policies[0];
  const task=(stage:JourneyStage='collect',run=latest)=>{const q=new URLSearchParams({module:'runs',stage});if(run){q.set('config',run.configId);q.set('run',run.id);}else if(s.selectedConfig)q.set('config',s.selectedConfig.id);navigate('/work?'+q);};
- const labels=[s.work.configs.isError?'读取失败':latest?collectionOutcome(latest).label:'等待开始',review.isError?'读取失败':policy?.autoEnabled?'自动识别已开启':'按需分析','按授权规则执行','收信待接通'];
+ const labels=[s.work.configs.isError?'读取失败':latest?collectionOutcome(latest).label:'等待开始',review.isError?'读取失败':policy?.autoEnabled?'自动识别已开启':'按需分析',contact.isError?'状态读取失败':contact.isPending?'正在读取':rule?.pauseReason?'已暂停':rule?.enabled?'已授权开启':'未启用','收信待接通'];
  return <section className="mist-overview simple-overview" aria-label="轻序工作台" inert={!!s.active} aria-hidden={!!s.active}>
-  <h1 className="sr-only">工作台</h1><ErrorNotice error={s.work.configs.error||readiness.error||review.error}/>
+  <h1 className="sr-only">工作台</h1><ErrorNotice error={s.work.configs.error||readiness.error||review.error||contact.error}/>
   <div className="simple-home-top"><div className="simple-hero"><SpotlightCard theme="light" spotlightColor="#99c7ad" intensity={reduced?0:.12} ambient={false}>
     <p className="eyebrow">从发现需求开始</p><h2>{s.admin?<>下一次获客，<br/>先开始采集。</>:<>从真实需求，<br/>开始下一次跟进。</>}</h2><p>先保存原文，再判断需求与联系。每个阶段都有自己的记录。</p>
     <button className="core-start mist-primary" disabled={s.admin&&s.work.configs.isPending} onPointerMove={e=>{if(reduced)return;const r=e.currentTarget.getBoundingClientRect();e.currentTarget.style.translate=`${((e.clientX-r.left)/r.width-.5)*7}px ${((e.clientY-r.top)/r.height-.5)*7}px`;}} onPointerLeave={e=>{e.currentTarget.style.translate='';}} onClick={()=>s.admin?task():s.openModule('matches')}><Play size={17}/>{s.admin?'自动化采集':'进入我的线索'}</button><small>复用已保存配置 · 进入任务后明确开始</small>

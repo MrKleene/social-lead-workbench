@@ -36,6 +36,6 @@ export class UnavailableContactSender implements ContactSender {
     async send(): Promise<SendResult> { throw Error('SENDER_UNAVAILABLE'); }
 }
 export const CONTACT_SENDER = Symbol('CONTACT_SENDER');
-export const senderUnavailable = '真实评论/私信适配器尚未接通；仅保存规则，不能开启发送。';
+export const senderUnavailable = '持续自动联系尚未接通，不能开启规则发送；单条测试结果请查看回复记录，私信发送仍未接通。';
 const resultSchema = z.discriminatedUnion('kind', [z.object({kind:z.literal('BLOCKED'),reason:z.literal('STOP_UNCONFIRMED')}).strict(),z.object({ kind: z.literal('CONFIRMED'), receipt: z.string().trim().min(1).max(500) }).strict(), z.object({ kind: z.literal('FAILED'), reason: z.string().max(500) }).strict(), z.object({ kind: z.literal('UNKNOWN'), reason: z.string().max(500) }).strict(), z.object({ kind: z.literal('RISK'), reason: z.enum(['RATE_LIMITED', 'VERIFICATION', 'BANNED', 'PLATFORM_REFUSED']) }).strict()]);
 export function normalizeSendResult(raw: unknown): SendResult { const result = resultSchema.safeParse(raw); return result.success ? result.data : { kind: 'UNKNOWN', reason: '发送结果结构或回执不可信，保留占用' }; }
