@@ -1,11 +1,19 @@
-import {useEffect} from 'react';
-import {useQuery} from '@tanstack/react-query';
+import {useCallback,useEffect,useSyncExternalStore} from 'react';
+import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {runPostFeedSchema,type RunPostFeed} from '@crm/contracts';
 import {api,ApiError} from '@/lib/api';
 import type {Run} from '@/features/collection/types';
 export const runPostFeedKey=(configId:string,runId:string)=>['collection',configId,'run-posts',runId];
 /** Observe the timeline cache without creating another network request or polling timer. */
-export function useRunPostSnapshot(configId:string,runId?:string){return useQuery<RunPostFeed>({queryKey:runPostFeedKey(configId,runId||'none'),enabled:false}).data;}
+export function useRunPostSnapshot(configId:string,runId?:string){
+ const client=useQueryClient();
+ const subscribe=useCallback((notify:()=>void)=>client.getQueryCache().subscribe(event=>{
+  const key=event.query.queryKey;
+  if(key[0]==='collection'&&key[1]===configId&&key[2]==='run-posts'&&key[3]===(runId||'none'))notify();
+ }),[client,configId,runId]);
+ const snapshot=useCallback(()=>client.getQueryData<RunPostFeed>(runPostFeedKey(configId,runId||'none')),[client,configId,runId]);
+ return useSyncExternalStore(subscribe,snapshot,snapshot);
+}
 export function useRunPostFeed(configId:string,run:Run,visible:boolean){
  const query=useQuery({queryKey:runPostFeedKey(configId,run.id),queryFn:async()=>{
   const data=runPostFeedSchema.parse(await api(`/collection/configs/${encodeURIComponent(configId)}/runs/${encodeURIComponent(run.id)}/posts`));
