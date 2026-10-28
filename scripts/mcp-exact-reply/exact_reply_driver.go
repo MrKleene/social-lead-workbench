@@ -161,11 +161,11 @@ func (d *ExactReplyDriver) Inspect(ctx context.Context, c exactreply.Command) (e
 // Each action runs at most once, except explicit read-only rechecks. Keeping the
 // sequence pure allows cancellation/failure injection without a browser account.
 type replySelectSteps struct {
-	idle, target, emptyBinding, click, matchedBinding, activeEmpty, input, filled func(context.Context) error
+	idle, target, emptyBinding, click, initialBinding, matchedBinding, activeEmpty, input, filled func(context.Context) error
 }
 
 func runReplySelect(ctx context.Context, s replySelectSteps) error {
-	for _, step := range []func(context.Context) error{s.idle, s.target, s.emptyBinding, s.idle, s.click, s.matchedBinding, s.activeEmpty, s.input, s.matchedBinding, s.filled} {
+	for _, step := range []func(context.Context) error{s.idle, s.target, s.emptyBinding, s.idle, s.click, s.initialBinding, s.activeEmpty, s.input, s.matchedBinding, s.filled} {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -203,6 +203,56 @@ func waitSelectedComposer(ctx context.Context, probe, wait func(context.Context)
 		}
 	}
 	return errors.New("COMPOSER_NOT_ACTIVE")
+}
+
+// Only the first post-click EMPTY may be a rendering transition. This helper
+// has no click/type capability and succeeds exclusively on exact MATCH. Once
+// matched, later guards remain immediate: MATCH -> EMPTY never gets a grace period.
+func waitInitialReplyBinding(ctx context.Context, probe, pristine, wait func(context.Context) error, record func(context.Context, string) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := record(ctx, "INITIAL_BINDING_WAIT"); err != nil {
+		return err
+	}
+	for n := 0; n < 15; n++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := probe(ctx)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err == nil {
+			return record(ctx, "INITIAL_BINDING_MATCHED")
+		}
+		if err.Error() != "BINDING_EMPTY" {
+			return err
+		}
+		if err := pristine(ctx); err != nil {
+			return err
+		}
+		if n == 14 {
+			if err := record(ctx, "INITIAL_BINDING_EMPTY_TIMEOUT"); err != nil {
+				return err
+			}
+			return errors.New("BINDING_EMPTY")
+		}
+		if err := wait(ctx); err != nil {
+			return err
+		}
+	}
+	return errors.New("BINDING_EMPTY")
+}
+func replyRenderWait(ctx context.Context) error {
+	timer := time.NewTimer(100 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) error {
 	d.selected = false
@@ -246,6 +296,15 @@ func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) err
 				return err
 			}
 			return exactreply.RecordStage(ctx, "REPLY_SELECTED", nil, nil)
+		},
+		initialBinding: func(ctx context.Context) error {
+			return waitInitialReplyBinding(ctx, func(ctx context.Context) error {
+				if err := d.restrictions(ctx, c); err != nil {
+					return err
+				}
+				return d.binding(ctx, c, "MATCH")
+			}, func(ctx context.Context) error { return d.composer(ctx, c, "BINDING_PENDING") }, replyRenderWait,
+				func(ctx context.Context, stage string) error { return exactreply.RecordStage(ctx, stage, nil, nil) })
 		},
 		matchedBinding: func(ctx context.Context) error { return d.binding(ctx, c, "MATCH") },
 		activeEmpty: func(ctx context.Context) error {
@@ -330,6 +389,9 @@ func (d *ExactReplyDriver) composer(ctx context.Context, c exactreply.Command, p
 		return err
 	}
 	expected := "ACTIVE_MATCH"
+	if phase == "BINDING_PENDING" {
+		expected = "PENDING_EMPTY"
+	}
 	if phase == "DEFAULT" {
 		expected = "DEFAULT_EMPTY"
 	}
@@ -524,6 +586,15 @@ const exactReplySelectionGuard = `(targetId, authorId, phase="DEFAULT", content=
  const input = editors[0], box = input.closest('div.input-box'), edit = input.parentElement;
  if (!visible(input)) return 'COMPOSER_HIDDEN';
  if (input.id !== 'content-textarea' || input.getAttribute('contenteditable') !== 'true' || !edit?.matches('.content-edit') || !box) return 'COMPOSER_UNRECOGNIZED';
+ // Pending is observation only; it can never authorize typing or submission.
+ // UI focus/header may render before store binding. Exact store MATCH is still
+ // required by the caller before the normal SELECTED/FILLED guards can run.
+ if (phase === 'BINDING_PENDING') {
+  if ((input.textContent||'').length!==0 || [...input.children].some(e=>e.tagName!=='BR'||e.attributes.length||e.textContent)) return 'COMPOSER_DRAFT_PRESENT';
+  const container=input.closest('.engage-bar-container');
+  if (!container || container.querySelectorAll('p.content-input').length!==1 || container.querySelectorAll('.engage-bar.active').length>1 || container.querySelectorAll('.reply-content').length>1) return 'COMPOSER_AMBIGUOUS';
+  return 'PENDING_EMPTY';
+ }
  if (phase !== 'DEFAULT') {
   if (phase !== 'SELECTED' && phase !== 'FILLED') return 'COMPOSER_UNRECOGNIZED';
   const container=input.closest('.engage-bar-container');

@@ -62,11 +62,11 @@ func TestExactReplySelectionPipelineSyntheticSuccess(t *testing.T) {
 	action := func(name string) func(context.Context) error {
 		return func(context.Context) error { events = append(events, name); return nil }
 	}
-	steps := replySelectSteps{action("idle"), action("target"), action("empty"), action("click"), action("match"), action("activeEmpty"), action("type"), action("filled")}
+	steps := replySelectSteps{action("idle"), action("target"), action("empty"), action("click"), action("initial"), action("match"), action("activeEmpty"), action("type"), action("filled")}
 	if err := runReplySelect(context.Background(), steps); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"idle", "target", "empty", "idle", "click", "match", "activeEmpty", "type", "match", "filled"}
+	want := []string{"idle", "target", "empty", "idle", "click", "initial", "activeEmpty", "type", "match", "filled"}
 	if !reflect.DeepEqual(events, want) {
 		t.Fatal(events)
 	}
@@ -97,7 +97,7 @@ func TestExactReplySelectionFailureOrCancellationCannotAdvanceOrRetry(t *testing
 					return nil
 				}
 			}
-			steps := replySelectSteps{action("idle"), action("target"), action("empty"), action("click"), action("match"), action("activeEmpty"), action("type"), action("filled")}
+			steps := replySelectSteps{action("idle"), action("target"), action("empty"), action("click"), action("initial"), action("match"), action("activeEmpty"), action("type"), action("filled")}
 			err := runReplySelect(ctx, steps)
 			if err == nil || count != stop+1 || clicks > 1 || types > 1 {
 				t.Fatal(stop, cancelled, count, clicks, types, err)
@@ -222,5 +222,101 @@ func TestExactReplySelectedComposerCancellationPreventsNextRead(t *testing.T) {
 	err := waitSelectedComposer(ctx, func(context.Context) error { n++; return errors.New("COMPOSER_BAR_INACTIVE") }, func(context.Context) error { cancel(); return ctx.Err() })
 	if !errors.Is(err, context.Canceled) || n != 1 {
 		t.Fatal(err, n)
+	}
+}
+
+func TestExactReplyInitialBindingWaitOnlyAcceptsExactMatch(t *testing.T) {
+	n, empty, waits := 0, 0, 0
+	var stages []string
+	err := waitInitialReplyBinding(context.Background(), func(context.Context) error {
+		n++
+		if n < 4 {
+			return errors.New("BINDING_EMPTY")
+		}
+		return nil
+	}, func(context.Context) error { empty++; return nil }, func(context.Context) error { waits++; return nil }, func(_ context.Context, s string) error { stages = append(stages, s); return nil })
+	if err != nil || n != 4 || empty != 3 || waits != 3 || !reflect.DeepEqual(stages, []string{"INITIAL_BINDING_WAIT", "INITIAL_BINDING_MATCHED"}) {
+		t.Fatal(err, n, empty, waits, stages)
+	}
+}
+func TestExactReplyInitialBindingNeverSucceedsFromPermanentEmpty(t *testing.T) {
+	n, w := 0, 0
+	var stages []string
+	err := waitInitialReplyBinding(context.Background(), func(context.Context) error { n++; return errors.New("BINDING_EMPTY") }, func(context.Context) error { return nil }, func(context.Context) error { w++; return nil }, func(_ context.Context, s string) error { stages = append(stages, s); return nil })
+	if err == nil || err.Error() != "BINDING_EMPTY" || n != 15 || w != 14 || !reflect.DeepEqual(stages, []string{"INITIAL_BINDING_WAIT", "INITIAL_BINDING_EMPTY_TIMEOUT"}) {
+		t.Fatal(err, n, w, stages)
+	}
+}
+func TestExactReplyInitialBindingMismatchAndRiskNeverWait(t *testing.T) {
+	for _, code := range []string{"BINDING_TARGET_MISMATCH", "BINDING_AUTHOR_MISMATCH", "BINDING_ACCOUNT_MISMATCH", "BINDING_POST_MISMATCH", "BINDING_STATE_MISSING", "BINDING_USER_MISSING", "BINDING_INVALID", "PLATFORM_REFUSED", "RESTRICTION_UNVERIFIED"} {
+		n, w, empty := 0, 0, 0
+		err := waitInitialReplyBinding(context.Background(), func(context.Context) error { n++; return errors.New(code) }, func(context.Context) error { empty++; return nil }, func(context.Context) error { w++; return nil }, func(context.Context, string) error { return nil })
+		if err == nil || err.Error() != code || n != 1 || w != 0 || empty != 0 {
+			t.Fatal(code, err, n, w, empty)
+		}
+	}
+}
+func TestExactReplyInitialBindingCannotWaitPastDraftOrChangedDOM(t *testing.T) {
+	for _, code := range []string{"COMPOSER_DRAFT_PRESENT", "COMPOSER_HIDDEN", "COMPOSER_AMBIGUOUS", "COMPOSER_UNRECOGNIZED", "EXACT_TARGET_MISSING", "AUTHOR_MISMATCH", "REPLY_BUTTON_AMBIGUOUS"} {
+		w := 0
+		err := waitInitialReplyBinding(context.Background(), func(context.Context) error { return errors.New("BINDING_EMPTY") }, func(context.Context) error { return errors.New(code) }, func(context.Context) error { w++; return nil }, func(context.Context, string) error { return nil })
+		if err == nil || err.Error() != code || w != 0 {
+			t.Fatal(code, err, w)
+		}
+	}
+}
+func TestExactReplyInitialBindingCancellationAndJournalFailureDoNotAdvance(t *testing.T) {
+	for _, kind := range []string{"cancel-before", "cancel-wait", "journal-start", "journal-match", "journal-timeout"} {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		if kind == "cancel-before" {
+			cancel()
+		}
+		n := 0
+		err := waitInitialReplyBinding(ctx, func(context.Context) error {
+			n++
+			if kind == "journal-match" {
+				return nil
+			}
+			return errors.New("BINDING_EMPTY")
+		}, func(context.Context) error { return nil }, func(context.Context) error {
+			if kind == "cancel-wait" {
+				cancel()
+				return ctx.Err()
+			}
+			return nil
+		}, func(_ context.Context, s string) error {
+			if kind == "journal-start" && s == "INITIAL_BINDING_WAIT" || kind == "journal-match" && s == "INITIAL_BINDING_MATCHED" || kind == "journal-timeout" && s == "INITIAL_BINDING_EMPTY_TIMEOUT" {
+				return errors.New("JOURNAL_UNAVAILABLE")
+			}
+			return nil
+		})
+		if err == nil || (kind == "cancel-before" || kind == "journal-start") && n != 0 || kind == "cancel-wait" && n != 1 {
+			t.Fatal(kind, err, n)
+		}
+	}
+}
+func TestExactReplyInitialBindingDelayedSelectionClicksAndTypesOnce(t *testing.T) {
+	for _, lost := range []bool{false, true} {
+		clicks, types, reads := 0, 0, 0
+		ok := func(context.Context) error { return nil }
+		s := replySelectSteps{idle: ok, target: ok, emptyBinding: ok, click: func(context.Context) error { clicks++; return nil }, initialBinding: func(ctx context.Context) error {
+			return waitInitialReplyBinding(ctx, func(context.Context) error {
+				reads++
+				if reads < 3 {
+					return errors.New("BINDING_EMPTY")
+				}
+				return nil
+			}, ok, ok, func(context.Context, string) error { return nil })
+		}, matchedBinding: ok, activeEmpty: func(context.Context) error {
+			if lost {
+				return errors.New("BINDING_EMPTY")
+			}
+			return nil
+		}, input: func(context.Context) error { types++; return nil }, filled: ok}
+		err := runReplySelect(context.Background(), s)
+		if clicks != 1 || reads != 3 || lost && (err == nil || types != 0) || !lost && (err != nil || types != 1) {
+			t.Fatal(lost, err, clicks, types, reads)
+		}
 	}
 }

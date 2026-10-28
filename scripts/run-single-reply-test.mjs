@@ -17,14 +17,28 @@ Object.assign(process.env,{DOTENV_CONFIG_PATH:'/dev/null',XHS_ACCOUNT_LOGIN_MODE
 if(process.env.CRM_SUPERVISED_BOOT)throw Error('USE_DIRECT_OPERATOR_CONTEXT');
 require('reflect-metadata');const {Db}=require('../apps/api/dist/common/db.js');const db=new Db();
 const abort=new AbortController();for(const name of ['SIGINT','SIGTERM'])process.once(name,()=>abort.abort());
+let devices,result;
 try{
  const device=await db.executionDevice.findUnique({where:{id:manifest.deviceId}});
  if(!device?.enabled||!device.runtimeId||!device.lastSeenAt||Date.now()-device.lastSeenAt.getTime()>30000)throw Error('CURRENT_DEVICE_RUNTIME_REQUIRED');
  process.env.CRM_RUNTIME_ID=device.runtimeId;
  const actor=await db.user.findUnique({where:{id:input.actorId},select:{id:true,name:true,email:true,role:true,active:true}});if(!actor?.active||actor.role!=='ADMIN')throw Error('ACTIVE_ADMIN_REQUIRED');
  const {DeviceService}=require('../apps/api/dist/devices/device.service.js'),{LocalDeviceRuntime}=require('../apps/api/dist/devices/device-runtime.js'),{LoginRuntime}=require('../apps/api/dist/accounts/login-runtime.js'),{LocalSingleReplyExecutor}=require('../apps/api/dist/auto-contact/single-reply-executor.js'),{SingleReplyTestService}=require('../apps/api/dist/auto-contact/single-reply-test.js');
- const executor=new LocalSingleReplyExecutor(db,new DeviceService(db,new LocalDeviceRuntime()),new LoginRuntime());
- const result=await new SingleReplyTestService(db,executor).execute(actor,input.scope,abort.signal);
+ devices=new DeviceService(db,new LocalDeviceRuntime());const runtime=new LoginRuntime();
+ const executor=new LocalSingleReplyExecutor(db,devices,runtime);
+ result=await new SingleReplyTestService(db,executor).execute(actor,input.scope,abort.signal);
+ // Explicit proven non-submission recovery keeps the original collection/review
+ // association and automatically completes one readback, never another send.
+ if(input.scope.recoveryWorkflowId&&input.scope.purpose==='CAPTURE_EXACT_COMMENT_RECEIPT_ONCE'&&result.outcome==='UNKNOWN'&&!result.reused){
+  process.env.CRM_ACCOUNT_READ_ENABLED='1';
+  const {AccountReadService}=require('../apps/api/dist/collection/account-read.service.js'),{BoundedCaptureReadback}=require('../apps/api/dist/auto-contact/bounded-capture-readback.js');
+  const readback=await new BoundedCaptureReadback(db,new AccountReadService(db,devices,runtime)).run(actor,result.attemptId,abort.signal);result={...result,readback};
+  if(readback.kind==='CONFIRMED'){
+   result={...result,outcome:'CONFIRMED',replyId:readback.replyId};
+   const {resolveConfirmedCapturePause}=require('../apps/api/dist/auto-contact/resolved-capture-pause.js');result.pauseResolution=await resolveConfirmedCapturePause(db,actor,input.scope.accountId);
+  }
+ }
+ if(input.scope.recoveryWorkflowId)await db.auditLog.create({data:{actorId:actor.id,entityId:input.scope.recoveryWorkflowId,action:'BOUNDED_RECOVERY_FINISHED',metadata:{approvalId:input.scope.approvalId,previousNotAttemptedId:input.scope.previousNotAttemptedId,...result,collectionCalls:0,modelCalls:0}}});
  console.log(JSON.stringify(result));
-}catch(error){console.error(JSON.stringify({status:'STOPPED',reason:error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'SINGLE_REPLY_STOPPED_REVIEW_LEDGER_BEFORE_ANY_FOLLOWUP'}));process.exitCode=1;}
-finally{await db.$disconnect();}
+}catch(error){console.error(JSON.stringify({...result,status:'STOPPED',reason:error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'SINGLE_REPLY_STOPPED_REVIEW_LEDGER_BEFORE_ANY_FOLLOWUP'}));process.exitCode=1;}
+finally{try{await devices?.onModuleDestroy();}finally{await db.$disconnect();}}

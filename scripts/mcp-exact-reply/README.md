@@ -101,3 +101,7 @@ Production pin remains `70c02190...`; this candidate is deliberately not registe
 ## Current reliability candidate (offline only)
 
 See `docs/REPLY-RELIABILITY-2026-10-27.md` in the repository root. Candidate version `v2.5.5-local-reply-reliability-v1`, SHA256 `8cd3b580bbfda16881c125d04aa169f551e129053e656d70f7d2ebdeae62b92f`, reproduced twice without installation or execution. Production response mapping remains false. Account eligibility has no reviewed positive provider and remains blocked. Both real executors now stop before opening a saved session when eligibility is unverified. Stages, same-page restriction evidence, UNKNOWN pause/retention, fixed screenshot reasons and read-only history views are covered by offline fixtures. This section supersedes historical deployment statements above; it does not revise any historical send outcome.
+
+## Latest initial-binding candidate (2026-10-28, not installed)
+
+See `docs/INITIAL-BINDING-WAIT-2026-10-28.md`. It supersedes the historical current-state statements above: the prepared candidate adds a bounded read-only initial EMPTY-to-MATCH wait, preserves all exact-binding/input/submit guards, and remains uninstalled. A new matching source pin does not authorize installation or sending. Production keeps its previously approved executable; historical UNKNOWN and confirmed records stay intact.

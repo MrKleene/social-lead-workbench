@@ -65,3 +65,10 @@ test('binding never borrows targetComment or uses visible nickname; no raw field
  assert.doesNotMatch(bindingJS,/\.click\(|\.focus\(|\.dispatchEvent\(|\bfetch\(|XMLHttpRequest|\.commentTarget\s*=/);
  assert.doesNotMatch(bindingJS,/nickname|targetComment/);
 });
+test('initial pending phase only observes a pristine exact-target editor through rendering transitions',()=>{
+ for(const o of [{},{focused:true},{focused:true,noHeader:true},{noActiveBar:true,markerHidden:true},{child:{tagName:'BR'}}])assert.equal(fixture({...o,phase:'BINDING_PENDING'}),'PENDING_EMPTY');
+ for(const [o,code] of [[{text:' '},'COMPOSER_DRAFT_PRESENT'],[{text:'\u200b'},'COMPOSER_DRAFT_PRESENT'],[{child:{tagName:'IMG'}},'COMPOSER_DRAFT_PRESENT'],[{wrongAuthor:true},'AUTHOR_MISMATCH'],[{targets:2},'EXACT_TARGET_MISSING'],[{hidden:true},'COMPOSER_HIDDEN'],[{editors:2},'COMPOSER_AMBIGUOUS']])assert.equal(fixture({...o,phase:'BINDING_PENDING'}),code);
+ const pipeline=src.split('func runReplySelect')[1].split('// At most')[0];assert.match(pipeline,/s\.click, s\.initialBinding, s\.activeEmpty, s\.input, s\.matchedBinding/);
+ const select=src.split('func (d *ExactReplyDriver) Select')[1].split('func (d *ExactReplyDriver) binding')[0];assert.match(select,/initialBinding:[\s\S]*waitInitialReplyBinding[\s\S]*d\.binding\(ctx, c, "MATCH"\)/);
+ assert.equal((select.match(/humanize.Click/g)||[]).length,1);assert.equal((select.match(/humanize.Type/g)||[]).length,1);
+});
