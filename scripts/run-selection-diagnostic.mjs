@@ -4,6 +4,7 @@ import {resolve,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
 import {validateSelectionScope} from './selection-diagnostic-scope.mjs';
+import {verifySelectionHistory} from './selection-diagnostic-history.mjs';
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const require=createRequire(import.meta.url);
 const [flag,file,evidence]=process.argv.slice(2);if(flag!=='--select-observe-approved-once'||!file||!evidence||process.argv.length!==5)throw Error('EXPLICIT_SELECTION_SCOPE_REQUIRED');
@@ -43,9 +44,10 @@ try{
  const {contactTarget}=require('../apps/api/dist/auto-contact/contact-policy.js'),{savedPostReference}=require('../apps/api/dist/collection/post-reference.js');
  const target=review&&contactTarget(review,review.capture,review.capture?.post??null);
  if(!target||review.isDemo||review.platform!=='XHS'||review.version!==scope.reviewVersion||review.score<=90||review.result?.decision!=='MATCH'||review.context!=='SUFFICIENT'||target.postId!==scope.postId||target.commentId!==scope.targetCommentId||target.recipientId!==scope.recipientId)throw Error('SAVED_TARGET_MISMATCH');
- // Reject any already contacted, uncertain or in-flight recipient without changing its ledger.
- const ledger=await db.contactLedger.findFirst({where:{mode:'REAL',identity:{platform:'XHS',platformUserId:scope.recipientId}},include:{attempts:true}});
- if(ledger&&(ledger.accountId!==scope.accountId||ledger.attempts.some(a=>!['FAILED','CANCELLED'].includes(a.outcome)||a.attemptedAt)))throw Error('TARGET_HISTORY_BLOCKED');
+ const {verifyCaptureRecoveryChain}=require('../apps/api/dist/auto-contact/capture-recovery-chain.js');
+ const {contactLock}=require('../apps/api/dist/auto-contact/contact-settings.service.js');
+ const historyProof=await db.$transaction(async tx=>{await contactLock(tx);return verifySelectionHistory(tx,scope,actor.id,verifyCaptureRecoveryChain)});
+ await writeFile(join(output,'history-proof.json'),JSON.stringify(historyProof)+'\n',{flag:'wx',mode:0o600});
  for(const priorDirectory of ['restriction-inspection-consents','selection-diagnostic-consents']){
   try{await lstat(join(directory,priorDirectory,scope.approvalId+'.json'));throw Error('APPROVAL_ALREADY_CONSUMED')}catch(error){if(error?.code!=='ENOENT')throw error}
  }
