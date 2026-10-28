@@ -334,3 +334,42 @@ it.each(['reply','sender','recipient','content','target','post','expired','missi
  const f=await capturedConfirmationFixture();const p:any={...f.proof};if(kind==='reply')p.replyId='f'.repeat(24);if(kind==='sender')p.senderId='f'.repeat(24);if(kind==='recipient')p.recipientId='f'.repeat(24);if(kind==='content')p.contentSha256='f'.repeat(64);if(kind==='target')p.commentId='f'.repeat(24);if(kind==='post')p.postId='f'.repeat(24);if(kind==='expired')p.observedAt=new Date(0).toISOString();if(kind==='missing-login')await db.auditLog.deleteMany({where:{entityId:p.readbackRequestId}});if(kind==='missing-receipt')await db.auditLog.deleteMany({where:{entityId:f.attempt.requestKey,action:'SINGLE_REPLY_EXECUTION_STAGE'}});if(kind==='not-closed')p.stopped=false;if(kind==='no-match')p.matches=0;
  await expect(f.reconciler.confirm(actor,p)).rejects.toThrow();expect(await db.contactAttempt.findUnique({where:{id:f.attempt.id}})).toEqual(f.attempt);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);expect(await db.auditLog.count({where:{action:'SINGLE_REPLY_CAPTURE_RECONCILED'}})).toBe(0);
 });
+
+import {resolveConfirmedCapturePause} from '../src/auto-contact/resolved-capture-pause';
+import {BoundedCaptureReadback} from '../src/auto-contact/bounded-capture-readback';
+it('resolved same-transaction pause closes once without enabling rules or changing prior UNKNOWN/quota/locks',async()=>{
+ const f=await capturedConfirmationFixture();await f.reconciler.confirm(actor,f.proof);
+ const old=await db.contactAttempt.create({data:{ledgerId:f.attempt.ledgerId,requestKey:'unrelated-old-unknown',kind:'FIRST',mode:'REAL',channel:'COMMENT',content:'old',outcome:'UNKNOWN',day:'old',actorId:actor.id,accountIdSnapshot:'different-restricted-account'}});
+ const attempts=await db.contactAttempt.findMany(),usage=await db.accountDay.findMany(),ledger=await db.contactLedger.findMany();
+ const results=await Promise.all([resolveConfirmedCapturePause(db,actor,f.account.id),resolveConfirmedCapturePause(db,actor,f.account.id)]);
+ expect(results.filter(x=>x.resolved)).toHaveLength(1);expect(await db.autoContactControl.findFirst()).toMatchObject({pauseReason:null,pausedAt:null});expect(await db.contactAttempt.findMany()).toEqual(attempts);expect(await db.accountDay.findMany()).toEqual(usage);expect(await db.contactLedger.findMany()).toEqual(ledger);expect(await db.autoContactRule.count({where:{enabled:true}})).toBe(0);expect(await db.contactAttempt.findUnique({where:{id:old.id}})).toEqual(old);
+});
+it.each(['unknown','rewritten-pause','restriction','other-account','new-unknown','missing-proof','missing-origin','sender-change'])('resolved-pause closure refuses %s',async kind=>{
+ const f=await capturedConfirmationFixture();if(kind!=='unknown')await f.reconciler.confirm(actor,f.proof);
+ if(kind==='rewritten-pause')await db.autoContactControl.updateMany({data:{pauseReason:'SUBMISSION_UNKNOWN'}});
+ if(kind==='restriction')await db.auditLog.create({data:{entityId:f.account.id,action:'ACCOUNT_SEND_OBSERVATION',metadata:{state:'RESTRICTED',source:'USER_REPORT',observedAt:new Date().toISOString()}}});
+ if(kind==='new-unknown')await db.contactAttempt.create({data:{ledgerId:f.attempt.ledgerId,requestKey:'new-unknown',kind:'FIRST',mode:'REAL',channel:'COMMENT',content:'new',outcome:'UNKNOWN',day:'new',actorId:actor.id,accountIdSnapshot:f.account.id}});
+ if(kind==='missing-proof')await db.auditLog.deleteMany({where:{action:'SINGLE_REPLY_CAPTURE_RECONCILED'}});if(kind==='missing-origin')await db.auditLog.deleteMany({where:{action:'SINGLE_REPLY_TEST_FINISHED'}});if(kind==='sender-change')await db.platformAccount.update({where:{id:f.account.id},data:{loginPlatformUserId:'f'.repeat(24)}});
+ const before=await db.autoContactControl.findMany();await expect(resolveConfirmedCapturePause(db,actor,kind==='other-account'?'other':f.account.id)).rejects.toThrow();expect(await db.autoContactControl.findMany()).toEqual(before);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);
+});
+it.each(['match','no-match','wrong-parent','read-failure','close-failure'])('automatic one-window reconciliation handles %s without another send',async kind=>{
+ const f=await capturedConfirmationFixture();const p=f.proof;let rows:any[]=[{id:p.commentId,userId:p.recipientId,text:f.scope.comment},{id:p.replyId,userId:p.senderId,text:f.scope.content,parentId:p.commentId,replyTarget:{commentId:p.commentId,userId:p.recipientId}}];if(kind==='no-match')rows.pop();if(kind==='wrong-parent')rows[1].parentId='f'.repeat(24);
+ const reader={postReference:vi.fn(async()=>{if(kind==='read-failure')throw Error('synthetic');return {id:p.postId};}),receivedComments:vi.fn(()=>rows),chunkReceipt:vi.fn(()=>null)},close=vi.fn(async()=>{if(kind==='close-failure')throw Error('synthetic');});
+ const reads:any={authorize:vi.fn(async()=>({})),open:vi.fn(async(_e:any,_cancel:any,id:string)=>{await db.auditLog.create({data:{actorId:actor.id,entityId:id,action:'ACCOUNT_TASK_LOGIN_CHECK_RESULT',metadata:{state:'VERIFIED'}}});return {reader,check:async()=>{},close};}),failure:vi.fn(async()=>{})};
+ const s=new BoundedCaptureReadback(db,reads),result=await s.run(actor,f.attempt.id,new AbortController().signal);
+ expect(result.kind).toBe(kind==='match'?'CONFIRMED':'UNKNOWN');expect(reader.postReference).toHaveBeenCalledTimes(1);expect(close).toHaveBeenCalledTimes(1);expect(f.executor.run).toHaveBeenCalledTimes(1);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);
+ await expect(s.run(actor,f.attempt.id,new AbortController().signal)).rejects.toThrow();expect(reads.open).toHaveBeenCalledTimes(1);expect(await db.contactLedger.count()).toBe(1);
+});
+
+import {inspectBoundedAccount} from '../src/auto-contact/bounded-account-inspection';
+import {XhsRestrictionInspectionTransport,XHS_PROFILE_RESTRICTION_PROTOCOL} from '../src/auto-contact/xhs-restriction-transport';
+it.each(['clean','restricted','unverified','stop-unconfirmed'])('bounded profile preflight %s is observed before collection, never send permission',async kind=>{
+ const f=await oneShotFixture(),release=vi.fn(async()=>{}),permit:any={root:'/synthetic',signal:new AbortController().signal,release},devices:any={acquire:async()=>permit,assertPermit:async()=>{}},scope={workflowId:randomUUID(),accountId:f.account.id,senderId:f.scope.senderId,binarySha256:f.scope.binarySha256};
+ const endpoint={url:new URL('http://127.0.0.1:28060/mcp'),token:'a'.repeat(64),accountId:f.account.id,binarySha256:f.scope.binarySha256,stop:async()=>true},runtime:any={deviceId:()=>randomUUID(),inspect:async()=>'UNVERIFIED',openSavedForRestrictionInspection:async()=>({replyEndpoint:()=>endpoint})};
+ vi.spyOn(XhsRestrictionInspectionTransport.prototype,'inspect').mockResolvedValue({kind:'READ_ONLY_RESULT',ownedStopped:kind!=='stop-unconfirmed',result:{accountId:scope.accountId,senderId:scope.senderId,protocol:XHS_PROFILE_RESTRICTION_PROTOCOL,kind:kind==='restricted'?'RESTRICTION_VISIBLE':kind==='unverified'?'IDENTITY_UNVERIFIED':'OBSERVED_NO_RESTRICTION',code:kind==='restricted'?'VISIBLE_NOTICE':'NOT_A_SEND_PERMISSION_CHECK',observedAt:new Date().toISOString(),observation:{identity:kind==='unverified'?'UNKNOWN':'MATCH',identitySource:'STATE_AND_SELF_LINK',title:'合成账号',pathname:'/user/profile/[SENDER]',warnings:kind==='restricted'?[{code:'ACCOUNT_CONTENT_RESTRICTED',text:'合成限制'}]:[],screenshotState:'NO_SAFE_REGION',consoleErrors:0,networkFailures:0},processStopped:kind!=='stop-unconfirmed',writeOperations:0}});
+ vi.spyOn(XhsRestrictionInspectionTransport.prototype,'close').mockResolvedValue(kind!=='stop-unconfirmed');
+ if(kind==='clean'){expect(await inspectBoundedAccount(db,devices,runtime,actor,scope,new AbortController().signal)).toMatchObject({sendPermission:false,kind:'OBSERVED_NO_RESTRICTION'});await expect(inspectBoundedAccount(db,devices,runtime,actor,scope,new AbortController().signal)).rejects.toThrow('PROFILE_CHECK_ALREADY_CONSUMED');}
+ else await expect(inspectBoundedAccount(db,devices,runtime,actor,scope,new AbortController().signal)).rejects.toThrow();
+ expect(await db.collectionRun.count()).toBe(1);expect(await db.contactAttempt.count()).toBe(0);expect(await db.semanticModelCall.count()).toBe(0);expect(release).toHaveBeenCalledTimes(kind==='stop-unconfirmed'?0:1);
+ if(kind==='restricted'){expect(await accountSendObservation(db,scope.accountId,new Date())).toMatchObject({state:'RESTRICTED',canSend:false});expect(await db.autoContactControl.findFirst()).toMatchObject({pauseReason:'ACCOUNT_RESTRICTED'});}
+});
