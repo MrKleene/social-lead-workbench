@@ -27,7 +27,7 @@ const exactPreflightDOM = `(target,author) => {
  if(nodes.length===1){
   const node=nodes[0];
   const authors=Array.from(node.querySelectorAll('[data-user-id]')).filter(x=>x.closest('.comment-item')===node);
-  result.author=authors.length===0?'MISSING':authors.length!==1?'AMBIGUOUS':authors[0].getAttribute('data-user-id')===author?'MATCH':'MISMATCH';
+  result.author=authors.length===0?'MISSING':authors.some(e=>e.getAttribute('data-user-id')!==author)?'MISMATCH':authors.filter(e=>e.matches('a.name')).length!==1?'AMBIGUOUS':'MATCH';
   const buttons=Array.from(node.querySelectorAll('.right .interactions .reply')).filter(x=>x.closest('.comment-item')===node);
   result.replyButton=buttons.length===0?'MISSING':buttons.length!==1?'AMBIGUOUS':buttons[0].closest('.comment-item')?.id==='comment-'+target?'EXACT':'MISMATCH';
  }
@@ -78,6 +78,11 @@ func (d *ExactPreflightDriver) Inspect(ctx context.Context, t exactreply.Preflig
 	if e = json.Unmarshal([]byte(raw), &o.DOM); e != nil {
 		return o, errors.New("STATE_INVALID")
 	}
+	selection, selectionErr := d.read.selection(ctx, c)
+	if selectionErr != nil {
+		return o, selectionErr
+	}
+	o.Selection = &selection
 	o.Sources.DOM = "EXACT_COMMENT_ID_AND_SCOPED_DESCENDANTS"
 	return
 }

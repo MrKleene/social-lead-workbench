@@ -1,3 +1,4 @@
+import {selectionEvidenceSchema} from './selection-evidence';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {CallToolResultSchema} from '@modelcontextprotocol/sdk/types.js';
@@ -14,6 +15,7 @@ const pageSchema=z.object({navigation:z.enum(['UNKNOWN','EXACT_POST','OTHER_POST
 const resultSchema=z.object({
  protocol:z.literal(XHS_PREFLIGHT_PROTOCOL),kind:z.enum(['UNAVAILABLE','RISK','MISMATCH','DOM_UNAVAILABLE','MATCHED_READ_ONLY']),
  diagnostic:z.object({stage:z.enum(['VALIDATE','INSPECT','CLOSE']),code:z.enum(['PREFLIGHT_NAVIGATION_UNVERIFIED','PREFLIGHT_REFERENCE_UNVERIFIED','INVALID_COMMAND','CANCELLED','DRIVER_PANIC','DRIVER_ERROR','STOP_UNCONFIRMED','STATE_UNAVAILABLE','STATE_INVALID','STATE_USER_MISSING','STATE_POST_MISSING','STATE_POST_MISMATCH','STATE_COMMENTS_MISSING','DEPTH_LIMIT','ROW_LIMIT','POST_MISMATCH','EXACT_TARGET_MISSING_OR_AMBIGUOUS','TARGET_MISMATCH','DOM_LOCATOR_UNVERIFIED','READ_ONLY_MATCH','RATE_LIMITED','VERIFICATION','BANNED','PLATFORM_REFUSED']),checks:z.object({post:check,sender:check,target:check,author:check}).strict()}).strict(),
+ selection:selectionEvidenceSchema.optional(),
  dom:z.object({target:z.enum(['UNKNOWN','MISSING','UNIQUE','AMBIGUOUS']),author:z.enum(['UNKNOWN','MISSING','MATCH','MISMATCH','AMBIGUOUS']),replyButton:z.enum(['UNKNOWN','MISSING','EXACT','MISMATCH','AMBIGUOUS']),composer:z.enum(['UNKNOWN','ABSENT','EMPTY','NONEMPTY','AMBIGUOUS'])}).strict(),
  sources:z.object({identity:z.enum(['UNKNOWN','UNOBSERVED','INITIAL_STATE_USER_INFO']),target:z.enum(['UNKNOWN','UNOBSERVED','INITIAL_STATE_NOTE_COMMENTS']),dom:z.enum(['UNKNOWN','UNOBSERVED','EXACT_COMMENT_ID_AND_SCOPED_DESCENDANTS'])}).strict(),processStopped:z.boolean(),writeOperations:z.literal(0),page:pageSchema,
 }).strict();

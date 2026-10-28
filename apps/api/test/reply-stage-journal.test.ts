@@ -21,3 +21,11 @@ it('receipt projection accepts bounded structural evidence and rejects credentia
  for(const bad of [{...receipt,rawBody:'secret'},{...receipt,fields:[{path:'/token',type:'string'}]},{...receipt,fields:[{path:'/msg',type:'string',text:'private'}]}]){const f=await file(JSON.stringify({...record,receipt:bad})+'\n');expect((await readReplyJournal(f.dir,id)).state).toBe('INVALID')}
 });
 it('initial binding diagnostics remain evidence only; accepted solely as fixed stage enums',async()=>{for(const stage of ['INITIAL_BINDING_WAIT','INITIAL_BINDING_MATCHED','INITIAL_BINDING_EMPTY_TIMEOUT']){const f=await file(JSON.stringify({...row,stage})+'\n');expect((await readReplyJournal(f.dir,id)).state).toBe('AVAILABLE');}const f=await file(JSON.stringify({...row,stage:'INITIAL_BINDING_MATCHED',boundTarget:'invented'})+'\n');expect((await readReplyJournal(f.dir,id)).state).toBe('INVALID');});
+
+import {selectionEvidenceSchema} from '../src/auto-contact/selection-evidence';
+it('selection evidence is fixed enums, never raw state or replacement confirmation',async()=>{
+ const selection={frame:'TOP',target:'UNIQUE',depth:'ROOT',button:'EXACT',centerHit:'COVERED',component:'MATCH',handler:'PRESENT',bindingShape:'PLAIN',binding:'EMPTY',editor:'EMPTY',replyUI:'ACTIVE',focused:true};
+ expect(selectionEvidenceSchema.safeParse(selection).success).toBe(true);
+ for(const change of [{token:'secret'},{component:'private author'},{centerHit:{x:20}},{binding:'CONFIRMED'}])expect(selectionEvidenceSchema.safeParse({...selection,...change}).success).toBe(false);
+ const f=await file(JSON.stringify({...row,stage:'SELECTION_STOPPED',selection})+'\n');expect((await readReplyJournal(f.dir,id)).records[0].selection).toEqual(selection);
+});

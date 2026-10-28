@@ -297,7 +297,9 @@ async function boundedCaptureRecoveryFixture(){
  const f=await oneShotFixture();const scope={...f.scope,scopeVersion:'workbench.single-reply-authorization.v3',purpose:'CAPTURE_EXACT_COMMENT_RECEIPT_ONCE',receiptCapture:'workbench.reply-receipt-capture.v1',excludedPostIds:['e'.repeat(24)],excludedRecipientIds:['f'.repeat(24)]};
  f.executor.run.mockImplementationOnce(async(_c,before)=>{await before();return {result:{kind:'FAILED',reason:'synthetic composer not ready'},protocolCalls:1,submission:'NOT_ATTEMPTED',identityVerified:true,stopped:true} as any;});
  await f.service.execute(actor,scope);const old=await db.contactAttempt.findFirstOrThrow(),protocolAttemptId=randomUUID(),at=new Date().toISOString();
- await db.auditLog.createMany({data:[{actorId:actor.id,entityId:scope.approvalId,action:'BOUNDED_WORKFLOW_AUTHORIZED',metadata:{scope}},{actorId:actor.id,entityId:scope.approvalId,action:'BOUNDED_WORKFLOW_FINISHED',metadata:{kind:'FAILED',attemptId:old.id,submission:'NOT_ATTEMPTED',stopped:true}}]});
+ const workflowScope={workflowId:scope.approvalId,accountId:scope.accountId,senderId:scope.senderId,content:scope.content,maximumSubmissions:1,retryCount:0};
+ const {semanticHash}=await import('../src/collection/capture-archive');
+ await db.auditLog.createMany({data:[{actorId:actor.id,entityId:scope.approvalId,action:'BOUNDED_WORKFLOW_AUTHORIZED',metadata:{scope:workflowScope,scopeHash:semanticHash(workflowScope)}},{actorId:actor.id,entityId:scope.approvalId,action:'BOUNDED_WORKFLOW_FINISHED',metadata:{kind:'FAILED',attemptId:old.id,submission:'NOT_ATTEMPTED',stopped:true}}]});
  const metadata=[{stage:'RPC_INTENT',protocolAttemptId},{stage:'RPC_RETURNED',protocolAttemptId,kind:'NOT_SENT',envelopeValid:true},{stage:'TRANSPORT_STOP',protocolAttemptId,stopped:true,journal:{state:'AVAILABLE',records:[{sequence:1,stage:'STARTED',attemptId:protocolAttemptId,at},{sequence:2,stage:'DRIVER_CLOSED',attemptId:protocolAttemptId,at,stopped:true}]}}];
  for(let i=0;i<metadata.length;i++)await db.auditLog.create({data:{actorId:actor.id,entityId:old.requestKey,action:'SINGLE_REPLY_EXECUTION_STAGE',metadata:metadata[i] as any,createdAt:new Date(Date.now()+i)}});
  return {...f,old,next:{...scope,approvalId:randomUUID(),previousNotAttemptedId:old.id,recoveryWorkflowId:scope.approvalId}};
@@ -375,3 +377,47 @@ it.each(['clean','restricted','unverified','stop-unconfirmed'])('bounded profile
 });
 
 it('same-transaction provenance tolerates application/DB clock ordering without accepting another transaction',async()=>{const f=await capturedConfirmationFixture();await f.reconciler.confirm(actor,f.proof);const c=await db.autoContactControl.findFirstOrThrow(),e=await db.auditLog.findFirstOrThrow({where:{entityId:f.attempt.requestKey,action:'SINGLE_REPLY_TEST_FINISHED'}});await db.$transaction(async tx=>{await tx.autoContactControl.updateMany({data:{pausedAt:c.pausedAt}});await tx.auditLog.update({where:{id:e.id},data:{createdAt:new Date(c.pausedAt!.getTime()+5)}});});expect(await resolveConfirmedCapturePause(db,actor,f.account.id)).toMatchObject({resolved:true});});
+
+async function secondUnsubmittedCaptureFixture(){
+ const f=await boundedCaptureRecoveryFixture();
+ f.executor.run.mockImplementationOnce(async(_c,before)=>{await before();return {result:{kind:'FAILED',reason:'synthetic binding still empty'},protocolCalls:1,submission:'NOT_ATTEMPTED',identityVerified:true,stopped:true} as any;});
+ const result=await f.service.execute(actor,f.next),old2=await db.contactAttempt.findUniqueOrThrow({where:{id:result.attemptId}});
+ const protocolAttemptId=randomUUID(),at=new Date().toISOString();
+ const metadata=[{stage:'RPC_INTENT',protocolAttemptId},{stage:'RPC_RETURNED',protocolAttemptId,kind:'NOT_SENT',envelopeValid:true},{stage:'TRANSPORT_STOP',protocolAttemptId,stopped:true,journal:{state:'AVAILABLE',records:[{sequence:1,stage:'STARTED',attemptId:protocolAttemptId,at},{sequence:2,stage:'INITIAL_BINDING_WAIT',attemptId:protocolAttemptId,at},{sequence:3,stage:'INITIAL_BINDING_EMPTY_TIMEOUT',attemptId:protocolAttemptId,at},{sequence:4,stage:'DRIVER_CLOSED',attemptId:protocolAttemptId,at,stopped:true}]}}];
+ for(let i=0;i<metadata.length;i++)await db.auditLog.create({data:{actorId:actor.id,entityId:old2.requestKey,action:'SINGLE_REPLY_EXECUTION_STAGE',metadata:metadata[i] as any,createdAt:new Date(Date.now()+i)}});
+ return {...f,old2,next2:{...f.next,approvalId:randomUUID(),previousNotAttemptedId:old2.id}};
+}
+it('explicit same-workflow recovery verifies every predecessor and preserves two FAILED rows',async()=>{
+ const f=await secondUnsubmittedCaptureFixture(),oldRows=await db.contactAttempt.findMany({orderBy:{id:'asc'}});
+ const result=await f.service.execute(actor,f.next2);expect(result.outcome).toBe('UNKNOWN');
+ expect(await db.contactAttempt.findMany({where:{id:{in:oldRows.map(a=>a.id)}},orderBy:{id:'asc'}})).toEqual(oldRows);
+ expect(await db.contactAttempt.count()).toBe(3);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);
+ await f.service.execute(actor,f.next2);expect(f.executor.run).toHaveBeenCalledTimes(3);
+});
+it.each(['root-unknown','ancestor-submit','ancestor-journal-missing','stale-predecessor','history-link','scope-link','workflow-scope','cancelled-extra','same-id-authorization'])('multi-predecessor recovery refuses %s without discarding history',async kind=>{
+ const f=await secondUnsubmittedCaptureFixture();
+ if(kind==='root-unknown')await db.contactAttempt.update({where:{id:f.old.id},data:{outcome:'UNKNOWN'}});
+ if(kind==='ancestor-submit'||kind==='ancestor-journal-missing'){
+  const e=await db.auditLog.findFirstOrThrow({where:{entityId:f.old.requestKey,action:'SINGLE_REPLY_EXECUTION_STAGE',metadata:{path:['stage'],equals:'TRANSPORT_STOP'}}});
+  if(kind==='ancestor-journal-missing')await db.auditLog.delete({where:{id:e.id}});
+  else {const m=JSON.parse(JSON.stringify(e.metadata));m.journal.records[0].attempted=true;await db.auditLog.update({where:{id:e.id},data:{metadata:m}});}
+ }
+ if(kind==='stale-predecessor')f.next2.previousNotAttemptedId=f.old.id;
+ if(kind==='same-id-authorization')f.next2.approvalId=f.next.approvalId;
+ if(kind==='workflow-scope'){const e=await db.auditLog.findFirstOrThrow({where:{entityId:f.next2.recoveryWorkflowId,action:'BOUNDED_WORKFLOW_AUTHORIZED'}});await db.auditLog.update({where:{id:e.id},data:{metadata:{scope:{accountId:'other'}}}});}
+ if(kind==='history-link')await db.contactAttempt.update({where:{id:f.old2.id},data:{historySnapshot:{previousNotAttemptedId:'wrong'}}});
+ if(kind==='scope-link'){
+  const e=await db.auditLog.findFirstOrThrow({where:{entityId:f.old2.requestKey,action:'SINGLE_REPLY_TEST_AUTHORIZED_RESERVED'}}),m=e.metadata as any;
+  await db.auditLog.update({where:{id:e.id},data:{metadata:{...m,scope:{...m.scope,previousNotAttemptedId:f.old2.id}}}});
+ }
+ if(kind==='cancelled-extra')await db.contactAttempt.create({data:{ledgerId:f.old.ledgerId,requestKey:randomUUID(),kind:'FIRST',mode:'REAL',channel:'COMMENT',content:'unrelated',outcome:'CANCELLED',day:f.old.day,actorId:actor.id,accountIdSnapshot:f.account.id}});
+ const before=await db.contactAttempt.findMany({orderBy:{id:'asc'}}),usage=await db.accountDay.findMany();
+ if(kind==='same-id-authorization')expect(await f.service.execute(actor,f.next2)).toMatchObject({reused:true});
+ else await expect(f.service.execute(actor,f.next2)).rejects.toThrow();
+ expect(await db.contactAttempt.findMany({orderBy:{id:'asc'}})).toEqual(before);expect(await db.accountDay.findMany()).toEqual(usage);expect(f.executor.run).toHaveBeenCalledTimes(2);
+});
+it('two simultaneous explicit recoveries cannot both consume a verified chain',async()=>{
+ const f=await secondUnsubmittedCaptureFixture();
+ const results=await Promise.allSettled([f.service.execute(actor,f.next2),f.service.execute(actor,{...f.next2,approvalId:randomUUID()})]);
+ expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);expect(f.executor.run).toHaveBeenCalledTimes(3);expect(await db.contactAttempt.count()).toBe(3);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);
+});

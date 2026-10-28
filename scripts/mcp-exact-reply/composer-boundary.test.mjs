@@ -37,7 +37,7 @@ test('readers never mutate; driver checks stable binding before typing and again
  assert.doesNotMatch(js,/\.click\(|\.focus\(|\.dispatchEvent\(|\bfetch\(|XMLHttpRequest|textContent\s*=/);
  const select=src.split('func (d *ExactReplyDriver) Select')[1].split('func (d *ExactReplyDriver) binding')[0];
  assert.match(select,/d\.Inspect\(ctx, c\)/);assert.match(select,/ctx\.Err\(\)/);
- assert.equal((select.match(/humanize.Click/g)||[]).length,1);
+ assert.equal((select.match(/d.clickExactReply/g)||[]).length,1);
  assert.match(select,/emptyBinding:[\s\S]*d\.binding\(ctx, c, "EMPTY"\)/);
  assert.match(select,/matchedBinding:[\s\S]*d\.binding\(ctx, c, "MATCH"\)/);
  assert.match(select,/activeEmpty:[\s\S]*waitSelectedComposer[\s\S]*d\.composer\(ctx, c, "SELECTED"\)/);
@@ -70,5 +70,13 @@ test('initial pending phase only observes a pristine exact-target editor through
  for(const [o,code] of [[{text:' '},'COMPOSER_DRAFT_PRESENT'],[{text:'\u200b'},'COMPOSER_DRAFT_PRESENT'],[{child:{tagName:'IMG'}},'COMPOSER_DRAFT_PRESENT'],[{wrongAuthor:true},'AUTHOR_MISMATCH'],[{targets:2},'EXACT_TARGET_MISSING'],[{hidden:true},'COMPOSER_HIDDEN'],[{editors:2},'COMPOSER_AMBIGUOUS']])assert.equal(fixture({...o,phase:'BINDING_PENDING'}),code);
  const pipeline=src.split('func runReplySelect')[1].split('// At most')[0];assert.match(pipeline,/s\.click, s\.initialBinding, s\.activeEmpty, s\.input, s\.matchedBinding/);
  const select=src.split('func (d *ExactReplyDriver) Select')[1].split('func (d *ExactReplyDriver) binding')[0];assert.match(select,/initialBinding:[\s\S]*waitInitialReplyBinding[\s\S]*d\.binding\(ctx, c, "MATCH"\)/);
- assert.equal((select.match(/humanize.Click/g)||[]).length,1);assert.equal((select.match(/humanize.Type/g)||[]).length,1);
+ assert.equal((select.match(/d.clickExactReply/g)||[]).length,1);assert.equal((select.match(/humanize.Type/g)||[]).length,1);
+});
+
+test('physical reply click verifies actual final hit, rejects frames and cannot jitter or repeat',()=>{
+ const click=src.split('func (d *ExactReplyDriver) clickExactReply')[1].split('const exactReplyPointGuard')[0];
+ assert.equal((click.match(/Mouse.Click/g)||[]).length,1);assert.doesNotMatch(click,/humanize|\.Select\(/);
+ assert.ok(click.indexOf('p.Mouse.MoveTo')<click.lastIndexOf('check()'));assert.ok(click.indexOf('SELECT_POINT_VERIFIED')<click.lastIndexOf('check()'));assert.ok(click.indexOf('SELECT_POINT_VERIFIED')<click.indexOf('Mouse.Click'));
+ const guard=src.match(/const exactReplyPointGuard = `([\s\S]*?)`/)[1];assert.match(guard,/elementFromPoint/);assert.match(guard,/window!==window.top/);assert.match(guard,/isConnected/);
+ const observation=src.match(/const exactReplySelectionObservation = `([\s\S]*?)`/)[1];assert.doesNotMatch(observation,/\.click\(|\.focus\(|\.dispatchEvent\(|addEventListener|\bfetch\(|XMLHttpRequest|\.scroll|textContent\s*=/);
 });

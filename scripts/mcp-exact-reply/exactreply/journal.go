@@ -20,6 +20,7 @@ type JournalRecord struct {
 	Attempted *bool                `json:"attempted,omitempty"`
 	Stopped   *bool                `json:"stopped,omitempty"`
 	Evidence  *RestrictionEvidence `json:"evidence,omitempty"`
+	Selection *SelectionEvidence   `json:"selection,omitempty"`
 	Receipt   *ReceiptEvidence     `json:"receipt,omitempty"`
 }
 type Journal struct {
@@ -65,7 +66,7 @@ func OpenJournal(directory, attempt string) (*Journal, error) {
 func (j *Journal) Close() error { return j.file.Close() }
 func validJournalStage(s string) bool {
 	switch s {
-	case "INITIAL_BINDING_WAIT", "INITIAL_BINDING_MATCHED", "INITIAL_BINDING_EMPTY_TIMEOUT", "RECEIPT_CAPTURE", "NAVIGATION_INTENT", "NAVIGATED", "TARGET_LOCATED", "SELECT_INTENT", "REPLY_SELECTED", "INPUT_INTENT", "INPUT_FINISHED", "CANCELLED", "RESTRICTION_CHECK", "BEFORE_CLOSE", "STARTED", "INSPECTED", "SELECTED", "RECHECKED", "BEFORE_SUBMIT", "ATTEMPTED", "AFTER_SUBMIT", "SUBMIT_FINISHED", "READBACK", "DRIVER_CLOSED":
+	case "SELECT_EVENT_UNAVAILABLE", "SELECT_EVENT_EXACT", "SELECT_EVENT_NONE", "SELECT_EVENT_OTHER", "SELECT_EVENT_MULTIPLE", "SELECTION_BEFORE", "SELECTION_AFTER", "SELECTION_STOPPED", "SELECT_POINT_VERIFIED", "INITIAL_BINDING_WAIT", "INITIAL_BINDING_MATCHED", "INITIAL_BINDING_EMPTY_TIMEOUT", "RECEIPT_CAPTURE", "NAVIGATION_INTENT", "NAVIGATED", "TARGET_LOCATED", "SELECT_INTENT", "REPLY_SELECTED", "INPUT_INTENT", "INPUT_FINISHED", "CANCELLED", "RESTRICTION_CHECK", "BEFORE_CLOSE", "STARTED", "INSPECTED", "SELECTED", "RECHECKED", "BEFORE_SUBMIT", "ATTEMPTED", "AFTER_SUBMIT", "SUBMIT_FINISHED", "READBACK", "DRIVER_CLOSED":
 		return true
 	}
 	return false
@@ -74,15 +75,15 @@ func (j *Journal) append(stage string, attempted, stopped *bool) error {
 	return j.appendEvidence(stage, attempted, stopped, nil)
 }
 func (j *Journal) appendEvidence(stage string, attempted, stopped *bool, evidence *RestrictionEvidence) error {
-	return j.appendRecord(stage, attempted, stopped, evidence, nil)
+	return j.appendRecord(stage, attempted, stopped, evidence, nil, nil)
 }
-func (j *Journal) appendRecord(stage string, attempted, stopped *bool, evidence *RestrictionEvidence, receipt *ReceiptEvidence) error {
+func (j *Journal) appendRecord(stage string, attempted, stopped *bool, evidence *RestrictionEvidence, receipt *ReceiptEvidence, selection *SelectionEvidence) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.broken || j.sequence >= 64 || !validJournalStage(stage) {
 		return errors.New("JOURNAL_UNAVAILABLE")
 	}
-	b, err := json.Marshal(JournalRecord{j.sequence + 1, j.attempt, stage, time.Now().UTC().Format(time.RFC3339Nano), attempted, stopped, evidence, receipt})
+	b, err := json.Marshal(JournalRecord{j.sequence + 1, j.attempt, stage, time.Now().UTC().Format(time.RFC3339Nano), attempted, stopped, evidence, selection, receipt})
 	if err == nil {
 		var n int
 		b = append(b, '\n')
@@ -162,5 +163,9 @@ func RecordReceipt(ctx context.Context, evidence ReceiptEvidence) error {
 	if !ok {
 		return errors.New("JOURNAL_UNAVAILABLE")
 	}
-	return j.appendRecord("RECEIPT_CAPTURE", nil, nil, nil, &evidence)
+	return j.appendRecord("RECEIPT_CAPTURE", nil, nil, nil, &evidence, nil)
+}
+
+func (j *Journal) appendSelection(stage string, evidence *SelectionEvidence) error {
+	return j.appendRecord(stage, nil, nil, nil, nil, evidence)
 }

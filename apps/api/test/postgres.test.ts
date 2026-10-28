@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { beforeAll, afterAll, describe, it, expect } from "vitest";
+import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { Test } from "@nestjs/testing";
 import type { INestApplication } from "@nestjs/common";
 import request from "supertest";
@@ -448,6 +448,9 @@ describe("真实 PostgreSQL + Nest HTTP 集成", () => {
     expect((await read("/api/leads", temp)).status).toBe(401);
   });
   it("登录按账号限速且错误不泄露账号存在", async () => {
+    // Keep this limit assertion in one 15-minute bucket, even across wall-clock rollover.
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now());
+    try {
     let status = 0;
     for (let i = 0; i < 11; i++) {
       const r = await api()
@@ -461,5 +464,6 @@ describe("真实 PostgreSQL + Nest HTTP 集成", () => {
       }
     }
     expect(status).toBe(429);
+    } finally { clock.mockRestore(); }
   });
 });

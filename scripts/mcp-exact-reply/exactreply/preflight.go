@@ -42,20 +42,22 @@ type FieldSources struct {
 	DOM      string `json:"dom"`
 }
 type PreflightObservation struct {
-	Snapshot Snapshot
-	DOM      DOMChecks
-	Sources  FieldSources
-	Page     PageChecks
+	Selection *SelectionEvidence
+	Snapshot  Snapshot
+	DOM       DOMChecks
+	Sources   FieldSources
+	Page      PageChecks
 }
 type PreflightResult struct {
-	Protocol        string       `json:"protocol"`
-	Kind            string       `json:"kind"`
-	Diagnostic      Diagnostic   `json:"diagnostic"`
-	DOM             DOMChecks    `json:"dom"`
-	Sources         FieldSources `json:"sources"`
-	ProcessStopped  bool         `json:"processStopped"`
-	WriteOperations int          `json:"writeOperations"`
-	Page            PageChecks   `json:"page"`
+	Selection       *SelectionEvidence `json:"selection,omitempty"`
+	Protocol        string             `json:"protocol"`
+	Kind            string             `json:"kind"`
+	Diagnostic      Diagnostic         `json:"diagnostic"`
+	DOM             DOMChecks          `json:"dom"`
+	Sources         FieldSources       `json:"sources"`
+	ProcessStopped  bool               `json:"processStopped"`
+	WriteOperations int                `json:"writeOperations"`
+	Page            PageChecks         `json:"page"`
 }
 
 func emptyPreflight(t PreflightTarget) PreflightResult {
@@ -105,6 +107,9 @@ func Preflight(ctx context.Context, t PreflightTarget, newInspector func() (Read
 	r.DOM = safeDOM(o.DOM)
 	r.Sources = safeSources(o.Sources)
 	r.Page = SafePage(o.Page)
+	if o.Selection != nil && o.Selection.Valid() {
+		r.Selection = o.Selection
+	}
 	if err != nil {
 		r.Diagnostic.Code = diagnosticCode(err)
 		if code := risk(err); code != "" {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/proto"
 	"github.com/xpzouying/xiaohongshu-mcp/exactreply"
 	"github.com/xpzouying/xiaohongshu-mcp/humanize"
 	"net/url"
@@ -275,8 +276,21 @@ func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) err
 			if err != nil || len(targets) != 1 {
 				return errors.New("EXACT_TARGET_MISSING")
 			}
-			buttons, err := targets[0].Elements(".right .interactions .reply")
-			if err != nil || len(buttons) != 1 {
+			candidates, err := targets[0].Elements(".right .interactions .reply")
+			if err != nil {
+				return errors.New("REPLY_BUTTON_AMBIGUOUS")
+			}
+			buttons := []*rod.Element{}
+			for _, candidate := range candidates {
+				owner, e := candidate.Eval(`() => this.closest('.comment-item')?.id || ''`)
+				if e != nil {
+					return errors.New("REPLY_BUTTON_AMBIGUOUS")
+				}
+				if owner.Value.Str() == "comment-"+c.TargetID {
+					buttons = append(buttons, candidate)
+				}
+			}
+			if len(buttons) != 1 {
 				return errors.New("REPLY_BUTTON_AMBIGUOUS")
 			}
 			hit, err := buttons[0].Eval(`() => this.closest('.comment-item')?.id || ''`)
@@ -289,13 +303,19 @@ func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) err
 			if err := d.restrictions(ctx, c); err != nil {
 				return err
 			}
+			if err := d.recordSelection(ctx, c, "SELECTION_BEFORE"); err != nil {
+				return err
+			}
 			if err := exactreply.RecordStage(ctx, "SELECT_INTENT", nil, nil); err != nil {
 				return err
 			}
-			if err := humanize.Click(buttons[0]); err != nil {
+			if err := d.clickExactReply(ctx, c, buttons[0]); err != nil {
 				return err
 			}
-			return exactreply.RecordStage(ctx, "REPLY_SELECTED", nil, nil)
+			if err := exactreply.RecordStage(ctx, "REPLY_SELECTED", nil, nil); err != nil {
+				return err
+			}
+			return d.recordSelection(ctx, c, "SELECTION_AFTER")
 		},
 		initialBinding: func(ctx context.Context) error {
 			return waitInitialReplyBinding(ctx, func(ctx context.Context) error {
@@ -351,6 +371,11 @@ func (d *ExactReplyDriver) Select(ctx context.Context, c exactreply.Command) err
 		filled: func(ctx context.Context) error { return d.composer(ctx, c, "FILLED") },
 	})
 	if err != nil {
+		if ctx.Err() == nil {
+			if diagnosticErr := d.recordSelection(ctx, c, "SELECTION_STOPPED"); diagnosticErr != nil {
+				return diagnosticErr
+			}
+		}
 		return err
 	}
 	d.selected = true
@@ -738,3 +763,174 @@ func profileSendBlock(o exactreply.RestrictionObservation) error {
 	}
 	return nil
 }
+
+// One physical click at the verified point; no jitter, JS click, focus forcing,
+// retry or alternate selector. Hover/layout/virtual-list changes are rechecked
+// before mouse down. A successful dispatch is not a binding or delivery proof.
+func (d *ExactReplyDriver) clickExactReply(ctx context.Context, c exactreply.Command, button *rod.Element) error {
+	p := d.page.Context(ctx)
+	top, err := p.Eval(`() => window === window.top`)
+	if err != nil || !top.Value.Bool() {
+		return errors.New("REPLY_FRAME_UNSUPPORTED")
+	}
+	point, err := button.WaitInteractable()
+	if err != nil {
+		return errors.New("REPLY_POINT_UNAVAILABLE")
+	}
+	check := func() error {
+		v, e := button.Eval(exactReplyPointGuard, c.TargetID, point.X, point.Y)
+		if e != nil {
+			return errors.New("REPLY_POINT_UNAVAILABLE")
+		}
+		if v.Value.Str() != "EXACT" {
+			return errors.New(v.Value.Str())
+		}
+		return nil
+	}
+	if err = check(); err != nil {
+		return err
+	}
+	if err = p.Mouse.MoveTo(*point); err != nil {
+		return errors.New("REPLY_POINTER_MOVE_FAILED")
+	}
+	if err = button.WaitEnabled(); err != nil {
+		return errors.New("REPLY_BUTTON_DISABLED")
+	}
+	if err = d.restrictions(ctx, c); err != nil {
+		return err
+	}
+	if err = d.binding(ctx, c, "EMPTY"); err != nil {
+		return err
+	}
+	if err = d.composer(ctx, c, "DEFAULT"); err != nil {
+		return err
+	}
+	if err = check(); err != nil {
+		return err
+	}
+	if err = exactreply.RecordStage(ctx, "SELECT_POINT_VERIFIED", nil, nil); err != nil {
+		return err
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	observer, e := button.Evaluate(rod.Eval(exactReplyClickObserver, c.TargetID).ByObject())
+	if e != nil {
+		return errors.New("REPLY_EVENT_OBSERVER_UNAVAILABLE")
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		page := d.page.Context(cleanup)
+		_, _ = page.Evaluate(rod.Eval(`() => this.stop()`).This(observer))
+		_ = (proto.RuntimeReleaseObject{ObjectID: observer.ObjectID}).Call(page)
+	}()
+	// Observer setup cannot exempt the final point check or create another click.
+	if err = check(); err != nil {
+		return err
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	clickErr := p.Mouse.Click(proto.InputMouseButtonLeft, 1)
+	event, e := p.Evaluate(rod.Eval(`() => this.read()`).This(observer))
+	stage := "SELECT_EVENT_UNAVAILABLE"
+	if e == nil {
+		switch event.Value.Str() {
+		case "EXACT":
+			stage = "SELECT_EVENT_EXACT"
+		case "NONE":
+			stage = "SELECT_EVENT_NONE"
+		case "OTHER":
+			stage = "SELECT_EVENT_OTHER"
+		case "MULTIPLE":
+			stage = "SELECT_EVENT_MULTIPLE"
+		}
+	}
+	if err = exactreply.RecordStage(ctx, stage, nil, nil); err != nil {
+		return err
+	}
+	if clickErr != nil {
+		return errors.New("REPLY_CLICK_DISPATCH_UNCERTAIN")
+	}
+	if stage != "SELECT_EVENT_EXACT" {
+		return errors.New("REPLY_CLICK_EVENT_UNVERIFIED")
+	}
+	return nil
+}
+
+const exactReplyPointGuard = `(targetId,x,y) => {
+ if(window!==window.top || this.ownerDocument!==document) return 'REPLY_FRAME_UNSUPPORTED';
+ if(!this.isConnected || this.closest('.comment-item')?.id!=='comment-'+targetId) return 'BUTTON_TARGET_MISMATCH';
+ const targets=[...document.querySelectorAll('#comment-'+targetId)];
+ if(targets.length!==1) return 'EXACT_TARGET_MISSING';
+ const buttons=[...targets[0].querySelectorAll('.right .interactions .reply')].filter(e=>e.closest('.comment-item')===targets[0]);
+ if(buttons.length!==1 || buttons[0]!==this) return 'REPLY_BUTTON_AMBIGUOUS';
+ if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=innerWidth||y>=innerHeight) return 'REPLY_POINT_OFFSCREEN';
+ if(![...this.getClientRects()].some(r=>x>=r.left&&x<r.right&&y>=r.top&&y<r.bottom)) return 'REPLY_POINT_MOVED';
+ let opacity=1;
+ for(let e=this;e;e=e.parentElement){const s=getComputedStyle(e);opacity*=Number(s.opacity);if(s.visibility!=='visible'||s.display==='none'||s.pointerEvents==='none'||!Number.isFinite(opacity)||opacity<0.1)return 'REPLY_POINT_HIDDEN';}
+ const hit=document.elementFromPoint(x,y);
+ if(!hit || (hit!==this&&!this.contains(hit))) return 'REPLY_POINT_COVERED';
+ if(hit.closest('.comment-item')!==targets[0]) return 'BUTTON_TARGET_MISMATCH';
+ if(this.disabled||this.getAttribute('aria-disabled')==='true') return 'REPLY_BUTTON_DISABLED';
+ return 'EXACT';
+}`
+
+func (d *ExactReplyDriver) selection(ctx context.Context, c exactreply.Command) (exactreply.SelectionEvidence, error) {
+	var s exactreply.SelectionEvidence
+	v, err := d.page.Context(ctx).Eval(exactReplySelectionObservation, c.TargetID, c.RecipientID)
+	if err != nil || len(v.Value.Str()) > 2048 {
+		return s, errors.New("SELECTION_OBSERVATION_UNAVAILABLE")
+	}
+	if json.Unmarshal([]byte(v.Value.Str()), &s) != nil || !s.Valid() {
+		return s, errors.New("SELECTION_OBSERVATION_INVALID")
+	}
+	return s, nil
+}
+func (d *ExactReplyDriver) recordSelection(ctx context.Context, c exactreply.Command, stage string) error {
+	s, err := d.selection(ctx, c)
+	if err != nil {
+		return err
+	}
+	return exactreply.RecordSelection(ctx, stage, s)
+}
+
+// Observes one already located target. No clicking, scrolling, focus, state writes,
+// listener registration or invocation. Component/handler hints do NOT prove hydration
+// or event delivery. Unknown page versions stay diagnostic and cannot authorize input.
+const exactReplySelectionObservation = `(targetId,authorId) => {
+ const nodes=[...document.querySelectorAll('#comment-'+targetId)];
+ const o={frame:window===window.top?'TOP':'SUBFRAME',target:nodes.length===0?'MISSING':nodes.length===1?'UNIQUE':'AMBIGUOUS',depth:'UNKNOWN',button:'MISSING',centerHit:'UNAVAILABLE',component:'ABSENT',handler:'ABSENT',bindingShape:'MISSING',binding:'INVALID',editor:'ABSENT',replyUI:'INACTIVE',focused:false};
+ if(nodes.length===1){
+  const target=nodes[0];o.depth=target.parentElement?.closest('.comment-item')?'REPLY':'ROOT';
+  const buttons=[...target.querySelectorAll('.right .interactions .reply')].filter(e=>e.closest('.comment-item')===target);
+  o.button=buttons.length===0?'MISSING':buttons.length===1?'EXACT':'AMBIGUOUS';
+  if(buttons.length===1){
+   const b=buttons[0],r=b.getBoundingClientRect(),x=(r.left+r.right)/2,y=(r.top+r.bottom)/2;
+   if(r.width>0&&r.height>0){if(x<0||y<0||x>=innerWidth||y>=innerHeight)o.centerHit='OFFSCREEN';else{const hit=document.elementFromPoint(x,y);o.centerHit=hit&&(hit===b||b.contains(hit))?'EXACT':'COVERED';}}
+   o.handler=typeof b.__vnode?.props?.onClick==='function'?'PRESENT':'ABSENT';
+   let c=b.__vueParentComponent;
+   for(let i=0;c&&i<16;i++,c=c.parent){const comment=c.props?.comment;if(comment&&typeof comment==='object'&&typeof comment.id==='string'){o.component=comment.id===targetId&&comment.userInfo?.userId===authorId?'MATCH':'MISMATCH';break;}}
+  }
+ }
+ const raw=window.__INITIAL_STATE__?.note?.commentTarget;
+ o.bindingShape=raw==null?'MISSING':typeof raw!=='object'||Array.isArray(raw)?'INVALID':raw.value!==undefined?'VALUE_REF':raw._rawValue!==undefined?'RAW_VALUE_REF':Object.prototype.hasOwnProperty.call(raw,'_value')?'UNSUPPORTED_REF':'PLAIN';
+ const bound=raw&&raw.value!==undefined?raw.value:raw&&raw._rawValue!==undefined?raw._rawValue:raw;
+ if(bound&&typeof bound==='object'&&!Array.isArray(bound)){o.binding=Object.keys(bound).length===0?'EMPTY':typeof bound.id!=='string'?'INVALID':bound.id===targetId&&bound.userInfo?.userId===authorId?'MATCH':'MISMATCH';}
+ const inputs=[...document.querySelectorAll('div.input-box p.content-input')];
+ o.editor=inputs.length===0?'ABSENT':inputs.length!==1?'AMBIGUOUS':inputs[0].textContent.length===0?'EMPTY':'DRAFT';
+ if(inputs.length===1){const input=inputs[0],container=input.closest('.engage-bar-container');o.focused=document.activeElement===input;const bars=container?.querySelectorAll('.engage-bar.active')??[],headers=container?.querySelectorAll('.reply-content')??[];o.replyUI=bars.length>1||headers.length>1?'AMBIGUOUS':bars.length===1&&headers.length===1?'ACTIVE':'INACTIVE';}
+ return JSON.stringify(o);
+}`
+
+// Passive observer of the ONE already authorized physical reply click. Never
+// invokes/cancels/retargets an event or changes application state. Object stays in
+// the owned CDP context and is removed/released immediately after the click.
+// EXACT proves trusted event delivery to this element, not handler success.
+const exactReplyClickObserver = `(targetId) => {
+ const button=this;let count=0,exact=false;
+ const listener=e=>{count++;exact=count===1&&e.isTrusted&&e.composedPath().includes(button)&&e.target?.closest('.comment-item')?.id==='comment-'+targetId;};
+ window.addEventListener('click',listener,{capture:true,passive:true});
+ return {read:()=>count===0?'NONE':count>1?'MULTIPLE':exact?'EXACT':'OTHER',stop:()=>window.removeEventListener('click',listener,true)};
+}`

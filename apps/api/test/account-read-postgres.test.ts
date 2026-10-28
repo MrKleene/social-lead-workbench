@@ -88,6 +88,6 @@ describe('single-post: real device lease and synthetic saved session',()=>{
   expect([await db.collectionRun.count(),await db.capturedPost.count(),await db.capturedComment.count()]).toEqual(before);
   expect(JSON.stringify(out)).not.toMatch(/OFFLINE_REFERENCE|account-read-fictional-user/);
   await expect(check.check(admin,input)).rejects.toThrow('不会重复请求');expect(await db.deviceExecutionLease.count({where:{accountId}})).toBe(0);
-  const audit=await db.auditLog.findFirstOrThrow({where:{entityId:input.requestKey}});expect(audit.action).toBe('SINGLE_POST_CHECK_FINISHED');expect(JSON.stringify(audit)).not.toMatch(/OFFLINE_REFERENCE|xsec_token/);
+  const audit=await db.auditLog.findFirstOrThrow({where:{entityId:input.requestKey,action:'SINGLE_POST_CHECK_FINISHED'}});expect(audit.action).toBe('SINGLE_POST_CHECK_FINISHED');expect(JSON.stringify(audit)).not.toMatch(/OFFLINE_REFERENCE|xsec_token/);
  });
 });
