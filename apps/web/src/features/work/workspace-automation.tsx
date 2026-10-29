@@ -1,3 +1,4 @@
+import {Plus} from 'lucide-react';
 import {createContext,useContext,useEffect,useRef,useState,type ReactNode} from 'react';
 import {useLocation,useNavigate,useNavigationType,useSearchParams} from 'react-router-dom';
 import {AutomationSettings} from './automation-settings';
@@ -8,7 +9,9 @@ import {scenarios,type Config} from '@/features/collection/types';
 import {FormField} from '@/components/form-field';
 import {SelectField,SelectOption} from '@/components/select-field';
 import {Button} from '@/components/ui/button';
-import {InfoSection} from '@/components/information-panel';
+import {SettingsDisclosure} from '@/components/settings-disclosure';
+import {Badge} from '@/components/ui/badge';
+import {FieldGroup} from '@/components/ui/field';
 import {ErrorNotice,Loading} from '@/components/feedback';
 import {accountOptionName} from '@/features/accounts/account-presentation';
 type Plan={posts:number;pages:number;scenario:string};
@@ -58,8 +61,12 @@ export function WorkspaceAutomationProvider({configs,initialId,loading,error,ena
 <div className="task-settings-body">
  {editor?<ConfigEditor key={editor==='new'?'new':selected?.id} config={editor==='edit'?selected:undefined} availableMode={readiness.data?.enabled?readiness.data.mode:null} onDirty={setDirty} onBusy={setCollectionBusy} onReviewSettings={()=>setSettingsTab("review")} onClose={()=>setEditor(null)} onSaved={c=>{setConfigId(c.id);setEditor(null);}}/>:<>
  {configs.length>1&&<FormField>编辑的关键词组<SelectField aria-label="编辑的关键词组" value={selected?.id||''} onValueChange={e=>{setConfigId(e);}}>{configs.map(c=><SelectOption key={c.id} value={c.id}>{c.name}</SelectOption>)}</SelectField></FormField>}
- {selected&&<><h3>01 · 采集 · {selected.name}</h3><p>在此切换仅选择编辑对象，不切换底下的任务。关键词必填；真实采集开始前需要可用账号。采集账号与发送账号分开核验，可使用同一个账号。</p><p>默认采集账号：{defaultAccount?accountOptionName(defaultAccount):'未设置，开始前选择'}</p><p className="task-keywords">{selected.keywords.join(' / ')||'未配置关键词'}</p><Button variant="ghost" size="content" onClick={()=>setEditor('edit')}>编辑采集配置</Button><FormField>本轮最多帖子数<SelectField aria-label="本轮最多帖子数" value={posts} onValueChange={e=>updatePlan({posts:Number(e)})}>{Array.from({length:selected.batchLimit},(_,i)=><SelectOption key={i+1} value={i+1}>{i+1}</SelectOption>)}</SelectField></FormField><small>本轮范围仅在当前页面保留；关键词、默认账号与默认上限通过编辑保存。</small></>}
- <Button variant="outline" onClick={()=>setEditor('new')}>新增关键词组</Button><InfoSection  title={<>更多选项与读取范围</>}><p>每次手动运行 1 轮，不自动续跑。1 帖不等于 1 页评论；真实模式在服务端上限内翻页并展开回复；停止时保留已读内容，未读尽会标明。模型与发送分别授权，保存采集配置不会开启它们。</p>{selected?.mode==='MOCK'&&<><FormField>每条评论流的页数上限<SelectField aria-label="每条评论流的页数上限" value={plan.pages} onValueChange={e=>updatePlan({pages:Number(e)})}>{[1,2,3,4].map(n=><SelectOption key={n}>{n}</SelectOption>)}</SelectField></FormField><FormField>模拟场景<SelectField value={plan.scenario} onValueChange={e=>updatePlan({scenario:e})}>{Object.entries(scenarios).filter(([k])=>k!=='READ_WINDOW').map(([k,v])=><SelectOption key={k} value={k}>{v}</SelectOption>)}</SelectField></FormField></>}</InfoSection>
+ {selected&&<><div className="settings-section-heading"><div><span className="settings-label">当前关键词组</span><h3>{selected.name}</h3></div><Button variant="outline" size="sm" onClick={()=>setEditor('edit')}>编辑采集配置</Button></div>
+ <div className="settings-keywords"><span className="settings-label">搜索关键词</span><div>{selected.keywords.length?selected.keywords.map((word,i)=><Badge key={i} variant="secondary">{word}</Badge>):<span>未配置关键词</span>}</div></div>
+ <FieldGroup className="settings-collection-grid"><div className="settings-account"><span className="settings-label">默认采集账号</span><strong>{defaultAccount?accountOptionName(defaultAccount):'开始前选择'}</strong><small>与发送账号分别核验</small></div><FormField>本轮最多帖子数<SelectField aria-label="本轮最多帖子数" value={posts} onValueChange={e=>updatePlan({posts:Number(e)})}>{Array.from({length:selected.batchLimit},(_,i)=><SelectOption key={i+1} value={i+1}>{i+1}</SelectOption>)}</SelectField></FormField></FieldGroup>
+ <p className="settings-note">本轮范围临时保留；默认上限请在编辑中保存。</p></>}
+ <div className="settings-secondary-action"><Button variant="ghost" size="sm" onClick={()=>setEditor('new')}><Plus data-icon="inline-start"/>新增关键词组</Button></div>
+ <SettingsDisclosure title="更多选项与读取范围" defaultOpen={selected?.mode==='MOCK'}><p>每次手动运行 1 轮，不自动续跑。真实模式在服务端上限内翻页并展开回复；停止保留已读内容，未读尽会标明。模型与发送分别授权，保存配置不会开启它们。</p><p>在这里切换关键词组只改变编辑对象，不切换底下的任务。真实采集需可用账号，采集与发送可使用同一账号。</p>{selected?.mode==='MOCK'&&<><FormField>每条评论流的页数上限<SelectField aria-label="每条评论流的页数上限" value={plan.pages} onValueChange={e=>updatePlan({pages:Number(e)})}>{[1,2,3,4].map(n=><SelectOption key={n}>{n}</SelectOption>)}</SelectField></FormField><FormField>模拟场景<SelectField value={plan.scenario} onValueChange={e=>updatePlan({scenario:e})}>{Object.entries(scenarios).filter(([k])=>k!=='READ_WINDOW').map(([k,v])=><SelectOption key={k} value={k}>{v}</SelectOption>)}</SelectField></FormField></>}</SettingsDisclosure>
  </>}
  </div>
  </AutomationSettings>}</Context.Provider>;
