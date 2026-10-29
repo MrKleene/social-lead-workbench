@@ -18,7 +18,7 @@ export function OrbitOverview({state:s}:{state:SpatialState}) {
  const latest=recent[0],policy=review.data?.policies[0];
  const task=(stage:JourneyStage='collect',run=latest)=>{const q=new URLSearchParams({module:'runs',stage});if(run){q.set('config',run.configId);q.set('run',run.id);}else if(s.selectedConfig)q.set('config',s.selectedConfig.id);navigate('/work?'+q);};
  const labels=[s.work.configs.isError?'读取失败':latest?collectionOutcome(latest).label:'等待开始',review.isError?'读取失败':policy?.autoEnabled?'自动识别已开启':'按需分析',contact.isError?'状态读取失败':contact.isPending?'正在读取':rule?.pauseReason?'已暂停':rule?.enabled?'已授权开启':'未启用','收信待接通'];
- return <section className="mist-overview simple-overview" aria-label="轻序工作台" inert={!!s.active} aria-hidden={!!s.active}>
+ return <section className="mist-overview simple-overview" aria-label="轻序工作台" data-workspace-inactive={!!s.active} inert={!!s.active} aria-hidden={!!s.active}>
   <h1 className="sr-only">工作台</h1><ErrorNotice error={s.work.configs.error||readiness.error||review.error||contact.error}/>
   <div className="simple-home-top"><div className="simple-hero"><div className="simple-hero-content">
     <p className="eyebrow">从发现需求开始</p><h2>{s.admin?<>下一次获客，<br/>先开始采集。</>:<>从真实需求，<br/>开始下一次跟进。</>}</h2><p>先保存原文，再判断需求与联系。每个阶段都有自己的记录。</p>

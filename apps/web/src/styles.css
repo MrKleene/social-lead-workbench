@@ -1263,7 +1263,8 @@ button:active:not(:disabled) { transform: scale(.98) !important; }
 .task-main h3 { font-size: 12px; }
 .task-main p { font-size: 10px; }
 .detail-sheet { width: 650px !important; background: #f8fafd; border: 1px solid #fff; box-shadow: -16px 0 80px #33477520; }
-[data-slot="sheet-overlay"] { background: #25335236; backdrop-filter: blur(3px); }
+/* Keep the underlying page recognizable; aria-hidden controls accessibility only. */
+.modal-backdrop { background: rgb(37 58 48 / 18%); backdrop-filter: none; -webkit-backdrop-filter: none; }
 .detail-sheet > [data-slot="sheet-header"] { background: linear-gradient(120deg, #f4f6fc, #fff); padding: 27px 28px 22px; border-bottom: 1px solid #e5eaf3; }
 .detail-kicker { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .detail-kicker .eyebrow { margin-bottom: 0; font-size: 9px; }

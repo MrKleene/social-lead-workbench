@@ -55,7 +55,7 @@ html[data-crm-theme="graphite"] {
 [data-crm-theme="graphite"] .detail-sheet { background: #121d25; border-color: #354c5b; color: #edf4f8; box-shadow: -24px 0 60px #0005; }
 [data-crm-theme="graphite"] .detail-sheet > [data-slot="sheet-header"] { background: #17242d; border-color: #304753; }
 [data-crm-theme="graphite"] [data-slot="sheet-description"] { color: #aebfcc; }
-[data-crm-theme="graphite"] [data-slot="sheet-overlay"] { background: #050b1280; backdrop-filter: none; }
+
 [data-crm-theme="graphite"] [data-slot="dialog-content"] { background: #172129; color: #edf4f8; border-color: #3a515f; }
 [data-crm-theme="graphite"] :is(.detail-sections blockquote,.reply-preview) { color: #d8e7ef; background: #12212b; border-color: #35596c; }
 [data-crm-theme="graphite"] .detail-facts strong { color: #d8e7ef; }
