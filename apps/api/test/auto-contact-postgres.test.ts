@@ -421,3 +421,31 @@ it('two simultaneous explicit recoveries cannot both consume a verified chain',a
  const results=await Promise.allSettled([f.service.execute(actor,f.next2),f.service.execute(actor,{...f.next2,approvalId:randomUUID()})]);
  expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);expect(f.executor.run).toHaveBeenCalledTimes(3);expect(await db.contactAttempt.count()).toBe(3);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);
 });
+
+import {journeySummary} from '../src/auto-contact/journey-summary';
+it('run progress includes scoped attempts, follows reconciliation, isolates mode/run and avoids duplicate counting',async()=>{
+ const review=await source(), other=await source();
+ const account=await db.platformAccount.create({data:{platform:'XHS',label:'synthetic bounded sender'}});
+ const identity=await db.platformIdentity.create({data:{platform:'XHS',platformUserId:randomUUID(),nickname:'synthetic'}});
+ const ledger=await db.contactLedger.create({data:{identityId:identity.id,accountId:account.id,mode:'REAL'}});
+ const attempt=await db.contactAttempt.create({data:{ledgerId:ledger.id,requestKey:'single-reply:'+randomUUID(),kind:'FIRST',mode:'REAL',outcome:'UNKNOWN',day:'synthetic',actorId:actor.id,accountIdSnapshot:account.id}});
+ const event={actorId:actor.id,entityId:attempt.requestKey,action:'SINGLE_REPLY_TEST_AUTHORIZED_RESERVED',metadata:{attemptId:attempt.id,scope:{reviewId:review.id,accountId:account.id}}};
+ await db.auditLog.create({data:event});
+ await db.auditLog.create({data:event}); // A repeated audit row cannot inflate totals.
+ expect((await journeySummary(db,actor,'REAL',review.runId!)).contacts).toEqual({UNKNOWN:1});
+ expect((await journeySummary(db,actor,'REAL',other.runId!)).contacts).toEqual({});
+ expect((await journeySummary(db,actor,'SIMULATION',review.runId!)).contacts).toEqual({});
+ await db.contactAttempt.update({where:{id:attempt.id},data:{outcome:'CONFIRMED',platformReceipt:'synthetic-receipt',confirmedAt:new Date()}});
+ expect((await journeySummary(db,actor,'REAL',review.runId!)).contacts).toEqual({CONFIRMED:1});
+ const r=await db.autoContactRule.create({data:{platform:'XHS',policyId:'workspace',policyRevision:1,mode:'REAL'}});
+ const job=await db.autoContactJob.create({data:{ruleId:r.id,ruleVersion:r.version,reviewId:review.id,reviewVersion:review.version,mode:'REAL',platform:'XHS',recipientId:'synthetic',postId:'synthetic',commentId:'synthetic',channel:'COMMENT',content:'synthetic',evidence:{},eligibilityHash:'synthetic',status:'CONFIRMED',attemptId:attempt.id}});
+ expect((await journeySummary(db,actor,'REAL',review.runId!)).contacts).toEqual({CONFIRMED:1});
+ await db.autoContactJob.delete({where:{id:job.id}});
+ await db.auditLog.deleteMany({where:{entityId:attempt.requestKey}});
+ await db.auditLog.create({data:{...event,actorId:sales.id}});
+ expect((await journeySummary(db,actor,'REAL',review.runId!)).contacts).toEqual({});
+ await db.auditLog.deleteMany({where:{entityId:attempt.requestKey}});
+ await db.auditLog.create({data:{...event,metadata:{attemptId:attempt.id,scope:{reviewId:review.id,accountId:'wrong-account'}}}});
+ expect((await journeySummary(db,actor,'REAL',review.runId!)).contacts).toEqual({});
+ expect(sender.send).not.toHaveBeenCalled();
+});

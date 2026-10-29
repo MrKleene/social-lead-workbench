@@ -5,7 +5,7 @@ import {automationIssue} from './automation-validation';
 const summary=(contacts:Record<string,number>={},reviews={EVALUATED:125},reviewJobs={})=>({contacts,reviews,reviewJobs,matches:2});
 describe('three-step task conclusions',()=>{
  it('maps historical fourth step to final valid stage without creating a task',()=>{expect(journeyStages).toHaveLength(3);expect(journeyStage('handoff')).toBe('contact');expect(journeyStage('invalid')).toBe('collect');});
- it('ends a processed send even with failures, without waiting for incoming reply',()=>{const s=journeyProgress(summary({CONFIRMED:22,FAILED:4}),false,false);expect(s.settled).toBe(true);expect(s.contact).toContain('4 条失败');expect(s.conclusion).toContain('不等待对方回复');});
+ it('ends a processed send even with failures, without waiting for incoming reply',()=>{const s=journeyProgress(summary({CONFIRMED:22,FAILED:4}),false,false);expect(s.settled).toBe(true);expect(s.contact).toContain('已确认 22 条');expect(s.contact).toContain('4 条失败');expect(s.conclusion).toContain('不等待对方回复');});
  it.each(['UNKNOWN','BLOCKED_POST','QUEUED','WAITING_QUOTA','WAITING_ACCOUNT','ATTEMPTED','RESERVED','FUTURE_STATUS'])('does not finish with unresolved %s',status=>{expect(journeyProgress(summary({CONFIRMED:30,[status]:1}),true,true).settled).toBe(false);});
  it('does not call off switches a successful send',()=>{const s=journeyProgress(summary(),false,false);expect(s.contact).toContain('发送关闭');expect(s.settled).toBe(false);});
  it('shows no matches only after evaluated comments',()=>{const s=journeyProgress({...summary(),matches:0},true,true);expect(s.contact).toContain('无匹配对象');expect(s.settled).toBe(false);});
