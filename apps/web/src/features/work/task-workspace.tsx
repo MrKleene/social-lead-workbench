@@ -1,10 +1,11 @@
+import {useWorkspaceAutomation} from './workspace-automation';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FormField } from '@/components/form-field';
 import { SelectField, SelectOption } from '@/components/select-field';
 import { Button } from '@/components/ui/button';
 import { Empty } from '@/components/ui/empty';
 import {useEffect,useState} from 'react';
-import {Link,useSearchParams} from 'react-router-dom';
+import {Link} from 'react-router-dom';
 import {ArrowRight} from 'lucide-react';
 import {CommentReviewPage} from '@/features/comment-review/comment-review-page';
 import {AutoContactPage} from '@/features/auto-contact/auto-contact-page';
@@ -17,8 +18,7 @@ import {useJourney} from './use-journey';
 type Props = {configs:Config[]; loading:boolean; error?:unknown; visible:boolean; initialId?:string;
   onSelect:(id:string)=>void; onAccounts:()=>void; onSettings:()=>void; onResults:()=>void};
 export function TaskWorkspace(props:Props) {
-  const [,setParams]=useSearchParams();
-  const openSettings=(tab:JourneyStage)=>setParams(p=>{p.set("panel","automation-settings");p.set("settingsTab",tab);return p;});
+  const {openSettings}=useWorkspaceAutomation();
   const config = props.configs.find(c => c.id === props.initialId) ?? props.configs[0];
   const s = useJourney(config, props.visible);
   const [visited, setVisited] = useState<Set<JourneyStage>>(new Set());

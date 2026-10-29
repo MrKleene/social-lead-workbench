@@ -4,7 +4,7 @@ import { SelectField, SelectOption } from '@/components/select-field';
 import { Checkbox } from '@/components/ui/checkbox';
 import {accountOptionName} from '@/features/accounts/account-presentation';
 import { Link } from 'react-router-dom';
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useLayoutEffect, FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -35,8 +35,8 @@ export function ConfigEditor({ availableMode, config, onClose, onSaved, onDirty,
     const [enabled, setEnabled] = useState(config?.enabled ?? true);
     const dirty=defaultAccount!==(config?.defaultExecutionAccountId||'')||mode!==(config?.mode||'MOCK')||name!==(config?.name||'')||keywords!==initialKeywords||platform!==(config?.platform||'XHS')||limit!==(config?.batchLimit||1)||enabled!==(config?.enabled??true);
     const discard=useDraftGuard(dirty);
-    useEffect(()=>{onBusy?.(mutation.isPending);return()=>onBusy?.(false);},[mutation.isPending,onBusy]);
-    useEffect(()=>{onDirty(dirty);return()=>onDirty(false);},[dirty,onDirty]);
+    useLayoutEffect(()=>{onBusy?.(mutation.isPending);return()=>onBusy?.(false);},[mutation.isPending,onBusy]);
+    useLayoutEffect(()=>{onDirty(dirty);return()=>onDirty(false);},[dirty,onDirty]);
     const close=async()=>{if(await discard())onClose();};
     const submit = (event: FormEvent) => { event.preventDefault(); const draft: ConfigDraft = { name, keywords: words(keywords), excludeWords: config?.excludeWords||[], platform, batchLimit: limit, enabled, mode,defaultExecutionAccountId:defaultAccount||null }; mutation.mutate({ path: config ? `/collection/configs/${config.id}` : '/collection/configs', method: config ? 'PATCH' : 'POST', body: config ? { config: draft, revision: config.revision } : draft }, { onSuccess: onSaved }); };
     return <section className="space-inline-editor"><header><h2>{config ? '编辑关键词配置' : '新增关键词配置'}</h2><p>保存后重复使用。模块切换会保留草稿；保存修改后创建新搜索版本，不重放历史采集。只采集并保存原文，不按评论内容筛选或创建线索。</p></header><form className="config-form detail-scroll" onSubmit={submit}><FieldGroup className="form-fields">

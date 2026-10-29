@@ -9,7 +9,7 @@ import {Button} from '@/components/ui/button';
 import {ErrorNotice,Loading} from '@/components/feedback';
 import {useReviewOverview} from '@/features/comment-review/use-comment-review';
 import {MatchingSettings,ReplySettings} from './automation-panels';
-import {useConfirmDiscard} from './draft-guard';
+import {useConfirmDiscard,useDraftGuard} from './draft-guard';
 import type {AutomationTab,SetupIssue} from './automation-validation';
 export function AutomationSettings({open,onClose,tab,onTab,collectionDirty,collectionBusy,collectionReady,children,issue,onReturnFocus}:{open:boolean;onClose:()=>void;tab:AutomationTab;onTab:(tab:AutomationTab)=>void;collectionDirty:boolean;collectionBusy:boolean;collectionReady:boolean;children:ReactNode;issue:SetupIssue|null;onReturnFocus:()=>void}){
  const navigate=useNavigate(),[params]=useSearchParams();
@@ -18,6 +18,7 @@ export function AutomationSettings({open,onClose,tab,onTab,collectionDirty,colle
  const changeMatching=useCallback((dirty:boolean,busy:boolean)=>setMatching(s=>s.dirty===dirty&&s.busy===busy?s:{dirty,busy}),[]);
  const changeReply=useCallback((dirty:boolean,busy:boolean)=>setReply(s=>s.dirty===dirty&&s.busy===busy?s:{dirty,busy}),[]);
  const busy=collectionBusy||matching.busy||reply.busy,dirty=collectionDirty||matching.dirty||reply.dirty;
+ useDraftGuard(open&&(dirty||busy),'modal');
  const close=async()=>{if(busy)return false;if(dirty&&!await confirm('自动化设置有未保存的修改。已保存的页签不受影响，确定放弃其余修改并关闭吗？'))return false;onClose();return true;};
  const globalSettings=async(module:'settings'|'accounts')=>{if(!await close())return;const next=new URLSearchParams(params);next.set('module',module);next.delete('panel');next.delete('settingsTab');navigate('/work?'+next);};
  useEffect(()=>{if(!open){setMatching({dirty:false,busy:false});setReply({dirty:false,busy:false});}},[open]);
