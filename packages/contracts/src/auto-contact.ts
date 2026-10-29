@@ -115,3 +115,6 @@ export type ReplyHistoryItem = {
     executionEvidence: { at: string; event: unknown }[];
 };
 export type ReplyHistoryPage = { items: ReplyHistoryItem[]; total: number; allTotal: number; confirmedTotal: number; offset: number; limit: number; mode: string };
+
+/** Whole-run counts; reviewJobs span historical versions, contacts span all rules in the current sender mode. */
+export type JourneySummary = {reviews:Record<string,number>;reviewJobs:Record<string,number>;contacts:Record<string,number>;matches:number};

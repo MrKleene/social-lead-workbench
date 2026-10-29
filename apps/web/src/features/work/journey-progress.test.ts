@@ -1,0 +1,30 @@
+import {describe,it,expect} from 'vitest';
+import {journeyProgress} from './journey-progress';
+import {journeyStage,journeyStages} from './journey-model';
+import {automationIssue} from './automation-validation';
+const summary=(contacts:Record<string,number>={},reviews={EVALUATED:125},reviewJobs={})=>({contacts,reviews,reviewJobs,matches:2});
+describe('three-step task conclusions',()=>{
+ it('maps historical fourth step to final valid stage without creating a task',()=>{expect(journeyStages).toHaveLength(3);expect(journeyStage('handoff')).toBe('contact');expect(journeyStage('invalid')).toBe('collect');});
+ it('ends a processed send even with failures, without waiting for incoming reply',()=>{const s=journeyProgress(summary({CONFIRMED:22,FAILED:4}),false,false);expect(s.settled).toBe(true);expect(s.contact).toContain('4 条失败');expect(s.conclusion).toContain('不等待对方回复');});
+ it.each(['UNKNOWN','BLOCKED_POST','QUEUED','WAITING_QUOTA','WAITING_ACCOUNT','ATTEMPTED','RESERVED','FUTURE_STATUS'])('does not finish with unresolved %s',status=>{expect(journeyProgress(summary({CONFIRMED:30,[status]:1}),true,true).settled).toBe(false);});
+ it('does not call off switches a successful send',()=>{const s=journeyProgress(summary(),false,false);expect(s.contact).toContain('发送关闭');expect(s.settled).toBe(false);});
+ it('shows no matches only after evaluated comments',()=>{const s=journeyProgress({...summary(),matches:0},true,true);expect(s.contact).toContain('无匹配对象');expect(s.settled).toBe(false);});
+ it.each(['PROCESSING','FAILED','UNCONFIGURED'])('does not hide incomplete review %s',state=>{expect(journeyProgress({...summary({CONFIRMED:2}),reviews:{[state]:1}},true,true).settled).toBe(false);});
+ it('counts pending jobs even before review rows exist',()=>{const s=journeyProgress(summary({CONFIRMED:2},{EVALUATED:0},{PENDING:1}),true,true);expect(s.settled).toBe(false);expect(s.review).toContain('待处理');});
+ it('identifies simulation instead of claiming delivery',()=>expect(journeyProgress(summary({SIMULATED_SUCCESS:2}),true,true).contact).toContain('模拟'));
+});
+const review={policies:[],connection:{state:'UNCONFIGURED'}} as any;
+const contact={rules:[],accounts:[],capability:{available:false}} as any;
+const policy={id:'p',target:'寻找企业中需要部署产品的用户',autoEnabled:true,revision:2};
+const rule={enabled:true,policyId:'p',policyRevision:2,channel:'COMMENT',content:'已保存的回复',accountIds:['a'],accountLimits:[{id:'a',dailyLimit:10}],mode:'REAL'};
+const account={id:'a',healthy:true,workbenchStatus:'READY',isDemo:false,sendEligibility:{canSend:true,stale:false}};
+describe('conditional automation prerequisites',()=>{
+ it('allows collection with both later stages off and no model/template/accounts',()=>expect(automationIssue(review,contact)).toBeNull());
+ it('does not interpret unreadable settings as disabled',()=>{expect(automationIssue(undefined,contact)?.tab).toBe('review');expect(automationIssue(review,undefined)?.tab).toBe('contact');});
+ it('locates missing model at matching tab',()=>expect(automationIssue({...review,policies:[policy]},contact)?.tab).toBe('review'));
+ it('locates empty template at reply tab',()=>expect(automationIssue(review,{...contact,rules:[{...rule,content:''}]} )?.tab).toBe('contact'));
+ it('requires current enabled matching for enabled sends',()=>expect(automationIssue(review,{...contact,capability:{available:true},rules:[rule],accounts:[account]})?.tab).toBe('review'));
+ it('permits fully configured stages but does not grant authorization',()=>expect(automationIssue({...review,policies:[policy],connection:{state:'READY'}},{...contact,capability:{available:true},rules:[rule],accounts:[account]})).toBeNull());
+ it.each([{...account,workbenchStatus:'PAUSED'},{...account,sendEligibility:{canSend:false,stale:true}}])('blocks unavailable sending accounts',a=>expect(automationIssue({...review,policies:[policy],connection:{state:'READY'}},{...contact,capability:{available:true},rules:[rule],accounts:[a]})?.tab).toBe('contact'));
+ it('does not require any disabled rule fields',()=>expect(automationIssue(review,{...contact,rules:[{enabled:false}]})).toBeNull());
+});

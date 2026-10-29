@@ -2,12 +2,12 @@ import type {Config, Run} from '@/features/collection/types';
 
 export const journeyStages = [
   {id: 'collect', label: '采集', description: '发现帖子，保存评论与回复'},
-  {id: 'review', label: '评论匹配', description: '判断需求，保留原文证据'},
+  {id: 'review', label: 'LLM 评论匹配', description: '判断需求，保留原文证据'},
   {id: 'contact', label: '自动回复', description: '按已授权规则处理匹配评论'},
-  {id: 'handoff', label: '回复与交接', description: '核实意向，交给销售跟进'},
 ] as const;
 export type JourneyStage = typeof journeyStages[number]['id'];
 export function journeyStage(value: string | null): JourneyStage {
+  if(value==='handoff') return 'contact'; // Old fourth-step links retain the selected run at its final valid step.
   return journeyStages.find(stage => stage.id === value)?.id ?? 'collect';
 }
 /** A saved selection is scoped to its configuration. Never infer a run from another scope. */

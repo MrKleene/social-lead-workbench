@@ -1,3 +1,4 @@
+import {journeySummary} from './journey-summary';
 import { DevicesModule } from '../devices/devices';
 import { DeviceService } from '../devices/device.service';
 import { LoginRuntime } from '../accounts/login-runtime';
@@ -18,7 +19,7 @@ class AutoContactController {
     @Inject(ContactSettingsService)
     private settings: ContactSettingsService,
     @Inject(AutoContactService)
-    private service: AutoContactService) { }
+    private service: AutoContactService, @Inject(Db) private db: Db, @Inject(CONTACT_SENDER) private sender: import('./contact-sender').ContactSender) { }
     @Get()
     @Header('Cache-Control', 'no-store, private')
     overview(
@@ -41,6 +42,12 @@ class AutoContactController {
     history(@Req() r: AuthedRequest, @Query() q: unknown) {
         const b = parse(z.object({offset:z.coerce.number().int().min(0).max(1000000).default(0), outcome:z.enum(['NOT_ATTEMPTED','CONFIRMED','FAILED','UNKNOWN','RESERVED','ATTEMPTED','CANCELLED','SIMULATED_SUCCESS']).optional()}).strict(),q);
         return this.settings.history(r.actor,b.offset,b.outcome);
+    }
+    @Get('journey')
+    @Header('Cache-Control', 'no-store, private')
+    journey(@Req() r: AuthedRequest, @Query() q: unknown) {
+      const b=parse(z.object({runId:z.string().min(1).max(200),policyId:z.string().min(1).max(200).optional(),policyRevision:z.coerce.number().int().positive().optional()}).strict(),q);
+      return journeySummary(this.db,r.actor,this.sender.mode,b.runId,b.policyId,b.policyRevision);
     }
     @Get('jobs')
     @Header('Cache-Control', 'no-store, private')
