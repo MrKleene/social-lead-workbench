@@ -84,3 +84,6 @@ html[data-crm-reduced=true] [data-slot=sheet-content][data-layout=modal],html[da
 .automation-settings-sheet>.task-settings-body{flex:none;border-top:1px solid var(--border)}
 .simple-readiness>.automation-setup+.automation-setup{margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
 .automation-settings-sheet .task-settings-body .task-settings-body{padding-inline:0}
+.journey-heading>div:first-child{flex:1;min-width:0}
+.journey-heading .journey-run-picker{flex:0 1 320px;width:320px}
+@media(max-width:760px){.journey-heading>div:first-child{flex:none;width:100%}.journey-heading .journey-run-picker{flex:none;width:100%}}
