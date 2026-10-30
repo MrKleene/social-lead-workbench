@@ -138,3 +138,13 @@ html[data-crm-reduced=true] [data-slot=sheet-content][data-layout=modal],html[da
 .automation-page .collection-next-run p{margin:10px 0}
 .automation-page .journey-footer{padding:16px 0 0}
 @media(max-width:600px){.automation-page .journey-steps>button{padding:10px 7px;gap:5px}.automation-page .journey-number{display:none}.automation-page .journey-steps strong{font-size:12px}.automation-page .journey-steps small{font-size:10px;line-height:1.5}.automation-page .mist-task-summary{padding:14px;gap:12px}.automation-page .mist-summary-count>strong{font-size:25px}.automation-page .mist-summary-count>svg{display:none}.automation-page .mist-summary-count{grid-template-columns:1fr}.automation-page .mist-summary-count>strong{grid-column:1}}
+
+/* Primary task actions belong to the page heading, outside the result stream. */
+.journey-heading-tools{display:flex;align-items:flex-end;justify-content:flex-end;gap:18px;flex-wrap:wrap;min-width:0}
+.journey-collection-actions[hidden]{display:none}
+.collection-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;max-width:520px}
+.collection-toolbar>.task-actions{margin:0;padding:0;border:0;justify-content:flex-end;gap:8px}
+.automation-page .collection-toolbar>.collection-next-run{margin:0;padding:0;border:0;flex-basis:100%;text-align:right}
+.collection-toolbar .collection-next-run .task-actions{margin:10px 0 0;justify-content:flex-end}
+.automation-page .journey-steps{margin-bottom:22px}
+@media(max-width:760px){.journey-heading-tools{width:100%;justify-content:stretch;gap:14px}.journey-heading-tools>.journey-run-picker,.journey-collection-actions{width:100%}.journey-heading-tools .journey-run-picker [data-slot=select-trigger]{max-width:none;width:100%}.collection-toolbar{max-width:none;justify-content:space-between}.collection-toolbar>.task-actions{margin-left:auto}.collection-toolbar .task-actions>p{flex-basis:100%;text-align:left}}

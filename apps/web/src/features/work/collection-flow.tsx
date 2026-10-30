@@ -1,4 +1,5 @@
 import {useNavigate} from 'react-router-dom';
+import {createPortal} from 'react-dom';
 import {Disclosure} from '@/components/disclosure';
 import {useAutomationPreferences} from './settings-data';
 import {automationIssue} from './automation-validation';
@@ -20,17 +21,17 @@ import {Button} from '@/components/ui/button';
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import {ErrorNotice,Loading} from '@/components/feedback';
 import {useMcpReadiness,useWorkspaceMutation} from '@/features/collection/use-collection';
-import {modeLabels,runRequest} from '@/features/collection/mode';
+import {runRequest} from '@/features/collection/mode';
 import {type Config} from '@/features/collection/types';
 import {collectionPreflight} from './collection-preflight';
 import {runFinished} from './collection-progress';
 import {CollectionProgressFeed} from './collection-progress-feed';
 const hints={keywords:'先添加搜索关键词',account:'请登录或恢复一个可用账号',device:'请恢复执行设备连接',paused:'此配置已暂停，请检查设置',backoff:'暂时无法继续，请等待后重试',unavailable:'采集服务未就绪，请检查账号与设置'};
-export function CollectionFlow({configs,loading,error,visible,workspaceVisible=visible,initialId,onAccounts,onSettings,onResults,onSelect,onRunSelect}:{configs:Config[];loading:boolean;error?:unknown;visible:boolean;workspaceVisible?:boolean;initialId?:string;onAccounts:()=>void;onSettings:()=>void;onResults:()=>void;onSelect:(id:string)=>void;onRunSelect?:(id:string)=>void}){
+export function CollectionFlow({configs,loading,error,visible,workspaceVisible=visible,initialId,onAccounts,onSettings,onResults,onSelect,onRunSelect,actionsHost}:{actionsHost?:HTMLElement|null;configs:Config[];loading:boolean;error?:unknown;visible:boolean;workspaceVisible?:boolean;initialId?:string;onAccounts:()=>void;onSettings:()=>void;onResults:()=>void;onSelect:(id:string)=>void;onRunSelect?:(id:string)=>void}){
  const preferences=useAutomationPreferences(workspaceVisible),navigate=useNavigate();
  const review=useReviewOverview(workspaceVisible);
  const contact=useQuery({queryKey:['auto-contact'],queryFn:()=>api<AutoContactOverview>('/auto-contact'),enabled:workspaceVisible,retry:false});
- const {openSettings:showSettings,plans}=useWorkspaceAutomation();
+ const {openSettings:showSettings}=useWorkspaceAutomation();
  const readiness=useMcpReadiness(),mutation=useWorkspaceMutation<{id:string}>();
  const [confirm,setConfirm]=useState(false),[account,setAccount]=useState(''),[consent,setConsent]=useState(false);
  const submitting=useRef(false),preparing=useRef(false);
@@ -45,8 +46,8 @@ export function CollectionFlow({configs,loading,error,visible,workspaceVisible=v
  const baseStatus=collectionPreflight(selected?{...selected,activeRunId:session.activeId||null}:undefined,unavailable?undefined:readiness.data,loading||readiness.isPending||session.checking);
  useEffect(()=>{preparing.current=false;setConfirm(false);setConsent(false);},[visible,selected?.id,selected?.revision]);
  const status=baseStatus==='ready'&&selected?.mode!=='MOCK'&&loginCheck.supported&&!loginCheck.candidate?.eligible?'account':baseStatus;
- const plan=plans[selected?.id||'']||{posts:selected?.batchLimit||1,pages:4,scenario:'BASELINE'};
- const posts=Math.min(plan.posts,selected?.batchLimit||1);
+ // Persisted configuration is authoritative for new tasks; history keeps its own readPlan.
+ const posts=selected?.batchLimit??1;
  const primary=useRef<HTMLButtonElement>(null);
  const active=!!session.activeId;
  const finished=!active&&!!session.currentRun&&runFinished(session.currentRun);
@@ -57,7 +58,7 @@ export function CollectionFlow({configs,loading,error,visible,workspaceVisible=v
   if(!validateSetup())return;
   if(submitting.current||uncertain||!selected||baseStatus!=='ready'||unavailable||session.pending||mutation.isPending||(selected.mode!=='MOCK'&&(!consent||!accountReady)))return;
   const visit=session.token();submitting.current=true;
-  mutation.mutate({path:`/collection/configs/${selected.id}/runs`,body:{...runRequest(selected,plan.scenario,crypto.randomUUID()),readPlan:{rounds:1,postsPerRound:posts,commentPages:selected.mode==='MOCK'?plan.pages:1},...(selected.mode!=='MOCK'?{accountId:account,consent:'account-read-window-v1'}:{})}, onResponse:result=>{if(!result||typeof result.id!=='string'||!result.id.trim()||result.id.length>200){setUncertain(true);setConsent(false);return;}if(session.remember(result.id,visit))onRunSelect?.(result.id);setConsent(false);setConfirm(false);preparing.current=false;}}, {onSettled:()=>{submitting.current=false;}});
+  mutation.mutate({path:`/collection/configs/${selected.id}/runs`,body:{...runRequest(selected,'BASELINE',crypto.randomUUID()),readPlan:{rounds:1,postsPerRound:posts,commentPages:selected.mode==='MOCK'?4:1},...(selected.mode!=='MOCK'?{accountId:account,consent:'account-read-window-v1'}:{})}, onResponse:result=>{if(!result||typeof result.id!=='string'||!result.id.trim()||result.id.length>200){setUncertain(true);setConsent(false);return;}if(session.remember(result.id,visit))onRunSelect?.(result.id);setConsent(false);setConfirm(false);preparing.current=false;}}, {onSettled:()=>{submitting.current=false;}});
  };
  const selectedAccount=readiness.data?.accounts?.find(a=>a.id===account);
  const mayPrepare=status==='ready';
@@ -65,12 +66,11 @@ export function CollectionFlow({configs,loading,error,visible,workspaceVisible=v
  const taskActions=<> {loginCheck.working?<p role="status">正在检查账号登录，不会启动采集…</p>:active?<Button variant="outline" disabled={mutation.isPending} onClick={()=>mutation.mutate({path:`/collection/runs/${session.activeId}/pause`})}><Square size={15}/>停止采集</Button>:unavailable||session.pending?<><p role="status">{unavailable?'暂时无法确认任务状态':'正在确认本次任务'}</p><Button variant="outline" onClick={()=>void session.refresh()}>重新读取任务</Button></>:nextConfig&&nextConfig.id!==selected?.id?<Button onClick={()=>navigate('/automation?'+new URLSearchParams({stage:'collect',fresh:'1',config:nextConfig.id}))}>使用已选关键词组开始新一轮 · {nextConfig.name}</Button>:status==='backoff'?<p role="status">请稍候，{new Date(selected.nextAllowedAt!).toLocaleTimeString()} 后可重试。</p>:status==='ready'?<Button ref={primary} variant={finished?'outline':'default'} disabled={mutation.isPending||loginCheck.working} onClick={()=>void begin()}><Play size={16}/>{mutation.isPending?'正在提交…':'开始采集'}</Button>:<><p role="status">{status==='account'&&loginCheck.supported?loginCheck.message:hints[status as keyof typeof hints]||'请检查当前任务状态'}{status==='account'&&loginCheck.retryAt&&<> · {new Date(loginCheck.retryAt).toLocaleTimeString()} 后可重试</>}</p>{status==='account'&&loginCheck.supported&&<><Button onClick={()=>{showSettings('collect',null,true);}}>设置默认执行账号</Button>{baseStatus==='ready'&&<Button ref={primary} variant="outline" onClick={()=>begin(true)}>仅本次选择账号</Button>}</>}<Button variant={status==='account'&&loginCheck.supported?'ghost':'default'} onClick={status==='account'||status==='device'?onAccounts:status==='paused'?onSettings:openSettings}>{status==='account'||status==='device'?'前往账号中心':status==='keywords'?'配置关键词':'检查设置'}</Button></>} </>;
  // Keep an open editor mounted while its save invalidates and refreshes config data.
  if(status==='loading'&&!confirm)return <Loading/>;
- return <section className="collection-flow task-room"><header className="task-heading"><div><h1>自动化采集</h1><p className="task-config-summary">{selected?`${modeLabels[selected.mode]} · 最多 ${posts} 篇 · ${selected.name}`:'还没有搜索关键词'}</p></div>{!session.currentRun&&<Button variant="ghost" onClick={openSettings}><Settings2 size={16}/>自动化设置</Button>}</header>
+ const toolbar=<div className="collection-toolbar" role="group" aria-label="采集操作">{!session.currentRun&&<Button variant="ghost" onClick={openSettings}><Settings2 size={16}/>自动化设置</Button>}<div className="task-actions">{finished&&!unavailable&&!session.pending?<Button variant="outline" onClick={onResults}>查看采集信息</Button>:taskActions}</div>{finished&&!unavailable&&!session.pending&&<Disclosure className="collection-next-run" title="新一轮采集"><div className="task-actions">{taskActions}</div></Disclosure>}</div>;
+ return <section className="collection-flow task-room">{actionsHost?createPortal(toolbar,actionsHost):toolbar}
  <ErrorNotice error={unavailable||mutation.error||loginCheck.error}/>
 
- <div className="task-actions">{finished&&!unavailable&&!session.pending?<Button variant="outline" onClick={onResults}>查看采集信息</Button>:taskActions}</div>
  {selected?<CollectionProgressFeed configId={selected.id} key={selected.id} run={session.currentRun} runs={session.runs} visible={visible} pending={session.pending} error={unavailable} onRefresh={()=>void session.refresh()} onSelectRun={onRunSelect}/>:!unavailable&&<div className="task-feed-empty"><h2>先选择关键词组</h2></div>}
- {finished&&<Disclosure className="collection-next-run" title="新一轮采集"><div className="task-actions">{taskActions}</div></Disclosure>}
  <Sheet open={confirm} onOpenChange={open=>{if(!mutation.isPending){setConfirm(open);if(!open){setConsent(false);preparing.current=false;}}}}><SheetContent className="task-settings-sheet task-confirm-sheet" onCloseAutoFocus={e=>{e.preventDefault();primary.current?.focus();}}><SheetHeader><SheetTitle>确认本次采集</SheetTitle><SheetDescription>任务启动时先核验登录和账号身份，通过后读取本轮最多 {posts} 篇，不自动续跑。后续匹配与回复仅按各自已授权开关执行。</SheetDescription></SheetHeader><div className="task-settings-body"><p>关键词组：{selected?.name} · 执行账号：{selectedAccount?accountOptionName(selectedAccount):'请选择账号'}</p><FormField>本次执行账号<SelectField aria-label="本次执行账号" disabled={mutation.isPending} value={account} onValueChange={e=>{setAccount(e);setConsent(false);}}><SelectOption value="">请选择本次执行账号</SelectOption>{account&&!readiness.data?.accounts?.some(a=>a.id===account)&&<SelectOption value={account} disabled>原选择账号已不可用</SelectOption>}{readiness.data?.accounts?.map(a=><SelectOption key={a.id} value={a.id} disabled={!a.eligible}>{accountOptionName(a)}{a.eligible?'':' · 需恢复'}</SelectOption>)}</SelectField></FormField><small>这里更换仅用于本次任务，不修改关键词组的默认账号。</small><p>执行设备：{readiness.data?.device?.name||'未批准'} · {readiness.data?.device?.online?'在线且已认证':'离线'}</p><FormField className="check-label"><Checkbox  checked={consent} disabled={mutation.isPending||!accountReady||uncertain} onCheckedChange={e=>setConsent((e === true))}/>仅授权使用所选账号的本机会话执行这一轮只读采集</FormField>{confirm&&!mutation.isPending&&!uncertain&&baseStatus!=='ready'&&<Alert role="alert"><AlertDescription>{baseStatus==='loading'?'正在确认当前状态…':status==='running'?'已有任务正在运行，请查看本轮进度。':'账号、设备或配置状态已变化，请关闭后检查。'}</AlertDescription></Alert>}{uncertain&&<Alert role="alert"><AlertDescription>提交结果尚未确认，请关闭后重新读取任务；不要重复提交。</AlertDescription></Alert>}<ErrorNotice error={mutation.error}/><Button disabled={uncertain||baseStatus!=='ready'||!!unavailable||session.pending||!accountReady||!consent||mutation.isPending} onClick={submit}>{mutation.isPending?'正在提交…':'确认并开始'}</Button></div></SheetContent></Sheet>
  </section>;
 }

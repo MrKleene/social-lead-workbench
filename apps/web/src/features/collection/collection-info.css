@@ -104,3 +104,15 @@
 :root .saved-conversation .info-comment-row[data-context=true] .info-comment-kind{color:#8a9299}
 @media(max-width:900px),(max-height:559px){:root .saved-conversation .info-comments{height:62dvh;min-height:240px;max-height:680px}:root .saved-conversation .info-comment-row{padding-right:20px}:root .saved-conversation .info-conversation-heading{padding-bottom:12px}}
 @media(max-width:520px){:root .saved-conversation .info-comment-row{padding-left:40px}:root .saved-conversation .info-comment-row[data-reply=true]{margin-left:40px;padding-left:32px}:root .saved-conversation .info-replies-toggle{margin-left:72px}:root .saved-conversation .info-comment-tools{gap:8px}:root .saved-conversation .info-comment-search{min-width:0;width:100%}:root .saved-conversation .info-comment-kind{font-size:12px}}
+
+/* Full-width card tracks override the shared Button's intrinsic centering. */
+.collection-info .info-post-list{align-items:stretch}
+.collection-info .info-post-card{width:100%;height:100%;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr;justify-content:stretch;align-items:stretch;padding:0;gap:0;white-space:normal}
+.collection-info .info-post-cover{width:100%;aspect-ratio:16/9;min-width:0}
+.collection-info .info-post-content{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0;padding:16px}
+.collection-info .info-post-content>.post-state-tag{align-self:flex-start}
+.collection-info .info-card-nickname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.collection-info .info-post-top strong{min-width:0;overflow-wrap:anywhere;flex:1}
+.collection-info .info-card-excerpt{overflow-wrap:anywhere}
+.collection-info .info-card-count{margin-top:auto;flex-wrap:wrap;line-height:1.6}
+.collection-info .info-post-card:focus-visible{outline:2px solid var(--ring);outline-offset:3px}
