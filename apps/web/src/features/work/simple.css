@@ -148,3 +148,7 @@ html[data-crm-reduced=true] [data-slot=sheet-content][data-layout=modal],html[da
 .collection-toolbar .collection-next-run .task-actions{margin:10px 0 0;justify-content:flex-end}
 .automation-page .journey-steps{margin-bottom:22px}
 @media(max-width:760px){.journey-heading-tools{width:100%;justify-content:stretch;gap:14px}.journey-heading-tools>.journey-run-picker,.journey-collection-actions{width:100%}.journey-heading-tools .journey-run-picker [data-slot=select-trigger]{max-width:none;width:100%}.collection-toolbar{max-width:none;justify-content:space-between}.collection-toolbar>.task-actions{margin-left:auto}.collection-toolbar .task-actions>p{flex-basis:100%;text-align:left}}
+
+/* Saving selections keeps labels and modal geometry stable. Errors remain inline. */
+.automation-settings-sheet .automation-save-status{min-height:20px;flex:1;line-height:20px}
+.automation-settings-sheet[data-applying=true] :is([data-slot=button],[role=tab]):disabled{opacity:1;color:var(--muted-foreground)}

@@ -63,12 +63,14 @@ function SheetContent({
   children,
   side = "right",
   showCloseButton = true,
+  closeDisabled = false,
   onEscapeKeyDown,
   ref:forwardedRef,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left";
   showCloseButton?: boolean;
+  closeDisabled?: boolean;
 }) {
   const state=React.useContext(SheetState),content=React.useRef<HTMLDivElement|null>(null);
   const setContentRef=React.useCallback((node:HTMLDivElement|null)=>{content.current=node;if(typeof forwardedRef==='function')forwardedRef(node);else if(forwardedRef)forwardedRef.current=node;},[forwardedRef]);
@@ -110,7 +112,7 @@ function SheetContent({
       >
         {children}
         {showCloseButton && (
-          <SheetPrimitive.Close className="absolute top-4 right-4 rounded-xs size-8 grid place-items-center opacity-70 transition-opacity hover:opacity-100 disabled:pointer-events-none data-[state=open]:bg-secondary">
+          <SheetPrimitive.Close disabled={closeDisabled} className="absolute top-4 right-4 rounded-xs size-8 grid place-items-center opacity-70 transition-opacity hover:opacity-100 disabled:pointer-events-none data-[state=open]:bg-secondary">
             <XIcon className="size-4" />
             <span className="sr-only">关闭</span>
           </SheetPrimitive.Close>
