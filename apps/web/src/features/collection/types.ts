@@ -16,7 +16,7 @@ export type ConfigDraft = {
 };
 export type Run = {
     coveragePostLabels?:{postRef:string;title:string}[];
-    snapshot?:{name?:string;keywords?:string[]};
+    snapshot?:{name?:string;keywords?:string[];mode?:'MOCK'|'XHS_FIXTURE'|'XHS_MCP'};
     capturedPosts?:number;capturedCommentsCount?:number;readPlan?:{rounds:number;postsPerRound:number;commentPages:number;savedPostId?:string}|null;
     metrics?:RunMetrics|null;
     id: string;

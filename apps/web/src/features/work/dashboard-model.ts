@@ -3,7 +3,7 @@ import type {Config,Run} from '@/features/collection/types';
 export type DashboardRun=Run&{configId:string;configName:string;mode:Config['mode']};
 export const collecting=(run:Run)=>['QUEUED','RUNNING'].includes(run.status);
 export function dashboardRuns(configs:Config[]):DashboardRun[]{
- return configs.flatMap(c=>c.runs.map(r=>({...r,configId:c.id,configName:r.snapshot?.name||c.name,mode:c.mode}))).sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt));
+ return configs.flatMap(c=>c.runs.map(r=>({...r,configId:c.id,configName:r.snapshot?.name||c.name,mode:r.snapshot?.mode||c.mode}))).sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt));
 }
 export function dashboardCurrent(runs:DashboardRun[]){return runs.find(r=>r.status==='RUNNING')||runs.find(collecting)||runs[0];}
 export function dashboardCounts(summary:JourneySummary){

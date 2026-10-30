@@ -1,3 +1,4 @@
+import {useConfig} from '@/features/collection/use-collection';
 import {useAutomationPreferences} from './settings-data';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -37,7 +38,9 @@ export function useSpatialWork() {
   const setView = (next: string) => { work.clearSelection(); setParams(p => { p.set('view', next); p.set('module', next === 'follow' ? 'follow' : 'matches'); return p; }); };
   const closeDetail = () => navigate(`/work?${params}`);
   const openLead = (leadId: string) => { const next = new URLSearchParams(params); next.set('module', active === 'follow' ? 'follow' : 'matches'); next.set('view', view); navigate(`/work/${leadId}?${next}`); };
-  const configs = work.configs.data || [];
+  const currentConfigs = work.configs.data || [];
+  const historyConfig=useConfig(admin&&params.get('run')&&!currentConfigs.some(c=>c.id===params.get('config'))?params.get('config')||undefined:undefined);
+  const configs=historyConfig.data&&!currentConfigs.some(c=>c.id===historyConfig.data.id)?[...currentConfigs,historyConfig.data]:currentConfigs;
   const selectedConfig = configs.find(c => c.id === params.get('config')) || configs.find(c=>c.id===preferences.data?.configId) || configs.find(c => c.enabled) || configs[0];
   return { detailScroll, accounts, admin, id, view, work, active, rows, page, pages, configs, selectedConfig, openModule, setView, closeDetail, openLead,
     overview: () => navigate(selectedConfig ? `/work?config=${selectedConfig.id}` : '/work'), setConfig: (config: string) => setParams(p => { p.set('config', config);p.delete('run');p.delete('fresh'); return p; }),

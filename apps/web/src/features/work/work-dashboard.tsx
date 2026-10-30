@@ -12,14 +12,14 @@ import {useWorkDashboard} from './use-work-dashboard';
 import {collecting,taskHref} from './dashboard-model';
 export function WorkDashboard({state}:{state:SpatialState}){return state.admin?<AutomationDashboard state={state}/>:<SalesDashboard state={state}/>;}
 function AutomationDashboard({state}:{state:SpatialState}){
- const s=useWorkDashboard(state.configs),{run,counts:c}=s;
- const error=state.work.configs.error;
+ const s=useWorkDashboard(),{run,counts:c}=s;
+ const error=s.history.error;
  const stages=run?[collectionOutcome(run).label,s.summary.isError||s.review.isError?'状态读取失败':s.progress?.review||'正在读取',s.summary.isError||s.contact.isError?'状态读取失败':s.progress?.contact||'正在读取']:[];
- const refresh=()=>void Promise.all([state.work.configs.refetch(),...(run?[s.summary.refetch()]:[]),s.review.refetch(),s.contact.refetch()]);
+ const refresh=()=>void Promise.all([s.history.refetch(),...(run?[s.summary.refetch()]:[]),s.review.refetch(),s.contact.refetch()]);
  return <section className="work-dashboard" aria-label="数据工作台">
-  <header className="dashboard-heading"><div><p className="eyebrow">过程与结果</p><h1>工作台</h1><p>从一次真实任务，看采集、判断和发送的进展。</p></div><Button variant="outline" disabled={state.work.configs.isFetching||s.summary.isFetching} onClick={refresh}><RefreshCw size={15}/>刷新数据</Button></header>
+  <header className="dashboard-heading"><div><p className="eyebrow">过程与结果</p><h1>工作台</h1><p>从一次真实任务，看采集、判断和发送的进展。</p></div><Button variant="outline" disabled={s.history.isFetching||s.summary.isFetching} onClick={refresh}><RefreshCw size={15}/>刷新数据</Button></header>
   <ErrorNotice error={error}/>
-  {state.work.configs.isPending?<div className="dashboard-loading" aria-label="正在读取任务"><Skeleton className="h-48"/><Skeleton className="h-32"/></div>:error?<Empty><h2>任务读取失败</h2><p>暂时无法确认任务和统计，请重新读取。</p></Empty>:!run?<Empty className="dashboard-empty"><Clock3/><h2>还没有自动化任务</h2><p>从首页选择已有配置，开始第一轮采集。结果会在这里保留。</p><Button asChild><Link to="/home">去首页开始 <ArrowRight size={16}/></Link></Button></Empty>:<>
+  {s.history.isPending?<div className="dashboard-loading" aria-label="正在读取任务"><Skeleton className="h-48"/><Skeleton className="h-32"/></div>:error?<Empty><h2>任务读取失败</h2><p>暂时无法确认任务和统计，请重新读取。</p></Empty>:!run?<Empty className="dashboard-empty"><Clock3/><h2>还没有自动化任务</h2><p>从首页选择已有配置，开始第一轮采集。结果会在这里保留。</p><Button asChild><Link to="/home">去首页开始 <ArrowRight size={16}/></Link></Button></Empty>:<>
    <Card className="dashboard-current"><div className="dashboard-current-title"><div><p className="eyebrow">{collecting(run)?'当前任务':'最近任务'}{s.activeCount>1?` · ${s.activeCount} 个采集任务处理中`:''}</p><h2>{run.configName}</h2><p className="dashboard-time">{new Date(run.createdAt).toLocaleString()} · {run.mode==='MOCK'?'模拟任务':run.mode==='XHS_FIXTURE'?'离线验收任务':'真实采集任务'}</p></div><Badge variant="secondary" className={collecting(run)?'dashboard-live':''}>{collectionOutcome(run).label}</Badge></div>
     <nav className="dashboard-steps" aria-label="查看本轮阶段">{['采集','LLM 评论匹配','自动回复'].map((label,i)=><Link key={label} to={taskHref(run,['collect','review','contact'][i])}><span>0{i+1}</span><div><strong>{label}</strong><small>{stages[i]}</small></div><ArrowRight size={16}/></Link>)}</nav>
     <p className="dashboard-conclusion">{collecting(run)?'采集正在处理中。已保存的数据会持续显示，各阶段状态分别核对。':collectionOutcome(run).warning?'采集存在中断或异常，请查看任务详情；已有结果仍保留。':s.progress?.conclusion||'本轮进度尚未读取完整，不能判断是否结束。'}</p>

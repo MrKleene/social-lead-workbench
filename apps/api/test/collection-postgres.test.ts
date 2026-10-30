@@ -75,6 +75,22 @@ beforeAll(async () => {
 afterAll(async () => { if (app)
     await app.close(); await clean(); await db.$disconnect(); });
 describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
+    it('dashboard includes same-group history, archived history and an older active task without duplication',async()=>{
+      const c=await config('dashboard history');
+      const rows:{id:string}[]=[];
+      for(let i=0;i<8;i++)rows.push(await db.collectionRun.create({data:{configId:c.id,requestKey:randomUUID(),revision:0,snapshot:{name:'historical name'},scenario:'BASELINE',status:i===0?'RUNNING':'COMPLETE',createdAt:new Date(Date.UTC(2026,0,i+1))}}));
+      await db.collectionConfig.update({where:{id:c.id},data:{archivedAt:new Date()}});
+      expect((await read('/collection/configs')).body.some((x:{id:string})=>x.id===c.id)).toBe(false);
+      const response=await read('/collection/dashboard');expect(response.status).toBe(200);
+      const runs=response.body.flatMap((x:{runs:{id:string}[]})=>x.runs);
+      expect(runs).toHaveLength(7);expect(new Set(runs.map((r:{id:string})=>r.id)).size).toBe(7);
+      expect(runs.some((r:{id:string})=>r.id===rows[0].id)).toBe(true);
+      expect(runs.some((r:{id:string})=>r.id===rows[1].id)).toBe(false);
+      expect((await read('/collection/dashboard',a)).status).toBe(403);
+      expect((await api().get('/api/collection/dashboard')).status).toBe(401);
+      expect((await read('/collection/configs/'+c.id)).body.runs).toHaveLength(8);
+      await db.collectionRun.update({where:{id:rows[0].id},data:{status:'CANCELLED'}});
+    });
     it('评论/私信话术校验、版本、持久化和关联删除均受审计保护', async () => {
         const draft = { name: '评论首触达', channel: 'COMMENT', body: '{{昵称}}，看到{{帖子标题}}中的{{关键词}}；{{专业}}' };
         expect((await write('post', '/reply-templates', { ...draft, body: '{{不存在}}' })).status).toBe(400);
