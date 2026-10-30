@@ -1517,7 +1517,7 @@ html[data-crm-reduced=true] [data-slot=alert-dialog-content],html[data-crm-reduc
 :root .automation-settings-sheet .task-settings-body p{margin:0}
 :root .automation-settings-sheet .automation-settings-footer{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 28px;background:var(--background)}
 :root .automation-settings-sheet .automation-settings-footer p{font-size:12px;color:var(--muted-foreground);margin:0}
-:root .automation-settings-sheet .automation-settings-footer [data-slot=button]{flex:none;min-width:104px;width:auto}
+:root .automation-settings-sheet .automation-settings-footer [data-slot=button]{margin-left:auto;flex:none;min-width:104px;width:auto}
 :root .automation-settings-sheet .settings-section-heading{display:flex;justify-content:space-between;align-items:center;gap:16px}
 :root .automation-settings-sheet .settings-section-heading>div{min-width:0}
 :root .automation-settings-sheet .settings-section-heading h3{font-size:18px;line-height:1.5;margin:3px 0 0;overflow-wrap:anywhere}
