@@ -478,3 +478,16 @@ it('selection-only autosave reads quotas without changing account settings or au
  await db.platformAccount.update({where:{id:account.id},data:{dailyLimit:4,version:{increment:1}}});
  const next=await settings.save(actor,r.id,{version:r.version,platform:'XHS',policyId:'workspace',policyRevision:1,threshold:91,channel:'COMMENT',content:'合成模板',accounts:[{id:account.id,version:account.version,dailyLimit:999}],preserveAccountLimits:true});expect(next.accountLimits).toEqual([{id:account.id,dailyLimit:4}]);expect((await db.platformAccount.findUniqueOrThrow({where:{id:account.id}})).version).toBe(account.version+1);
 });
+
+it('dashboard high relevance is strictly above 90, evaluated, and scoped to run and version',async()=>{
+ const first=await source(), other=await source();
+ expect((await journeySummary(db,actor,'REAL',first.runId!)).highRelevance).toBe(1);
+ await db.semanticReview.update({where:{id:first.id},data:{score:90}});
+ expect((await journeySummary(db,actor,'REAL',first.runId!)).highRelevance).toBe(0);
+ await db.semanticReview.update({where:{id:first.id},data:{score:91,state:'FAILED'}});
+ expect((await journeySummary(db,actor,'REAL',first.runId!)).highRelevance).toBe(0);
+ await db.semanticReview.update({where:{id:first.id},data:{score:91,state:'EVALUATED'}});
+ expect((await journeySummary(db,actor,'REAL',first.runId!,'workspace',2)).highRelevance).toBe(0);
+ expect((await journeySummary(db,actor,'REAL',other.runId!)).highRelevance).toBe(1);
+ expect(sender.send).not.toHaveBeenCalled();
+});

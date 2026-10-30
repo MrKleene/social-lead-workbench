@@ -1,6 +1,7 @@
 import {activeWorkModule,type SpaceModule} from '../../features/work/navigation-policy';
 export type NavigationItem={id:string;label:string;path:string;module?:SpaceModule;adminOnly?:boolean;group?:string};
 export const primaryNavigation:NavigationItem[]=[
+ {id:'home',label:'首页',path:'/home'},
  {id:'overview',label:'工作台',path:'/work'},
  {id:'archive',label:'采集信息',path:'/work?module=archive',module:'archive',adminOnly:true},
  {id:'reply-history',label:'回复记录',path:'/reply-history',adminOnly:true},
@@ -21,6 +22,7 @@ export const secondaryNavigation:NavigationItem[]=[
 ];
 export const isWorkPath=(path:string)=>/^\/work(?:\/|$)/.test(path);
 export function activeNavigation(path:string,search:string,admin:boolean){
+ if(path==='/home')return 'home';
  if(isWorkPath(path))return activeWorkModule(search,path.split('/')[2],admin)||'overview';
  if(/^\/reply-history(?:\/|$)/.test(path))return admin?'reply-history':null;
  if(path==='/auto-contact')return admin?'auto-contact':null;

@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {useEffect,useRef,useState} from 'react';
 import {Link} from 'react-router-dom';
-import {Archive,Bell,BriefcaseBusiness,ContactRound,House,ListChecks,LogOut,MessageSquare,Play,ScanLine,Send,Settings2,ShieldCheck,UsersRound,ArrowUpRight} from 'lucide-react';
+import {Archive,Bell,BriefcaseBusiness,ContactRound,House,LayoutDashboard,ListChecks,LogOut,MessageSquare,Play,ScanLine,Send,Settings2,ShieldCheck,UsersRound,ArrowUpRight} from 'lucide-react';
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import type {useWorkspaceMotion} from '@/features/work/use-workspace-motion';
 import {useAppNavigation} from './use-app-navigation';
-const icons:Record<string,typeof House>={overview:House,runs:Play,archive:Archive,review:ScanLine,'reply-history':MessageSquare,'auto-contact':Send,matches:UsersRound,follow:BriefcaseBusiness,'all-leads':UsersRound,tasks:ListChecks,templates:MessageSquare,notices:Bell,accounts:ContactRound,settings:Settings2,platforms:ShieldCheck};
+const icons:Record<string,typeof House>={home:House,overview:LayoutDashboard,runs:Play,archive:Archive,review:ScanLine,'reply-history':MessageSquare,'auto-contact':Send,matches:UsersRound,follow:BriefcaseBusiness,'all-leads':UsersRound,tasks:ListChecks,templates:MessageSquare,notices:Bell,accounts:ContactRound,settings:Settings2,platforms:ShieldCheck};
 type Props={admin:boolean;name:string;motion:ReturnType<typeof useWorkspaceMotion>;loggingOut:boolean;onLogout:()=>void};
 export function AppNavigation({admin,name,motion,loggingOut,onLogout}:Props){
  const n=useAppNavigation(admin),[panel,setPanel]=useState<'工作管理'|'设置'|null>(null);

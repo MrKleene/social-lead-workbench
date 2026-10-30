@@ -5,11 +5,12 @@ import type {JourneySummary} from '@crm/contracts';
 export async function journeySummary(db:Db,actor:Actor,mode:string,runId:string,policyId?:string,policyRevision?:number):Promise<JourneySummary>{
  requireAdmin(actor);
  const reviewWhere={runId,...(policyId?{policyId}:{}),...(policyRevision?{policyRevision}:{})};
- const [reviews,reviewJobs,contacts,matches,scopedAttempts]=await Promise.all([
+ const [reviews,reviewJobs,contacts,matches,highRelevance,scopedAttempts]=await Promise.all([
   db.semanticReview.groupBy({by:['state'],where:reviewWhere,_count:{_all:true}}),
   db.autoReviewJob.groupBy({by:['status'],where:{runId,...(policyId?{policyId}:{})},_count:{_all:true}}),
   db.autoContactJob.groupBy({by:['status'],where:{mode,review:{runId}},_count:{_all:true}}),
   db.semanticReview.count({where:{...reviewWhere,state:'EVALUATED',result:{path:['decision'],equals:'MATCH'}}}),
+  db.semanticReview.count({where:{...reviewWhere,state:'EVALUATED',score:{gt:90}}}),
   // Bounded runs reserve the same durable attempt ledger without a recurring
   // AutoContactJob. Bind by the original authorization, never current post data
   // or a global recent-history sample. Read final ledger outcomes, not receipts
@@ -28,5 +29,5 @@ export async function journeySummary(db:Db,actor:Actor,mode:string,runId:string,
  ]);
  const contactCounts=Object.fromEntries(contacts.map(r=>[r.status,r._count._all]));
  for(const row of scopedAttempts)contactCounts[row.outcome]=(contactCounts[row.outcome]||0)+row.count;
- return {reviews:Object.fromEntries(reviews.map(r=>[r.state,r._count._all])),reviewJobs:Object.fromEntries(reviewJobs.map(r=>[r.status,r._count._all])),contacts:contactCounts,matches};
+ return {reviews:Object.fromEntries(reviews.map(r=>[r.state,r._count._all])),reviewJobs:Object.fromEntries(reviewJobs.map(r=>[r.status,r._count._all])),contacts:contactCounts,matches,highRelevance};
 }

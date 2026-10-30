@@ -1,3 +1,4 @@
+import {HomePage} from '@/features/work/home-page';
 import {ReplyHistoryPage} from '@/features/auto-contact/reply-history-page';
 import {AutoContactPage} from '@/features/auto-contact/auto-contact-page';
 import {CommentReviewPage} from '@/features/comment-review/comment-review-page';
@@ -37,6 +38,7 @@ function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
+        <Route path="/home" element={<HomePage />} />
         <Route path="/work/:id?" element={<WorkPage />} />
         <Route path="/templates" element={<Navigate to={legacyWorkspacePath("templates")} replace/>} />
         <Route path="/collection/:configId?" element={<LegacySettings />} />
@@ -46,7 +48,7 @@ function App() {
         <Route path="/leads/:id?" element={<LeadsPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/platforms" element={<PlatformsPage />} />
-        <Route path="*" element={<Navigate to="/work" replace />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Route>
     </Routes>
   );
