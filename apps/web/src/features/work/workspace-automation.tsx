@@ -1,3 +1,4 @@
+import {useAutomationPreferences} from './settings-data';
 import {createContext,useContext,useEffect,useRef,useState,type ReactNode} from 'react';
 import {useLocation,useNavigate,useNavigationType,useSearchParams} from 'react-router-dom';
 import {AutomationSettings} from './automation-settings';
@@ -12,6 +13,7 @@ const Context=createContext<SettingsContext|null>(null);
 export function useWorkspaceAutomation(){const value=useContext(Context);if(!value)throw new Error('Workspace automation provider missing');return value;}
 /** Settings are a sibling of the page surfaces; opening them never changes the active page. */
 export function WorkspaceAutomationProvider({configs,initialId,loading,error,enabled,children}:{configs:Config[];initialId?:string;loading:boolean;error?:unknown;enabled:boolean;children:ReactNode}){
+ const preferences=useAutomationPreferences(enabled);
  const readiness=useMcpReadiness(enabled),location=useLocation(),navigationType=useNavigationType(),navigate=useNavigate(),[params]=useSearchParams();
  const [settings,setSettings]=useState(false),[settingsTab,setSettingsTab]=useState<AutomationTab>('collect'),[setupIssue,setSetupIssue]=useState<SetupIssue|null>(null);
  const [dirty,setDirty]=useState(false),[collectionBusy,setCollectionBusy]=useState(false),[configId,setConfigId]=useState<string>();
@@ -22,7 +24,7 @@ export function WorkspaceAutomationProvider({configs,initialId,loading,error,ena
   if(!enabled)return;
   trigger.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
   origin.current=location.pathname+location.search+location.hash;
-  setConfigId(initialId);setSettingsTab(tab);setSetupIssue(issue);setDirty(false);setCollectionBusy(false);
+  setConfigId(preferences.data?.configId||initialId);setSettingsTab(tab);setSetupIssue(issue);setDirty(false);setCollectionBusy(false);
   setSettings(true);
  };
  useEffect(()=>{
@@ -44,7 +46,7 @@ export function WorkspaceAutomationProvider({configs,initialId,loading,error,ena
   }
  },[location.pathname,location.search,location.hash,loading,enabled]);
  return <Context.Provider value={{openSettings,plans}}>{children}{enabled&&<AutomationSettings open={settings} onClose={()=>{setSettings(false);setSetupIssue(null);}} tab={settingsTab} onTab={setSettingsTab} collectionDirty={dirty} collectionBusy={collectionBusy} collectionReady={!error&&!!selected?.keywords.length&&(selected.mode==='MOCK'||!!readiness.data?.accounts?.some(a=>a.eligible))} issue={setupIssue} onReturnFocus={()=>{if(trigger.current?.isConnected)trigger.current.focus({preventScroll:true});}}>
- <ErrorNotice error={error||readiness.error}/>{loading&&!selected?<Loading/>:''}
-<div className="task-settings-body">{settings&&!loading&&<CollectionSettings configs={configs} initialId={configId||initialId} onDirty={setDirty} onBusy={setCollectionBusy} onSaved={c=>{setConfigId(c.id);setPlans(old=>({...old,[c.id]:{posts:c.batchLimit,pages:4,scenario:'BASELINE'}}));}}/>}</div>
+ {manage=><><ErrorNotice error={error||readiness.error}/>{loading&&!selected?<Loading/>:''}
+<div className="task-settings-body">{settings&&!loading&&<CollectionSettings onManage={()=>manage("settings")} configs={configs} initialId={configId||initialId} onDirty={setDirty} onBusy={setCollectionBusy} onSaved={c=>{setConfigId(c.id);setPlans(old=>({...old,[c.id]:{posts:c.batchLimit,pages:4,scenario:'BASELINE'}}));}}/>}</div></>}
  </AutomationSettings>}</Context.Provider>;
 }

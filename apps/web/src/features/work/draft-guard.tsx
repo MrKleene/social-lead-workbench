@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { useBlocker } from 'react-router-dom';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { shouldProtectDrafts } from './navigation-policy';
-type DraftKind = 'retained' | 'lead' | 'modal';
+type DraftKind = 'retained' | 'lead' | 'modal' | 'pending';
 const DraftContext = createContext<{ drafts: Map<symbol,DraftKind>; confirmLeave:()=>Promise<boolean>; confirm:(message:string)=>Promise<boolean> } | null>(null);
 export function DraftGuardProvider({children}:{children:ReactNode}) {
  const drafts=useRef(new Map<symbol,DraftKind>()).current;
@@ -15,8 +15,8 @@ export function DraftGuardProvider({children}:{children:ReactNode}) {
   pending.current={resolve,promise,trigger:document.activeElement instanceof HTMLElement?document.activeElement:null};returnFocus.current=pending.current.trigger;setQuestion(message);setOpen(true);return promise;
  },[]);
  const finish=(answer:boolean)=>{const request=pending.current;pending.current=null;setOpen(false);request?.resolve(answer);request?.trigger?.focus({preventScroll:true});};
- const confirmLeave=useCallback(async()=>!drafts.size||await confirm('还有未保存的修改。离开会丢弃这些修改，确定离开吗？'),[drafts,confirm]);
- const blocker=useBlocker(({currentLocation,nextLocation})=>[...drafts.values()].includes('modal')&&(currentLocation.pathname+currentLocation.search+currentLocation.hash!==nextLocation.pathname+nextLocation.search+nextLocation.hash)||shouldProtectDrafts([...drafts.values()].filter(kind=>kind!=='modal'),currentLocation.pathname,nextLocation.pathname)||drafts.size>0&&currentLocation.pathname==='/work'&&nextLocation.pathname==='/work'&&['run','policy'].some(key=>new URLSearchParams(currentLocation.search).get(key)!==new URLSearchParams(nextLocation.search).get(key)));
+ const confirmLeave=useCallback(async()=>[...drafts.values()].includes('pending')?false:!drafts.size||await confirm('还有未保存的修改。离开会丢弃这些修改，确定离开吗？'),[drafts,confirm]);
+ const blocker=useBlocker(({currentLocation,nextLocation})=>[...drafts.values()].some(kind=>kind==='modal'||kind==='pending')&&(currentLocation.pathname+currentLocation.search+currentLocation.hash!==nextLocation.pathname+nextLocation.search+nextLocation.hash)||shouldProtectDrafts([...drafts.values()].filter((kind):kind is 'retained'|'lead'=>kind==='retained'||kind==='lead'),currentLocation.pathname,nextLocation.pathname)||drafts.size>0&&currentLocation.pathname==='/work'&&nextLocation.pathname==='/work'&&['run','policy'].some(key=>new URLSearchParams(currentLocation.search).get(key)!==new URLSearchParams(nextLocation.search).get(key)));
  const deciding=useRef(false);
  useEffect(()=>{if(blocker.state==='blocked'&&!deciding.current){deciding.current=true;void confirmLeave().then(leave=>{if(leave)blocker.proceed();else blocker.reset();deciding.current=false;});}},[blocker,confirmLeave]);
  useEffect(()=>{const before=(event:BeforeUnloadEvent)=>{if(drafts.size){event.preventDefault();event.returnValue='';}};window.addEventListener('beforeunload',before);return()=>window.removeEventListener('beforeunload',before);},[drafts]);

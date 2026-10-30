@@ -90,7 +90,7 @@ export class ContactSettingsService {
             const accounts = await tx.platformAccount.findMany({ where: { id: { in: input.accounts.map(a => a.id) }, platform: input.platform, archivedAt: null } });
             if (accounts.length !== input.accounts.length)
                 throw new ConflictException('账号池已变化或平台不一致');
-            for (const a of [...input.accounts].sort((a, b) => a.id.localeCompare(b.id))) {
+            for (const a of (input.preserveAccountLimits?[]:[...input.accounts]).sort((a, b) => a.id.localeCompare(b.id))) {
                 await tx.$queryRaw `SELECT id FROM "PlatformAccount" WHERE id=${a.id} FOR UPDATE`;
                 const updated = await tx.platformAccount.updateMany({ where: { id: a.id, version: a.version, archivedAt: null, platform: input.platform }, data: { dailyLimit: a.dailyLimit, version: { increment: 1 } } });
                 if (updated.count !== 1)
@@ -101,7 +101,7 @@ export class ContactSettingsService {
                 for (const j of pending)
                     await cancelReserved(tx, j, '规则已修改，需重新授权');
             }
-            const model = await tx.modelSettings.findFirst({ select: { model: true } }), data = { accountLimits: input.accounts.map(({ id, dailyLimit }) => ({ id, dailyLimit })), platform: input.platform, model: model?.model ?? '', policyId: input.policyId, policyRevision: input.policyRevision, threshold: input.threshold, channel, channels, templateId:input.templateId??null,templateVersion:input.templateId?input.templateVersion:null, content: input.content, accountIds: input.accounts.map(a => a.id), enabled: false, authorizedBy: null, authorizedAt: null, authorizedHash: null, version: (old?.version ?? 0) + 1, mode: this.sender.mode };
+            const model = await tx.modelSettings.findFirst({ select: { model: true } }), data = { accountLimits: input.accounts.map(({ id, dailyLimit }) => ({ id, dailyLimit:input.preserveAccountLimits?accounts.find(a=>a.id===id)!.dailyLimit:dailyLimit })), platform: input.platform, model: model?.model ?? '', policyId: input.policyId, policyRevision: input.policyRevision, threshold: input.threshold, channel, channels, templateId:input.templateId??null,templateVersion:input.templateId?input.templateVersion:null, content: input.content, accountIds: input.accounts.map(a => a.id), enabled: false, authorizedBy: null, authorizedAt: null, authorizedHash: null, version: (old?.version ?? 0) + 1, mode: this.sender.mode };
             const rule = await tx.autoContactRule.upsert({ where: { id }, create: { id, ...data }, update: data });
             await tx.auditLog.create({ data: { actorId: actor.id, action: 'AUTO_CONTACT_RULE_SAVED_OFF', entityId: id, metadata: { version: rule.version, accountIds: rule.accountIds, threshold: rule.threshold, channel: rule.channel } } });
             return rule;

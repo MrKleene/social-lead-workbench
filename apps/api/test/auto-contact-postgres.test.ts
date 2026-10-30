@@ -471,3 +471,10 @@ it('preset selection uses optimistic versions and preserves historical policy re
  await expect(saveAutomationPreferences(db,actor,{version:0,policyId:'workspace'})).rejects.toThrow('当前选用方案已变化');await expect(saveAutomationPreferences(db,sales,{version:1,policyId:'workspace'})).rejects.toThrow();expect(sender.send).not.toHaveBeenCalled();
  await db.automationPreferences.deleteMany();
 });
+it('selection-only autosave reads quotas without changing account settings or authorizing sends',async()=>{
+ const account=await db.platformAccount.create({data:{platform:'XHS',label:'只读额度账号',dailyLimit:7,isDemo:true,status:'PAUSED'}});
+ const r=await settings.save(actor,'selector-XHS',{version:0,platform:'XHS',policyId:'workspace',policyRevision:1,threshold:90,channel:'COMMENT',channels:['COMMENT'],content:'合成模板',accounts:[{id:account.id,version:account.version,dailyLimit:999}],preserveAccountLimits:true});
+ expect(await db.platformAccount.findUniqueOrThrow({where:{id:account.id}})).toEqual(account);expect(r.accountLimits).toEqual([{id:account.id,dailyLimit:7}]);expect(r.enabled).toBe(false);expect(sender.send).not.toHaveBeenCalled();expect(await db.autoContactJob.count()).toBe(0);
+ await db.platformAccount.update({where:{id:account.id},data:{dailyLimit:4,version:{increment:1}}});
+ const next=await settings.save(actor,r.id,{version:r.version,platform:'XHS',policyId:'workspace',policyRevision:1,threshold:91,channel:'COMMENT',content:'合成模板',accounts:[{id:account.id,version:account.version,dailyLimit:999}],preserveAccountLimits:true});expect(next.accountLimits).toEqual([{id:account.id,dailyLimit:4}]);expect((await db.platformAccount.findUniqueOrThrow({where:{id:account.id}})).version).toBe(account.version+1);
+});
