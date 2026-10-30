@@ -1,3 +1,4 @@
+import {projectOverview} from './project-overview';
 import {collectionDashboard} from './dashboard';
 import {lockReview} from '../comment-review/review-policy.service';
 import {AutoReviewService} from '../comment-review/auto-review.service';
@@ -66,6 +67,7 @@ export class CollectionService {
         await this.db.auditLog.create({ data: { actorId: actor.id, action: "MCP_READINESS_CHECK", entityId: "xhs-readonly", metadata: { probeId: probe.id, mode: settings.mode, reason, nextAllowedAt: new Date(Date.now() + retryAfterMs).toISOString() } } });
         return this.readiness(actor);
     }
+    async overview(actor:Actor){return projectOverview(this.db,actor);}
     async dashboard(actor:Actor){requireAdmin(actor);return collectionDashboard(this.db);}
     async list(actor: Actor) { requireAdmin(actor); const configs=await this.db.collectionConfig.findMany({ where: { archivedAt: null }, include: { runs: { take: 1, orderBy: { createdAt: "desc" } } }, orderBy: { createdAt: "desc" }, take: 100 }); return withCoveragePostLabels(this.db,configs); }
     async detail(actor: Actor, id: string) { requireAdmin(actor); const config = await this.db.collectionConfig.findUnique({ where: { id }, include: { runs: { orderBy: { createdAt: "desc" }, take: 20 }, matches: { orderBy: { createdAt: "desc" }, take: 50, include: { comment: { include: { post: true, identity: { include: { lead: { select: { id: true } } } } } } } }, monitors: { take: 10, orderBy: { id: "desc" }, include: { observations: { take: 100, orderBy: { lastSeenAt: "desc" } } } } } }); if (!config)

@@ -72,6 +72,8 @@ class CollectionController {
     readiness(@Req() r: AuthedRequest) { return this.service.readiness(r.actor); }
     @Post("mcp/check")
     check(@Req() r: AuthedRequest) { parse(z.object({}).strict(), r.body); return this.service.checkReadiness(r.actor); }
+    @Get("overview") @Header("Cache-Control","no-store, private")
+    overview(@Req() r:AuthedRequest){return this.service.overview(r.actor);}
     @Get("dashboard") @Header("Cache-Control","no-store, private")
     dashboard(@Req() r:AuthedRequest){return this.service.dashboard(r.actor);}
     @Get("configs")

@@ -5,7 +5,7 @@ export function useAppNavigation(admin:boolean){
  const location=useLocation(),history=useRef<Record<string,string>>({}),lastWorkSearch=useRef(''),scroll=useRef<HTMLElement>(null);
  const active=activeNavigation(location.pathname,location.search,admin),visible=(item:NavigationItem)=>!item.adminOnly||admin;
  const primary=primaryNavigation.filter(visible),secondary=secondaryNavigation.filter(visible),currentSecondary=secondary.find(item=>item.id===active);
- useLayoutEffect(()=>{if(isWorkPath(location.pathname)){lastWorkSearch.current=location.search;if(active&&active!=='overview')history.current[active]=location.pathname+location.search;}},[active,location.pathname,location.search]);
+ useLayoutEffect(()=>{if(isWorkPath(location.pathname)||location.pathname==='/automation'){lastWorkSearch.current=location.search;if(active&&active!=='overview')history.current[active]=location.pathname+location.search;}},[active,location.pathname,location.search]);
  useLayoutEffect(()=>{
   const nav=scroll.current;if(!nav)return;
   const reveal=()=>{const selected=nav.querySelector<HTMLElement>('[aria-current=page]');if(!selected)return;const frame=nav.getBoundingClientRect(),item=selected.getBoundingClientRect(),padding=6;

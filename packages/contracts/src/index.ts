@@ -64,3 +64,5 @@ export {observedReadCounts} from './observed-read';
 export * from './auto-contact';
 
 export * from './post-availability';
+
+export * from './project-overview';

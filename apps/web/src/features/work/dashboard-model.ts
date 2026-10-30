@@ -10,4 +10,4 @@ export function dashboardCounts(summary:JourneySummary){
  const c=summary.contacts,sum=(keys:string[])=>keys.reduce((n,k)=>n+(c[k]||0),0);
  return {reviewed:summary.reviews.EVALUATED||0,high:summary.highRelevance,confirmed:c.CONFIRMED||0,pending:sum(['QUEUED','WAITING_QUOTA','WAITING_ACCOUNT','RESERVED','ATTEMPTED']),failed:c.FAILED||0,unknown:c.UNKNOWN||0,blocked:c.BLOCKED_POST||0,simulated:c.SIMULATED_SUCCESS||0,skipped:sum(['SKIPPED','CANCELLED']),other:Object.entries(c).filter(([k])=>!['CONFIRMED','QUEUED','WAITING_QUOTA','WAITING_ACCOUNT','RESERVED','ATTEMPTED','FAILED','UNKNOWN','BLOCKED_POST','SIMULATED_SUCCESS','SKIPPED','CANCELLED'].includes(k)).reduce((n,[,v])=>n+v,0)};
 }
-export function taskHref(run:DashboardRun,stage='collect'){return '/work?'+new URLSearchParams({module:'runs',config:run.configId,run:run.id,stage});}
+export function taskHref(run:DashboardRun,stage='collect'){return '/automation?'+new URLSearchParams({config:run.configId,run:run.id,stage});}

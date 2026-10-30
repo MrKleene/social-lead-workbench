@@ -1,7 +1,7 @@
 import {useConfig} from '@/features/collection/use-collection';
 import {useAutomationPreferences} from './settings-data';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams,useLocation } from 'react-router-dom';
 import { useAuth } from '@/features/auth/use-auth';
 import { useAccounts } from '@/features/accounts/use-accounts';
 import { useWork } from './use-work';
@@ -17,7 +17,8 @@ export function useSpatialWork() {
   const view = params.get('view') || 'new';
   const work = useWork(admin, view);
   const accounts = useAccounts(),preferences=useAutomationPreferences(admin);
-  const active=activeWorkModule(params.toString(),id,admin);
+  const location=useLocation();
+  const active=location.pathname==='/automation'?'runs':activeWorkModule(params.toString(),id,admin);
   const moduleHistory=useRef<Partial<Record<SpaceModule,string>>>({});
   useEffect(()=>{if(active)moduleHistory.current[active]=`/work${id?`/${id}`:''}?${params}`;},[active,id,params]);
   const previousModule=useRef(active);
@@ -33,7 +34,7 @@ export function useSpatialWork() {
     const next = new URLSearchParams(params); next.set('module', module);
     if(config) next.set('config', config);
     next.set('view', module === 'follow' ? 'follow' : 'new');
-    navigate(`/work?${next}`);
+    navigate(`${module==='runs'?'/automation':'/work'}?${next}`);
   };
   const setView = (next: string) => { work.clearSelection(); setParams(p => { p.set('view', next); p.set('module', next === 'follow' ? 'follow' : 'matches'); return p; }); };
   const closeDetail = () => navigate(`/work?${params}`);

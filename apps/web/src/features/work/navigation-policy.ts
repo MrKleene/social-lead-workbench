@@ -14,3 +14,5 @@ export function activeWorkModule(search:string,id:string|undefined,admin:boolean
  const params=new URLSearchParams(search),requested=params.get('module'),view=params.get('view')||'new';
  return requested==='archive'&&admin?'archive':requested==='accounts'?'accounts':(requested==='settings'||requested==='templates')&&admin?requested:requested==='runs'&&admin?'runs':requested==='notices'?'notices':requested==='follow'||view==='follow'?'follow':id||requested==='matches'||params.has('view')?'matches':null;
 }
+
+export function automationPath(search:string){const p=new URLSearchParams(search);p.delete('module');p.delete('view');return '/automation'+(p.size?'?'+p:'');}

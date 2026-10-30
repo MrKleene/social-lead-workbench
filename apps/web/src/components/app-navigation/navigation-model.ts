@@ -7,7 +7,7 @@ export const primaryNavigation:NavigationItem[]=[
  {id:'reply-history',label:'回复记录',path:'/reply-history',adminOnly:true},
 ];
 export const secondaryNavigation:NavigationItem[]=[
- {id:'runs',label:'采集任务',path:'/work?module=runs',module:'runs',adminOnly:true,group:'工作管理'},
+ {id:'runs',label:'自动化任务',path:'/automation',module:'runs',adminOnly:true,group:'工作管理'},
  {id:'review',label:'评论审核',path:'/comment-review',adminOnly:true,group:'工作管理'},
  {id:'auto-contact',label:'自动回复与账号矩阵',path:'/auto-contact',adminOnly:true,group:'工作管理'},
  {id:'matches',label:'线索池',path:'/work?module=matches',module:'matches',group:'工作管理'},
@@ -22,6 +22,7 @@ export const secondaryNavigation:NavigationItem[]=[
 ];
 export const isWorkPath=(path:string)=>/^\/work(?:\/|$)/.test(path);
 export function activeNavigation(path:string,search:string,admin:boolean){
+ if(path==='/automation')return admin?'runs':null;
  if(path==='/home')return 'home';
  if(isWorkPath(path))return activeWorkModule(search,path.split('/')[2],admin)||'overview';
  if(/^\/reply-history(?:\/|$)/.test(path))return admin?'reply-history':null;
@@ -34,7 +35,8 @@ export function activeNavigation(path:string,search:string,admin:boolean){
 }
 /** Retain only workspace destinations; each module keeps its last detail/filter URL. */
 export function navigationPath(item:NavigationItem,current:{pathname:string;search:string},history:Record<string,string>,lastWorkSearch:string){
- if(item.id==='overview'){const config=new URLSearchParams(isWorkPath(current.pathname)?current.search:lastWorkSearch).get('config');return config?'/work?'+new URLSearchParams({config}):'/work';}
+ if(item.id==='overview')return '/work';
+ if(item.id==='runs')return history.runs||'/automation';
  if(!item.module)return item.path;
  if(history[item.id])return history[item.id];
  const query=new URLSearchParams(isWorkPath(current.pathname)?current.search:lastWorkSearch);

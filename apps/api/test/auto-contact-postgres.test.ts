@@ -491,3 +491,49 @@ it('dashboard high relevance is strictly above 90, evaluated, and scoped to run 
  expect((await journeySummary(db,actor,'REAL',other.runId!)).highRelevance).toBe(1);
  expect(sender.send).not.toHaveBeenCalled();
 });
+
+import {projectOverview} from '../src/collection/project-overview';
+it('project overview deduplicates across groups, original versions and review versions, excluding synthetic data',async()=>{
+ const a=await source(),b=await source();
+ const ca=await db.capturedComment.findUniqueOrThrow({where:{id:a.captureId!}}),cb=await db.capturedComment.findUniqueOrThrow({where:{id:b.captureId!}}),pa=await db.capturedPost.findUniqueOrThrow({where:{id:ca.postId}});
+ await db.collectionConfig.updateMany({where:{id:{in:[a.configId,b.configId]}},data:{mode:'XHS_MCP'}});
+ await db.capturedPost.update({where:{id:cb.postId},data:{platformPostId:pa.platformPostId}});
+ await db.capturedComment.update({where:{id:ca.id},data:{isDemo:false}});
+ await db.capturedComment.update({where:{id:cb.id},data:{isDemo:false,platformCommentId:ca.platformCommentId,contentHash:ca.contentHash,contextVersion:ca.contextVersion}});
+ await db.semanticReview.updateMany({where:{id:{in:[a.id,b.id]}},data:{isDemo:false}});
+ await db.collectionConfig.update({where:{id:a.configId},data:{archivedAt:new Date()}});
+ const sim=await source(); // Configuration mode may change; historical snapshot remains authoritative.
+ await db.collectionConfig.update({where:{id:sim.configId},data:{mode:'XHS_MCP'}});
+ await db.collectionRun.update({where:{id:sim.runId},data:{snapshot:{mode:'MOCK'}}});
+ expect((await projectOverview(db,actor)).activity.some(x=>x.id===sim.runId)).toBe(false);
+ expect((await projectOverview(db,actor)).archive).toEqual({posts:1,comments:1,scored:1,unscored:0,failed:0});
+ const newer=await db.capturedComment.create({data:{configId:a.configId,runId:a.runId,lastRunId:a.runId,postId:ca.postId,platformCommentId:ca.platformCommentId,contentHash:'new original',contextVersion:'v2',snapshot:{comment:'changed'},isDemo:false,lastSeenAt:new Date('2099-01-01')}});
+ expect((await projectOverview(db,actor)).archive).toEqual({posts:1,comments:1,scored:0,unscored:1,failed:0});
+ await db.semanticReview.update({where:{id:a.id},data:{captureId:newer.id,state:'FAILED'}});
+ expect((await projectOverview(db,actor)).archive.failed).toBe(1);
+ await db.semanticReview.update({where:{id:a.id},data:{state:'EVALUATED',score:10}});
+ expect((await projectOverview(db,actor)).archive.scored).toBe(1); // Coverage is not a merged threshold.
+ expect(sender.send).not.toHaveBeenCalled();
+});
+it('project overview counts real attempts once, preserves unknown, and uses Shanghai quota day',async()=>{
+ const a=await source(),b=await source(),now=new Date('2026-10-30T16:00:01Z');
+ const account=await db.platformAccount.create({data:{platform:'XHS',label:'Synthetic real-namespace fixture',isDemo:false,status:'PAUSED',dailyLimit:10}});
+ const identity=await db.platformIdentity.create({data:{platform:'XHS',platformUserId:randomUUID(),nickname:'synthetic'}}),ledger=await db.contactLedger.create({data:{identityId:identity.id,accountId:account.id,mode:'REAL'}});
+ const attempts=[] as {id:string}[];
+ for(const outcome of ['CONFIRMED','UNKNOWN','FAILED','RESERVED'] as const)attempts.push(await db.contactAttempt.create({data:{ledgerId:ledger.id,mode:'REAL',outcome,kind:'FIRST',requestKey:randomUUID(),day:quotaBucket('REAL',now),actorId:actor.id}}));
+ await db.contactAttempt.create({data:{ledgerId:ledger.id,mode:'SIMULATION',outcome:'SIMULATED_SUCCESS',kind:'FIRST',requestKey:randomUUID(),day:'synthetic',actorId:actor.id}});
+ const r=await db.autoContactRule.create({data:{platform:'XHS',policyId:'workspace',policyRevision:1,mode:'REAL'}});
+ const base={ruleId:r.id,ruleVersion:1,reviewVersion:0,mode:'REAL',platform:'XHS' as const,recipientId:'fixture',postId:'fixture',commentId:'fixture',channel:'COMMENT' as const,content:'synthetic',evidence:{},eligibilityHash:'synthetic',status:'QUEUED'};
+ await db.autoContactJob.create({data:{...base,reviewId:a.id,attemptId:attempts[3].id}});
+ await db.autoContactJob.create({data:{...base,reviewId:b.id}});
+ await db.accountDay.create({data:{accountId:account.id,day:quotaBucket('REAL',now),occupied:2}});
+ await db.accountDay.create({data:{accountId:account.id,day:quotaBucket('REAL',new Date('2026-10-30T15:59:59Z')),occupied:9}});
+ const d=await projectOverview(db,actor,now);expect(d.day).toBe('2026-10-31');expect(d.sends).toEqual({confirmed:1,unknown:1,failed:1,pending:2,cancelled:0,blockedJobs:0});expect(d.accounts).toEqual({total:1,paused:1,restricted:0,notPaused:0,dailyLimit:10,occupied:2});
+ expect(await db.accountDay.count()).toBe(2);expect(sender.send).not.toHaveBeenCalled();
+});
+it('project overview returns a genuine empty state and enforces administrator access',async()=>{
+ const d=await projectOverview(db,actor);expect(d.archive).toEqual({posts:0,comments:0,scored:0,unscored:0,failed:0});expect(d.activity).toEqual([]);
+ await expect(projectOverview(db,sales)).rejects.toThrow();
+ expect((await request(app.getHttpServer()).get('/api/collection/overview')).status).toBe(401);
+ expect((await request(app.getHttpServer()).get('/api/collection/overview').set('Cookie',auth.cookie)).status).toBe(200);
+});

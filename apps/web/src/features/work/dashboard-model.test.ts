@@ -4,7 +4,7 @@ import type {Config} from '@/features/collection/types';
 it('prioritizes running tasks over newer history without mixing their counts',()=>{
  const configs=[{id:'a',name:'A',mode:'MOCK',runs:[{id:'new',status:'COMPLETE',createdAt:'2026-10-30',capturedPosts:9},{id:'live',status:'RUNNING',createdAt:'2026-10-29',capturedPosts:1}]}] as Config[];
  const runs=dashboardRuns(configs),current=dashboardCurrent(runs)!;
- expect(runs.map(r=>r.id)).toEqual(['new','live']);expect(current.id).toBe('live');expect(current.capturedPosts).toBe(1);expect(taskHref(current,'review')).toBe('/work?module=runs&config=a&run=live&stage=review');
+ expect(runs.map(r=>r.id)).toEqual(['new','live']);expect(current.id).toBe('live');expect(current.capturedPosts).toBe(1);expect(taskHref(current,'review')).toBe('/automation?config=a&run=live&stage=review');
  expect(dashboardCurrent([])).toBeUndefined();expect(dashboardCurrent(runs.filter(r=>r.id!=='live'))?.id).toBe('new');
 });
 it('keeps failed, unknown, simulated, blocked and pending sends separate',()=>{

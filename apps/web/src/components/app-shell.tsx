@@ -15,7 +15,7 @@ function ShellContent(){
  const confirmLeave=useConfirmWorkspaceLeave(),motion=useWorkspaceMotion(),{user,logout}=useAuth(),location=useLocation();useEvents(!!user);
  const previousLocation=useRef(location.key);
  useEffect(()=>{if(previousLocation.current===location.key)return;previousLocation.current=location.key;const frame=requestAnimationFrame(()=>{if(document.activeElement===document.body)document.getElementById('workspace-main')?.focus({preventScroll:true});});return()=>cancelAnimationFrame(frame);},[location.key]);
- const spatial=isWorkPath(location.pathname)||location.pathname==='/home',module=new URLSearchParams(location.search).get('module');
+ const spatial=isWorkPath(location.pathname)||location.pathname==='/home'||location.pathname==='/automation',module=new URLSearchParams(location.search).get('module');
  const phase=module==='follow'?'handoff':module||location.pathname!=='/work'?'review':'overview';
  return <AuroraMotionContext.Provider value={motion.reduced}><div className="space-shell" data-phase={phase}>
  <a className="aurora-skip" href="#workspace-main">跳到工作内容</a>
