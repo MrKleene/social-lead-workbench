@@ -1,3 +1,4 @@
+import {randomUUID} from 'node:crypto';
 import {postAvailability} from '../collection/post-availability';
 import {unknownPostAvailability} from '@crm/contracts';
 import {wholePostRequestPolicy} from '@crm/contracts';
@@ -20,13 +21,15 @@ export const lockReview=async(db:ReviewDb)=>{await db.$queryRaw`SELECT pg_adviso
 export class ReviewPolicyService {
  constructor(@Inject(Db) readonly db:Db,@Inject(ModelSettingsService) readonly models:ModelSettingsService,@Inject(QwenMatchingService) readonly qwen:QwenMatchingService){}
  async overview(actor:Actor){requireAdmin(actor);const [policies,settings,status,capturedComments]=await Promise.all([this.db.commentReviewPolicy.findMany({orderBy:{createdAt:'asc'}}),this.models.resolve(),this.qwen.status(),this.db.capturedComment.count()]);const autoJobs=await this.db.autoReviewJob.findMany({orderBy:{createdAt:'desc'},take:20});const jobPosts=await this.db.capturedPost.findMany({where:{id:{in:autoJobs.map(j=>j.postId)}},select:{id:true,snapshot:true}});return {policies,autoJobs:autoJobs.map(j=>({...j,title:(jobPosts.find(p=>p.id===j.postId)?.snapshot as {title?:string})?.title||'已保存帖子'})),...status,modelVersion:settings.configurationVersion,capturedComments};}
- async save(actor:Actor,id:string,input:z.infer<typeof reviewPolicySaveSchema>){
+ async create(actor:Actor,input:{name:string;target:string}){requireAdmin(actor);return this.save(actor,randomUUID(),{...input,version:0},true);}
+ async save(actor:Actor,id:string,input:z.infer<typeof reviewPolicySaveSchema>,create=false){
   requireAdmin(actor);input=reviewPolicySaveSchema.parse(input);
   return this.db.$transaction(async tx=>{await lockReview(tx);const old=await tx.commentReviewPolicy.findUnique({where:{id}});
    if((old?.version??0)!==input.version)throw new ConflictException('审核需求已变化，请刷新');
-   if(!old&&id!=='workspace')throw new NotFoundException();
+   if(!old&&id!=='workspace'&&!create)throw new NotFoundException();
+   if(!old&&await tx.commentReviewPolicy.count()>=100)throw new BadRequestException('最多100个匹配方案');
    const changed=!old||old.target!==input.target,revision=(old?.revision??0)+(changed?1:0);
-   const row=await tx.commentReviewPolicy.upsert({where:{id},create:{id,name:'评论审核',target:input.target,revision,enabled:false},update:{target:input.target,revision,version:{increment:1},...(changed?{autoEnabled:false}: {})}});
+   const row=await tx.commentReviewPolicy.upsert({where:{id},create:{id,name:input.name||'评论审核',target:input.target,revision,enabled:false},update:{name:input.name??old?.name,target:input.target,revision,version:{increment:1},...(changed?{autoEnabled:false}: {})}});
    if(changed)await tx.autoReviewJob.updateMany({where:{policyId:id,status:{in:['PENDING','PROCESSING']}},data:{status:'CANCELLED',reason:'目标已变化，请重新确认自动识别'}});
    if(changed)await tx.commentReviewPolicyVersion.create({data:{policyId:id,revision,target:input.target}});
    await tx.auditLog.create({data:{actorId:actor.id,action:'COMMENT_REVIEW_POLICY_SAVED',entityId:id,metadata:{revision,version:row.version}}});return row;

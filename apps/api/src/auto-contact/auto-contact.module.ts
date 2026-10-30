@@ -1,3 +1,4 @@
+import {automationPreferenceInput,readAutomationPreferences,saveAutomationPreferences} from './automation-preferences';
 import {journeySummary} from './journey-summary';
 import { DevicesModule } from '../devices/devices';
 import { DeviceService } from '../devices/device.service';
@@ -25,6 +26,8 @@ class AutoContactController {
     overview(
     @Req()
     r: AuthedRequest) { return this.settings.overview(r.actor); }
+    @Get('preferences') preferences(@Req() r:AuthedRequest){return readAutomationPreferences(this.db,r.actor);}
+    @Put('preferences') select(@Req() r:AuthedRequest){return saveAutomationPreferences(this.db,r.actor,parse(automationPreferenceInput,r.body));}
     @Put('rules/:id')
     save(
     @Req()

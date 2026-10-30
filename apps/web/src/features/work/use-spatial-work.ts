@@ -1,3 +1,4 @@
+import {useAutomationPreferences} from './settings-data';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/use-auth';
@@ -14,7 +15,7 @@ export function useSpatialWork() {
   const navigate = useNavigate();
   const view = params.get('view') || 'new';
   const work = useWork(admin, view);
-  const accounts = useAccounts();
+  const accounts = useAccounts(),preferences=useAutomationPreferences(admin);
   const active=activeWorkModule(params.toString(),id,admin);
   const moduleHistory=useRef<Partial<Record<SpaceModule,string>>>({});
   useEffect(()=>{if(active)moduleHistory.current[active]=`/work${id?`/${id}`:''}?${params}`;},[active,id,params]);
@@ -37,7 +38,7 @@ export function useSpatialWork() {
   const closeDetail = () => navigate(`/work?${params}`);
   const openLead = (leadId: string) => { const next = new URLSearchParams(params); next.set('module', active === 'follow' ? 'follow' : 'matches'); next.set('view', view); navigate(`/work/${leadId}?${next}`); };
   const configs = work.configs.data || [];
-  const selectedConfig = configs.find(c => c.id === params.get('config')) || configs.find(c => c.enabled) || configs[0];
+  const selectedConfig = configs.find(c => c.id === params.get('config')) || configs.find(c=>c.id===preferences.data?.configId) || configs.find(c => c.enabled) || configs[0];
   return { detailScroll, accounts, admin, id, view, work, active, rows, page, pages, configs, selectedConfig, openModule, setView, closeDetail, openLead,
     overview: () => navigate(selectedConfig ? `/work?config=${selectedConfig.id}` : '/work'), setConfig: (config: string) => setParams(p => { p.set('config', config);p.delete('run');p.delete('fresh'); return p; }),
     setPage: (next: number) => { setPagination(current=>({...current,[pageKey]:Math.max(0,Math.min(next,pages-1))})); if(id) closeDetail(); },

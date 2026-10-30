@@ -26,6 +26,7 @@ export function eligible(review: SemanticReview, threshold: number) { const resu
 }; return review.state === 'EVALUATED' && review.score !== null && review.score >= threshold && review.context === 'SUFFICIENT' && result?.decision === 'MATCH' && ['PENDING', 'APPROVED'].includes(review.reviewStatus) && !!result.evidence?.length && result.evidence.some(e => e.source === 'COMMENT' && typeof e.quote === 'string' && e.quote.length > 0 && s.comment?.includes(e.quote)); }
 export function eligibilityHash(r: SemanticReview) { return semanticHash({ id: r.id, version: r.version, score: r.score, context: r.context, result: r.result, model: r.modelVersion, selectedModel: r.selectedModel, policy: r.policyId, revision: r.policyRevision, snapshot: r.snapshot, input: r.evaluationInput, status: r.reviewStatus }); }
 export function ruleHash(r: {
+    channels?:string[];
     accountLimits: unknown;
     model: string;
     platform: string;
@@ -37,4 +38,4 @@ export function ruleHash(r: {
     accountIds: string[];
     version: number;
     mode: string;
-}) { return semanticHash({ model: r.model, platform: r.platform, policyId: r.policyId, policyRevision: r.policyRevision, threshold: r.threshold, channel: r.channel, content: r.content, accounts: r.accountIds, limits: r.accountLimits, version: r.version, mode: r.mode, timezone: 'Asia/Shanghai', sufficientOnly: true, repeatRecipients: false, scope: 'evaluated-after-authorization' }); }
+}) { return semanticHash({ ...(r.channels&&(r.channels.length!==1||r.channels[0]!==r.channel)?{channels:r.channels}:{}), model: r.model, platform: r.platform, policyId: r.policyId, policyRevision: r.policyRevision, threshold: r.threshold, channel: r.channel, content: r.content, accounts: r.accountIds, limits: r.accountLimits, version: r.version, mode: r.mode, timezone: 'Asia/Shanghai', sufficientOnly: true, repeatRecipients: false, scope: 'evaluated-after-authorization' }); }

@@ -449,3 +449,25 @@ it('run progress includes scoped attempts, follows reconciliation, isolates mode
  expect((await journeySummary(db,actor,'REAL',review.runId!)).contacts).toEqual({});
  expect(sender.send).not.toHaveBeenCalled();
 });
+
+it('platform presets persist selected channels and template snapshots; dual channels contact a recipient once',async()=>{
+ const template=await db.replyTemplate.create({data:{name:'合成发送方案',body:'合成正文',channel:'COMMENT'}});
+ const account=await db.platformAccount.create({data:{platform:'XHS',label:'合成多渠道账号',dailyLimit:2,isDemo:true}});
+ const r=await settings.save(actor,'preset-XHS',{version:0,platform:'XHS',policyId:'workspace',policyRevision:1,threshold:90,channel:'DM',channels:['DM','COMMENT'],templateId:template.id,templateVersion:template.version,content:template.body,accounts:[{id:account.id,version:account.version,dailyLimit:2}]});
+ expect(r).toMatchObject({enabled:false,channel:'COMMENT',channels:['DM','COMMENT'],templateId:template.id,templateVersion:template.version});
+ await settings.toggle(actor,r.id,{version:r.version,enabled:true,consent:autoContactConsent,hash:ruleHash(r)});
+ const recipient=randomUUID();await source(recipient);await source(recipient);await service.tick();await service.tick();expect(sender.send).toHaveBeenCalledTimes(1);expect((sender.send as any).mock.calls[0][0].channel).toBe('COMMENT');expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(1);
+ const dy=await settings.save(actor,'preset-DOUYIN',{version:0,platform:'DOUYIN',policyId:'workspace',policyRevision:1,threshold:92,channel:'COMMENT',channels:[],content:'另一个平台',accounts:[]});expect(dy.enabled).toBe(false);await expect(settings.toggle(actor,dy.id,{version:dy.version,enabled:true,consent:autoContactConsent,hash:ruleHash(dy)})).rejects.toThrow();
+ expect((await settings.overview(actor)).rules).toHaveLength(2);expect(sender.send).toHaveBeenCalledTimes(1);
+ await db.replyTemplate.update({where:{id:template.id},data:{version:{increment:1},body:'新正文'}});
+ await expect(settings.save(actor,'other',{version:0,platform:'XHS',policyId:'workspace',policyRevision:1,threshold:90,channel:'COMMENT',templateId:template.id,templateVersion:template.version,content:'合成正文',accounts:[]})).rejects.toThrow('发送模板已变化');expect((await db.autoContactRule.findUniqueOrThrow({where:{id:r.id}})).content).toBe('合成正文');
+});
+it('preset selection uses optimistic versions and preserves historical policy revisions',async()=>{
+ const {readAutomationPreferences,saveAutomationPreferences}=await import('../src/auto-contact/automation-preferences');
+ await db.automationPreferences.deleteMany();const old=await readAutomationPreferences(db,actor);expect(old.version).toBe(0);
+ const second=await db.commentReviewPolicy.create({data:{id:randomUUID(),name:'第二个匹配方案',target:'新的语义需求',revisions:{create:{revision:1,target:'新的语义需求'}}}});
+ await db.commentReviewPolicy.update({where:{id:'workspace'},data:{autoEnabled:true}});
+ const prefs=await saveAutomationPreferences(db,actor,{version:0,policyId:second.id});expect(prefs.policyId).toBe(second.id);expect((await db.commentReviewPolicy.findUniqueOrThrow({where:{id:'workspace'}})).autoEnabled).toBe(false);expect(await db.commentReviewPolicyVersion.count()).toBe(2);
+ await expect(saveAutomationPreferences(db,actor,{version:0,policyId:'workspace'})).rejects.toThrow('当前选用方案已变化');await expect(saveAutomationPreferences(db,sales,{version:1,policyId:'workspace'})).rejects.toThrow();expect(sender.send).not.toHaveBeenCalled();
+ await db.automationPreferences.deleteMany();
+});

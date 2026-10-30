@@ -1,3 +1,4 @@
+import {useAutomationPreferences} from './settings-data';
 import {useWorkspaceAutomation} from './workspace-automation';
 import {accountOptionName} from '@/features/accounts/account-presentation';
 import {ReviewAndReplySetup} from './automation-setup';
@@ -19,7 +20,8 @@ export function OrbitOverview({state:s}:{state:SpatialState}) {
  const navigate=useNavigate(),readiness=useMcpReadiness(s.admin),review=useReviewOverview(s.admin&&!s.active),reduced=useAuroraReduced();
  const contact=useQuery({queryKey:['auto-contact'],queryFn:()=>api<AutoContactOverview>('/auto-contact'),enabled:s.admin&&!s.active,refetchInterval:5000}),rule=contact.data?.rules[0];
  const recent=s.configs.flatMap(c=>c.runs.map(r=>({...r,config:c.name,configId:c.id}))).sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)).slice(0,3);
- const latest=recent[0],policy=review.data?.policies[0],defaultAccount=readiness.data?.accounts?.find(a=>a.id===s.selectedConfig?.defaultExecutionAccountId);
+ const preferences=useAutomationPreferences(s.admin);
+ const latest=recent[0],policy=(review.data?.policies.find(p=>p.id===preferences.data?.policyId)||review.data?.policies[0]),defaultAccount=readiness.data?.accounts?.find(a=>a.id===s.selectedConfig?.defaultExecutionAccountId);
  const task=(stage:JourneyStage='collect',run=latest)=>{const q=new URLSearchParams({module:'runs',stage});if(run){q.set('config',run.configId);q.set('run',run.id);}else if(s.selectedConfig)q.set('config',s.selectedConfig.id);navigate('/work?'+q);};
  const labels=[s.work.configs.isError?'读取失败':latest?collectionOutcome(latest).label:'等待开始',review.isError?'读取失败':policy?.autoEnabled?'自动识别已开启':'按需分析',contact.isError?'状态读取失败':contact.isPending?'正在读取':rule?.pauseReason?'已暂停':rule?.enabled?'已授权开启':'未启用'];
  return <section className="mist-overview simple-overview" aria-label="轻序工作台" data-workspace-inactive={!!s.active} inert={!!s.active} aria-hidden={!!s.active}>

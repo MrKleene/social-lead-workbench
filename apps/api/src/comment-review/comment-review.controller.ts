@@ -23,6 +23,7 @@ export class CommentReviewController {
  @Post('authorize') authorize(@Req() r:AuthedRequest){return this.policies.authorize(r.actor,parse(reviewAuthorizationSchema,r.body));}
  @Patch('policies/:id/automatic') automatic(@Req() r:AuthedRequest,@Param('id') id:string){return this.policies.automatic(r.actor,id,parse(reviewAutoToggleSchema,r.body));}
  @Get('history') history(@Req() r:AuthedRequest,@Query('offset') n?:string){return this.policies.results(r.actor,undefined,offset(n));}
+ @Post('policies') create(@Req() r:AuthedRequest){const b=parse(reviewPolicySaveSchema.omit({version:true}).required({name:true}),r.body);return this.policies.create(r.actor,b);}
  @Put('policies/:id') save(@Req() r:AuthedRequest,@Param('id') id:string){return this.policies.save(r.actor,id,parse(reviewPolicySaveSchema,r.body));}
  @Patch('policies/:id/control') toggle(@Req() r:AuthedRequest,@Param('id') id:string){return this.policies.toggle(r.actor,id,parse(reviewPolicyToggleSchema,r.body));}
  @Post('policies/:id/prepare') prepare(@Req() r:AuthedRequest,@Param('id') id:string){return this.policies.prepare(r.actor,id,parse(reviewPrepareSchema,r.body));}

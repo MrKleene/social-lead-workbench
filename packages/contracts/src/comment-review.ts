@@ -2,7 +2,7 @@ import {z} from 'zod';
 import type {SemanticConnection,SemanticUsage,SemanticReviewItem} from './semantic-review';
 export const reviewAutoConsent='comment-review-continuous-single-post-v3' as const;
 export const reviewUseConsent='comment-review-original-first-use-v2' as const;
-export const reviewPolicySaveSchema=z.object({version:z.number().int().nonnegative(),target:z.string().trim().min(10).max(1500)}).strict();
+export const reviewPolicySaveSchema=z.object({version:z.number().int().nonnegative(),name:z.string().trim().min(1).max(80).optional(),target:z.string().trim().min(10).max(1500)}).strict();
 export const reviewPolicyToggleSchema=z.object({version:z.number().int().positive(),enabled:z.boolean(),consent:z.literal(reviewUseConsent).optional(),modelVersion:z.number().int().nonnegative().optional(),priceVersion:z.string().max(60).optional()}).strict();
 export const reviewAutoToggleSchema=z.object({version:z.number().int().positive(),enabled:z.boolean(),consent:z.literal(reviewAutoConsent).optional(),modelVersion:z.number().int().nonnegative().optional(),priceVersion:z.string().max(60).optional()}).strict();
 export const reviewAuthorizationSchema=z.object({consent:z.literal(reviewUseConsent),modelVersion:z.number().int().nonnegative(),priceVersion:z.string().max(60)}).strict();
@@ -10,7 +10,7 @@ export const reviewScopeSchema=z.discriminatedUnion('kind',[z.object({kind:z.lit
 export const reviewPrepareSchema=z.object({version:z.number().int().positive(),scope:reviewScopeSchema}).strict();
 export type ReviewScope=z.infer<typeof reviewScopeSchema>;
 export type ReviewPolicy={id:string;name:string;target:string;revision:number;version:number;enabled:boolean;autoEnabled:boolean;autoModelVersion:number|null};
-export type ReviewOverview={policies:ReviewPolicy[];connection:SemanticConnection;usage:SemanticUsage;modelVersion:number;capturedComments:number;autoJobs:{runId?:string;id:string;postId:string;title:string;status:string;reason:string|null;processed:number}[]};
+export type ReviewOverview={selectedPolicyId?:string|null;policies:ReviewPolicy[];connection:SemanticConnection;usage:SemanticUsage;modelVersion:number;capturedComments:number;autoJobs:{runId?:string;id:string;postId:string;title:string;status:string;reason:string|null;processed:number}[]};
 export type ReviewResults={items:(SemanticReviewItem&{policyId:string|null;policyRevision:number|null})[];total:number;hasMore:boolean};
 export type ReviewComments={items:{id:string;comment:string;coverage:string}[];hasMore:boolean};
 export type ReviewPosts={items:{id:string;title:string;comments:number;coverUrl?:string;coverage?:string}[];hasMore:boolean};

@@ -1,3 +1,4 @@
+import {useAutomationPreferences} from './settings-data';
 import {useEffect} from 'react';
 import {journeyProgress} from './journey-progress';
 import {useQuery} from '@tanstack/react-query';
@@ -11,13 +12,14 @@ import type {Config} from '@/features/collection/types';
 import {journeyStage, type JourneyStage} from './journey-model';
 
 export function useJourney(config: Config | undefined, visible: boolean) {
+  const preferences=useAutomationPreferences(visible);
   const [params, setParams] = useSearchParams();
   const detail = useConfig(config?.id), reviews = useReviewOverview(visible);
   const runs = detail.data && detail.data.id === config?.id ? detail.data.runs : config?.runs ?? [];
   const requested = params.get('run') || '';
   const run = runs.find(r => r.id === (requested || config?.activeRunId)) ??
     (!requested && params.get('fresh') !== '1' ? runs[0] : undefined);
-  const policy = reviews.data?.policies.find(p => p.id === params.get('policy')) ?? reviews.data?.policies[0];
+  const policy = reviews.data?.policies.find(p => p.id === params.get('policy')) ?? (reviews.data?.policies.find(p=>p.id===preferences.data?.policyId)||reviews.data?.policies[0]);
   const version=Number(params.get('reviewVersion'));
   const policyRevision=Number.isInteger(version)&&version>0?version:undefined;
   const scope = new URLSearchParams({offset: '0', sort: 'newest', ...(run ? {runId: run.id} : {}),...(policyRevision?{policyRevision:String(policyRevision)}:{})});

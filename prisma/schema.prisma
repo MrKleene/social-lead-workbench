@@ -677,6 +677,9 @@ model ManualReviewJob {
 
 // Independent opt-in sending rules. No migration of review consent into sending consent.
 model AutoContactRule {
+ channels ReplyChannel[] @default([])
+ templateId String?
+ templateVersion Int?
  accountLimits Json @default("[]")
  model String @default("")
  id String @id @default(cuid())
@@ -763,4 +766,11 @@ model PostAvailabilityEvent {
  evidence Json
  actorId String?
  @@unique([platform,postId,version])
+}
+
+model AutomationPreferences {
+ id String @id @default("workspace")
+ version Int @default(1)
+ configId String?
+ policyId String?
 }

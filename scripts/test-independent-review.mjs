@@ -68,5 +68,19 @@ try{
  IF NOT EXISTS(SELECT 1 FROM "AccountDay" WHERE day='2026-10-26' AND occupied=1) THEN RAISE EXCEPTION 'UTC quota reset'; END IF;
  END $$;`);
  results.push({label:'auto-contact-preserves-legacy-simulation-utc-and-default-off',exit:0});
+ const presetMigration='202610300001_automation_presets';
+ for(const name of migrations.filter(n=>n>'202610270001_auto_contact'&&n<presetMigration))sql('crm_migration_test',readFileSync(join(root,'prisma/migrations',name,'migration.sql'),'utf8'));
+ sql('crm_migration_test',`INSERT INTO "AutoContactRule" (id,platform,"policyId","policyRevision",channel,content,enabled,"authorizedHash","updatedAt") VALUES ('legacy-rule','XHS','legacy-legacy-fixture',1,'COMMENT','保留原正文',true,'unchanged-authorization',now());
+ CREATE TABLE fixture_rule_before AS SELECT to_jsonb(r) AS snapshot FROM "AutoContactRule" r;
+ CREATE TABLE fixture_attempt_presets_before AS SELECT to_jsonb(a) AS snapshot FROM "ContactAttempt" a;
+ CREATE TABLE fixture_quota_presets_before AS SELECT to_jsonb(a) AS snapshot FROM "AccountDay" a;`);
+ sql('crm_migration_test',readFileSync(join(root,'prisma/migrations',presetMigration,'migration.sql'),'utf8'));
+ sql('crm_migration_test',`DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM "AutoContactRule" r,fixture_rule_before f WHERE to_jsonb(r)-'channels'-'templateId'-'templateVersion'=f.snapshot AND r.channels=ARRAY[r.channel] AND r."templateId" IS NULL) THEN RAISE EXCEPTION 'preset migration changed rule authorization'; END IF;
+ IF EXISTS((SELECT to_jsonb(a) FROM "ContactAttempt" a) EXCEPT (SELECT snapshot FROM fixture_attempt_presets_before)) THEN RAISE EXCEPTION 'preset migration changed attempts'; END IF;
+ IF EXISTS((SELECT to_jsonb(a) FROM "AccountDay" a) EXCEPT (SELECT snapshot FROM fixture_quota_presets_before)) THEN RAISE EXCEPTION 'preset migration changed quota'; END IF;
+ IF EXISTS(SELECT 1 FROM "AutomationPreferences") THEN RAISE EXCEPTION 'migration chose a new default'; END IF;
+ END $$;`);
+ results.push({label:'presets-preserve-authorized-rule-content-channel-attempts-quota-and-defaults',exit:0});
  run('integration',['npm','run','test:integration','-w','@crm/api'],env);
 }finally{for(const c of containers.reverse())docker(['stop',c]);writeFileSync(join(output,'checks.json'),JSON.stringify({results,isolated:true,removed:containers.length},null,2));console.log('Evidence: '+output);}
