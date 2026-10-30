@@ -111,3 +111,30 @@ html[data-crm-reduced=true] [data-slot=sheet-content][data-layout=modal],html[da
 
 /* Project overview: global information, separate from task execution. */
 .project-scope{display:flex;justify-content:space-between;gap:16px;color:#536c61;font-size:12px;margin:0 0 20px}.project-scope span{color:#7b8982}.project-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.project-metrics .dashboard-metric{padding:22px}.project-metrics .dashboard-stat strong{font-size:34px}.project-metrics .dashboard-metric small{display:block;color:#7b8982;font-size:11px;line-height:1.7}.project-lower{display:grid;grid-template-columns:1fr 1.2fr;gap:40px;margin-top:36px}.project-lower h2{font-size:17px;margin:0 0 16px}.project-health>a{display:flex;align-items:center;gap:12px;padding:18px 0;border-bottom:1px solid #e3eae5;font-size:13px;color:#53665c}.project-health>a strong{margin-left:auto;font-size:12px;font-weight:500;color:#284b3b}.project-activity header{display:flex;justify-content:space-between}.project-activity header>span{font-size:11px;color:#7b8982}.project-activity>a{display:flex;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid #e3eae5}.activity-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:#eaf0eb;color:#4c6b5b}.project-activity>a div{display:grid;gap:5px;flex:1}.project-activity strong{font-size:13px}.project-activity small{font-size:11px;color:#7b8982}.project-method{font-size:12px;color:#77857c;line-height:1.9;margin-top:24px;max-width:920px}.project-method summary{cursor:pointer}.project-no-history{margin-top:24px;padding:24px}.project-no-history h2{font-size:18px}.automation-page{padding:24px 0 100px}.automation-breadcrumb{display:flex;align-items:center;gap:12px;font-size:12px;color:#6f8176;margin-bottom:24px}.automation-breadcrumb>a:last-child{margin-left:auto}.automation-page>.journey-workspace{background:#fff;border:1px solid #e1e9e3;border-radius:24px;padding:28px}.project-dashboard .dashboard-links{margin-top:28px}@media(max-width:1100px){.project-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.project-metrics,.project-lower{grid-template-columns:1fr}.project-scope{display:grid;gap:5px}.project-lower{gap:28px}.project-metrics .dashboard-stat strong{font-size:32px}.project-health>a{flex-wrap:wrap}.automation-page>.journey-workspace{padding:16px;border-radius:18px}.automation-breadcrumb{font-size:11px;gap:8px}}
+
+/* Task reading surface: results first, secondary evidence on demand. */
+.automation-page .journey-heading{margin-bottom:20px}
+.automation-page .journey-stage{border:0;padding:0;border-radius:0}
+.automation-page .journey-steps{margin-bottom:16px}
+.automation-page .journey-steps>button{min-height:64px;padding:10px 16px}
+.automation-page .journey-conclusion{padding:10px 14px;margin-bottom:20px;font-size:12px;line-height:1.7}
+.automation-page .task-heading{margin-bottom:12px;align-items:center}
+.automation-page .task-actions{margin-bottom:12px}
+.automation-page .task-actions:empty{display:none}
+.automation-page .task-feed-heading{margin:0;padding:0;border:0;align-items:center}
+.automation-page .mist-task-grid{gap:18px}
+.automation-page .mist-task-summary{grid-template-columns:1fr 1fr;gap:14px 24px;padding:18px 20px}
+.automation-page .mist-summary-count{grid-row:auto}
+.automation-page .mist-summary-count:nth-of-type(1){grid-column:1}
+.automation-page .mist-summary-count:nth-of-type(2){grid-column:2}
+.automation-page .mist-task-summary>[data-slot=collapsible]{grid-column:1/-1}
+.automation-page .mist-task-summary .mist-summary-time{margin:12px 0}
+.automation-page .mist-task-summary .mist-summary-note{display:block}
+.automation-page .mist-timeline-heading{margin-bottom:6px}
+.automation-page .task-feed-empty{padding:28px 12px}
+.automation-page .run-post-feed{margin-top:12px}
+.automation-page .run-post-card{padding:16px 0}
+.automation-page .collection-next-run{margin-top:20px;border-top:1px solid var(--border);padding-top:12px;color:var(--muted-foreground);font-size:12px}
+.automation-page .collection-next-run p{margin:10px 0}
+.automation-page .journey-footer{padding:16px 0 0}
+@media(max-width:600px){.automation-page .journey-steps>button{padding:10px 7px;gap:5px}.automation-page .journey-number{display:none}.automation-page .journey-steps strong{font-size:12px}.automation-page .journey-steps small{font-size:10px;line-height:1.5}.automation-page .mist-task-summary{padding:14px;gap:12px}.automation-page .mist-summary-count>strong{font-size:25px}.automation-page .mist-summary-count>svg{display:none}.automation-page .mist-summary-count{grid-template-columns:1fr}.automation-page .mist-summary-count>strong{grid-column:1}}
