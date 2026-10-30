@@ -239,7 +239,7 @@ it('same-session profile restriction atomically pauses account and every REAL ru
  const attempts=await db.contactAttempt.findMany(),ledgers=await db.contactLedger.findMany(),quotas=await db.accountDay.findMany();
  await db.$transaction(tx=>recordSendExecution(tx,actor.id,account.id,'synthetic-profile','AUTO_CONTACT_EXECUTION_STAGE',profileJournal(),account.loginPlatformUserId!));
  expect(await db.contactAttempt.findMany()).toEqual(attempts);expect(await db.contactLedger.findMany()).toEqual(ledgers);expect(await db.accountDay.findMany()).toEqual(quotas);
- expect((await db.platformAccount.findUniqueOrThrow({where:{id:account.id}})).status).toBe('PAUSED');
+ expect(await db.platformAccount.findUniqueOrThrow({where:{id:account.id}})).toMatchObject({status:'RESTRICTED',pauseReason:'RESTRICTED'});
  expect((await db.autoContactControl.findUniqueOrThrow({where:{platform_mode:{platform:'XHS',mode:'REAL'}}})).pauseReason).toBeTruthy();
  const fresh=new ContactSettingsService(db,{...sender,mode:'REAL'});const view=await fresh.overview(actor);
  expect(view.accounts.find(a=>a.id===account.id)?.sendEligibility).toMatchObject({state:'RESTRICTED',canSend:false,evidence:{pathname:'/user/profile/[SENDER]',screenshotState:'NOT_CAPTURED'}});

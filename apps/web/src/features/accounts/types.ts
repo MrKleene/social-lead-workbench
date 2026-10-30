@@ -9,7 +9,9 @@ export type Account = {
   day: string;
   status: "UNCONNECTED" | "PAUSED" | "RESTRICTED";
   pauseReason: string | null;
+  systemBlockReason?: string | null;
   available: boolean;
+  isDemo?: boolean;
   version: number;
   loginStatus?: string;
   sessionReference?: {deviceId:string;provider:string;state:string;verifiedAt:string|null}|null;

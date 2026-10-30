@@ -24,8 +24,8 @@ const metadata = z.object({
   label: z.string().trim().min(1).max(80),
   ownerId: z.string().min(1).nullable(),
   dailyLimit: z.number().int().min(0).max(1000),
-  status: z.enum(["UNCONNECTED", "PAUSED", "RESTRICTED"]),
-  pauseReason: z.string().trim().min(1).max(300).nullable(),
+  status: z.enum(["UNCONNECTED", "PAUSED", "RESTRICTED"]).optional(),
+  pauseReason: z.string().trim().min(1).max(300).nullable().optional(),
 });
 @Controller("accounts")
 @UseGuards(SessionGuard)

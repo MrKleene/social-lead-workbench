@@ -27,7 +27,7 @@ it('historical proof survives elapsed time/restart; each distinct task checks on
  for(let i=0;i<3;i++)expect((await reads.readiness(admin)).accounts.find(a=>a.id===accountId)).toMatchObject({eligible:true,reason:'PREVIOUSLY_VERIFIED'});expect(status).not.toHaveBeenCalled();
  const c=await config(),key=randomUUID();const [one,replay]=await Promise.all([collection.start(admin,c.id,'READ_WINDOW',key,'XHS_FIXTURE',accountId,readConsent),collection.start(admin,c.id,'READ_WINDOW',key,'XHS_FIXTURE',accountId,readConsent)]);expect(one.id).toBe(replay.id);expect(status).not.toHaveBeenCalled();
  await Promise.all([collection.execute(one.id),collection.execute(one.id)]);expect(status).toHaveBeenCalledTimes(1);expect(await db.capturedPost.count({where:{runId:one.id}})).toBe(3);
- const second=await start();await collection.execute(second.id);await reads.failure(one.execution,'LOGIN_EXPIRED',one.id);expect((await db.platformAccount.findUniqueOrThrow({where:{id:accountId}})).status).toBe('PAUSED');expect((await db.accountSessionReference.findUniqueOrThrow({where:{accountId}})).state).toBe('VERIFIED');
+ const second=await start();await collection.execute(second.id);await reads.failure(one.execution,'LOGIN_EXPIRED',one.id);expect((await db.platformAccount.findUniqueOrThrow({where:{id:accountId}})).status).toBe('UNCONNECTED');expect((await db.accountSessionReference.findUniqueOrThrow({where:{accountId}})).state).toBe('VERIFIED');
  expect(status).toHaveBeenCalledTimes(2);expect(transportCalls.mock.calls.filter(c=>c[0]==='check_login_status')).toHaveLength(0);
  expect(await db.auditLog.count({where:{action:'ACCOUNT_TASK_LOGIN_CHECK_STARTED',entityId:{in:[one.id,second.id]}}})).toBe(2);
 });
@@ -90,4 +90,19 @@ describe('single-post: real device lease and synthetic saved session',()=>{
   await expect(check.check(admin,input)).rejects.toThrow('不会重复请求');expect(await db.deviceExecutionLease.count({where:{accountId}})).toBe(0);
   const audit=await db.auditLog.findFirstOrThrow({where:{entityId:input.requestKey,action:'SINGLE_POST_CHECK_FINISHED'}});expect(audit.action).toBe('SINGLE_POST_CHECK_FINISHED');expect(JSON.stringify(audit)).not.toMatch(/OFFLINE_REFERENCE|xsec_token/);
  });
+});
+it.each(['UNCONNECTED','PAUSED'])('selected account supports task-start verification with compatible %s metadata',async status=>{
+ await db.platformAccount.update({where:{id:accountId},data:{status:status as 'UNCONNECTED'|'PAUSED',pauseReason:status==='PAUSED'?'登录已验证；只读采集须逐次确认，发送禁用':null}});
+ expect((await reads.readiness(admin)).accounts.find(a=>a.id===accountId)?.eligible).toBe(true);
+ const run=await start();await collection.execute(run.id);expect(await db.capturedPost.count({where:{runId:run.id}})).toBe(3);
+ expect((await db.platformAccount.findUniqueOrThrow({where:{id:accountId}})).status).toBe(status);
+});
+it('historical reported restriction cannot become eligible through neutral metadata',async()=>{
+ await db.platformAccount.update({where:{id:accountId},data:{status:'UNCONNECTED',pauseReason:null,loginPlatformUserId:'6334380e000000001802cc73'}});
+ expect((await reads.readiness(admin)).accounts.find(a=>a.id===accountId)).toMatchObject({eligible:false,reason:'RESTRICTED'});await expect(start()).rejects.toThrow();
+});
+it('append-only restriction evidence overrides an initial-login pause and later clean reads',async()=>{
+ await db.platformAccount.update({where:{id:accountId},data:{status:'PAUSED',pauseReason:'登录已验证；只读采集须逐次确认，发送禁用'}});
+ for(const state of ['RESTRICTED','UNKNOWN'])await db.auditLog.create({data:{actorId:admin.id,entityId:accountId,action:'ACCOUNT_SEND_OBSERVATION',metadata:{state,source:'SAME_SESSION',observedAt:new Date().toISOString()}}});
+ expect((await reads.readiness(admin)).accounts.find(a=>a.id===accountId)).toMatchObject({eligible:false,reason:'RESTRICTED'});await expect(start()).rejects.toThrow();
 });

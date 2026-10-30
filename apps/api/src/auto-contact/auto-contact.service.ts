@@ -1,3 +1,4 @@
+import {accountModeBlocked} from '../accounts/account-execution-policy';
 import {accountSendObservation} from './send-observation';
 import {postAvailability,postSendBlock} from '../collection/post-availability';
 import {publicPostSnapshot} from '../collection/post-reference';
@@ -109,7 +110,7 @@ export class AutoContactService {
                 for (const id of r.accountIds) {
                     await tx.$queryRaw `SELECT id FROM "PlatformAccount" WHERE id=${id} FOR UPDATE`;
                     const a = await tx.platformAccount.findUnique({ where: { id }, include: { sessionReference: true } });
-                    if (!a || a.archivedAt || a.platform !== j.platform || a.status !== 'UNCONNECTED' || (j.mode === 'SIMULATION' ? !a.isDemo || !!a.loginSessionKey : a.isDemo || a.sessionReference?.state !== 'VERIFIED'))
+                    if (!a || a.archivedAt || a.platform !== j.platform || accountModeBlocked(a,j.mode) || (j.mode === 'SIMULATION' ? !a.isDemo || !!a.loginSessionKey : a.isDemo || a.sessionReference?.state !== 'VERIFIED'))
                         continue;
                     if(j.mode==='REAL'&&!(await accountSendObservation(tx,id,now)).canSend)continue;
                     healthyCount++;
@@ -154,7 +155,7 @@ export class AutoContactService {
             const postBlock = valid ? postSendBlock(valid.availability,j.rule.authorizedAt,valid.row.updatedAt,j.availabilityVersion) : null;
             if(postBlock){await cancelReserved(tx,j,postBlock);await tx.autoContactJob.update({where:{id:j.id},data:{status:'BLOCKED_POST'}});return null;}
             const attempt = await tx.contactAttempt.findUniqueOrThrow({ where: { id: j.attemptId! } }), usage = await tx.accountDay.findUnique({ where: { accountId_day: { accountId: j.accountId!, day: attempt.day } } });
-            if (!healthy || !a || a.archivedAt || a.status !== 'UNCONNECTED' || !j.rule.accountIds.includes(a.id) || j.ruleVersion !== j.rule.version || !await this.ruleReady(tx, j.rule) || !valid || eligibilityHash(valid.row) !== j.eligibilityHash || !j.leaseUntil || j.leaseUntil < now || attempt.day !== quotaBucket(j.mode, now) || (usage?.occupied ?? 0) > limit(j.rule, a.id, a.dailyLimit) || (j.mode === 'REAL' ? (a.isDemo || a.sessionReference?.state !== 'VERIFIED') : (!a.isDemo || !!a.loginSessionKey))) {
+            if (!healthy || !a || a.archivedAt || accountModeBlocked(a,j.mode) || !j.rule.accountIds.includes(a.id) || j.ruleVersion !== j.rule.version || !await this.ruleReady(tx, j.rule) || !valid || eligibilityHash(valid.row) !== j.eligibilityHash || !j.leaseUntil || j.leaseUntil < now || attempt.day !== quotaBucket(j.mode, now) || (usage?.occupied ?? 0) > limit(j.rule, a.id, a.dailyLimit) || (j.mode === 'REAL' ? (a.isDemo || a.sessionReference?.state !== 'VERIFIED') : (!a.isDemo || !!a.loginSessionKey))) {
                 await cancelReserved(tx, j, '发送前健康、授权、额度日期或证据已变化；未发送');
                 return null;
             }

@@ -1,3 +1,4 @@
+import {accountSystemBlock} from '../accounts/account-execution-policy';
 import type {Db} from '../common/db';
 import {requireAdmin,type Actor} from '../auth/security';
 import {contactLock} from './contact-lock';
@@ -12,7 +13,7 @@ export async function resolveConfirmedCapturePause(db:Db,actor:Actor,accountId:s
   const control=await tx.autoContactControl.findUnique({where:{platform_mode:{platform:'XHS',mode:'REAL'}}});
   if(!control?.pauseReason)return {resolved:false,reason:'NO_PAUSE'};
   const user=await tx.user.findUnique({where:{id:actor.id}}),account=await tx.platformAccount.findUnique({where:{id:accountId}});
-  if(!user?.active||user.role!=='ADMIN'||!account||account.status!=='PAUSED'||account.isDemo||control.pauseReason!=='SUBMISSION_UNKNOWN'||!control.pausedAt||control.activeJobId||control.leaseUntil)throw Error('PAUSE_NOT_PROVEN_RESOLVED');
+  if(!user?.active||user.role!=='ADMIN'||!account||accountSystemBlock(account)||account.isDemo||control.pauseReason!=='SUBMISSION_UNKNOWN'||!control.pausedAt||control.activeJobId||control.leaseUntil)throw Error('PAUSE_NOT_PROVEN_RESOLVED');
   if(await tx.autoContactRule.count({where:{enabled:true}})||await tx.deviceExecutionLease.count()||await tx.autoContactJob.count({where:{status:{in:['RESERVED','ATTEMPTED']}}})||await tx.contactAttempt.count({where:{mode:'REAL',accountIdSnapshot:accountId,outcome:{in:['UNKNOWN','RESERVED','ATTEMPTED']}}}))throw Error('PAUSE_NOT_PROVEN_RESOLVED');
   const observation=await accountSendObservation(tx,accountId,new Date());if(observation.state!=='UNKNOWN'||observation.evidenceInvalid)throw Error('PAUSE_NOT_PROVEN_RESOLVED');
   const origins=await tx.$queryRaw<{id:string;entityId:string}[]>`SELECT a.id,a."entityId" FROM "AuditLog" a JOIN "AutoContactControl" c ON a.xmin=c.xmin WHERE c.platform='XHS' AND c.mode='REAL' AND a.action='SINGLE_REPLY_TEST_FINISHED' AND a."actorId"=${actor.id}`;

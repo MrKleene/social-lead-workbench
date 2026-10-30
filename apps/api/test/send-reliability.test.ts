@@ -17,9 +17,9 @@ it('missing, no-warning, mismatched, corrupt or future evidence never grants per
  }
 });
 it('only strict same-identity safe journal evidence is persisted under the request and account',async()=>{
- const create=vi.fn(async(_input:any)=>{}),tx:any={auditLog:{create},$executeRaw:vi.fn(),platformAccount:{findUnique:vi.fn(async()=>({platform:'XHS',isDemo:false,loginPlatformUserId:'a'.repeat(24),status:'PAUSED'}))},autoContactControl:{upsert:vi.fn()},autoContactRule:{updateMany:vi.fn()}};
+ const create=vi.fn(async(_input:any)=>{}),tx:any={auditLog:{create},$executeRaw:vi.fn(),platformAccount:{update:vi.fn(),findUnique:vi.fn(async()=>({platform:'XHS',isDemo:false,loginPlatformUserId:'a'.repeat(24),status:'PAUSED'}))},autoContactControl:{upsert:vi.fn()},autoContactRule:{updateMany:vi.fn()}};
  await recordSendExecution(tx,'admin','synthetic-account','job:1','AUTO_CONTACT_EXECUTION_STAGE',{stage:'TRANSPORT_STOP',protocolAttemptId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',stopped:true,journal:{state:'AVAILABLE',records:[{sequence:1,attemptId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',stage:'RESTRICTION_CHECK',at:now.toISOString(),evidence:{identity:'MATCH',title:'限制提示',pathname:'/explore/[POST]',warnings:[{code:'BANNED',text:'账号已封禁'}],screenshotState:'NOT_CAPTURED'}}]}},'a'.repeat(24));
- expect(create).toHaveBeenCalledTimes(2);expect(create.mock.calls[1][0]).toMatchObject({data:{entityId:'synthetic-account',action:'ACCOUNT_SEND_OBSERVATION',metadata:{state:'RESTRICTED'}}});
+ expect(tx.platformAccount.update).toHaveBeenCalledWith({where:{id:'synthetic-account'},data:{status:'RESTRICTED',pauseReason:'RESTRICTED',version:{increment:1}}});expect(create).toHaveBeenCalledTimes(2);expect(create.mock.calls[1][0]).toMatchObject({data:{entityId:'synthetic-account',action:'ACCOUNT_SEND_OBSERVATION',metadata:{state:'RESTRICTED'}}});
  expect(sendObservationSchema.safeParse({state:'UNKNOWN',source:'SAME_SESSION',observedAt:now.toISOString(),token:'secret'}).success).toBe(false);
 });
 it('stderr emits fixed categories only, handles split chunks and drains bounded bytes',()=>{

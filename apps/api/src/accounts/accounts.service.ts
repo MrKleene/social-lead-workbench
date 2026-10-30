@@ -1,3 +1,5 @@
+import {quotaBucket,shanghaiDay} from '../auto-contact/contact-policy';
+import {accountSystemBlock,recordedAccountBlocks} from './account-execution-policy';
 import {boundAccountNickname} from './account-display';
 import {sessionHealth} from './session-health';
 import {
@@ -15,8 +17,8 @@ export type AccountInput = {
   label: string;
   ownerId: string | null;
   dailyLimit: number;
-  status: "UNCONNECTED" | "PAUSED" | "RESTRICTED";
-  pauseReason: string | null;
+  status?: "UNCONNECTED" | "PAUSED" | "RESTRICTED";
+  pauseReason?: string | null;
 };
 export const utcDay = (date: Date) => date.toISOString().slice(0, 10);
 @Injectable()
@@ -30,10 +32,10 @@ export class AccountsService {
   }
   async list(actor: Actor) {
     return this.db.$transaction(async (tx) => {
-      const day = utcDay(await this.now(tx));
+      const now=await this.now(tx), day = utcDay(now), realDay=quotaBucket('REAL',now);
       const rows = await tx.platformAccount.findMany({
         where: { ...scope(actor), archivedAt: null },
-        include: { sessionReference: true, usage: { where: { day } } },
+        include: { sessionReference: true, usage: { where: { day:{in:[day,realDay]} } } },
         orderBy: { createdAt: "asc" },
       });
       const owners = await tx.user.findMany({
@@ -42,12 +44,14 @@ export class AccountsService {
         },
         select: { id: true, name: true, active: true },
       });
+      const riskBlocks=await recordedAccountBlocks(tx,rows.map(a=>a.id));
       const accounts = rows.map(({ usage, sessionReference, ...r }) => ({
         ...r,
+        systemBlockReason:accountSystemBlock(r)||(riskBlocks.has(r.id)?'历史平台限制，待核查':null),
         loginNickname:boundAccountNickname({...r,sessionReference}),
         owner: owners.find((u) => u.id === r.ownerId) || null,
-        day,
-        occupied: usage[0]?.occupied || 0,
+        day:r.isDemo?day:shanghaiDay(now),
+        occupied: usage.find(u=>u.day===(r.isDemo?day:realDay))?.occupied || 0,
         available:
           r.isDemo && !r.loginSessionKey &&
           !r.archivedAt &&
@@ -111,6 +115,8 @@ export class AccountsService {
       if (old.version !== version)
         throw new ConflictException("账号已变化，请刷新");
       if ("ownerId" in data) await this.owner(tx, data.ownerId);
+      if ((!old.isDemo || old.loginSessionKey) && ('status' in data && data.status!==old.status || 'pauseReason' in data && data.pauseReason!==old.pauseReason))
+        throw new ConflictException('账号资格由系统检查维护，不能通过元数据修改限制');
       const account = await tx.platformAccount.update({
         where: { id },
         data: { ...data, version: { increment: 1 } },

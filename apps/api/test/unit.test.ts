@@ -52,3 +52,14 @@ describe("服务端权限与安全原语", () => {
     expect(() => assertOrigin("http://127.0.0.1:5173")).not.toThrow();
   });
 });
+
+import {accountSystemBlock,accountModeBlocked} from '../src/accounts/account-execution-policy';
+describe('system account eligibility without manual participation state',()=>{
+ it.each(['UNCONNECTED','PAUSED'])('accepts neutral/initial-login metadata %s without granting send authority',status=>{
+  const a={status,pauseReason:'登录已验证；只读采集须逐次确认，发送禁用'};
+  expect(accountSystemBlock(a)).toBeNull();expect(accountModeBlocked(a,'REAL')).toBe(false);
+ });
+ it.each([{status:'RESTRICTED',pauseReason:'RATE_LIMITED'},{status:'PAUSED',pauseReason:null},{status:'PAUSED',pauseReason:'管理员风控暂停'}])('retains conservative legacy holds %#',a=>{expect(accountSystemBlock(a)).toBeTruthy();expect(accountModeBlocked(a,'REAL')).toBe(true);});
+ it('retains the historical reported restriction independently of neutral status or a fresh login',()=>{for(const status of ['UNCONNECTED','PAUSED'])expect(accountSystemBlock({platform:'XHS',loginPlatformUserId:'6334380e000000001802cc73',status,pauseReason:null})).toBe('历史平台限制报告，待复核');});
+ it('does not grant simulation tasks to paused legacy simulation accounts',()=>expect(accountModeBlocked({status:'PAUSED',pauseReason:'登录已验证；只读采集须逐次确认，发送禁用'},'SIMULATION')).toBe(true));
+});

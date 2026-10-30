@@ -1,3 +1,4 @@
+import {quotaBucket,shanghaiDay} from '../src/auto-contact/contact-policy';
 import "reflect-metadata";
 import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -433,4 +434,17 @@ describe("account center / isolated PostgreSQL", () => {
       }),
     ).toBe(2);
   });
+});
+it('metadata-only edit preserves real system restrictions and rejects legacy state clearing',async()=>{
+ const row=await account({status:'RESTRICTED',pauseReason:'RATE_LIMITED'});await db.platformAccount.update({where:{id:row.id},data:{isDemo:false}});
+ const changed=await service.update(admin,row.id,row.version,{label:'只改备注',ownerId:a.id,dailyLimit:8});
+ expect(changed).toMatchObject({status:'RESTRICTED',pauseReason:'RATE_LIMITED',dailyLimit:8});
+ await expect(service.update(admin,row.id,changed.version,{label:'试图清除',ownerId:a.id,dailyLimit:8,status:'UNCONNECTED',pauseReason:null})).rejects.toThrow('账号资格由系统检查维护');
+ expect((await db.platformAccount.findUniqueOrThrow({where:{id:row.id}})).status).toBe('RESTRICTED');
+});
+
+it('real account quota display uses the shared Shanghai bucket, preserving legacy simulation usage',async()=>{
+ const row=await account();await db.platformAccount.update({where:{id:row.id},data:{isDemo:false}});
+ const now=new Date();await db.accountDay.createMany({data:[{accountId:row.id,day:quotaBucket('REAL',now),occupied:2},{accountId:row.id,day:utcDay(now),occupied:7}]});
+ const displayed=(await service.list(admin)).accounts.find(a=>a.id===row.id);expect(displayed).toMatchObject({occupied:2,day:shanghaiDay(now)});
 });

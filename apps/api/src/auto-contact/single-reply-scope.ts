@@ -8,8 +8,8 @@ const legacyScopeSchema=z.object({
  availabilityVersion:z.number().int().nonnegative(),approvalId:z.string().uuid(),accountId:id,senderId:platformId,reviewId:id,reviewVersion:z.number().int().nonnegative(),templateId:id,
  postId:platformId,commentId:platformId,recipientId:platformId,comment:z.string().min(1).max(20000),content:z.string().min(1).max(4000),
  binarySha256:z.enum(singleReplyBuildHashes),maximumSubmissions:z.literal(1),retryCount:z.literal(0),expiresAt:z.string().datetime(),
- // A narrow exception to this pre-existing read-only setting, never platform risk.
- pausedReason:z.literal('登录已验证；只读采集须逐次确认，发送禁用'),
+ // Exact legacy metadata snapshot; null is the new neutral login state. Neither grants sending.
+ pausedReason:z.literal('登录已验证；只读采集须逐次确认，发送禁用').nullable(),
 }).strict();
 // Separate explicit operator authority for one evidence-producing submission.
 // This is application authorization, never a platform "can send" assertion.

@@ -1,3 +1,4 @@
+import {accountSystemBlock} from '../accounts/account-execution-policy';
 import {verifyCaptureRecoveryChain} from './capture-recovery-chain';
 import {accountSendObservation} from './send-observation';
 import {postAvailability,postSendBlock} from '../collection/post-availability';
@@ -31,7 +32,7 @@ export class SingleReplyTestService {
    tx.user.findUnique({where:{id:actor.id}}),
    tx.commentReviewPolicy.findUnique({where:{id:'workspace'}}),tx.modelSettings.findFirst({select:{model:true}}),
   ]);
-  if(!u?.active||u.role!=='ADMIN'||!a||a.archivedAt||a.isDemo||a.platform!=='XHS'||a.status!=='PAUSED'||a.pauseReason!==s.pausedReason||a.loginProvider!=='real'||a.loginPlatformUserId!==s.senderId||!a.loginSessionKey||a.sessionReference?.provider!=='real'||a.sessionReference.state!=='VERIFIED'||a.sessionReference.sessionKey!==a.loginSessionKey)refuse();
+  if(!u?.active||u.role!=='ADMIN'||!a||a.archivedAt||a.isDemo||a.platform!=='XHS'||accountSystemBlock(a)||a.pauseReason!==s.pausedReason||a.loginProvider!=='real'||a.loginPlatformUserId!==s.senderId||!a.loginSessionKey||a.sessionReference?.provider!=='real'||a.sessionReference.state!=='VERIFIED'||a.sessionReference.sessionKey!==a.loginSessionKey)refuse();
   const observation=await accountSendObservation(tx,s.accountId,now);
   if(observation.state!=='UNKNOWN'||observation.evidenceInvalid)refuse();
   if(!r||r.isDemo||r.version!==s.reviewVersion||r.platform!=='XHS'||r.capture?.config.platform!=='XHS'||!eligible(r,91)||r.policyId!==p?.id||r.policyRevision!==p?.revision||r.selectedModel!==m?.model)refuse();

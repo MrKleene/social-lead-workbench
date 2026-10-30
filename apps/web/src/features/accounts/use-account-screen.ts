@@ -20,7 +20,7 @@ export function useAccountScreen(){
  const close=async()=>{if(state.mutation.isPending||!await confirmLeave())return;setPanel(null);};
  const add=async()=>{if(busy.current||!await confirmLeave())return;if(busy.current)return;if(availability!=='ready'){void open('device');return;}
   returnFocus.current=document.activeElement as HTMLElement;busy.current=true;setAdding(true);setError('');
-  try{const a=await send<Account>('/accounts','POST',{platform:'XHS',label:'小红书 · 待扫码',ownerId:null,dailyLimit:10,status:'PAUSED',pauseReason:'等待本人授权'});state.select(a.id);setTarget(a);setPanel('login');await client.invalidateQueries({queryKey:['accounts']});}
+  try{const a=await send<Account>('/accounts','POST',{platform:'XHS',label:'小红书 · 待扫码',ownerId:null,dailyLimit:10});state.select(a.id);setTarget(a);setPanel('login');await client.invalidateQueries({queryKey:['accounts']});}
   catch(e){setError(e instanceof Error?e.message:'添加失败，请重试');}finally{busy.current=false;setAdding(false);}
  };
  const rows=state.query.data?.accounts||[];

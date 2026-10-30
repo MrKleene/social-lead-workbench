@@ -1,3 +1,4 @@
+import {accountSystemBlock} from '../accounts/account-execution-policy';
 import {accountSendObservation,recordSendExecution} from './send-observation';
 import {executionEventSchema, type ExecutionEvent} from './reply-stage-journal';
 import {postAvailability,postSendBlock} from '../collection/post-availability';
@@ -26,7 +27,7 @@ export class LocalXhsReplySender implements ContactSender {
         const ref = a?.sessionReference;
         const restriction=await accountSendObservation(this.db,accountId,new Date());
         if(!restriction.canSend)return false;
-        return !!a && a.platform === 'XHS' && !a.isDemo && !a.archivedAt && a.status === 'UNCONNECTED' &&
+        return !!a && a.platform === 'XHS' && !a.isDemo && !a.archivedAt && !accountSystemBlock(a) &&
             !!a.loginPlatformUserId && !!a.loginSessionKey && ref?.sessionKey === a.loginSessionKey && ref?.provider === 'real' &&
             ref?.state === 'VERIFIED' && ref.checkedRuntimeId === this.runtime.runtimeId && ref.deviceId === this.runtime.deviceId();
     }
@@ -59,7 +60,7 @@ export class LocalXhsReplySender implements ContactSender {
         const reference = savedPostReference(snapshot?.sourceReference, j.postId);
         if (!reference) return null;
         const account = await this.db.platformAccount.findUnique({ where: { id: request.accountId }, include: { sessionReference: true } });
-        if (!account?.loginPlatformUserId || !account.sessionReference || account.isDemo || account.archivedAt || account.status !== 'UNCONNECTED' || account.sessionReference.state !== 'VERIFIED' || account.sessionReference.checkedRuntimeId !== this.runtime.runtimeId || account.sessionReference.deviceId !== this.runtime.deviceId() || account.sessionReference.sessionKey !== account.loginSessionKey || account.sessionReference.provider !== 'real') return null;
+        if (!account?.loginPlatformUserId || !account.sessionReference || account.isDemo || account.archivedAt || accountSystemBlock(account) || account.sessionReference.state !== 'VERIFIED' || account.sessionReference.checkedRuntimeId !== this.runtime.runtimeId || account.sessionReference.deviceId !== this.runtime.deviceId() || account.sessionReference.sessionKey !== account.loginSessionKey || account.sessionReference.provider !== 'real') return null;
         const limits = j.rule.accountLimits as { id: string; dailyLimit: number }[];
         const limit = Math.min(account.dailyLimit, Array.isArray(limits) ? limits.find(a => a.id === account.id)?.dailyLimit ?? 0 : 0);
         const usage = await this.db.accountDay.findUnique({ where: { accountId_day: { accountId: account.id, day } } });

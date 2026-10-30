@@ -33,6 +33,8 @@ export type AutoContactRule = {
 export type SendEligibilityView={state:'RESTRICTED'|'VERIFY_REQUIRED'|'RATE_LIMITED'|'REPLY_DISABLED'|'UNKNOWN';canSend:boolean;checkedAt:string|null;stale:boolean;source:string|null;reason:string;evidence:unknown};
 export type ContactAccount = {
     workbenchStatus?:string;
+    systemBlockReason?:string|null;
+    loginState?:string;
     sendEligibility?:SendEligibilityView;
     id: string;
     version: number;

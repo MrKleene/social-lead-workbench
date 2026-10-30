@@ -1,3 +1,4 @@
+import {accountSystemBlock} from '../accounts/account-execution-policy';
 import type {Db} from '../common/db';
 import {requireAdmin,type Actor} from '../auth/security';
 import {DeviceService} from '../devices/device.service';
@@ -11,7 +12,7 @@ export async function inspectBoundedAccount(db:Db,devices:DeviceService,runtime:
  requireAdmin(actor);
  const account=await db.platformAccount.findUnique({where:{id:scope.accountId},include:{sessionReference:true}}),ref=account?.sessionReference;
  const previous=await accountSendObservation(db,scope.accountId,new Date());
- if(!account||account.isDemo||account.status!=='PAUSED'||account.loginPlatformUserId!==scope.senderId||!account.loginSessionKey||ref?.sessionKey!==account.loginSessionKey||ref?.provider!=='real'||ref.state!=='VERIFIED'||previous.state!=='UNKNOWN'||previous.evidenceInvalid)throw Error('ACCOUNT_RESTRICTED_OR_CHANGED');
+ if(!account||account.isDemo||accountSystemBlock(account)||account.loginPlatformUserId!==scope.senderId||!account.loginSessionKey||ref?.sessionKey!==account.loginSessionKey||ref?.provider!=='real'||ref.state!=='VERIFIED'||previous.state!=='UNKNOWN'||previous.evidenceInvalid)throw Error('ACCOUNT_RESTRICTED_OR_CHANGED');
  await db.$transaction(async tx=>{await contactLock(tx);if(await tx.auditLog.count({where:{entityId:scope.workflowId,action:'BOUNDED_PROFILE_CHECK_STARTED'}}))throw Error('PROFILE_CHECK_ALREADY_CONSUMED');await tx.auditLog.create({data:{actorId:actor.id,entityId:scope.workflowId,action:'BOUNDED_PROFILE_CHECK_STARTED',metadata:{accountId:scope.accountId,senderId:scope.senderId,submissions:0}}});});
  const permit=await devices.acquire(actor,scope.accountId);let transport:XhsRestrictionInspectionTransport|undefined,driver:SessionDriver|undefined,stopped=true;
  try{

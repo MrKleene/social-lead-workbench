@@ -37,6 +37,6 @@ function MatchingSelector({overview,onChange,onGlobal,onManage,model,defaultId}:
  <section className="preset-readonly"><span className="settings-label">要识别的评论内容</span><div className="preset-tags" aria-label="要识别的评论内容">{policy?<Badge variant="secondary" className="semantic-tag">{policy.target}</Badge>:<p>请先在方案管理中添加识别内容。</p>}</div></section>
  <div className="preset-picker"><FormField>匹配模型<SelectField aria-label="匹配模型" value={s.value.model} disabled={op.busy} onValueChange={model=>s.change({...s.value,model})}>{model.models.map(m=><SelectOption key={m.id} value={m.id}>{m.id}</SelectOption>)}</SelectField><small>全局模型 · {model.configured?'凭据已配置':'尚未配置凭据'}</small></FormField><Button variant="ghost" size="sm" disabled={busy} onClick={onGlobal}>管理模型</Button></div>
  <div className="preset-switch"><div><strong>自动识别</strong><span>开启后，新采集的全部评论原文会提交模型审核并计费。</span></div><Switch aria-label="自动识别" checked={policy?.autoEnabled??false} disabled={busy||!!s.error||!policy||(!policy.autoEnabled&&overview.connection.state!=='READY')} onCheckedChange={v=>void toggle(v)}/></div>
- <ErrorNotice error={op.error}/>{op.message&&<p role="status">{op.message}</p>}<AutoApplyStatus {...s}/>
+ <ErrorNotice error={op.error}/>{op.message&&<p role="status" className="sr-only">{op.message}</p>}<AutoApplyStatus {...s}/>
  </div>;
 }

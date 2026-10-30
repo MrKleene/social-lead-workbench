@@ -25,8 +25,6 @@ export function AccountEditor({
     label: account?.label || "",
     ownerId: account?.ownerId || "",
     dailyLimit: account?.dailyLimit ?? 10,
-    status: account?.status || "UNCONNECTED",
-    pauseReason: account?.pauseReason || "",
   };
   const [baseline] = useState(initial),
     [version] = useState(account?.version),
@@ -43,13 +41,12 @@ export function AccountEditor({
     onSave({
       ...rest,
       ownerId: value.ownerId || null,
-      pauseReason: value.pauseReason || null,
       ...(account ? { version } : { platform }),
     });
   };
   return (
     <form className="account-form" onSubmit={submit}><FieldGroup className="form-fields">
-      <h3>{account ? "账号元数据" : "添加模拟账号"}</h3>
+      <h3>{account ? "账号设置" : "添加模拟账号"}</h3>
       <FormField>
         平台
         <SelectField
@@ -92,7 +89,7 @@ export function AccountEditor({
         </SelectField>
       </FormField>
       <FormField>
-        内部每日额度（UTC）
+        每日共用额度{account?.isDemo?'（UTC 演示）':'（北京时间）'}
         <Input
           type="number"
           min={0}
@@ -104,33 +101,11 @@ export function AccountEditor({
           }
         />
       </FormField>
-      <FormField>
-        模拟分配状态
-        <SelectField
-          aria-label="模拟分配状态"
-          value={value.status}
-          onValueChange={(e) =>
-            setValue({ ...value, status: e as Account["status"] })
-          }
-        >
-          <SelectOption value="UNCONNECTED">模拟可分配 · 平台未登录</SelectOption>
-          <SelectOption value="PAUSED">暂停</SelectOption>
-          <SelectOption value="RESTRICTED">受限 / 验证 / 封禁</SelectOption>
-        </SelectField>
-      </FormField>
-      <FormField>
-        暂停或处理说明
-        <Input
-          maxLength={300}
-          value={value.pauseReason}
-          onChange={(e) => setValue({ ...value, pauseReason: e.target.value })}
-        />
-      </FormField>
       <p className="helper-text">
-        额度仅供内部管理，不保证平台安全额度。耗尽后暂停接收新模拟任务。
+        每日额度由评论与私信共用，不代表平台发送许可。
       </p>
       <div className="action-row">
-        <Button disabled={pending || users.isError}>保存元数据</Button>
+        <Button disabled={pending || users.isError}>保存账号设置</Button>
         {onArchive && (
           <Button
             type="button"

@@ -1,3 +1,4 @@
+import {accountSystemBlock} from '../accounts/account-execution-policy';
 import {exactReplyDeployment,type ExactReplyDeployment} from './xhs-reply-deployment';
 import {singleReplyScopeSchema,controlledPurpose} from './single-reply-scope';
 import {semanticHash} from '../collection/capture-archive';
@@ -29,6 +30,7 @@ export async function recordSendExecution(tx:Prisma.TransactionClient, actorId:s
  // Last durable application boundary before RPC: a concurrent restriction cannot
  // pass this boundary using a stale health result. Controlled evidence capture must additionally prove its durable one-use scope.
  if(safe.stage==='RPC_INTENT'){
+  if(accountSystemBlock(account))throw Error('SEND_PERMISSION_UNVERIFIED');
   const control=await tx.autoContactControl.findUnique({where:{platform_mode:{platform:account.platform,mode:'REAL'}}});
   const observation=await accountSendObservation(tx,accountId,new Date());
   if(control?.pauseReason||observation.state!=='UNKNOWN'||observation.evidenceInvalid)throw Error('SEND_PERMISSION_UNVERIFIED');
@@ -58,7 +60,7 @@ export async function recordSendExecution(tx:Prisma.TransactionClient, actorId:s
    const now=new Date();
    await tx.autoContactControl.upsert({where:{platform_mode:{platform:account.platform,mode:'REAL'}},create:{platform:account.platform,mode:'REAL',pauseReason:'ACCOUNT_RESTRICTED',pausedAt:now},update:{pauseReason:'ACCOUNT_RESTRICTED',pausedAt:now}});
    await tx.autoContactRule.updateMany({where:{platform:account.platform,mode:'REAL'},data:{enabled:false}});
-   if(account.status!=='PAUSED')await tx.platformAccount.update({where:{id:accountId},data:{status:'PAUSED',version:{increment:1}}});
+   await tx.platformAccount.update({where:{id:accountId},data:{status:'RESTRICTED',pauseReason:observation.state,version:{increment:1}}});
   }
 
  }

@@ -1,3 +1,4 @@
+import {Spinner} from '@/components/ui/spinner';
 import {useAutomationPreferences} from './settings-data';
 import {useCallback,useEffect,useState,type ReactNode} from 'react';
 import {useNavigate,useSearchParams} from 'react-router-dom';
@@ -31,5 +32,5 @@ export function AutomationSettings({open,onClose,tab,onTab,collectionDirty,colle
  <TabsContent value="collect" forceMount hidden={tab!=='collect'}>{children(module=>void globalSettings(module))}</TabsContent>
  <TabsContent value="review" forceMount hidden={tab!=='review'}><div className="task-settings-body">{review.isPending?<Loading/>:review.data?<><ErrorNotice error={review.error}/><MatchingSettings initialId={params.get("policy")||undefined} overview={review.data} onChange={changeMatching} onGlobal={()=>void globalSettings("settings")} onManage={()=>void globalSettings("review")}/></>:<><ErrorNotice error={review.error}/><Button variant="outline" onClick={()=>void review.refetch()}>重新读取匹配设置</Button></>}</div></TabsContent>
  <TabsContent value="contact" forceMount hidden={tab!=='contact'}><div className="task-settings-body"><ReplySettings onChange={changeReply} onGlobal={()=>void globalSettings("accounts")} onTemplates={()=>void globalSettings("templates")}/></div></TabsContent>
- </Tabs><Separator/><footer className="automation-settings-footer"><p className="automation-save-status" role="status">{busy?'正在应用…':dirty?'有选择尚未生效':''}</p><Button variant="outline" disabled={busy} onClick={()=>void close()}>{dirty?'关闭 / 放弃未生效选择':'完成设置'}</Button></footer></></SheetContent></Sheet>;
+ </Tabs><Separator/><footer className="automation-settings-footer"><p className="automation-save-status" role="status">{busy?<><Spinner aria-hidden="true"/><span className="sr-only">正在保存选择</span></>:''}</p><Button variant="outline" disabled={busy} onClick={()=>void close()}>完成设置</Button></footer></></SheetContent></Sheet>;
 }

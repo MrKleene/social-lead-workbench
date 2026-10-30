@@ -1,3 +1,4 @@
+import {accountSystemBlock,recordedAccountBlocks} from './account-execution-policy';
 import {SavedSessionChecks} from './saved-session-checks';
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -112,7 +113,7 @@ export class AccountLoginService implements OnModuleDestroy, OnModuleInit {
           const ref=await tx.accountSessionReference.findUnique({where:{accountId}}),expected=job.expected;
           if(a.version!==expected.version||a.status==='RESTRICTED'||a.loginSessionKey!==expected.sessionKey||a.loginPlatformUserId!==expected.userId||a.loginProvider!==expected.provider||(ref?.sessionKey||null)!==expected.refKey||(ref?.deviceId||null)!==expected.deviceId||(ref?.deviceKeyId||null)!==expected.deviceKeyId)throw Error('SESSION_CHANGED');
           if(await tx.platformAccount.findFirst({where:{id:{not:accountId},platform:'XHS',loginProvider:row.mode,loginPlatformUserId:status.userId}}))throw new ConflictException('账号已绑定');
-          await tx.platformAccount.update({where:{id:accountId},data:{loginSessionKey:row.id,loginProvider:row.mode,loginPlatformUserId:status.userId,loginNickname:status.nickname||null,loginVerifiedAt:new Date(),isDemo:row.mode==='offline',status:'PAUSED',pauseReason:'登录已验证；只读采集须逐次确认，发送禁用',version:{increment:1}}});
+          await tx.platformAccount.update({where:{id:accountId},data:{loginSessionKey:row.id,loginProvider:row.mode,loginPlatformUserId:status.userId,loginNickname:status.nickname||null,loginVerifiedAt:new Date(),isDemo:row.mode==='offline',...(accountSystemBlock({...a,loginPlatformUserId:status.userId!})||(await recordedAccountBlocks(tx,[accountId])).has(accountId)?{}:{status:'UNCONNECTED',pauseReason:null}),version:{increment:1}}});
           if(this.runtime.persistent()){
             const data={deviceId:this.runtime.deviceId(),sessionKey:row.id,deviceKeyId:job.permit?.keyId||null,provider:row.mode,state:'VERIFIED',checkedRuntimeId:this.runtime.runtimeId,verifiedAt:new Date(),checkingUntil:null};
             if(ref)await tx.accountSessionReference.update({where:{accountId},data});else await tx.accountSessionReference.create({data:{accountId,...data}});
