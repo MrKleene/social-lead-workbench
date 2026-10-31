@@ -1,5 +1,5 @@
 import {useLayoutEffect,useState} from 'react';
-import {api,send} from '@/lib/api';
+import {settingsApi as api,settingsSend as send} from './settings-request';
 import {FormField} from '@/components/form-field';
 import {SelectField,SelectOption} from '@/components/select-field';
 import {Input} from '@/components/ui/input';

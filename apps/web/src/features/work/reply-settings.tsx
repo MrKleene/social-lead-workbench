@@ -1,7 +1,7 @@
 import {useId,useLayoutEffect,useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {autoContactConsent,type AutoContactOverview,type AutoContactRule,type AutoContactRuleInput} from '@crm/contracts';
-import {api,send} from '@/lib/api';
+import {settingsApi as api,settingsSend as send} from './settings-request';
 import {FormField} from '@/components/form-field';
 import {SelectField,SelectOption} from '@/components/select-field';
 import {Input} from '@/components/ui/input';
@@ -9,6 +9,7 @@ import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
 import {Switch} from '@/components/ui/switch';
 import {Tabs,TabsList,TabsTrigger} from '@/components/ui/tabs';
+import {Collapsible,CollapsibleTrigger,CollapsibleContent} from '@/components/ui/collapsible';
 import {Badge} from '@/components/ui/badge';
 import {ErrorNotice,Loading} from '@/components/feedback';
 import {useConfirmDiscard} from './draft-guard';
@@ -41,12 +42,13 @@ function ReplySelector({data,templates,defaultPolicy,platform,onPlatform,onChang
  const canEnable=!!rule&&!!rule.content.trim()&&!!rule.accountIds.length&&!rule.pauseReason&&data.policies.some(p=>p.id===rule.policyId&&p.revision===rule.policyRevision)&&(rule.channels??[rule.channel]).length>0&&(rule.channels??[rule.channel]).every(available)&&rule.accountIds.every(id=>{const a=accounts.find(a=>a.id===id);return a?.healthy&&a.dailyLimit>0&&!a.systemBlockReason&&(rule.mode==='SIMULATION'?a.isDemo:!a.isDemo&&a.sendEligibility?.canSend&&!a.sendEligibility.stale);});
  const selectedAccounts=rule?.accountIds.map(id=>accounts.find(a=>a.id===id))??[];
  const configurationReason=!rule?'请先选择发送模板与账号':rule.pauseReason?`规则已暂停：${rule.pauseReason}`:!data.policies.some(p=>p.id===rule.policyId&&p.revision===rule.policyRevision)?'请重新选择有效的匹配方案':!rule.content.trim()?'请先选择发送内容':!rule.accountIds.length?'请先选择发送账号':selectedAccounts.some(a=>a?.systemBlockReason)?'所选账号存在限制，需核查':!(rule.channels??[rule.channel]).length?'请至少选择一个联系渠道':!(rule.channels??[rule.channel]).every(supported)?'所选联系渠道尚未接通':selectedAccounts.some(a=>!a?.healthy||a.dailyLimit<=0||(rule.mode==='SIMULATION'?!a.isDemo:a.isDemo||!a.sendEligibility?.canSend||a.sendEligibility.stale))?'所选账号尚未就绪，请检查账号状态与额度':'';
- const serviceReason=!supported('COMMENT')?'此平台尚未接通':!available('COMMENT')?'持续规则发送尚未开放；单轮测试不代表常开模式已开放':'';
+ const serviceReason=!supported('COMMENT')?'此平台尚未接通':!available('COMMENT')?'自动回复服务尚未上线':'';
  const enableReason=rule?.enabled?'正在按授权规则处理匹配评论':serviceReason||configurationReason||'可开启自动回复';
  const toggle=(enabled:boolean)=>op.run(async()=>{if(!rule||enabled&&!canEnable)throw Error('发送服务或账号尚未就绪');await send(`/auto-contact/rules/${rule.id}/enabled`,'POST',{version:rule.version,enabled,...(enabled?{consent:autoContactConsent,hash:rule.hash}:{})});op.setMessage(enabled?'自动回复已开启':'自动回复已关闭');});
  return <div className="preset-form">
  <Tabs value={platform} onValueChange={v=>{if(busy)return;void(async()=>{if(!(s.error||numberError)||await confirm('放弃尚未生效的选择并切换平台？'))onPlatform(v as Platform);})();}}><TabsList className="platform-tabs" aria-label="回复平台"><TabsTrigger value="XHS" disabled={busy}>小红书</TabsTrigger><TabsTrigger value="DOUYIN" disabled={busy}>抖音{!data.capabilities?.some(c=>c.platform==='DOUYIN'&&c.supported)&&<small>未接通</small>}</TabsTrigger></TabsList></Tabs>
- <div className="preset-switch"><div><strong>自动回复</strong><span id={reasonId}>{enableReason}</span></div><Switch aria-label="自动回复" aria-describedby={reasonId} checked={rule?.enabled??false} disabled={busy||!!s.error||!!numberError||(!rule?.enabled&&!canEnable)} onCheckedChange={v=>void toggle(v)}/></div>
+ <div className="preset-switch"><div><strong>自动回复</strong><span id={reasonId}>{enableReason}</span></div>{serviceReason&&!rule?.enabled?<Badge variant="secondary">{supported('COMMENT')?'未开放':'未接通'}</Badge>:<Switch aria-label="自动回复" aria-describedby={reasonId} checked={rule?.enabled??false} disabled={busy||!!s.error||!!numberError||(!rule?.enabled&&!canEnable)} onCheckedChange={v=>void toggle(v)}/>}</div>
+ {serviceReason&&<Collapsible className="settings-disclosure"><CollapsibleTrigger asChild><Button variant="ghost" size="sm">查看启用条件</Button></CollapsibleTrigger><CollapsibleContent><ul className="reply-readiness-list"><li>{supported('COMMENT')?'服务端还需完成普通流程的发送前核验与发布验收；单次测试成功不等于持续发送已上线。':'此平台尚无可用发送通道。'}</li><li>{configurationReason||'模板和账号配置已保存，开放服务后仍会核验登录、限制与额度。'}</li><li>私信未接通。平台限制与未知发送锁不会因开启规则而解除。</li></ul><Button variant="outline" size="sm" disabled={busy} onClick={onGlobal}>查看账号条件</Button></CollapsibleContent></Collapsible>}
  {rule?.pauseReason&&<p role="status">{rule.pauseReason}</p>}{!data.policies.length&&<p role="alert">尚无审核目标，请先到评论匹配的方案管理中添加。</p>}
  <div className="preset-columns">{data.policies.length>1&&<FormField>审核目标<SelectField disabled={op.busy} aria-label="审核目标" value={s.value.policyId} onValueChange={policyId=>patch({policyId})}>{data.policies.map(p=><SelectOption key={p.id} value={p.id}>{p.name||p.target}</SelectOption>)}</SelectField></FormField>}<FormField>最低相关度<Input aria-label="最低相关度" disabled={op.busy||!data.policies.length} type="number" min={0} max={100} step={1} value={numberText} onChange={e=>{const v=e.target.value,n=Number(v);setNumberText(v);if(!v||!Number.isInteger(n)||n<0||n>100){setNumberError(new Error('相关度必须是 0–100 的整数'));return;}setNumberError(null);patch({threshold:n},500);}} onBlur={s.flush}/></FormField></div>
  <fieldset className="preset-channels"><legend>联系渠道</legend>{(['COMMENT','DM'] as const).map(c=><label key={c}><Checkbox aria-label={c==='COMMENT'?'公开评论':'私信'} checked={s.value.channels.includes(c)} disabled={op.busy||!data.policies.length||!supported(c)&&!s.value.channels.includes(c)} onCheckedChange={checked=>patch({channels:checked?[...s.value.channels,c]:s.value.channels.filter(x=>x!==c)})}/>{c==='COMMENT'?'公开评论':'私信'}{!supported(c)&&<Badge variant="secondary">未接通</Badge>}</label>)}</fieldset>

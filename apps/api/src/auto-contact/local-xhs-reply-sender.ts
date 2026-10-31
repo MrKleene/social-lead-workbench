@@ -29,7 +29,7 @@ export class LocalXhsReplySender implements ContactSender {
         if(!restriction.canSend)return false;
         return !!a && a.platform === 'XHS' && !a.isDemo && !a.archivedAt && !accountSystemBlock(a) &&
             !!a.loginPlatformUserId && !!a.loginSessionKey && ref?.sessionKey === a.loginSessionKey && ref?.provider === 'real' &&
-            ref?.state === 'VERIFIED' && ref.checkedRuntimeId === this.runtime.runtimeId && ref.deviceId === this.runtime.deviceId();
+            ref?.state === 'VERIFIED' && currentRuntimeVerification(ref.checkedRuntimeId,this.runtime.runtimeId) && ref.deviceId === this.runtime.deviceId();
     }
     private async authorized(request: SendRequest) {
         if (!this.capability(request.platform, request.channel) || !request.requestKey.startsWith('auto-contact:') || !await this.healthy(request.accountId)) return null;
@@ -60,7 +60,7 @@ export class LocalXhsReplySender implements ContactSender {
         const reference = savedPostReference(snapshot?.sourceReference, j.postId);
         if (!reference) return null;
         const account = await this.db.platformAccount.findUnique({ where: { id: request.accountId }, include: { sessionReference: true } });
-        if (!account?.loginPlatformUserId || !account.sessionReference || account.isDemo || account.archivedAt || accountSystemBlock(account) || account.sessionReference.state !== 'VERIFIED' || account.sessionReference.checkedRuntimeId !== this.runtime.runtimeId || account.sessionReference.deviceId !== this.runtime.deviceId() || account.sessionReference.sessionKey !== account.loginSessionKey || account.sessionReference.provider !== 'real') return null;
+        if (!account?.loginPlatformUserId || !account.sessionReference || account.isDemo || account.archivedAt || accountSystemBlock(account) || account.sessionReference.state !== 'VERIFIED' || !currentRuntimeVerification(account.sessionReference.checkedRuntimeId,this.runtime.runtimeId) || account.sessionReference.deviceId !== this.runtime.deviceId() || account.sessionReference.sessionKey !== account.loginSessionKey || account.sessionReference.provider !== 'real') return null;
         const limits = j.rule.accountLimits as { id: string; dailyLimit: number }[];
         const limit = Math.min(account.dailyLimit, Array.isArray(limits) ? limits.find(a => a.id === account.id)?.dailyLimit ?? 0 : 0);
         const usage = await this.db.accountDay.findUnique({ where: { accountId_day: { accountId: account.id, day } } });
@@ -102,3 +102,7 @@ export class LocalXhsReplySender implements ContactSender {
         }
     }
 }
+
+/** Collection records the same runtime with a task suffix. It is still a login
+ * proof, never a send permission; restriction observation and leases remain required. */
+export function currentRuntimeVerification(value:string|null,runtimeId:string){return value===runtimeId||!!value?.startsWith(runtimeId+':task:')&&value.length>runtimeId.length+6;}

@@ -1,6 +1,6 @@
 import {useLayoutEffect} from 'react';
 import {reviewAutoConsent,type ReviewOverview,type ReviewPolicy} from '@crm/contracts';
-import {api,send} from '@/lib/api';
+import {settingsApi as api,settingsSend as send} from './settings-request';
 import {FormField} from '@/components/form-field';
 import {SelectField,SelectOption} from '@/components/select-field';
 import {Badge} from '@/components/ui/badge';
