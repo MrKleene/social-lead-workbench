@@ -10,27 +10,30 @@ type Store=Db|Prisma.TransactionClient;
 const id=z.string().min(1).max(200);
 export const normalAcceptanceInput=z.object({
  id:z.string().uuid(),consent:z.literal('normal-automation-acceptance-once-v1'),requestKey:z.string().uuid(),
- configId:id,configRevision:z.number().int().positive(),savedPostId:id,
+ configId:id,configRevision:z.number().int().positive(),savedPostId:id.optional(),
+ selection:z.enum(['SAVED_POST','CONFIG_SEARCH']).default('SAVED_POST'),
  readAccountId:id.optional(),ruleId:id,ruleVersion:z.number().int().nonnegative(),policyVersion:z.number().int().nonnegative(),
  modelVersion:z.number().int().nonnegative(),priceVersion:id,
- targets:z.array(z.object({commentId:id,recipientId:id}).strict()).min(1).max(20),
+ targets:z.array(z.object({commentId:id,recipientId:id}).strict()).min(1).max(20).optional(),
  maxInputTokens:z.number().int().min(1).max(1000000),maxOutputTokens:z.number().int().min(1).max(131072),
  maxEstimatedMicros:z.number().int().min(1).max(100000000),expiresAt:z.string().datetime(),
 }).strict();
 export const normalAcceptanceScope=normalAcceptanceInput.omit({consent:true}).extend({
- platformPostId:id,replyAccountId:id,ruleHash:id,policyId:id,policyRevision:z.number().int().positive(),model:id,mode:z.enum(['REAL','SIMULATION']),
+ platformPostId:id.optional(),replyAccountId:id,ruleHash:id,policyId:id,policyRevision:z.number().int().positive(),model:id,mode:z.enum(['REAL','SIMULATION']),
 });
 export type AcceptanceScope=z.infer<typeof normalAcceptanceScope>;
-export async function activeAcceptance(db:Store){return db.normalAutomationAcceptance.findFirst({where:{state:'ACTIVE'}});}
+// STOPPED retains the envelope until explicit close, so exhaustion never opens a
+// gap in which unrelated work or another envelope can silently become eligible.
+export async function activeAcceptance(db:Store){return db.normalAutomationAcceptance.findFirst({where:{state:{in:['ACTIVE','STOPPED']}}});}
 export function liveAcceptance(row:NormalAutomationAcceptance){return row.state==='ACTIVE'&&Date.parse(normalAcceptanceScope.parse(row.scope).expiresAt)>Date.now();}
 export function acceptanceConflict():never{throw new ConflictException('本次限定验收范围、期限或总次数不符；未调用外部服务，不自动解除限制');}
 export async function acceptanceRuleAllowed(db:Store,rule:AutoContactRule){
  const a=await activeAcceptance(db);if(!a)return true;const s=normalAcceptanceScope.parse(a.scope);
  return liveAcceptance(a)&&s.ruleId===rule.id&&s.ruleVersion===rule.version&&s.ruleHash===ruleHash(rule)&&s.mode===rule.mode;
 }
-export async function acceptanceCollectionStart(db:Store,input:{actorId:string;configId:string;revision:number;requestKey:string;accountId?:string;plan?:{savedPostId?:string;postsPerRound:number;rounds:number;commentPages:number}}){
+export async function acceptanceCollectionStart(db:Store,input:{actorId:string;configId:string;revision:number;requestKey:string;accountId?:string;plan?:{savedPostId?:string;freshPostsOnly?:boolean;restartCheckpoint?:boolean;postsPerRound:number;rounds:number;commentPages:number}}){
  const a=await activeAcceptance(db);if(!a)return null;const s=normalAcceptanceScope.parse(a.scope);
- if(!liveAcceptance(a)||a.actorId!==input.actorId||s.configId!==input.configId||s.configRevision!==input.revision||s.requestKey!==input.requestKey||s.readAccountId!==input.accountId||input.plan?.savedPostId!==s.savedPostId||input.plan.postsPerRound!==1||input.plan.rounds!==1||input.plan.commentPages!==1)acceptanceConflict();
+ if(!liveAcceptance(a)||a.actorId!==input.actorId||s.configId!==input.configId||s.configRevision!==input.revision||s.requestKey!==input.requestKey||s.readAccountId!==input.accountId||!input.plan||input.plan.savedPostId!==s.savedPostId||!!input.plan.freshPostsOnly!==(s.selection==='CONFIG_SEARCH')||input.plan.restartCheckpoint||input.plan.postsPerRound!==1||input.plan.rounds!==1||input.plan.commentPages!==1)acceptanceConflict();
  return a;
 }
 export async function acceptanceRunAllowed(db:Store,runId:string){
@@ -41,7 +44,7 @@ export async function acceptanceRunAllowed(db:Store,runId:string){
 export async function bindAcceptancePost(db:Store,runId:string,postId:string){
  const a=await activeAcceptance(db);if(!a)return acceptanceRunAllowed(db,runId);const s=normalAcceptanceScope.parse(a.scope);
  const post=await db.capturedPost.findUnique({where:{id:postId}});
- if(!liveAcceptance(a)||a.runId!==runId||post?.platformPostId!==s.platformPostId||post.configId!==s.configId||post.lastRunId!==runId)return false;
+ if(!liveAcceptance(a)||a.runId!==runId||!post||(s.selection==='SAVED_POST'&&post.platformPostId!==s.platformPostId)||post.configId!==s.configId||post.lastRunId!==runId)return false;
  if(a.capturedPostId)return a.capturedPostId===postId;
  return (await db.normalAutomationAcceptance.updateMany({where:{id:a.id,state:'ACTIVE',capturedPostId:null},data:{capturedPostId:postId}})).count===1;
 }
@@ -81,8 +84,37 @@ export async function acceptanceSendAllowed(db:Store,rule:AutoContactRule,review
  if(!a)return true;const s=normalAcceptanceScope.parse(a.scope);
  if(!r||!liveAcceptance(a)||!await acceptanceRuleAllowed(db,rule)||rule.id!==s.ruleId||r.capture?.postId!==a.capturedPostId||runId!==a.runId||!a.reviewIds.includes(reviewId)||!a.modelCallId||a.sendJobId&&a.sendJobId!==jobId)return false;
  const target=contactTarget(r,r.capture,r.capture?.post??null);
- if(!target||target.postId!==s.platformPostId||!s.targets.some(t=>t.commentId===target.commentId&&t.recipientId===target.recipientId))return false;
+ if(!target)return false;
+ if(s.selection==='CONFIG_SEARCH'){
+  // The user authorizes a category within this one newly captured post; no
+  // need to choose or approve an individual recipient before collection.
+  if(rule.threshold!==100||r.score!==100||target.postId!==r.capture?.post.platformPostId)return false;
+ }else if(target.postId!==s.platformPostId||!s.targets?.some(t=>t.commentId===target.commentId&&t.recipientId===target.recipientId))return false;
  return (await db.semanticModelCall.findUnique({where:{id:a.modelCallId}}))?.status==='COMPLETED';
+}
+
+/** Called under contactLock. Turn off the bound switches on expiry or a final
+ * outcome, retaining all claims and the blocking envelope until explicit close. */
+export async function settleAcceptance(db:Store){
+ const a=await activeAcceptance(db);if(!a||a.state!=='ACTIVE')return;
+ const s=normalAcceptanceScope.parse(a.scope);
+ let reason=!liveAcceptance(a)?'EXPIRED':null;
+ if(!reason&&a.sendJobId){const j=await db.autoContactJob.findUnique({where:{id:a.sendJobId}});if(j&&!['RESERVED','ATTEMPTED'].includes(j.status))reason='SUBMISSION_FINISHED';}
+ if(!reason&&a.runId&&!a.sendJobId){
+  const run=await db.collectionRun.findUnique({where:{id:a.runId}});
+  const jobs=await db.autoReviewJob.findMany({where:{runId:a.runId,policyId:s.policyId}});
+  const model= a.modelCallId?await db.semanticModelCall.findUnique({where:{id:a.modelCallId}}):null;
+  if(run&&!['QUEUED','RUNNING'].includes(run.status)&&!jobs.some(j=>['PENDING','PROCESSING'].includes(j.status))&&model?.status!=='RESERVED'){
+   if(!a.modelCallId||model?.status!=='COMPLETED')reason='NO_MODEL_RESULT';
+   else if(!await db.autoContactJob.count({where:{ruleId:s.ruleId,reviewId:{in:a.reviewIds},status:{in:['QUEUED','WAITING_ACCOUNT','WAITING_QUOTA','RESERVED','ATTEMPTED']}}}))reason='NO_ELIGIBLE_RECIPIENT';
+  }
+ }
+ if(!reason)return;
+ await db.autoContactRule.updateMany({where:{id:s.ruleId},data:{enabled:false}});
+ await db.commentReviewPolicy.updateMany({where:{id:s.policyId},data:{autoEnabled:false}});
+ if(a.runId){await db.collectionRun.updateMany({where:{id:a.runId,status:{in:['QUEUED','RUNNING']}},data:{cancelRequested:true}});await db.autoReviewJob.updateMany({where:{runId:a.runId,status:'PENDING'},data:{status:'CANCELLED',reason:'限定验收已结束'}});}
+ await db.normalAutomationAcceptance.update({where:{id:a.id},data:{state:'STOPPED'}});
+ await db.auditLog.create({data:{action:'NORMAL_ACCEPTANCE_STOPPED',entityId:a.id,metadata:{reason,consumedModel:!!a.modelCallId,consumedSend:!!a.sendJobId}}});
 }
 /** Under contactLock; the attempt is consumed before any sender call, never on result. */
 export async function claimAcceptanceSend(db:Store,rule:AutoContactRule,reviewId:string,jobId:string,accountId:string){

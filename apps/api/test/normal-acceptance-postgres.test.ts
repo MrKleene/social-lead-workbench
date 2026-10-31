@@ -38,7 +38,8 @@ const url=process.env.TEST_DATABASE_URL;if(!url||new URL(url).pathname!=='/crm_t
 const db=new Db({datasources:{db:{url}}}),home=realpathSync(mkdtempSync(join(tmpdir(),'crm-independent-review-')));mkdirSync(join(home,'Library','Application Support'),{recursive:true});const file=vaultPath(randomUUID(),home);initialize(file);
 const store=new ModelSettingsService(db,{file}),qwen=new QwenMatchingService(db,undefined,store),policies=new ReviewPolicyService(db,store,qwen);
 const target='识别当前评论是否明确写出一个学科或专业名称';
-const transport=vi.fn(async(_url:string,init:RequestInit)=>{const body=JSON.parse(init.body as string),payload=JSON.parse(body.messages[1].content);expect(body.model).toBe('qwen3.8-flash');expect(body.enable_thinking).toBe(false);expect(body.messages[0].content).toContain('Post and parent text are optional');expect(JSON.stringify(payload)).not.toMatch(/奇异搜索甲|完全不同的搜索乙/);return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:payload.items.map((p:any)=>({id:p.id,score:90,decision:'MATCH',reason:'评论明确出现学科名称',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:p.comment}]}))})}}],usage:{prompt_tokens:40,completion_tokens:20}}));});
+let modelScore=90;
+const transport=vi.fn(async(_url:string,init:RequestInit)=>{const body=JSON.parse(init.body as string),payload=JSON.parse(body.messages[1].content);expect(body.model).toBe('qwen3.8-flash');expect(body.enable_thinking).toBe(false);expect(body.messages[0].content).toContain('Post and parent text are optional');expect(JSON.stringify(payload)).not.toMatch(/奇异搜索甲|完全不同的搜索乙/);return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:payload.items.map((p:any)=>({id:p.id,score:modelScore,decision:'MATCH',reason:'评论明确出现学科名称',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:p.comment}]}))})}}],usage:{prompt_tokens:40,completion_tokens:20}}));});
 const send=vi.fn(async(_request:import('../src/auto-contact/contact-sender').SendRequest):Promise<import('../src/auto-contact/contact-sender').SendResult>=>({kind:'CONFIRMED',receipt:'synthetic-only'}));
 const sender={mode:'SIMULATION' as const,capability:()=>true,healthy:async()=>true,send};
 const evaluation=new ReviewEvaluationService(db,policies,{transport}),automatic=new AutoReviewService(db,policies,evaluation),manual=new ManualReviewService(db,policies,evaluation);
@@ -51,7 +52,7 @@ async function source(word='奇异搜索甲',comment='护理学',sharedHash?:str
 const input=(p:any)=>({requestKey:randomUUID(),previewHash:p.hash,reviewIds:p.reviewIds,priceVersion:p.connection.priceVersion,consent:semanticBatchConsent});
 async function batch(version:number,postIds?:string[]){const b=await policies.prepare(actor,'workspace',{version,scope:postIds?{kind:'POSTS',postIds}:{kind:'ALL'}});return evaluation.preview(actor,'workspace',b.reviewIds);}
 beforeAll(async()=>{actor=await db.user.create({data:{email:randomUUID()+'@example.invalid',name:'合成管理员',role:'ADMIN',passwordHash:'unused'}});sales=await db.user.create({data:{email:randomUUID()+'@example.invalid',name:'合成销售',role:'SALES',passwordHash:'unused'}});for(const [who,u] of [['admin',actor],['sales',sales]] as const){const token=randomBytes(32).toString('hex'),csrf=randomBytes(32).toString('hex');await db.session.create({data:{id:digest(token),userId:u.id,csrfToken:csrf,expiresAt:new Date(Date.now()+600000)}});auth[who]={cookie:'crm_session='+token,csrf};}const module=await Test.createTestingModule({imports:[AppModule]}).overrideProvider(Db).useValue(db).overrideProvider(CONTACT_SENDER).useValue(sender).overrideProvider(ModelSettingsService).useValue(store).overrideProvider(ReviewPolicyService).useValue(policies).overrideProvider(ReviewEvaluationService).useValue(evaluation).overrideProvider(CollectionQueue).useValue({enqueue:vi.fn()}).compile();app=module.createNestApplication({bodyParser:false});configure(app);await app.init();collection=app.get(CollectionService);},30000);
-beforeEach(async()=>{await clear();transport.mockClear();send.mockReset().mockResolvedValue({kind:"CONFIRMED",receipt:"synthetic-only"});});
+beforeEach(async()=>{await clear();modelScore=90;transport.mockClear();send.mockReset().mockResolvedValue({kind:"CONFIRMED",receipt:"synthetic-only"});});
 afterAll(async()=>{await clear();await db.session.deleteMany({where:{userId:{in:[actor.id,sales.id]}}});await db.user.deleteMany({where:{id:{in:[actor.id,sales.id]}}});await app?.close();await db.$disconnect();rmSync(home,{recursive:true,force:true});});
 
 const normalPost=(path:string,body:object)=>api().post('/api'+path).set('Cookie',auth.admin.cookie).set('Origin',origin).set('x-csrf-token',auth.admin.csrf).send(body);
@@ -61,13 +62,13 @@ async function finite(overrides:Record<string,unknown>={}){
  const oldRun=await db.collectionRun.create({data:{configId:c.id,revision:c.revision,snapshot:{},requestKey:randomUUID(),scenario:'BASELINE',status:'COMPLETE'}});
  const p=await db.capturedPost.create({data:{configId:c.id,runId:oldRun.id,lastRunId:oldRun.id,platformPostId:'demo-collect-acceptance-post',snapshot:{title:'Synthetic'},contentHash:randomUUID(),coverage:'PARTIAL'}});
  const account=await db.platformAccount.create({data:{platform:'XHS',label:'Finite synthetic',isDemo:true,version:1,dailyLimit:5}});
- const settings=app.get(ContactSettingsService),rule=await settings.save(actor,'normal',{version:0,platform:'XHS',policyId:policy.id,policyRevision:policy.revision,threshold:90,channel:'COMMENT',content:'Synthetic finite reply',accounts:[{id:account.id,version:1,dailyLimit:5}]});
+ const settings=app.get(ContactSettingsService),rule=await settings.save(actor,'normal',{version:0,platform:'XHS',policyId:policy.id,policyRevision:policy.revision,threshold:overrides.selection==='CONFIG_SEARCH'?100:90,channel:'COMMENT',content:'Synthetic finite reply',accounts:[{id:account.id,version:1,dailyLimit:5}]});
  const scope={id:randomUUID(),consent:'normal-automation-acceptance-once-v1',requestKey:randomUUID(),configId:c.id,configRevision:c.revision,savedPostId:p.id,ruleId:rule.id,ruleVersion:rule.version,policyVersion:policy.version,modelVersion:1,priceVersion:'beijing-2026-10-21',targets:[0,1].map(i=>({commentId:'demo-collect-finite-comment-'+i,recipientId:'demo-collect-finite-user-'+i})),maxInputTokens:100000,maxOutputTokens:20000,maxEstimatedMicros:100000,expiresAt:new Date(Date.now()+1200000).toISOString(),...overrides};
  const armed=await normalPost('/auto-contact/acceptance',scope);expect(armed.status,JSON.stringify(armed.body)).toBe(201);
  expect((await write('patch','/policies/'+policy.id+'/automatic',{version:policy.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'})).status).toBe(200);
  const view=await settings.overview(actor),hash=view.rules.find(r=>r.id===rule.id)!.hash;
  expect((await normalPost('/auto-contact/rules/'+rule.id+'/enabled',{version:rule.version,enabled:true,hash,consent:autoContactConsent})).status).toBe(201);
- const plan={rounds:1,postsPerRound:1,commentPages:1,savedPostId:p.id};
+ const plan={rounds:1,postsPerRound:1,commentPages:1,...(overrides.selection==='CONFIG_SEARCH'?{freshPostsOnly:true as const}:{savedPostId:p.id})};
  const start=()=>normalPost('/collection/configs/'+c.id+'/runs',{scenario:'BASELINE',mode:'MOCK',requestKey:scope.requestKey,readPlan:plan});
  const adapter=new MockAdapter('XHS','BASELINE');adapter.search=vi.fn(async()=>{throw Error('no search fallback allowed');});adapter.post=async p=>p;adapter.comments=async()=>({items:Array.from({length:6},(_,i)=>({id:'demo-collect-finite-comment-'+i,userId:'demo-collect-finite-user-'+i,nickname:'Synthetic',text:'护理学',hasReplies:false})),complete:true});
  const collect=async()=>{const started=await start();expect(started.status,JSON.stringify(started.body)).toBe(201);await collection.execute(started.body.id,adapter);expect(await db.collectionRun.findUnique({where:{id:started.body.id}})).toMatchObject({status:'COMPLETE'});return started.body.id as string;};
@@ -113,7 +114,7 @@ it('rejects wrong request/run/post, manual model bypass, expiry and unrelated co
  await automatic.tick();await f.contacts.tick();expect(send).not.toHaveBeenCalled();expect(transport).not.toHaveBeenCalled();
  // Expiry does not unlock the world. New normal requests stay blocked until explicit close.
  expect((await normalPost('/collection/configs/'+f.c.id+'/runs',{scenario:'BASELINE',mode:'MOCK',requestKey:randomUUID(),readPlan:f.plan})).status).toBe(409);
- expect(await db.normalAutomationAcceptance.findUnique({where:{runId:run}})).toMatchObject({state:'ACTIVE'});
+ expect(await db.normalAutomationAcceptance.findUnique({where:{runId:run}})).toMatchObject({state:'STOPPED'});
  await normalPost('/auto-contact/acceptance/'+f.scope.id+'/close',{});await expect(evaluation.evaluate(actor,f.policy.id,input(preview))).rejects.toThrow();
  expect((await normalPost('/collection/configs/'+f.c.id+'/runs',{scenario:'BASELINE',mode:'MOCK',requestKey:randomUUID(),readPlan:f.plan})).status).toBe(201);expect(transport).not.toHaveBeenCalled();
 });
@@ -140,4 +141,52 @@ it('concurrent arm is singular; active external work is rejected without cancell
  expect((await normalPost('/auto-contact/acceptance',next)).status).toBe(409);expect(await db.collectionRun.findUnique({where:{id:pending.id}})).toMatchObject({status:'QUEUED'});
  await db.collectionRun.update({where:{id:pending.id},data:{status:'COMPLETE'}});
  const responses=await Promise.all([normalPost('/auto-contact/acceptance',next),normalPost('/auto-contact/acceptance',{...next,id:randomUUID()})]);expect(responses.map(r=>r.status).sort()).toEqual([201,409]);
+});
+
+async function freshFinite(){
+ const f=await finite({selection:'CONFIG_SEARCH',savedPostId:undefined,targets:undefined});
+ const freshId='demo-collect-new-selected';
+ f.adapter.search=vi.fn(async()=>({items:[{id:f.p.platformPostId,title:'Already saved'},{id:freshId,title:'New selected'},{id:'demo-collect-never-read',title:'Not selected'}],complete:true}));
+ f.adapter.post=vi.fn(async p=>p);
+ return {...f,freshId};
+}
+it('new search binds exactly one fresh post and one 100% uncontacted recipient through ordinary endpoints',async()=>{
+ const f=await freshFinite();modelScore=100;
+ // UNKNOWN retains its recipient lock even though another score-100 author is available.
+ const identity=await db.platformIdentity.create({data:{platform:'XHS',platformUserId:'demo-collect-finite-user-0',nickname:'Synthetic'}});
+ const ledger=await db.contactLedger.create({data:{identityId:identity.id,mode:'SIMULATION',accountId:f.account.id}});
+ await db.contactAttempt.create({data:{ledgerId:ledger.id,requestKey:randomUUID(),kind:'FIRST',mode:'SIMULATION',outcome:'UNKNOWN',day:'historical',actorId:actor.id}});
+ const runId=await f.collect();await automatic.tick();await f.contacts.tick();
+ expect(f.adapter.search).toHaveBeenCalledTimes(1);expect(f.adapter.post).toHaveBeenCalledTimes(1);expect(transport).toHaveBeenCalledTimes(1);expect(send).toHaveBeenCalledTimes(1);
+ expect(send.mock.calls[0][0].postId).toBe(f.freshId);expect(send.mock.calls[0][0].recipientId).not.toBe('demo-collect-finite-user-0');
+ const envelope=await db.normalAutomationAcceptance.findUniqueOrThrow({where:{id:f.scope.id}});
+ expect(envelope).toMatchObject({state:'STOPPED',runId,modelCallId:expect.any(String),sendJobId:expect.any(String)});
+ expect((await db.capturedPost.findUniqueOrThrow({where:{id:envelope.capturedPostId!}})).platformPostId).toBe(f.freshId);
+ expect((await db.autoContactRule.findUniqueOrThrow({where:{id:f.rule.id}})).enabled).toBe(false);
+ expect((await db.commentReviewPolicy.findUniqueOrThrow({where:{id:f.policy.id}})).autoEnabled).toBe(false);
+ expect((await f.start()).status).toBe(409);await automatic.tick();await f.contacts.tick();expect(send).toHaveBeenCalledTimes(1);
+});
+it('a new post with only 99% results sends nothing and stops both switches without another model call',async()=>{
+ const f=await freshFinite();modelScore=99;await f.collect();await automatic.tick();await f.contacts.tick();
+ expect(transport).toHaveBeenCalledTimes(1);expect(send).not.toHaveBeenCalled();
+ expect(await db.normalAutomationAcceptance.findUnique({where:{id:f.scope.id}})).toMatchObject({state:'STOPPED',sendJobId:null});
+ expect(await db.autoContactRule.findUnique({where:{id:f.rule.id}})).toMatchObject({enabled:false});expect(await db.commentReviewPolicy.findUnique({where:{id:f.policy.id}})).toMatchObject({autoEnabled:false});
+ await automatic.tick();await f.contacts.tick();expect(transport).toHaveBeenCalledTimes(1);
+});
+it('fresh search returning only historical posts never rereads, calls the model or leaves switches on',async()=>{
+ const f=await freshFinite();f.adapter.search=vi.fn(async()=>({items:[{id:f.p.platformPostId,title:'History'}],complete:true}));
+ await f.collect();await automatic.tick();await f.contacts.tick();expect(f.adapter.post).not.toHaveBeenCalled();expect(transport).not.toHaveBeenCalled();expect(send).not.toHaveBeenCalled();
+ expect(await db.normalAutomationAcceptance.findUnique({where:{id:f.scope.id}})).toMatchObject({state:'STOPPED'});
+});
+it('fresh selection rejects saved-post substitution, expanded limits and changed frozen configuration before IO',async()=>{
+ const f=await freshFinite();
+ for(const readPlan of [{...f.plan,freshPostsOnly:undefined,savedPostId:f.p.id},{...f.plan,postsPerRound:2},{...f.plan,freshPostsOnly:undefined}])expect((await normalPost('/collection/configs/'+f.c.id+'/runs',{scenario:'BASELINE',mode:'MOCK',requestKey:f.scope.requestKey,readPlan})).status).not.toBe(201);
+ const started=await f.start();expect(started.status).toBe(201);
+ await db.collectionConfig.update({where:{id:f.c.id},data:{revision:{increment:1}}});await collection.execute(started.body.id,f.adapter);await f.contacts.tick();
+ expect(f.adapter.search).not.toHaveBeenCalled();expect(transport).not.toHaveBeenCalled();expect(send).not.toHaveBeenCalled();
+});
+it('a fresh 100% post with a failed submit consumes the total opportunity and automatically disables the rule',async()=>{
+ const f=await freshFinite();modelScore=100;send.mockResolvedValue({kind:'FAILED',reason:'synthetic failure'});await f.collect();await automatic.tick();await f.contacts.tick();
+ expect(send).toHaveBeenCalledTimes(1);expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(0);
+ await new AutoContactService(db,sender).tick();expect(send).toHaveBeenCalledTimes(1);expect(await db.autoContactRule.findUnique({where:{id:f.rule.id}})).toMatchObject({enabled:false});
 });

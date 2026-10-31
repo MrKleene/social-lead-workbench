@@ -1,4 +1,4 @@
-import {activeAcceptance,normalAcceptanceScope,acceptanceRuleAllowed,acceptanceSendAllowed,claimAcceptanceSend} from './normal-acceptance';
+import {activeAcceptance,normalAcceptanceScope,acceptanceRuleAllowed,acceptanceSendAllowed,claimAcceptanceSend,settleAcceptance} from './normal-acceptance';
 import {accountModeBlocked} from '../accounts/account-execution-policy';
 import {accountSendObservation} from './send-observation';
 import {postAvailability,postSendBlock} from '../collection/post-availability';
@@ -240,6 +240,6 @@ export class AutoContactService {
             }
         }
     }
-    async tick() { await this.enqueue(); let j = await this.reserve(); if(!j){await this.prepareWaiting();j=await this.reserve();} if (j)
-        await this.dispatch(j.id); }
+    async tick() { try { await this.enqueue(); let j = await this.reserve(); if(!j){await this.prepareWaiting();j=await this.reserve();} if (j)
+        await this.dispatch(j.id); } finally { await this.db.$transaction(async tx=>{await contactLock(tx);await settleAcceptance(tx);}); } }
 }
