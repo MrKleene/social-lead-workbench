@@ -1,3 +1,5 @@
+import {guardAcceptanceModel,claimAcceptanceModel} from '../auto-contact/normal-acceptance';
+import {estimateWholePostCost} from '../collection/model-cost-estimate';
 import {prepareReviewOutbound} from './review-observation';
 import {semanticHash} from '../collection/capture-archive';
 import {outputFailureReason,modelOutputFailure,wholePostRequestPolicy} from '@crm/contracts';
@@ -26,7 +28,7 @@ export class ReviewEvaluationService {
   if(wholePost&&!wholePostCapacity(payload,settings.status.model).fits)throw new ConflictException(wholePostCapacityMessage);
   return {wholePost,policy,settings,rows,inputs,payload,hash:previewHash(payload,rows,policy.revision,`${id}:${manual?policy.revision:policy.version}:${settings.status.model}:${settings.configurationVersion}:${qwenModel(settings.status.model)?.priceVersion}`)};
  }
- async preview(actor:Actor,id:string,reviewIds:string[],manual=false,wholePost=manual){requireAdmin(actor);const b=await this.batch(this.db,id,reviewIds,manual,wholePost);return {hash:b.hash,reviewIds,count:b.rows.length,revision:b.policy.revision,payload:b.payload,...await this.policies.qwen.status(this.db,undefined,{enabled:true,version:b.policy.version})};}
+ async preview(actor:Actor,id:string,reviewIds:string[],manual=false,wholePost=manual){requireAdmin(actor);const b=await this.batch(this.db,id,reviewIds,manual,wholePost);return {hash:b.hash,reviewIds,count:b.rows.length,revision:b.policy.revision,payload:b.payload,costEstimate:estimateWholePostCost(b.payload,b.settings.status.model),...await this.policies.qwen.status(this.db,undefined,{enabled:true,version:b.policy.version})};}
  async evaluate(actor:Actor,id:string,input:SemanticEvaluateRequest,autoJobId?:string,manualJobId?:string){
   requireAdmin(actor);input=semanticEvaluateRequestSchema.parse(input);if(!input.reviewIds?.length)throw new ConflictException('请先选择并预览评论');
   const reserved=await this.db.$transaction(async tx=>{await lockReview(tx);
@@ -36,9 +38,10 @@ export class ReviewEvaluationService {
    if(manualJobId)await assertManualReview(tx,manualJobId,b.settings.configurationVersion,b.rows.map(r=>r.id),b.payload);
    if(!status.usage.canCall||!b.settings.status.authorized)throw new ConflictException('模型未授权、预算不足或仍在请求间隔内；未外发');
    if(b.hash!==input.previewHash||input.priceVersion!==qwenModel(b.settings.status.model)?.priceVersion)throw new ConflictException('需求、模型或批次已变化，请重新预览');
+   const acceptance=await guardAcceptanceModel(tx,{autoJobId,policyId:id,modelVersion:b.settings.configurationVersion,model:b.settings.status.model,rows:b.rows,payload:b.payload});
    const until=new Date(Date.now()+(b.wholePost?WHOLE_POST_LEASE:60000));
    for(const row of b.rows){const claim=await tx.semanticReview.updateMany({where:{id:row.id,version:row.version,reviewStatus:'PENDING'},data:{state:'PROCESSING',leaseUntil:until,version:{increment:1}}});if(claim.count!==1)throw new ConflictException('批次已变化');}
-   const call=await tx.semanticModelCall.create({data:{requestKey:input.requestKey,previewHash:input.previewHash,policyId:id,policyRevision:b.policy.revision,actorId:actor.id,trigger:autoJobId?'AUTOMATIC':'MANUAL',configurationVersion:b.settings.configurationVersion,status:'RESERVED',rows:b.rows.length,reservedUntil:until}});return {b,call};
+   const call=await tx.semanticModelCall.create({data:{requestKey:input.requestKey,previewHash:input.previewHash,policyId:id,policyRevision:b.policy.revision,actorId:actor.id,trigger:autoJobId?'AUTOMATIC':'MANUAL',configurationVersion:b.settings.configurationVersion,status:'RESERVED',rows:b.rows.length,reservedUntil:until}});if(acceptance)await claimAcceptanceModel(tx,acceptance.a.id,call.id,b.rows.map(r=>r.id),acceptance.estimate);return {b,call};
   });
   if('previous' in reserved)return {callId:reserved.previous!.id,status:reserved.previous!.status,errorCode:reserved.previous!.errorCode,outputFailure:modelOutputFailure(reserved.previous!.errorCode),reused:true};
   const {b,call}=reserved;let outputs:ReturnType<typeof validateQwenEvidence>=[],usage:{inputTokens:number;outputTokens:number}|null=null,errorCode:string|null=null;
@@ -50,6 +53,7 @@ export class ReviewEvaluationService {
     if(manualJobId)await assertManualReview(tx,manualJobId,metadata.configurationVersion,b.rows.map(r=>r.id),b.payload);
     const current=await prepareReviewOutbound(tx,b.rows,b.wholePost);if(b.wholePost)current.payload.requestPolicy=wholePostRequestPolicy;
     if(semanticHash(current.payload)!==semanticHash(b.payload))throw new QwenError('REVIEW_CHANGED');
+    await guardAcceptanceModel(tx,{autoJobId,policyId:id,modelVersion:metadata.configurationVersion,model:metadata.status.model,rows:b.rows,payload:current.payload,callId:call.id});
     const settings=await this.policies.models.resolve(tx,true,semanticBatchConsent);
     flight=requestQwen(settings,b.payload,this.options?.transport,'comment-first').then(response=>({response}),error=>({error}));
    });

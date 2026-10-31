@@ -1,3 +1,4 @@
+import {activeAcceptance,normalAcceptanceScope,liveAcceptance,acceptanceConflict} from './normal-acceptance';
 import {accountSystemBlock,accountModeBlocked} from '../accounts/account-execution-policy';
 import {replyHistoryItem} from './reply-history';
 import {accountSendObservation} from './send-observation';
@@ -123,6 +124,7 @@ export class ContactSettingsService {
             if (r.version !== input.version)
                 throw new ConflictException('设置已变化，请重新确认');
             if (input.enabled) {
+                const envelope=await activeAcceptance(tx);if(envelope){const scope=normalAcceptanceScope.parse(envelope.scope);if(!liveAcceptance(envelope)||envelope.actorId!==actor.id||scope.ruleId!==id||scope.ruleVersion!==r.version+1||scope.ruleHash!==ruleHash({...r,version:r.version+1}))acceptanceConflict();}
                 if (!r.channels.length || !r.channels.includes(r.channel) || r.channels.some(channel=>!this.sender.capability(r.platform,channel)))
                     throw new ConflictException(senderUnavailable);
                 if (!r.content.trim() || !r.accountIds.length || !r.model)

@@ -1,3 +1,4 @@
+import {activeAcceptance,acceptanceConflict} from '../auto-contact/normal-acceptance';
 import {outputFailureReason,modelOutputFailure} from '@crm/contracts';
 import {semanticInputPolicy} from '@crm/contracts';
 import { ConflictException, Inject, Injectable, Optional } from '@nestjs/common';
@@ -45,6 +46,7 @@ export class QwenMatchingService {
   const reserved=await this.db.$transaction(async tx=>{
    // Global short transaction serializes budget, cooldown, reservations and idempotency across configurations.
    await tx.$queryRaw`SELECT pg_advisory_xact_lock(63967, 210003)::text`;
+   if(await activeAcceptance(tx))acceptanceConflict();
    const previous=await tx.semanticModelCall.findUnique({where:{requestKey:input.requestKey}});
    if(previous){if(previous.configId!==configId||previous.actorId!==actor.id||previous.previewHash!==input.previewHash)throw new ConflictException('请求标识已被使用');return {previous};}
    await tx.$queryRaw`SELECT id FROM "CollectionConfig" WHERE id=${configId} FOR UPDATE`;
@@ -68,6 +70,7 @@ export class QwenMatchingService {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(63967,210003)::text`;
     await tx.$queryRaw`SELECT id FROM "CollectionConfig" WHERE id=${configId} FOR UPDATE`;
     if(!(await tx.semanticControl.findUnique({where:{configId}}))?.enabled)throw new QwenError('SWITCH_OFF');
+    if(await activeAcceptance(tx))acceptanceConflict();
     let settings=await this.settings(tx);
     if(settings.configurationVersion!==b.settingsVersion||settings.status.model!==b.model)throw new QwenError('MODEL_SETTINGS_CHANGED');
     const current=await tx.collectionConfig.findUniqueOrThrow({where:{id:configId}});

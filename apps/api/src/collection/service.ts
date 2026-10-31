@@ -1,3 +1,4 @@
+import {acceptanceCollectionStart,acceptanceRunAllowed} from '../auto-contact/normal-acceptance';
 import {projectOverview} from './project-overview';
 import {collectionDashboard} from './dashboard';
 import {lockReview} from '../comment-review/review-policy.service';
@@ -120,6 +121,7 @@ export class CollectionService {
             if (config.mode !== mode) throw new BadRequestException("采集模式与配置不一致");
             if ((mode === "MOCK") === (scenario === "READ_WINDOW")) throw new BadRequestException("场景与采集模式不一致");
             const executionAccountId=mode==='MOCK'?undefined:accountId??config.defaultExecutionAccountId??undefined;
+            const acceptance=await acceptanceCollectionStart(tx,{actorId:actor.id,configId:id,revision:config.revision,requestKey,accountId:executionAccountId,plan:readPlan});
             const old = await tx.collectionRun.findUnique({ where: { requestKey } });
             if (old) {
                 if (old.configId !== id || old.scenario !== scenario || ((readPlan||(old.readPlan as ReadPlan|null)?.savedPostId)&&semanticHash(old.readPlan)!==semanticHash(readPlan??null)) || (old.execution as {accountId?:string;actorId?:string}|null)?.accountId !== executionAccountId || (old.execution && (old.execution as {actorId:string}).actorId !== actor.id))
@@ -142,6 +144,7 @@ export class CollectionService {
             }
             const execution=accountReadMode() && mode !== 'MOCK' ? await this.accountReads!.authorize(tx,actor,mode,executionAccountId,consent) : undefined;
             const created = await tx.collectionRun.create({ data: { configId: id, revision: config.revision, snapshot, scenario, requestKey, readPlan:readPlan||{rounds:1,postsPerRound:snapshot.batchLimit,commentPages:mode==="MOCK"?4:1}, ...(execution?{execution}:{}) } });
+            if(acceptance){const bound=await tx.normalAutomationAcceptance.updateMany({where:{id:acceptance.id,state:'ACTIVE',runId:null},data:{runId:created.id}});if(bound.count!==1)throw new ConflictException('本次验收采集次数已使用');}
             await tx.collectionConfig.update({ where: { id }, data: { activeRunId: created.id } });
             await tx.auditLog.create({ data: { actorId: actor.id, action: config.mode === "MOCK" ? "COLLECTION_REQUESTED_MOCK" : "COLLECTION_REQUESTED_MCP", entityId: created.id, metadata: { configId: id, scenario, mode: config.mode } } });
             return { ...created, reused: false };
@@ -184,8 +187,9 @@ export class CollectionService {
         let reader: ReadAdapter | undefined;
         let owned: Awaited<ReturnType<AccountReadService['open']>> | undefined;
         let diagnosticStage:CollectionDiagnostic['stage']='setup';
-        const cancelled=async()=>{const config=await this.db.collectionConfig.findUniqueOrThrow({where:{id:run.configId}}),fresh=await this.db.collectionRun.findUniqueOrThrow({where:{id}});return !config.enabled||!!config.archivedAt||config.revision!==run.revision||fresh.cancelRequested||fresh.status!=='RUNNING';};
+        const cancelled=async()=>{const config=await this.db.collectionConfig.findUniqueOrThrow({where:{id:run.configId}}),fresh=await this.db.collectionRun.findUniqueOrThrow({where:{id}});return !await acceptanceRunAllowed(this.db,id)||!config.enabled||!!config.archivedAt||config.revision!==run.revision||fresh.cancelRequested||fresh.status!=='RUNNING';};
         try {
+            if(!await acceptanceRunAllowed(this.db,id))throw new ReadFailure('AUTHORIZATION_ENDED');
             const spec = configInput.parse(run.snapshot);
             const plan=run.readPlan?readPlanSchema.parse(run.readPlan):undefined;
             const selectedPost=plan?.savedPostId?await savedReadTarget(this.db,run.configId,plan.savedPostId,spec.mode):undefined;

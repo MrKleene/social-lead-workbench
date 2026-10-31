@@ -1,3 +1,4 @@
+import {bindAcceptancePost,activeAcceptance,normalAcceptanceScope,acceptanceReviewAllowed,liveAcceptance} from '../auto-contact/normal-acceptance';
 import {Inject,Injectable} from '@nestjs/common';
 import {randomUUID} from 'node:crypto';
 import {outputFailureReason,semanticBatchConsent,autoReviewInputPolicy} from '@crm/contracts';
@@ -16,6 +17,8 @@ export class AutoReviewService {
    const policies=await tx.commentReviewPolicy.findMany({where:{autoEnabled:true}});
    const posts=await tx.capturedPost.findMany({where:{configId:run.configId,lastRunId:run.id,platformPostId:entry.post.id}});
    for(const policy of policies)for(const post of posts){
+    if(!await bindAcceptancePost(tx,run.id,post.id))continue;
+    if(!await acceptanceReviewAllowed(tx,{id:"pending",runId:run.id,postId:post.id,policyId:policy.id,policyVersion:policy.version}))continue;
     const complete=entry.windowRead&&entry.complete&&post.coverage==='COMPLETE';
     await tx.autoReviewJob.createMany({data:[{policyId:policy.id,policyVersion:policy.version,inputPolicyVersion:autoReviewInputPolicy,runId:run.id,postId:post.id,status:complete?'PENDING':'SKIPPED',reason:complete?'等待预算与调用间隔':`覆盖未通过：${entry.stopReason||'评论范围不完整'}`}],skipDuplicates:true});
    }
@@ -31,7 +34,8 @@ export class AutoReviewService {
   // No replay after an uncertain worker exit. Unstarted jobs can resume; claimed work requires manual review.
   await this.db.autoReviewJob.updateMany({where:{status:'PROCESSING',updatedAt:{lt:new Date(Date.now()-WHOLE_POST_STALE)}},data:{status:'FAILED',reason:'执行中断，调用结果可能未知；请手动核查，不自动重试'}});
   const job=await this.db.$transaction(async tx=>{await lockReview(tx);
-   const next=await tx.autoReviewJob.findFirst({where:{status:'PENDING'},orderBy:{createdAt:'asc'}});if(!next)return null;
+   const envelope=await activeAcceptance(tx),scope=envelope?normalAcceptanceScope.parse(envelope.scope):null;if(envelope&&(!liveAcceptance(envelope)||envelope.modelCallId||!envelope.runId||!envelope.capturedPostId))return null;
+   const next=await tx.autoReviewJob.findFirst({where:{status:'PENDING',...(scope?{policyId:scope.policyId,runId:envelope!.runId!,postId:envelope!.capturedPostId!}:{})},orderBy:{createdAt:'asc'}});if(!next)return null;
    const model=await this.policies.models.resolve(tx);
    await tx.autoReviewJob.update({where:{id:next.id},data:{status:'PROCESSING'}});
    try{await assertAutoReview(tx,next.id,model.configurationVersion);}catch(e){await tx.autoReviewJob.update({where:{id:next.id},data:{status:'CANCELLED',reason:e instanceof Error?e.message:'自动授权已失效'}});return null;}

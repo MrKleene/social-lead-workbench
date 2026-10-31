@@ -774,3 +774,22 @@ model AutomationPreferences {
  configId String?
  policyId String?
 }
+
+// Optional finite acceptance envelope; durable total attempts, independent of daily quota.
+// No cascade: closing/failed dispatch must never erase consumed authorization.
+model NormalAutomationAcceptance {
+ id String @id
+ state String @default("ACTIVE")
+ scope Json
+ actorId String
+ runId String? @unique
+ capturedPostId String?
+ modelCallId String? @unique
+ reviewIds String[] @default([])
+ sendJobId String? @unique
+ modelClaimedAt DateTime?
+ sendClaimedAt DateTime?
+ createdAt DateTime @default(now())
+ closedAt DateTime?
+ @@index([state])
+}

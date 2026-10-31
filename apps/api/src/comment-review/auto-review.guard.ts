@@ -1,3 +1,4 @@
+import {acceptanceReviewAllowed,acceptanceConflict} from '../auto-contact/normal-acceptance';
 import {reviewObservations} from './review-observation';
 import {ConflictException} from '@nestjs/common';
 import {boundedReadReportSchema,autoReviewInputPolicy,wholePostRequestPolicy} from '@crm/contracts';
@@ -5,6 +6,7 @@ import type {ReviewDb} from './review-policy.service';
 // Checked under the same global provider lock immediately before reservation AND dispatch.
 export async function assertAutoReview(db:ReviewDb,jobId:string,modelVersion:number){
  const job=await db.autoReviewJob.findUnique({where:{id:jobId}});
+ if(job&&!await acceptanceReviewAllowed(db,job,modelVersion))acceptanceConflict();
  if(!job||job.inputPolicyVersion!==autoReviewInputPolicy||job.status!=='PROCESSING')throw new ConflictException('自动任务已取消');
  const [policy,post,run]=await Promise.all([db.commentReviewPolicy.findUnique({where:{id:job.policyId}}),db.capturedPost.findUnique({where:{id:job.postId}}),db.collectionRun.findUnique({where:{id:job.runId},include:{config:true}})]);
  if(!policy?.autoEnabled||policy.version!==job.policyVersion||policy.autoModelVersion!==modelVersion)throw new ConflictException('自动授权或模型已变化');

@@ -1,3 +1,4 @@
+import {activeAcceptance,normalAcceptanceScope,acceptanceRuleAllowed,acceptanceSendAllowed,claimAcceptanceSend} from './normal-acceptance';
 import {accountModeBlocked} from '../accounts/account-execution-policy';
 import {accountSendObservation} from './send-observation';
 import {postAvailability,postSendBlock} from '../collection/post-availability';
@@ -24,6 +25,7 @@ export class AutoContactService {
     private sender: ContactSender) { }
     now(tx: ContactDb) { return contactNow(tx); }
     private async ruleReady(tx: ContactDb, r: AutoContactRule) {
+        if(!await acceptanceRuleAllowed(tx,r))return false;
         if (!r.enabled || r.mode !== this.sender.mode || r.authorizedHash !== ruleHash(r) || !r.authorizedAt || !r.authorizedBy || !r.content.trim() || !r.accountIds.length || !this.sender.capability(r.platform, r.channel))
             return false;
         if(r.mode==='REAL') for(const id of r.accountIds){const o=await accountSendObservation(tx,id,await this.now(tx));const a=await tx.platformAccount.findUnique({where:{id}});if(!a||accountModeBlocked(a,'REAL')||o.state!=='UNKNOWN'||o.evidenceInvalid)return false;}
@@ -32,7 +34,7 @@ export class AutoContactService {
     }
     private async reviewReady(tx: ContactDb, r: AutoContactRule, id: string) {
         const row = await tx.semanticReview.findUnique({ where: { id }, include: { capture: { include: { post: true, config: { select: { platform: true } } } } } });
-        if (!row || row.policyId !== r.policyId || row.policyRevision !== r.policyRevision || row.selectedModel !== r.model || row.platform !== r.platform || !eligible(row, r.threshold) || row.isDemo !== (r.mode === 'SIMULATION') || row.capture?.config.platform !== row.platform)
+        if (!row || !await acceptanceSendAllowed(tx,r,id) || row.policyId !== r.policyId || row.policyRevision !== r.policyRevision || row.selectedModel !== r.model || row.platform !== r.platform || !eligible(row, r.threshold) || row.isDemo !== (r.mode === 'SIMULATION') || row.capture?.config.platform !== row.platform)
             return null;
         const target = contactTarget(row, row.capture, row.capture?.post ?? null);
         if (!target)
@@ -46,13 +48,14 @@ export class AutoContactService {
     async enqueue() {
         return this.db.$transaction(async (tx) => {
             await contactLock(tx);
+            const envelope=await activeAcceptance(tx),scope=envelope?normalAcceptanceScope.parse(envelope.scope):null;
             const rules = await tx.autoContactRule.findMany({ where: { enabled: true, mode: this.sender.mode } });
             let added = 0;
             for (const r of rules) {
                 if (!await this.ruleReady(tx, r))
                     continue;
                 // Scan a bounded page of unprocessed *evaluations*, not a display page. Every later tick advances.
-                const rows = await tx.semanticReview.findMany({ where: { policyId: r.policyId, policyRevision: r.policyRevision, selectedModel: r.model, platform: r.platform, state: 'EVALUATED', score: { gte: r.threshold }, context: 'SUFFICIENT', reviewStatus: { in: ['PENDING', 'APPROVED'] }, updatedAt: { gte: r.authorizedAt! }, contactJobs: { none: { ruleId: r.id, ruleVersion: r.version } } }, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], take: 100 });
+                const rows = await tx.semanticReview.findMany({ where: { ...(scope?{id:{in:envelope!.reviewIds},capture:{lastRunId:envelope!.runId??'not-bound',postId:envelope!.capturedPostId??'not-bound'}}:{}),policyId: r.policyId, policyRevision: r.policyRevision, selectedModel: r.model, platform: r.platform, state: 'EVALUATED', score: { gte: r.threshold }, context: 'SUFFICIENT', reviewStatus: { in: ['PENDING', 'APPROVED'] }, updatedAt: { gte: r.authorizedAt! }, contactJobs: { none: { ruleId: r.id, ruleVersion: r.version } } }, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], take: 100 });
                 for (const row of rows) {
                     const valid = await this.reviewReady(tx, r, row.id), input = row.evaluationInput as Record<string, unknown> | null;
                     await tx.autoContactJob.create({ data: { ruleId: r.id, ruleVersion: r.version, reviewId: row.id, reviewVersion: row.version, mode: r.mode, platform: r.platform, recipientId: valid?.target.recipientId ?? '', postId: valid?.target.postId ?? '', commentId: valid?.target.commentId ?? '', channel: r.channel, content: r.content, eligibilityHash: eligibilityHash(row), availabilityVersion:valid?.availability?.version??0, sourceSnapshot:valid?json({post:publicPostSnapshot(valid.row.capture!.post.snapshot),comment:valid.row.snapshot,availability:valid.availability?{state:valid.availability.state,reason:valid.availability.reason,version:valid.availability.version,checkedAt:valid.availability.checkedAt.toISOString(),source:valid.availability.source,evidence:valid.availability.evidence}:{state:'UNKNOWN',version:0,checkedAt:null}}):Prisma.JsonNull, status: valid?.block ? 'BLOCKED_POST' : valid ? 'QUEUED' : 'SKIPPED', reason: valid?.block ?? (valid ? null : '评论作者、来源、充分性或勿联系条件未通过'), evidence: json({ score: row.score, modelVersion: row.modelVersion, target: (row.rules as {
@@ -82,7 +85,8 @@ export class AutoContactService {
                     await tx.autoContactRule.updateMany({ where: { platform: j.platform, mode: j.mode }, data: { enabled: false } });
                 }
             }
-            const jobs = await tx.autoContactJob.findMany({ where: { mode: this.sender.mode, status: { in: waiting } }, include: { rule: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 100 });
+            const envelope=await activeAcceptance(tx),scope=envelope?normalAcceptanceScope.parse(envelope.scope):null;
+            const jobs = await tx.autoContactJob.findMany({ where: { mode: this.sender.mode, status: { in: waiting }, ...(scope?{ruleId:scope.ruleId,ruleVersion:scope.ruleVersion,reviewId:{in:envelope!.reviewIds}}:{}) }, include: { rule: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 100 });
             for (const j of jobs) {
                 const r = j.rule;
                 if (j.ruleVersion !== r.version || !await this.ruleReady(tx, r)) {
@@ -159,6 +163,7 @@ export class AutoContactService {
                 await cancelReserved(tx, j, '发送前健康、授权、额度日期或证据已变化；未发送');
                 return null;
             }
+            if(!await claimAcceptanceSend(tx,j.rule,j.reviewId,j.id,j.accountId!)){await cancelReserved(tx,j,'本次限定验收总提交次数已使用或范围变化');return null;}
             await tx.contactAttempt.update({ where: { id: j.attemptId! }, data: { outcome: 'ATTEMPTED', attemptedAt: now, version: { increment: 1 } } });
             return tx.autoContactJob.update({ where: { id }, data: { status: 'ATTEMPTED' } });
         });

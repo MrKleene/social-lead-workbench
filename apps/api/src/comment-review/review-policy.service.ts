@@ -1,3 +1,4 @@
+import {activeAcceptance,normalAcceptanceScope,liveAcceptance,acceptanceConflict} from '../auto-contact/normal-acceptance';
 import {randomUUID} from 'node:crypto';
 import {postAvailability} from '../collection/post-availability';
 import {unknownPostAvailability} from '@crm/contracts';
@@ -60,6 +61,7 @@ export class ReviewPolicyService {
    if(!policy||policy.version!==input.version)throw new ConflictException('审核需求已变化，请刷新');
    const model=await this.models.resolve(tx);
    if(input.enabled){
+    const envelope=await activeAcceptance(tx);if(envelope){const scope=normalAcceptanceScope.parse(envelope.scope);if(!liveAcceptance(envelope)||envelope.actorId!==actor.id||scope.policyId!==id||scope.policyVersion!==policy.version+1)acceptanceConflict();}
     if(model.status.state!=='READY')throw new ConflictException('请先配置模型');
     if(input.consent!==reviewAutoConsent||input.modelVersion!==model.configurationVersion||input.priceVersion!==qwenModel(model.status.model)?.priceVersion)throw new BadRequestException('请明确确认持续调用、费用和数据范围');
     await tx.modelSettings.update({where:{id:MODEL_SETTINGS_ID},data:{consent:true,consentInputPolicy:semanticInputPolicy}});

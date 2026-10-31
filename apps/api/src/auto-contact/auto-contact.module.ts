@@ -1,3 +1,4 @@
+import {NormalAcceptanceService} from './normal-acceptance.service';
 import {automationPreferenceInput,readAutomationPreferences,saveAutomationPreferences} from './automation-preferences';
 import {journeySummary} from './journey-summary';
 import { DevicesModule } from '../devices/devices';
@@ -20,7 +21,10 @@ class AutoContactController {
     @Inject(ContactSettingsService)
     private settings: ContactSettingsService,
     @Inject(AutoContactService)
-    private service: AutoContactService, @Inject(Db) private db: Db, @Inject(CONTACT_SENDER) private sender: import('./contact-sender').ContactSender) { }
+    private service: AutoContactService, @Inject(NormalAcceptanceService) private acceptance:NormalAcceptanceService, @Inject(Db) private db: Db, @Inject(CONTACT_SENDER) private sender: import('./contact-sender').ContactSender) { }
+    @Get('acceptance') acceptanceStatus(@Req() r:AuthedRequest){return this.acceptance.status(r.actor);}
+    @Post('acceptance') armAcceptance(@Req() r:AuthedRequest){return this.acceptance.arm(r.actor,r.body);}
+    @Post('acceptance/:id/close') closeAcceptance(@Req() r:AuthedRequest,@Param('id') id:string){return this.acceptance.close(r.actor,id);}
     @Get()
     @Header('Cache-Control', 'no-store, private')
     overview(
@@ -72,6 +76,6 @@ class AutoContactController {
     @Param('id')
     id: string) { const b = parse(z.object({ receipt: z.string().trim().min(1).max(500) }).strict(), r.body); return this.service.reconcile(r.actor, id, b.receipt); }
 }
-@Module({ imports: [AuthModule, DevicesModule], controllers: [AutoContactController], providers: [LoginRuntime, { provide: CONTACT_SENDER, useFactory: (db: Db, devices: DeviceService, runtime: LoginRuntime) => new LocalXhsReplySender(db, devices, runtime), inject: [Db, DeviceService, LoginRuntime] }, ContactSettingsService, AutoContactService], exports: [AutoContactService] })
+@Module({ imports: [AuthModule, DevicesModule], controllers: [AutoContactController], providers: [NormalAcceptanceService, LoginRuntime, { provide: CONTACT_SENDER, useFactory: (db: Db, devices: DeviceService, runtime: LoginRuntime) => new LocalXhsReplySender(db, devices, runtime), inject: [Db, DeviceService, LoginRuntime] }, ContactSettingsService, AutoContactService], exports: [AutoContactService] })
 export class AutoContactModule {
 }

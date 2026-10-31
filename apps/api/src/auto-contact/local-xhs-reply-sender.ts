@@ -1,3 +1,4 @@
+import {acceptanceSendAllowed} from './normal-acceptance';
 import {randomUUID} from 'node:crypto';
 import type {Actor} from '../auth/security';
 import {inspectBoundedAccount} from './bounded-account-inspection';
@@ -58,6 +59,7 @@ export class LocalXhsReplySender implements ContactSender {
             j.postId !== request.postId || j.commentId !== request.commentId || j.recipientId !== request.recipientId ||
             !j.rule.enabled || !j.rule.authorizedAt || j.rule.mode !== 'REAL' || j.rule.platform !== 'XHS' || j.rule.channel !== 'COMMENT' || j.rule.content !== request.content || j.ruleVersion !== j.rule.version || j.rule.authorizedHash !== ruleHash(j.rule) || !j.rule.authorizedBy ||
             !j.rule.accountIds.includes(request.accountId) || eligibilityHash(j.review) !== j.eligibilityHash || !eligible(j.review, j.rule.threshold)) return null;
+        if(!await acceptanceSendAllowed(this.db,j.rule,j.reviewId,j.id))return null;
         if (j.review.isDemo || j.review.platform !== 'XHS' || j.review.capture?.config.platform !== 'XHS' || j.review.policyId !== j.rule.policyId || j.review.policyRevision !== j.rule.policyRevision || j.review.selectedModel !== j.rule.model) return null;
         if(postSendBlock(await postAvailability(this.db,j.platform,j.postId),j.rule.authorizedAt,j.review.updatedAt,j.availabilityVersion))return null;
         const target = contactTarget(j.review, j.review.capture, j.review.capture?.post ?? null);

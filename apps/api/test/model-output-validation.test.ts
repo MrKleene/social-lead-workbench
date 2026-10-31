@@ -64,6 +64,7 @@ function harness(bad:boolean){
  const config={id:'config',semanticRules:rules,revision:1,archivedAt:null,enabled:true};
  let call:any=null;
  const db:any={
+  normalAutomationAcceptance:{findFirst:async()=>null,findUnique:async()=>null},
   $queryRaw:vi.fn(async()=>[]),$transaction:async(fn:any)=>fn(db),
   commentReviewPolicy:{findUnique:async()=>policy,findUniqueOrThrow:async()=>policy},
   collectionConfig:{findUnique:async()=>config,findUniqueOrThrow:async()=>config},semanticControl:{findUnique:async()=>({enabled:true,version:1})},
