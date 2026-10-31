@@ -1,3 +1,7 @@
+import {ContactSettingsService} from '../src/auto-contact/contact-settings.service';
+import {AutoContactService} from '../src/auto-contact/auto-contact.service';
+import {CONTACT_SENDER} from '../src/auto-contact/contact-sender';
+import {autoContactConsent} from '@crm/contracts';
 import {readRunPostFeed} from '../src/collection/run-post-feed';
 import {commentDigest} from '../src/collection/comment-checkpoint';
 import {reviewObservationPolicy} from '@crm/contracts';
@@ -48,6 +52,25 @@ beforeAll(async()=>{actor=await db.user.create({data:{email:randomUUID()+'@examp
 beforeEach(async()=>{await clear();transport.mockClear();});
 afterAll(async()=>{await clear();await db.session.deleteMany({where:{userId:{in:[actor.id,sales.id]}}});await db.user.deleteMany({where:{id:{in:[actor.id,sales.id]}}});await app?.close();await db.$disconnect();rmSync(home,{recursive:true,force:true});});
 describe('independent comment review: disposable database and mocked provider only',()=>{
+ it('normal HTTP rules -> collection -> one whole-post model call -> dispatch -> history, without manual approval',async()=>{
+  await autoEnabled();const send=vi.fn(async()=>({kind:'CONFIRMED',receipt:'synthetic-only'})),sender:any={mode:'SIMULATION',capability:()=>true,healthy:async()=>true,send};
+  const mod=await Test.createTestingModule({imports:[AppModule]}).overrideProvider(Db).useValue(db).overrideProvider(CONTACT_SENDER).useValue(sender).compile(),http=mod.createNestApplication({bodyParser:false});configure(http);await http.init();
+  let accountId:string|undefined;
+  try{
+   const account=await db.platformAccount.create({data:{platform:'XHS',label:'Synthetic whole workflow',version:1,isDemo:true,dailyLimit:3}});accountId=account.id;
+   const post=(url:string,body:object)=>request(http.getHttpServer()).post('/api'+url).set('Cookie',auth.admin.cookie).set('Origin',origin).set('x-csrf-token',auth.admin.csrf).send(body);
+   const saved=await request(http.getHttpServer()).put('/api/auto-contact/rules/normal').set('Cookie',auth.admin.cookie).set('Origin',origin).set('x-csrf-token',auth.admin.csrf).send({version:0,platform:'XHS',policyId:'workspace',policyRevision:1,threshold:90,channel:'COMMENT',content:'Synthetic reply only',accounts:[{id:account.id,version:account.version,dailyLimit:3}]});expect(saved.status).toBe(200);
+   const overview=await request(http.getHttpServer()).get('/api/auto-contact').set('Cookie',auth.admin.cookie),rule=overview.body.rules[0];
+   expect((await post('/auto-contact/rules/normal/enabled',{version:rule.version,enabled:true,hash:rule.hash,consent:autoContactConsent})).status).toBe(201);
+   const c=await collection.create(actor,{name:'Normal workflow synthetic',platform:'XHS',mode:'MOCK',keywords:['synthetic'],excludeWords:[],batchLimit:1,enabled:true});
+   const adapter=new MockAdapter('XHS','BASELINE');adapter.search=async()=>({items:[{id:'demo-collect-normal-flow-post',title:'Synthetic'}],complete:true});adapter.post=async p=>p;adapter.comments=async()=>({items:Array.from({length:6},(_,i)=>({id:'demo-collect-normal-comment-'+i,userId:'demo-collect-normal-user-'+i,nickname:'Synthetic',text:'护理学',hasReplies:false})),complete:true});
+   const run=await collection.start(actor,c.id,'BASELINE',randomUUID());await collection.execute(run.id,adapter);expect(transport).not.toHaveBeenCalled();expect(send).not.toHaveBeenCalled();
+   await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.semanticModelCall.findFirst()).toMatchObject({rows:6,trigger:'AUTOMATIC'});expect(await db.semanticReview.count({where:{reviewStatus:'PENDING',score:90}})).toBe(6);
+   const contacts=http.get(AutoContactService);for(let i=0;i<7;i++)await contacts.tick();expect(send).toHaveBeenCalledTimes(3);expect(await db.autoContactJob.count({where:{status:'WAITING_QUOTA'}})).toBe(3);
+   const history=await request(http.getHttpServer()).get('/api/auto-contact/attempts').set('Cookie',auth.admin.cookie);expect(history.status).toBe(200);expect(history.body.items).toHaveLength(3);expect(history.body.items.every((a:any)=>a.outcome==='SIMULATED_SUCCESS')).toBe(true);
+   const journey=await request(http.getHttpServer()).get('/api/auto-contact/journey?runId='+run.id).set('Cookie',auth.admin.cookie);expect(journey.status).toBe(200);
+  }finally{await db.autoContactJob.deleteMany();await db.contactAttempt.deleteMany();await db.contactLedger.deleteMany();await db.accountDay.deleteMany();await db.autoContactRule.deleteMany();await db.autoContactControl.deleteMany();if(accountId)await db.platformAccount.delete({where:{id:accountId}});await http.close();}
+ });
  it('pure capture defaults to no rules, no keyword fallback, no leads and no review work even if old control is enabled',async()=>{
   const c=await collection.create(actor,{name:'合成纯采集',platform:'XHS',mode:'MOCK',keywords:['奇异搜索甲'],excludeWords:['护理'],commentRules:thesisRulePreset,semanticRules:{version:1,target,reviewThreshold:70},batchLimit:1,enabled:true});await db.semanticControl.create({data:{configId:c.id,enabled:true}});expect(c.legacyMatchingEnabled).toBe(false);
   const adapter=new MockAdapter('XHS','BASELINE');adapter.search=async()=>({items:[{id:'demo-collect-decouple-post',title:'无关标题'}],complete:true});adapter.post=async p=>p;adapter.comments=async()=>({items:[{id:'demo-collect-decouple-comment',userId:'demo-collect-decouple-user',nickname:'虚构',text:'护理',hasReplies:false},{id:'demo-collect-decouple-comment2',userId:'demo-collect-decouple-user2',nickname:'虚构',text:'奇异搜索甲',hasReplies:false}],complete:true});

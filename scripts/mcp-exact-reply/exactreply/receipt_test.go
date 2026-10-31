@@ -13,7 +13,7 @@ func receiptFixture(c Command) (string, []byte, []byte, *ReceiptMapping) {
 	endpoint := "https://edith.xiaohongshu.com/api/synthetic/comment" // fixture, NOT a platform schema
 	request, _ := json.Marshal(map[string]any{"note_id": c.PostID, "target_comment_id": c.TargetID, "content": c.Content, "token": "secret"})
 	response := []byte(`{"success":true,"data":{"id":"eeeeeeeeeeeeeeeeeeeeeeee"},"token":"SECRET","msg":"private text"}`)
-	mapping := &ReceiptMapping{endpoint, "/note_id", "/target_comment_id", "/content", "/success", true, "/data/id"}
+	mapping := &ReceiptMapping{Endpoint: endpoint, PostPath: "/note_id", TargetPath: "/target_comment_id", ContentPath: "/content", SuccessPath: "/success", SuccessValue: true, ReplyIDPath: "/data/id"}
 	return endpoint, request, response, mapping
 }
 func TestReceiptRequestCorrelation(t *testing.T) {

@@ -8,7 +8,7 @@ import {z} from 'zod';
 
 export const replyJournalProtocol='workbench.reply-stage-journal.v1' as const;
 const receiptEvidenceSchema=z.object({
- state:z.enum(['ARMED','REQUEST_MATCHED','RESPONSE_CAPTURED','MAPPING_UNREVIEWED','REQUEST_NOT_OBSERVED','AMBIGUOUS_REQUEST','RESPONSE_UNAVAILABLE','UNREVIEWED_READBACK']),
+ state:z.enum(['ARMED','REQUEST_MATCHED','RESPONSE_CAPTURED','MAPPING_UNREVIEWED','MAPPING_REVIEWED','REQUEST_NOT_OBSERVED','AMBIGUOUS_REQUEST','RESPONSE_UNAVAILABLE','UNREVIEWED_READBACK']),
  endpointHost:z.enum(['edith.xiaohongshu.com','www.xiaohongshu.com']).optional(),endpointPath:z.string().regex(/^\/api(\/(sns|web|comment|reply|post|publish|add|create|send|v[0-9]{1,2})){1,8}$/).optional(),
  endpointSha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),requestSha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),responseSha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),
  status:z.number().int().min(100).max(599).optional(),

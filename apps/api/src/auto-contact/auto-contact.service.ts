@@ -26,7 +26,7 @@ export class AutoContactService {
     private async ruleReady(tx: ContactDb, r: AutoContactRule) {
         if (!r.enabled || r.mode !== this.sender.mode || r.authorizedHash !== ruleHash(r) || !r.authorizedAt || !r.authorizedBy || !r.content.trim() || !r.accountIds.length || !this.sender.capability(r.platform, r.channel))
             return false;
-        if(r.mode==='REAL') for(const id of r.accountIds){if(!(await accountSendObservation(tx,id,await this.now(tx))).canSend)return false;}
+        if(r.mode==='REAL') for(const id of r.accountIds){const o=await accountSendObservation(tx,id,await this.now(tx));const a=await tx.platformAccount.findUnique({where:{id}});if(!a||accountModeBlocked(a,'REAL')||o.state!=='UNKNOWN'||o.evidenceInvalid)return false;}
         const [p, m, a, c] = await Promise.all([tx.commentReviewPolicy.findUnique({ where: { id: r.policyId } }), tx.modelSettings.findFirst({ select: { model: true } }), tx.user.findUnique({ where: { id: r.authorizedBy }, select: { active: true, role: true } }), tx.autoContactControl.findUnique({ where: { platform_mode: { platform: r.platform, mode: r.mode } } })]);
         return p?.revision === r.policyRevision && m?.model === r.model && a?.active && a.role === 'ADMIN' && !c?.pauseReason;
     }
@@ -217,6 +217,24 @@ export class AutoContactService {
     async reconcile(actor: Actor, id: string, receipt: string) { requireAdmin(actor); const j = await this.db.autoContactJob.findUnique({ where: { id } }); if (!j || j.mode !== this.sender.mode)
         throw new NotFoundException(); if (j.status !== 'UNKNOWN' || !this.sender.reconcile || !this.sender.capability(j.platform, j.channel))
         throw new ConflictException('当前没有可核验回执的适配器；保留占用，不能换号补发'); const result = await this.sender.reconcile(this.request(j), receipt); await this.finish(id, result); return this.db.autoContactJob.findUnique({ where: { id } }); }
-    async tick() { await this.enqueue(); const j = await this.reserve(); if (j)
+    async prepareWaiting(){
+        if(this.sender.mode!=='REAL'||!this.sender.prepare)return;
+        const jobs=await this.db.autoContactJob.findMany({where:{mode:'REAL',status:'WAITING_ACCOUNT'},include:{rule:true},orderBy:[{createdAt:'asc'},{id:'asc'}],take:100});
+        const checked=new Set<string>();
+        for(const j of jobs){
+            const r=j.rule;if(j.ruleVersion!==r.version||!await this.ruleReady(this.db,r))continue;
+            const actor=await this.db.user.findUnique({where:{id:r.authorizedBy!},select:{id:true,name:true,email:true,role:true,active:true}});if(!actor?.active||actor.role!=='ADMIN')continue;
+            for(const id of r.accountIds){
+                if(checked.has(id))continue;checked.add(id);
+                const control=await this.db.autoContactControl.findUnique({where:{platform_mode:{platform:j.platform,mode:'REAL'}}});if(control?.pauseReason||control?.activeJobId)return;
+                const account=await this.db.platformAccount.findUnique({where:{id}}),day=quotaBucket('REAL',await this.now(this.db));
+                const usage=await this.db.accountDay.findUnique({where:{accountId_day:{accountId:id,day}}});
+                if(!account||accountModeBlocked(account,'REAL')||(usage?.occupied??0)>=limit(r,id,account.dailyLimit))continue;
+                // Only qualify accounts when there is actual authorized work. No IO in a DB transaction.
+                if(await this.sender.prepare(actor,id))return;
+            }
+        }
+    }
+    async tick() { await this.enqueue(); let j = await this.reserve(); if(!j){await this.prepareWaiting();j=await this.reserve();} if (j)
         await this.dispatch(j.id); }
 }

@@ -1,5 +1,9 @@
 # Exact reply candidate source
 
+## 当前接入状态（2026-10-31）
+
+普通发送器的响应映射已接通并通过隔离测试；候选 `v2.5.5-local-reviewed-receipt-v1` 的 SHA256 为 `4ec68ba6999dc9f16ca4ae1bf5013e6df48b8bbf47d41b9e5ec6d8d3446ee6c8`，两次独立离线构建一致。固定响应元组与独立回读同时匹配才确认，未知/风险保持锁定。应用部署仍关闭，候选未安装或执行，正式运行未更新。详见 [交付与发布方案](../../docs/NORMAL-AUTO-REPLY-2026-10-31.md)。下方各阶段的候选哈希、无响应映射及生产状态均为当时历史记录，不作为当前版本结论。
+
 This is a reviewable overlay on the already-reviewed root-scope MCP source, not a replacement installed by this repository. The original license is preserved in `UPSTREAM-LICENSE`. `base-manifest.json` pins the full input tree; any extra, missing, changed or symlink file aborts the build.
 
 Build with an existing reviewed Go 1.24.13 darwin/arm64 compiler and module cache:

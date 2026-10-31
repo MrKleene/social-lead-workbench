@@ -93,3 +93,57 @@ func TestExactReplyReceiptEventCorrelation(t *testing.T) {
 		})
 	}
 }
+
+// Synthetic bodies reproduce only paths verified by the existing captured-reply
+// reconciliation. No live request, account, text or reply ID is used.
+func TestExactReplyReviewedMapping(t *testing.T) {
+	c := exactreply.Command{PostID: strings.Repeat("b", 24), TargetID: strings.Repeat("c", 24), SenderID: strings.Repeat("a", 24), RecipientID: strings.Repeat("d", 24), Content: "synthetic-only"}
+	c.ContentHash = exactreply.Hash(c.Content)
+	mapping := reviewedExactReceiptMapping()
+	for _, scenario := range []string{"matched", "post", "target", "recipient", "sender", "content", "code", "success", "old-id", "missing", "unknown-schema", "wrong-endpoint", "http-failure"} {
+		t.Run(scenario, func(t *testing.T) {
+			comment := map[string]any{"id": strings.Repeat("e", 24), "note_id": c.PostID, "target_comment": map[string]any{"id": c.TargetID, "user_info": map[string]any{"user_id": c.RecipientID}}, "user_info": map[string]any{"user_id": c.SenderID}, "content": c.Content}
+			response := map[string]any{"code": 0, "success": true, "data": map[string]any{"comment": comment}}
+			switch scenario {
+			case "post":
+				comment["note_id"] = strings.Repeat("f", 24)
+			case "target":
+				comment["target_comment"].(map[string]any)["id"] = strings.Repeat("f", 24)
+			case "recipient":
+				comment["target_comment"].(map[string]any)["user_info"] = map[string]any{"user_id": strings.Repeat("f", 24)}
+			case "sender":
+				comment["user_info"] = map[string]any{"user_id": strings.Repeat("f", 24)}
+			case "content":
+				comment["content"] = "different"
+			case "code":
+				response["code"] = 1
+			case "success":
+				response["success"] = false
+			case "old-id":
+				comment["id"] = c.TargetID
+			case "missing":
+				delete(comment, "target_comment")
+			case "unknown-schema":
+				response["data"] = map[string]any{"id": strings.Repeat("e", 24)}
+			}
+			req, _ := json.Marshal(map[string]any{"note_id": c.PostID, "target_comment_id": c.TargetID, "content": c.Content})
+			res, _ := json.Marshal(response)
+			endpoint := mapping.Endpoint
+			status := 200
+			if scenario == "wrong-endpoint" {
+				endpoint += "/other"
+			}
+			if scenario == "http-failure" {
+				status = 500
+			}
+			observation, accepted := exactreply.ParseMappedReceipt(c, mapping, endpoint, status, req, res)
+			if scenario == "matched" {
+				if observation == nil || !accepted || !exactreply.Matches(*observation, c) {
+					t.Fatal("exact receipt not mapped")
+				}
+			} else if observation != nil {
+				t.Fatal("mismatched receipt accepted")
+			}
+		})
+	}
+}

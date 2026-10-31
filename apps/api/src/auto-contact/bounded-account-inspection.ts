@@ -12,7 +12,7 @@ export async function inspectBoundedAccount(db:Db,devices:DeviceService,runtime:
  requireAdmin(actor);
  const account=await db.platformAccount.findUnique({where:{id:scope.accountId},include:{sessionReference:true}}),ref=account?.sessionReference;
  const previous=await accountSendObservation(db,scope.accountId,new Date());
- if(!account||account.isDemo||accountSystemBlock(account)||account.loginPlatformUserId!==scope.senderId||!account.loginSessionKey||ref?.sessionKey!==account.loginSessionKey||ref?.provider!=='real'||ref.state!=='VERIFIED'||previous.state!=='UNKNOWN'||previous.evidenceInvalid)throw Error('ACCOUNT_RESTRICTED_OR_CHANGED');
+ if(!account||account.isDemo||accountSystemBlock(account)||account.loginPlatformUserId!==scope.senderId||!account.loginSessionKey||ref?.sessionKey!==account.loginSessionKey||ref?.provider!=='real'||ref.deviceId!==runtime.deviceId()||!['VERIFIED','UNVERIFIED','CONNECTION_ERROR'].includes(ref.state)||previous.state!=='UNKNOWN'||previous.evidenceInvalid)throw Error('ACCOUNT_RESTRICTED_OR_CHANGED');
  await db.$transaction(async tx=>{await contactLock(tx);if(await tx.auditLog.count({where:{entityId:scope.workflowId,action:'BOUNDED_PROFILE_CHECK_STARTED'}}))throw Error('PROFILE_CHECK_ALREADY_CONSUMED');await tx.auditLog.create({data:{actorId:actor.id,entityId:scope.workflowId,action:'BOUNDED_PROFILE_CHECK_STARTED',metadata:{accountId:scope.accountId,senderId:scope.senderId,submissions:0}}});});
  const permit=await devices.acquire(actor,scope.accountId);let transport:XhsRestrictionInspectionTransport|undefined,driver:SessionDriver|undefined,stopped=true;
  try{
@@ -28,10 +28,14 @@ export async function inspectBoundedAccount(db:Db,devices:DeviceService,runtime:
   const evidence={identity:o.identity,title:o.title,pathname:o.pathname,warnings:o.warnings,screenshotState:'NOT_CAPTURED' as const};
   await db.$transaction(async tx=>{
    await contactLock(tx);await devices.assertPermit(tx,permit);
-   const current=await tx.platformAccount.findUnique({where:{id:scope.accountId}});if(current?.version!==account.version||current.loginPlatformUserId!==scope.senderId||current.loginSessionKey!==account.loginSessionKey)throw Error('ACCOUNT_CHANGED');
+   const current=await tx.platformAccount.findUnique({where:{id:scope.accountId},include:{sessionReference:true}});if(current?.version!==account.version||current.loginPlatformUserId!==scope.senderId||current.loginSessionKey!==account.loginSessionKey||current.sessionReference?.sessionKey!==ref.sessionKey||current.sessionReference?.deviceId!==ref.deviceId||current.sessionReference?.deviceKeyId!==ref.deviceKeyId)throw Error('ACCOUNT_CHANGED');
    await tx.auditLog.create({data:{actorId:actor.id,entityId:scope.workflowId,action:'BOUNDED_PROFILE_CHECK_FINISHED',metadata:{accountId:scope.accountId,senderId:scope.senderId,kind:r.kind,code:r.code,observedAt:r.observedAt,evidence,stopped:true,submissions:0}}});
+   if(['IDENTITY_MISMATCH','IDENTITY_UNVERIFIED'].includes(r.kind)){await tx.accountSessionReference.update({where:{accountId:scope.accountId},data:{state:r.kind==='IDENTITY_MISMATCH'?'NEEDS_REVIEW':'EXPIRED',checkedRuntimeId:null,checkingUntil:null}});}
+   if(r.kind==='OBSERVED_NO_RESTRICTION'&&o.identity==='MATCH'&&!o.warnings.length){
+    await tx.accountSessionReference.update({where:{accountId:scope.accountId},data:{state:'VERIFIED',verifiedAt:new Date(),checkedRuntimeId:runtime.runtimeId,checkingUntil:null}});
+   }
    if(o.identity==='MATCH'){
-    const observation=sendObservationSchema.parse({state:restrictionState(o.warnings.map(w=>w.code)),source:'SAME_SESSION',observedAt:r.observedAt,evidence,requestKey:scope.workflowId});
+    const observation=sendObservationSchema.parse({state:restrictionState(o.warnings.map(w=>w.code)),source:'SAME_SESSION',observedAt:r.observedAt,evidence,requestKey:scope.workflowId,binding:{sessionKey:ref.sessionKey,deviceId:runtime.deviceId(),runtimeId:runtime.runtimeId,senderId:scope.senderId}});
     await tx.auditLog.create({data:{actorId:actor.id,entityId:scope.accountId,action:'ACCOUNT_SEND_OBSERVATION',metadata:observation}});
     if(observation.state!=='UNKNOWN'){
      await tx.autoContactControl.upsert({where:{platform_mode:{platform:'XHS',mode:'REAL'}},create:{platform:'XHS',mode:'REAL',pauseReason:'ACCOUNT_RESTRICTED',pausedAt:new Date()},update:{pauseReason:'ACCOUNT_RESTRICTED',pausedAt:new Date()}});
@@ -44,5 +48,6 @@ export async function inspectBoundedAccount(db:Db,devices:DeviceService,runtime:
  }finally{
   if(transport)stopped=await transport.close();else if(driver?.replyEndpoint)stopped=await driver.replyEndpoint().stop().catch(()=>false);
   if(stopped)await permit.release();
+  else await db.$transaction(async tx=>{await contactLock(tx);await tx.autoContactControl.upsert({where:{platform_mode:{platform:'XHS',mode:'REAL'}},create:{platform:'XHS',mode:'REAL',pauseReason:'STOP_UNCONFIRMED',pausedAt:new Date()},update:{pauseReason:'STOP_UNCONFIRMED',pausedAt:new Date()}});await tx.autoContactRule.updateMany({where:{platform:'XHS',mode:'REAL'},data:{enabled:false}});});
  }
 }

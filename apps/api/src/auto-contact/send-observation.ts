@@ -12,6 +12,7 @@ export const sendObservationSchema=z.object({
  source:z.enum(['SAME_SESSION','USER_REPORT']),
  observedAt:z.string().datetime(),
  evidence:restrictionResultSchema.shape.observation.pick({identity:true,title:true,pathname:true,warnings:true}).extend({screenshotState:z.literal('NOT_CAPTURED')}).strict().optional(),
+ binding:z.object({sessionKey:z.string(),deviceId:z.string(),runtimeId:z.string(),senderId:z.string()}).strict().optional(),
  requestKey:z.string().regex(/^[A-Za-z0-9:_-]{1,200}$/).optional(),
 }).strict();
 export type SendObservation=z.infer<typeof sendObservationSchema>;
@@ -72,7 +73,7 @@ export async function recordSendExecution(tx:Prisma.TransactionClient, actorId:s
 export function automaticSendReady(observation:SendObservation|null,now:Date,deployment:ExactReplyDeployment=exactReplyDeployment){
  const age=observation?now.getTime()-Date.parse(observation.observedAt):Infinity;
  return deployment.enabled&&deployment.responseMappingReviewed===true&&deployment.sendEligibilityReviewed===true&&!!deployment.reviewedSha256&&
-  observation?.state==='UNKNOWN'&&observation.source==='SAME_SESSION'&&observation.evidence?.identity==='MATCH'&&age>=0&&age<=300000;
+  observation?.state==='UNKNOWN'&&observation.source==='SAME_SESSION'&&observation.evidence?.identity==='MATCH'&&observation.evidence.warnings.length===0&&age>=0&&age<=300000;
 }
 /** Restriction observations are append-only. No empty page or elapsed time clears a
  * prior restriction. A future recovery workflow needs separate reviewed evidence. */
@@ -82,6 +83,8 @@ export async function accountSendObservation(tx:Prisma.TransactionClient,account
  const parsed=sendObservationSchema.safeParse(row?.metadata);
  const observation=parsed.success?parsed.data:null;
  const age=observation?now.getTime()-Date.parse(observation.observedAt):Infinity;
- const ready=automaticSendReady(observation,now);
+ const binding=observation?.binding,account=binding?await tx.platformAccount.findUnique({where:{id:accountId},include:{sessionReference:true}}):null, ref=account?.sessionReference;
+ const sessionBound=!!binding&&binding.sessionKey===account?.loginSessionKey&&binding.sessionKey===ref?.sessionKey&&binding.deviceId===ref?.deviceId&&binding.senderId===account?.loginPlatformUserId&&ref?.state==='VERIFIED'&&(ref.checkedRuntimeId===binding.runtimeId||!!ref.checkedRuntimeId?.startsWith(binding.runtimeId+':task:'));
+ const ready=automaticSendReady(observation,now)&&sessionBound;
  return {state:observation?.state??'UNKNOWN',evidenceInvalid:!!row&&!parsed.success,canSend:ready,checkedAt:observation?.observedAt??null,stale:age<0||age>300000,source:observation?.source??null,evidence:observation?.evidence??null,automaticSendReady:ready,qualificationBasis:'RESTRICTION_OBSERVATION_ONLY' as const,reason:observation&&observation.state!=='UNKNOWN'?'账号受限，禁止发送或换号继续':ready?'应用发送条件已满足；提交时仍检查限制，不能保证平台接受或展示':'平台未提供只读发送许可；应用回执部署或限制检查尚未就绪，独立单次取证须精确授权并现场检查限制'};
 }

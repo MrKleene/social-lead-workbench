@@ -19,7 +19,7 @@ function fixture(){
  const release=vi.fn(async()=>{}),permit={root:'/synthetic',signal:new AbortController().signal,release};
  const devices:any={enabled:()=>true,acquire:vi.fn(async()=>permit),assertPermit:vi.fn(async()=>{})};
  const endpoint={url:new URL('http://127.0.0.1:1/mcp'),token:'1'.repeat(64),accountId:req.accountId,binarySha256:'2'.repeat(64),stop:vi.fn(async()=>true)};
- const driver={replyEndpoint:()=>endpoint,stop:vi.fn(async()=>{})};
+ const driver={status:vi.fn(async()=>({loggedIn:true,userId:'a'.repeat(24)})),replyEndpoint:()=>endpoint,stop:vi.fn(async()=>{})};
  const runtime:any={runtimeId:'runtime',mode:()=> 'real',persistent:()=>true,deviceId:()=> 'device',openSavedForReply:vi.fn(async()=>driver)};
  const sender=new LocalXhsReplySender(db,devices,runtime,{enabled:true,reviewedSha256:'2'.repeat(64)});
  // Only this synthetic test bypasses the immutable production deployment/hash gate.
@@ -51,3 +51,6 @@ it.each(['legacy-hold','restricted','historical-report'])('system %s blocks befo
 
 it.each(['runtime:task:synthetic-task','runtime'])('accepts login proof from the current runtime %s without bypassing other guards',async proof=>{const f=fixture();f.account.sessionReference.checkedRuntimeId=proof;expect((await f.sender.send(req)).kind).toBe('UNKNOWN');expect(wire.send).toHaveBeenCalledTimes(1);});
 it.each(['older:task:synthetic-task','runtime:task:','runtime-other:task:synthetic-task'])('rejects stale or incomplete task proof %s',async proof=>{const f=fixture();f.account.sessionReference.checkedRuntimeId=proof;expect((await f.sender.send(req)).kind).toBe('FAILED');expect(wire.send).not.toHaveBeenCalled();});
+
+it.each(['RATE_LIMITED','RESTRICTED'])('live identity probe preserves %s and never submits or releases an uncertain process',async message=>{const f=fixture();f.driver.status.mockRejectedValue(Error(message));wire.stop.mockResolvedValue(false);expect(await f.sender.send(req)).toEqual({kind:'RISK',reason:message==='RATE_LIMITED'?'RATE_LIMITED':'PLATFORM_REFUSED'});expect(wire.send).not.toHaveBeenCalled();expect(f.release).not.toHaveBeenCalled();});
+it.each([false,true])('live login mismatch (loggedIn=%s) stops before submission',async loggedIn=>{const f=fixture();f.driver.status.mockResolvedValue({loggedIn,userId:'f'.repeat(24)});expect((await f.sender.send(req)).kind).toBe('FAILED');expect(wire.send).not.toHaveBeenCalled();expect(f.release).toHaveBeenCalledTimes(1);});

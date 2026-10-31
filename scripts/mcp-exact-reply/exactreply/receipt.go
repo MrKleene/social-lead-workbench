@@ -210,11 +210,13 @@ func ReceiptProjection(c Command, body []byte) ([]ReceiptField, error) {
 // by a command, environment variable, remote response or model-generated mapping.
 // No production descriptor is installed until that evidence exists.
 type ReceiptMapping struct {
-	Endpoint                          string
-	PostPath, TargetPath, ContentPath string
-	SuccessPath                       string
-	SuccessValue                      any
-	ReplyIDPath                       string
+	Endpoint                                                                                             string
+	PostPath, TargetPath, ContentPath                                                                    string
+	SuccessPath                                                                                          string
+	SuccessValue                                                                                         any
+	ReplyIDPath                                                                                          string
+	CodePath                                                                                             string
+	ResponsePostPath, ResponseTargetPath, ResponseRecipientPath, ResponseSenderPath, ResponseContentPath string
 }
 
 func pointer(v any, p string) any {
@@ -249,6 +251,17 @@ func ParseMappedReceipt(c Command, m *ReceiptMapping, endpoint string, status in
 	expected, _ := json.Marshal(m.SuccessValue)
 	if m.SuccessValue == nil || !bytes.Equal(actual, expected) {
 		return nil, false
+	}
+	if m.CodePath != "" {
+		code, ok := pointer(res, m.CodePath).(json.Number)
+		if !ok || code.String() != "0" {
+			return nil, false
+		}
+	}
+	for _, pair := range [][2]string{{m.ResponsePostPath, c.PostID}, {m.ResponseTargetPath, c.TargetID}, {m.ResponseRecipientPath, c.RecipientID}, {m.ResponseSenderPath, c.SenderID}, {m.ResponseContentPath, c.Content}} {
+		if pair[0] != "" && pointer(res, pair[0]) != pair[1] {
+			return nil, false
+		}
 	}
 	reply, ok := pointer(res, m.ReplyIDPath).(string)
 	if !ok || !id.MatchString(reply) || reply == c.TargetID || reply == c.PostID || reply == c.SenderID || reply == c.RecipientID {

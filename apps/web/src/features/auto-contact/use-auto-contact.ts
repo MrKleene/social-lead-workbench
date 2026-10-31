@@ -1,3 +1,4 @@
+import {accountReadyForRule} from './account-ready';
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { autoContactConsent, type AutoContactOverview, type AutoContactRuleInput, type AutoContactJobView } from '@crm/contracts';
@@ -12,7 +13,7 @@ export function useAutoContact(enabled: boolean, runId?:string) {
     const rule = overview.data?.rules[0], refresh = () => Promise.all([client.invalidateQueries({ queryKey: ['auto-contact'] }), client.invalidateQueries({ queryKey: ['auto-contact-jobs'] }), client.invalidateQueries({ queryKey: ['accounts'] })]);
     const canEnable = Boolean(overview.data?.capability.available && rule?.content.trim() && rule.accountIds.length && !rule.pauseReason && rule.accountIds.every(id => {
         const account = overview.data?.accounts.find(a => a.id === id);
-        return account?.healthy && account.workbenchStatus !== 'PAUSED' && (rule.mode === 'SIMULATION' ? account.isDemo : !account.isDemo && account.sendEligibility?.canSend && !account.sendEligibility.stale);
+        return accountReadyForRule(account,rule.mode);
     }));
     const save = useMutation({ mutationFn: () => send(`/auto-contact/rules/${rule?.id ?? 'workspace'}`, 'PUT', draft?{...draft,channels:draft.channel!==rule?.channel?[draft.channel]:draft.channels,...(draft.content!==rule?.content?{templateId:null,templateVersion:null}:{})}:draft), retry: false, onSuccess: async () => { await refresh(); setDraft(null); } });
     const toggle = useMutation({ mutationFn: (enabled: boolean) => { if(enabled&&!canEnable)throw Error('账号受限或发送资格待核验，不能开启自动联系'); return send(`/auto-contact/rules/${rule!.id}/enabled`, 'POST', { version: rule!.version, enabled, ...(enabled ? { consent: autoContactConsent, hash: rule!.hash } : {}) }); }, retry: false, onSuccess: async () => { setConfirm(false); await refresh(); } });

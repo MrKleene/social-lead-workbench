@@ -1,3 +1,6 @@
+import {randomUUID} from 'node:crypto';
+import type {Actor} from '../auth/security';
+import {inspectBoundedAccount} from './bounded-account-inspection';
 import {accountSystemBlock} from '../accounts/account-execution-policy';
 import {accountSendObservation,recordSendExecution} from './send-observation';
 import {executionEventSchema, type ExecutionEvent} from './reply-stage-journal';
@@ -11,7 +14,7 @@ import { contactTarget, eligibilityHash, eligible, ruleHash, quotaBucket } from 
 import type { ContactSender, SendRequest, SendResult } from './contact-sender';
 import { exactReplyDeployment, type ExactReplyDeployment } from './xhs-reply-deployment';
 import { XhsExactReplyTransport } from './xhs-reply-transport';
-/** Concrete worker adapter. Default source deployment record is OFF and unapproved.
+/** Concrete worker adapter. Default source deployment record is OFF pending rollout.
  * No credentials, endpoint, binary path, approval hash or rule text comes from HTTP. */
 export class LocalXhsReplySender implements ContactSender {
     readonly mode = 'REAL' as const;
@@ -20,6 +23,21 @@ export class LocalXhsReplySender implements ContactSender {
         return platform === 'XHS' && channel === 'COMMENT' && process.platform === 'darwin' &&
             this.deployment.enabled && this.deployment.responseMappingReviewed === true && this.deployment.sendEligibilityReviewed === true && !!this.deployment.reviewedSha256 &&
             toolPlan(process.env.HOME ?? '').hash === this.deployment.reviewedSha256;
+    }
+    private preparations=new Map<string,Promise<boolean>>();
+    private nextCheck=new Map<string,number>();
+    async prepare(actor:Actor,accountId:string):Promise<boolean>{
+        if(!this.capability('XHS','COMMENT')||!this.devices.enabled()||!this.runtime.persistent()||this.runtime.mode()!=='real')return false;
+        const pending=this.preparations.get(accountId);if(pending)return pending;
+        const work=(async()=>{
+            if(await this.healthy(accountId))return true;
+            if((this.nextCheck.get(accountId)??0)>Date.now())return false;
+            const control=await this.db.autoContactControl.findUnique({where:{platform_mode:{platform:'XHS',mode:'REAL'}}});
+            const account=await this.db.platformAccount.findUnique({where:{id:accountId}});
+            if(control?.pauseReason||control?.activeJobId||!account?.loginPlatformUserId||account.archivedAt||accountSystemBlock(account))return false;
+            this.nextCheck.set(accountId,Date.now()+60000);
+            try{await inspectBoundedAccount(this.db,this.devices,this.runtime,actor,{workflowId:'auto-qualification:'+randomUUID(),accountId,senderId:account.loginPlatformUserId,binarySha256:this.deployment.reviewedSha256!},AbortSignal.timeout(60000));this.nextCheck.delete(accountId);return await this.healthy(accountId);}catch(error){await this.db.auditLog.create({data:{actorId:actor.id,entityId:accountId,action:'AUTO_CONTACT_QUALIFICATION_FAILED',metadata:{reason:error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'QUALIFICATION_UNAVAILABLE',submissions:0}}});return false;}
+        })();this.preparations.set(accountId,work);try{return await work;}finally{this.preparations.delete(accountId);}
     }
     async healthy(accountId: string) {
         if (!this.capability('XHS', 'COMMENT') || !this.devices.enabled() || this.runtime.mode() !== 'real' || !this.runtime.persistent()) return false;
@@ -80,6 +98,8 @@ export class LocalXhsReplySender implements ContactSender {
             if (!driver.replyEndpoint) return { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' };
             transport = new XhsExactReplyTransport(driver.replyEndpoint(), { enabled: true, reviewedSha256: this.deployment.reviewedSha256!, requireJournal: true, requireConfirmedMapping: true });
             if (!await transport.connect(combined)) { const failure = transport.connectionFailure(); stopped = await transport.stop(); return stopped || failure.kind === 'RISK' ? failure : { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' }; }
+            const login=await driver.status(combined);
+            if(!login.loggedIn||login.userId!==initial.account.loginPlatformUserId){stopped=await transport.stop();return stopped?notSent():{kind:'BLOCKED',reason:'STOP_UNCONFIRMED'};}
             const current = await this.authorized(request);
             if (!current || current.account.version !== initial.account.version || current.account.loginPlatformUserId !== initial.account.loginPlatformUserId || current.account.sessionReference?.sessionKey !== initial.account.sessionReference?.sessionKey || combined.aborted) {
                 stopped = await transport.stop(); return stopped ? notSent() : { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' };
@@ -90,8 +110,10 @@ export class LocalXhsReplySender implements ContactSender {
                 await this.db.$transaction(tx=>recordSendExecution(tx,current.actor.id,request.accountId,request.requestKey,'AUTO_CONTACT_EXECUTION_STAGE',event,current.account.loginPlatformUserId!));
             });
             stopped = await transport.stop(); return !stopped && result.kind !== 'RISK' ? { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' } : result;
-        } catch {
+        } catch (error) {
             if (transport) stopped = await transport.stop();
+            if (error instanceof Error && error.message === 'RATE_LIMITED') return { kind: 'RISK', reason: 'RATE_LIMITED' };
+            if (error instanceof Error && error.message === 'RESTRICTED') return { kind: 'RISK', reason: 'PLATFORM_REFUSED' };
             if (!stopped || attempted) return { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' };
             return notSent();
         } finally {

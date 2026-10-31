@@ -24,6 +24,8 @@ export interface ContactSender {
     readonly mode: 'REAL' | 'SIMULATION';
     capability(platform: string, channel: string): boolean;
     healthy(accountId: string): Promise<boolean>;
+    /** Bounded read-only qualification for an authorized rule, before reserving quota. */
+    prepare?(actor: import('../auth/security').Actor, accountId: string): Promise<boolean>;
     send(request: SendRequest, signal?: AbortSignal): Promise<SendResult>;
     reconcile?(request: SendRequest, receipt: string): Promise<SendResult>;
 }

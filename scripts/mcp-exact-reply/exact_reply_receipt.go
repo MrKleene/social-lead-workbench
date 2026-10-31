@@ -27,9 +27,19 @@ type exactReceiptCapture struct {
 	waitDone          chan struct{}
 }
 
-// An actual response sample must be reviewed before this can become non-nil.
-// CAPTURE_ONCE is independently useful with nil: it persists evidence as UNKNOWN.
-func reviewedExactReceiptMapping() *exactreply.ReceiptMapping { return nil }
+// Same paths and tuple checks as captured-reply-reconciliation.ts, reviewed
+// against the 2026-10-28 captured response plus independent fresh readback.
+// This describes response evidence only: engine.Run still requires a new matching
+// reply after reload and confirmed owned-process shutdown before CONFIRMED.
+func reviewedExactReceiptMapping() *exactreply.ReceiptMapping {
+	return &exactreply.ReceiptMapping{
+		Endpoint: "https://edith.xiaohongshu.com/api/sns/web/v1/comment/post",
+		PostPath: "/note_id", TargetPath: "/target_comment_id", ContentPath: "/content",
+		SuccessPath: "/success", SuccessValue: true, CodePath: "/code", ReplyIDPath: "/data/comment/id",
+		ResponsePostPath: "/data/comment/note_id", ResponseTargetPath: "/data/comment/target_comment/id",
+		ResponseRecipientPath: "/data/comment/target_comment/user_info/user_id", ResponseSenderPath: "/data/comment/user_info/user_id", ResponseContentPath: "/data/comment/content",
+	}
+}
 func armExactReceipt(ctx context.Context, p *rod.Page, c exactreply.Command) (cap *exactReceiptCapture, err error) {
 	cap = &exactReceiptCapture{waitDone: make(chan struct{})}
 	watch, cancel := context.WithCancel(ctx)
@@ -101,6 +111,9 @@ func (cap *exactReceiptCapture) finish(ctx context.Context, c exactreply.Command
 	defer cap.mu.Unlock()
 	cap.active = false
 	state := "MAPPING_UNREVIEWED"
+	if reviewedExactReceiptMapping() != nil {
+		state = "MAPPING_REVIEWED"
+	}
 	if cap.count == 0 {
 		state = "REQUEST_NOT_OBSERVED"
 	} else if cap.count != 1 {
@@ -117,7 +130,7 @@ func (cap *exactReceiptCapture) finish(ctx context.Context, c exactreply.Command
 	if cap.count == 1 && cap.status == 403 {
 		return nil, false, exactreply.RiskError("PLATFORM_REFUSED")
 	}
-	if state != "MAPPING_UNREVIEWED" {
+	if state != "MAPPING_UNREVIEWED" && state != "MAPPING_REVIEWED" {
 		return nil, false, nil
 	}
 	o, accepted := exactreply.ParseMappedReceipt(c, reviewedExactReceiptMapping(), cap.endpoint, cap.status, cap.request, cap.response)

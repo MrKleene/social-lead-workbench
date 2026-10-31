@@ -34,7 +34,7 @@ export type SendEligibilityView={state:'RESTRICTED'|'VERIFY_REQUIRED'|'RATE_LIMI
 export type ContactAccount = {
     workbenchStatus?:string;
     systemBlockReason?:string|null;
-    loginState?:string;
+    loginState?:string;canCheck?:boolean;
     sendEligibility?:SendEligibilityView;
     id: string;
     version: number;
