@@ -110,7 +110,17 @@ export async function acceptanceSendAllowed(db:Store,rule:AutoContactRule,review
  const r=await db.semanticReview.findUnique({where:{id:reviewId},include:{capture:{include:{post:true}}}});
  const runId=r?.capture?.lastRunId;
  const a=await activeAcceptance(db)??(runId?await db.normalAutomationAcceptance.findUnique({where:{runId}}):null);
- if(!a)return true;const s=normalAcceptanceScope.parse(a.scope);
+ if(!a){
+  if(rule.mode!=='REAL')return true;
+  // A normal enable authorizes new collection runs, not old results edited or
+  // re-evaluated after enable. Recheck at reservation and final RPC as well.
+  if(!r?.capture||!rule.authorizedAt||r.updatedAt<rule.authorizedAt)return false;
+  const sourceIds=[r.runId,r.capture.runId,r.capture.lastRunId];
+  if(sourceIds.some(id=>typeof id!=='string'||!id))return false;
+  const ids=[...new Set(sourceIds)];
+  return await db.collectionRun.count({where:{id:{in:ids},createdAt:{gte:rule.authorizedAt}}})===ids.length;
+ }
+ const s=normalAcceptanceScope.parse(a.scope);
  if(!r||!liveAcceptance(a)||!await acceptanceRuleAllowed(db,rule)||rule.id!==s.ruleId||!r.capture?.postId||runId!==a.runId||!a.reviewIds.includes(reviewId)||!a.modelCallId||a.sendJobId&&a.sendJobId!==jobId)return false;
  const target=contactTarget(r,r.capture,r.capture?.post??null);
  if(!target)return false;

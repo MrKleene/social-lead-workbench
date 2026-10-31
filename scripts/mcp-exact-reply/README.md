@@ -2,7 +2,7 @@
 
 ## 当前接入状态（2026-10-31）
 
-普通发送器的响应映射已接通并通过隔离测试；候选 `v2.5.5-local-reviewed-receipt-v1` 的 SHA256 为 `4ec68ba6999dc9f16ca4ae1bf5013e6df48b8bbf47d41b9e5ec6d8d3446ee6c8`，两次独立离线构建一致。固定响应元组与独立回读同时匹配才确认，未知/风险保持锁定。应用部署仍关闭，候选未安装或执行，正式运行未更新。详见 [交付与发布方案](../../docs/NORMAL-AUTO-REPLY-2026-10-31.md)。下方各阶段的候选哈希、无响应映射及生产状态均为当时历史记录，不作为当前版本结论。
+当前发布候选为 `v2.5.5-local-readback-verify-v2`，SHA256 `1c08ab3001ec004aa0c10fc8c681c3be3c71e46c303f463171190186dd36b3f8`，两次离线构建一致。正常发送与独立只读 verify 共用有界自动展开回读；应用能力开关与组件哈希同步准备，但新组件安装和运行更新仍待本次批准，正式规则保持关闭。详见 [当前发布方案](../../docs/AUTO-REPLY-RELEASE-2026-10-31.md)。以下各阶段为历史记录，不代表当前候选或正式状态。
 
 This is a reviewable overlay on the already-reviewed root-scope MCP source, not a replacement installed by this repository. The original license is preserved in `UPSTREAM-LICENSE`. `base-manifest.json` pins the full input tree; any extra, missing, changed or symlink file aborts the build.
 
@@ -14,7 +14,7 @@ node scripts/mcp-exact-reply/build.mjs REVIEWED_SOURCE NEW_OUTPUT EXISTING_GO EX
 
 The script tests the pure state machine and pure comment-data helpers, builds without network/module downloads, and writes `BUILD.json` and `SOURCE-OVERLAY.json`. It never installs or runs the MCP candidate. Unit test executables contain synthetic fixtures only; these tests are not a browser/platform acceptance test. Repeat in a separate output directory and compare binary SHA256.
 
-The new tools are `workbench_reply_capabilities`, `workbench_reply_exact`, and memory-only `workbench_reply_status`. They use protocol `workbench.xhs.exact-reply.v1`. Send defaults OFF; the workbench has another immutable OFF deployment record and checks a separately approved binary pin. Existing read tool policy remains unchanged. Do not enable old reply tools to bypass this handshake.
+The new tools are `workbench_reply_capabilities`, `workbench_reply_exact`, and memory-only `workbench_reply_status`. They use protocol `workbench.xhs.exact-reply.v1`. Component send registration defaults OFF; the workbench uses a source-reviewed deployment record and an exact binary pin, independently of explicit rule consent. Existing read tool policy remains unchanged. Do not enable old reply tools to bypass this handshake.
 
 The driver verifies the logged-in stable sender, post, exact selected comment and its author, exact DOM reply button, unique composer and unchanged content. Missing or unloaded targets fail before submission; it does not locate another comment from the same author. One click, context-bound operations, no retry, request fingerprint reservation, instance mutex and poison-on-uncertain-close protect ambiguity. The workbench still independently terminates/confirms its owned process group. Native cancellation, account state and selectors have not been validated on a real platform session.
 

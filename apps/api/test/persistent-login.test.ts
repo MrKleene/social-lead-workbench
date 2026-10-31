@@ -23,3 +23,13 @@ it.each(['', 'null', '{}', '{"fixture":true,"status":"PENDING"}', '{"fixture":tr
 it('accepts documented v1/v2 cookie structures but rejects seed-only and invalid structures',()=>{for(const v of [[cookie],{version:2,seed:1,cookies:[cookie]},[cookie,{...cookie,domain:'.auxiliary.example'}]])expect(validSessionPayload(v,'real')).toBe(true);for(const v of [[],{version:2,seed:1,cookies:[]},{version:3,cookies:[cookie]},[{}],[{...cookie,value:null}],[{...cookie,domain:'.example.invalid'}],[cookie,cookie],[{...cookie,value:''}]])expect(validSessionPayload(v,'real')).toBe(false);});
 it('flushes only a private, bounded regular candidate and returns no credential values',async()=>{const path=join(dir,'synthetic-cookies.json');await writeFile(path,JSON.stringify({version:2,cookies:[cookie]}),{mode:0o600});expect(await confirmSessionFile(path,'real',new AbortController().signal)).toBeUndefined();});
 it('rejects missing, cancelled, symlink and hard-linked candidates without leaking contents',async()=>{const signal=new AbortController();signal.abort();await expect(runtime.confirmSaved('testaccount',key,signal.signal)).rejects.toThrow(/^SESSION_SAVE_UNCONFIRMED$/);const path=join(dir,'fixture-state.json');await unlink(path);await expect(runtime.confirmSaved('testaccount',key,new AbortController().signal)).rejects.toThrow(/^SESSION_SAVE_UNCONFIRMED$/);await symlink(join(dir,'session.json'),path);await expect(runtime.confirmSaved('testaccount',key,new AbortController().signal)).rejects.toThrow(/^SESSION_SAVE_UNCONFIRMED$/);await unlink(path);await link(join(dir,'session.json'),path);await expect(runtime.confirmSaved('testaccount',key,new AbortController().signal)).rejects.toThrow(/^SESSION_SAVE_UNCONFIRMED$/);});
+
+it('reply verification selects only the dedicated read-only process mode and rejects unreviewed runtime input',async()=>{
+ const signal=new AbortController().signal;
+ await expect(runtime.openSavedForReplyVerification('testaccount',key,signal,root,'f'.repeat(64))).rejects.toThrow('VERIFY_RUNTIME_DISABLED');
+ vi.stubEnv('XHS_ACCOUNT_LOGIN_MODE','real');const open=vi.spyOn(runtime,'open').mockResolvedValue({stop:async()=>{},qr:async()=>({image:'',seconds:1}),status:async()=>({loggedIn:true})});
+ if(process.platform==='darwin'){
+  await runtime.openSavedForReplyVerification('testaccount',key,signal,root,'f'.repeat(64));expect(open).toHaveBeenCalledExactlyOnceWith('testaccount',key,signal,true,root,'f'.repeat(64),false,false,false,true);
+ }
+ await expect(runtime.openSavedForReplyVerification('testaccount',key,signal,root,'unreviewed')).rejects.toThrow('VERIFY_RUNTIME_DISABLED');
+});

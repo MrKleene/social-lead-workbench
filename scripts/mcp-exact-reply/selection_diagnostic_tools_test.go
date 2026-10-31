@@ -109,3 +109,49 @@ func TestSelectionDiagnosticMCPCallsSelectionAndRejectsUnboundedInput(t *testing
 		t.Fatal("repeat click")
 	}
 }
+
+type verifyToolFixture struct{ reads int }
+
+func (f *verifyToolFixture) Verify(_ context.Context, t exactreply.VerifyTarget) (exactreply.VerifyObservation, error) {
+	f.reads++
+	return exactreply.VerifyObservation{Reply: exactreply.Observation{ID: t.ReplyID, PostID: t.PostID, ParentID: t.TargetID, RecipientID: t.RecipientID, SenderID: t.SenderID, ContentHash: t.ContentHash}, Counts: exactreply.ReadbackCounts{InitialMatches: 0, FinalMatches: 1, ExpansionWindows: 1}}, nil
+}
+func (f *verifyToolFixture) Close(context.Context) error { return nil }
+func TestExactVerifyExclusiveAndRejectsSendArguments(t *testing.T) {
+	t.Setenv("CRM_EXACT_VERIFY_ONLY", "1")
+	t.Setenv("CRM_EXACT_REPLY_ENABLED", "1")
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	registerTools(server, &AppServer{})
+	list, e := diagnosticSession(t, server).ListTools(context.Background(), nil)
+	if e != nil || len(list.Tools) != 1 || list.Tools[0].Name != "workbench_reply_verify" || !list.Tools[0].Annotations.ReadOnlyHint {
+		t.Fatal(list, e)
+	}
+	for _, r := range setupRoutes(&AppServer{}).Routes() {
+		if r.Path != "/health" && r.Path != "/mcp" && r.Path != "/mcp/*path" {
+			t.Fatal(r.Path)
+		}
+	}
+	server = mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	f := &verifyToolFixture{}
+	registerExactVerifyFactory(server, func() (exactreply.ReplyVerifier, error) { return f, nil })
+	cs := diagnosticSession(t, server)
+	args := map[string]any{"protocol": exactreply.VerifyProtocol, "accountId": "test", "senderId": "aaaaaaaaaaaaaaaaaaaaaaaa", "postId": "bbbbbbbbbbbbbbbbbbbbbbbb", "targetCommentId": "cccccccccccccccccccccccc", "recipientId": "dddddddddddddddddddddddd", "replyId": "eeeeeeeeeeeeeeeeeeeeeeee", "contentSha256": exactreply.Hash("synthetic"), "postReference": map[string]any{"postId": "bbbbbbbbbbbbbbbbbbbbbbbb", "token": "synthetic", "source": "pc_feed"}}
+	for _, key := range []string{"content", "maxSubmissions", "send", "maxReplyClicks"} {
+		bad := map[string]any{}
+		for k, v := range args {
+			bad[k] = v
+		}
+		bad[key] = 1
+		r, e := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "workbench_reply_verify", Arguments: bad})
+		if e == nil && !r.IsError {
+			t.Fatal("accepted", key)
+		}
+	}
+	if f.reads != 0 {
+		t.Fatal("invalid input read")
+	}
+	r, e := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "workbench_reply_verify", Arguments: args})
+	if e != nil || r.IsError || f.reads != 1 {
+		t.Fatal(r, e)
+	}
+}

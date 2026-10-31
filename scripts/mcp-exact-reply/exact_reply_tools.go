@@ -52,6 +52,7 @@ func registerExactPreflightTool(server *mcp.Server) {
 
 func registerExactReplyTools(server *mcp.Server) {
 	registerExactPreflightTool(server)
+	registerExactVerifyTool(server)
 	engine := &exactreply.Engine{}
 	mcp.AddTool(server, &mcp.Tool{Name: "workbench_reply_capabilities", Description: exactreply.Protocol + " finite exact-target reply, default OFF", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest, args struct{}) (*mcp.CallToolResult, any, error) {
 		return nil, map[string]any{"protocol": exactreply.Protocol, "enabled": os.Getenv("CRM_EXACT_REPLY_ENABLED") == "1", "exactTarget": true, "cancellation": "context-and-owned-stop", "receiptMode": "FAIL_CLOSED", "confirmedResponseMapping": true, "receiptCapture": exactreply.ReceiptCaptureProtocol, "stageJournal": exactreply.JournalProtocol, "channels": []string{"COMMENT"}, "sendTool": "workbench_reply_exact", "statusTool": "workbench_reply_status"}, nil
@@ -91,6 +92,28 @@ func registerExactReplyTools(server *mcp.Server) {
 		return nil, engine.Status(c), nil
 	})
 }
+
+func registerExactVerifyTool(server *mcp.Server) {
+	registerExactVerifyFactory(server, func() (exactreply.ReplyVerifier, error) {
+		b := newBrowser()
+		complete := false
+		defer func() {
+			if !complete {
+				b.Close()
+			}
+		}()
+		v := xiaohongshu.NewExactReplyVerifier(b.NewPage(), func() { b.Close() })
+		complete = true
+		return v, nil
+	})
+}
+func registerExactVerifyFactory(server *mcp.Server, factory func() (exactreply.ReplyVerifier, error)) {
+	mcp.AddTool(server, &mcp.Tool{Name: "workbench_reply_verify", Description: exactreply.VerifyProtocol + " verify existing exact reply with shared bounded automatic expansion; no selection, input or submit", InputSchema: json.RawMessage(exactVerifySchema), Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest, t exactreply.VerifyTarget) (*mcp.CallToolResult, any, error) {
+		return nil, exactreply.Verify(ctx, t, factory), nil
+	})
+}
+
+const exactVerifySchema = `{"type":"object","additionalProperties":false,"required":["protocol","accountId","senderId","postId","targetCommentId","recipientId","replyId","contentSha256","postReference"],"properties":{"protocol":{"type":"string","const":"workbench.xhs.exact-reply-verify.v1"},"accountId":{"type":"string","pattern":"^[A-Za-z0-9:_-]{1,200}$"},"senderId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"postId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"targetCommentId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"recipientId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"replyId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"contentSha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},"postReference":{"type":"object","additionalProperties":false,"required":["postId","token","source"],"properties":{"postId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"token":{"type":"string","minLength":1,"maxLength":4096,"pattern":"^[A-Za-z0-9_+/=-]+$"},"source":{"type":"string","enum":["pc_feed","pc_search"]}}}}}`
 
 // Diagnostic mode is exclusive. The process exposes no sender or legacy HTTP actions.
 func registerSelectionDiagnosticTool(server *mcp.Server) {

@@ -63,7 +63,7 @@ it('automatic readiness is a reviewed application release plus fresh same-sessio
  const {automaticSendReady}=await import('../src/auto-contact/send-observation');
  const observation:any={state:'UNKNOWN',source:'SAME_SESSION',observedAt:now.toISOString(),evidence:{identity:'MATCH',title:'synthetic',pathname:'/user/profile/[SENDER]',warnings:[],screenshotState:'NOT_CAPTURED'}};
  const release={enabled:true,reviewedSha256:'f'.repeat(64),responseMappingReviewed:true,sendEligibilityReviewed:true};
- expect(automaticSendReady(observation,now)).toBe(false);expect(automaticSendReady(observation,now,release)).toBe(true);
+ expect(automaticSendReady(observation,now)).toBe(true);expect(automaticSendReady(observation,now,release)).toBe(true);expect(automaticSendReady(observation,now,{...release,enabled:false})).toBe(false);
  for(const o of [null,{...observation,state:'RESTRICTED'},{...observation,source:'USER_REPORT'},{...observation,evidence:undefined},{...observation,observedAt:new Date(now.getTime()-300001).toISOString()}])expect(automaticSendReady(o,now,release)).toBe(false);
  expect(automaticSendReady(observation,now,{...release,responseMappingReviewed:false})).toBe(false);
 });

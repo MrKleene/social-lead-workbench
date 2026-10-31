@@ -1,7 +1,7 @@
-/** Source-reviewed deployment record, never HTTP/env input. Installing a candidate
- * does not enable sending. Candidate hash and reviews are prepared offline;
- * enabled stays false until explicit runtime authorization; rule consent and account/session checks remain separate. */
+/** Source-reviewed deployment record, never HTTP/env input. Capability is available only for this reviewed build. Installation never
+ * enables a rule; explicit rule consent, new-run scope and account/session
+ * checks remain separate. Deploy together with the exact pinned binary. */
 // sendEligibilityReviewed reviews the application restriction policy, not an
 // asserted platform can-send API. Unknown/empty UI never guarantees acceptance.
 export type ExactReplyDeployment = Readonly<{ enabled: boolean; reviewedSha256: string | null; responseMappingReviewed?: boolean; sendEligibilityReviewed?: boolean }>;
-export const exactReplyDeployment: ExactReplyDeployment = Object.freeze({ enabled: false, reviewedSha256: '4ec68ba6999dc9f16ca4ae1bf5013e6df48b8bbf47d41b9e5ec6d8d3446ee6c8', responseMappingReviewed: true, sendEligibilityReviewed: true });
+export const exactReplyDeployment: ExactReplyDeployment = Object.freeze({ enabled: true, reviewedSha256: '1c08ab3001ec004aa0c10fc8c681c3be3c71e46c303f463171190186dd36b3f8', responseMappingReviewed: true, sendEligibilityReviewed: true });

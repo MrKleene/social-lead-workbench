@@ -15,7 +15,7 @@ import { contactTarget, eligibilityHash, eligible, ruleHash, quotaBucket } from 
 import type { ContactSender, SendRequest, SendResult } from './contact-sender';
 import { exactReplyDeployment, type ExactReplyDeployment } from './xhs-reply-deployment';
 import { XhsExactReplyTransport } from './xhs-reply-transport';
-/** Concrete worker adapter. Default source deployment record is OFF pending rollout.
+/** Concrete worker adapter. Reviewed component capability is separate from explicit rule authorization.
  * No credentials, endpoint, binary path, approval hash or rule text comes from HTTP. */
 export class LocalXhsReplySender implements ContactSender {
     readonly mode = 'REAL' as const;

@@ -558,3 +558,32 @@ it.each(['duplicate','missing','sender','recipient','parent','body','target','po
  if(kind==='duplicate'){m.matches.push(m.matches[0]);m.replyIdCount=2;}if(kind==='missing')m.matches=[];if(kind==='sender')m.matches[0].userId='f'.repeat(24);if(kind==='recipient')m.matches[0].replyTarget.userId='f'.repeat(24);if(kind==='parent')m.matches[0].parentId='f'.repeat(24);if(kind==='body')m.matches[0].text='other';if(kind==='target')m.target[0].text='other';if(kind==='post')m.postId='f'.repeat(24);if(kind==='login')await db.auditLog.deleteMany({where:{entityId:p.readbackRequestId}});if(kind==='receipt')await db.auditLog.deleteMany({where:{entityId:f.key,action:'AUTO_CONTACT_EXECUTION_STAGE'}});if(kind==='expired')p.observedAt=new Date(0).toISOString();if(kind==='quota')await db.accountDay.updateMany({data:{occupied:0}});
  await db.auditLog.update({where:{id:f.observation.id},data:{metadata:m}});const before=await db.contactAttempt.findUnique({where:{id:f.attempt.id}}),quota=await db.accountDay.findMany();await expect(f.reconciler.confirm(actor,p)).rejects.toThrow();expect(await db.contactAttempt.findUnique({where:{id:f.attempt.id}})).toEqual(before);expect(await db.accountDay.findMany()).toEqual(quota);expect(await db.autoContactJob.findUnique({where:{id:f.job.id}})).toMatchObject({status:'UNKNOWN'});expect(await db.auditLog.count({where:{action:'NORMAL_REPLY_CAPTURE_RECONCILED'}})).toBe(0);
 });
+
+import {resolveReviewedNormalPause} from '../src/auto-contact/resolved-normal-pause';
+async function reviewedNormalPauseFixture(){
+ const f=await normalReadbackFixture();await f.reconciler.confirm(actor,f.proof);
+ const audit=await db.auditLog.findFirstOrThrow({where:{entityId:f.key,action:'NORMAL_REPLY_CAPTURE_RECONCILED'}}),c=await db.autoContactControl.findFirstOrThrow();
+ const [v]=await db.$queryRaw<{xmin:string}[]>`SELECT xmin::text AS xmin FROM "AutoContactControl" WHERE platform='XHS' AND mode='REAL'`;
+ return {...f,input:{jobId:f.job.id,expectedControlXmin:v.xmin,expectedPausedAt:c.pausedAt!.toISOString(),reconciliationAuditId:audit.id}};
+}
+it('explicit normal pause recovery compares reviewed row version and preserves all rules, attempts, quotas and locks',async()=>{
+ const f=await reviewedNormalPauseFixture();await db.contactAttempt.create({data:{ledgerId:f.attempt.ledgerId,requestKey:'older-other-account',kind:'FIRST',mode:'REAL',channel:'COMMENT',content:'old',outcome:'UNKNOWN',day:'old',actorId:actor.id,accountIdSnapshot:'old-restricted',createdAt:new Date(0)}});
+ const before=await Promise.all([db.contactAttempt.findMany(),db.accountDay.findMany(),db.contactLedger.findMany(),db.autoContactRule.findMany()]);
+ expect(await resolveReviewedNormalPause(db,actor,f.input)).toMatchObject({resolved:true,replyId:f.proof.replyId});
+ expect(await Promise.all([db.contactAttempt.findMany(),db.accountDay.findMany(),db.contactLedger.findMany(),db.autoContactRule.findMany()])).toEqual(before);
+ expect(await db.autoContactControl.findFirst()).toMatchObject({pauseReason:null,pausedAt:null});expect(await db.auditLog.count({where:{action:'REVIEWED_NORMAL_REPLY_PAUSE_RESOLVED'}})).toBe(1);
+ await expect(resolveReviewedNormalPause(db,actor,f.input)).rejects.toThrow('REVIEWED_PAUSE_CHANGED');
+});
+it.each(['same-text-rewrite','risk','unknown','missing-proof','wrong-proof','quota','enabled','active','later-unknown'])('reviewed normal pause recovery rejects %s without changing control or ledger',async kind=>{
+ const f=await reviewedNormalPauseFixture();
+ if(kind==='same-text-rewrite')await db.autoContactControl.updateMany({data:{pauseReason:'SUBMISSION_UNKNOWN'}});
+ if(kind==='risk')await db.platformAccount.update({where:{id:f.account.id},data:{status:'RESTRICTED'}});
+ if(kind==='unknown')await db.contactAttempt.update({where:{id:f.attempt.id},data:{outcome:'UNKNOWN'}});
+ if(kind==='missing-proof')f.input.reconciliationAuditId='missing';if(kind==='wrong-proof')f.input.jobId='other';
+ if(kind==='quota')await db.accountDay.updateMany({data:{occupied:0}});
+ if(kind==='enabled')await db.autoContactRule.updateMany({data:{enabled:true}});
+ if(kind==='active')await db.autoContactJob.update({where:{id:f.job.id},data:{status:'ATTEMPTED'}});
+ if(kind==='later-unknown')await db.contactAttempt.create({data:{ledgerId:f.attempt.ledgerId,requestKey:'later-other-account',kind:'FIRST',mode:'REAL',channel:'COMMENT',content:'later',outcome:'UNKNOWN',day:'old',actorId:actor.id,accountIdSnapshot:'other'}});
+ const before=await Promise.all([db.autoContactControl.findMany(),db.contactAttempt.findMany(),db.accountDay.findMany(),db.contactLedger.findMany()]);await expect(resolveReviewedNormalPause(db,actor,f.input)).rejects.toThrow();
+ expect(await Promise.all([db.autoContactControl.findMany(),db.contactAttempt.findMany(),db.accountDay.findMany(),db.contactLedger.findMany()])).toEqual(before);expect(await db.auditLog.count({where:{action:'REVIEWED_NORMAL_REPLY_PAUSE_RESOLVED'}})).toBe(0);
+});

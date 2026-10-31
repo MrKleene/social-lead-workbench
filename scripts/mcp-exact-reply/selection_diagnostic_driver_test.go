@@ -210,3 +210,75 @@ func TestExactReplySelectionCapabilityCannotReachInputOrSubmit(t *testing.T) {
 		t.Fatal("base capability methods not inspected", count)
 	}
 }
+
+const verifyCollapsedHTML = `<!doctype html><meta charset="utf-8"><title>Offline verification fixture</title><style>.note-scroller{height:600px;overflow:auto}.comment-item{min-height:35px}.show-more{display:block;height:30px}</style><div class="note-scroller"><div class="parent-comment"><div class="comment-item">target</div><div class="comment-item">old reply</div><button class="show-more">展开1条回复</button></div><div class="end-container">THE END</div></div><script>
+const target={id:'cccccccccccccccccccccccc',noteId:'bbbbbbbbbbbbbbbbbbbbbbbb',userInfo:{userId:'dddddddddddddddddddddddd'},content:'original',subCommentCount:'2',subComments:[{id:'ffffffffffffffffffffffff',noteId:'bbbbbbbbbbbbbbbbbbbbbbbb',userInfo:{userId:'999999999999999999999999'},content:'old',subComments:[]}]};
+window.__INITIAL_STATE__={user:{userInfo:{value:{userId:'aaaaaaaaaaaaaaaaaaaaaaaa'}}},note:{noteDetailMap:{bbbbbbbbbbbbbbbbbbbbbbbb:{note:{noteId:'bbbbbbbbbbbbbbbbbbbbbbbb',interactInfo:{commentCount:'3'}},comments:{hasMore:false,list:[target]}}}}};window.counts={expansions:0,submissions:0,inputs:0};
+document.querySelector('.show-more').onclick=function(){window.counts.expansions++;target.subComments.push({id:'eeeeeeeeeeeeeeeeeeeeeeee',noteId:'bbbbbbbbbbbbbbbbbbbbbbbb',userInfo:{userId:'aaaaaaaaaaaaaaaaaaaaaaaa'},content:'synthetic reply',targetComment:{id:target.id,userInfo:{userId:'dddddddddddddddddddddddd'}},subComments:[]});this.insertAdjacentHTML('beforebegin','<div class="comment-item">synthetic reply</div>');this.remove()};document.addEventListener('input',()=>window.counts.inputs++);document.addEventListener('submit',()=>window.counts.submissions++);
+</script>`
+
+func TestExactReplyVerifyAndSenderShareAutomaticCollapsedReadback(t *testing.T) {
+	chrome := os.Getenv("SELECTION_FIXTURE_CHROME")
+	if chrome == "" {
+		t.Skip("offline Chromium required")
+	}
+	for _, mode := range []string{"normal-readback", "verify"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			l := launcher.New().Bin(chrome).UserDataDir(t.TempDir()).Headless(true).Proxy("http://127.0.0.1:9").Set("disable-background-networking").Leakless(false)
+			endpoint, e := l.Launch()
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer l.Kill()
+			b := rod.New().ControlURL(endpoint)
+			if e = b.Connect(); e != nil {
+				t.Fatal(e)
+			}
+			defer b.Close()
+			router := b.HijackRequests()
+			if e = router.Add("*", "", func(h *rod.Hijack) {
+				h.Response.SetHeader("Content-Type", "text/html")
+				h.Response.SetBody(verifyCollapsedHTML)
+			}); e != nil {
+				t.Fatal(e)
+			}
+			go router.Run()
+			defer router.Stop()
+			p, e := b.Page(proto.TargetCreateTarget{URL: "about:blank"})
+			if e != nil {
+				t.Fatal(e)
+			}
+			target := exactreply.VerifyTarget{Protocol: exactreply.VerifyProtocol, AccountID: "synthetic", SenderID: "aaaaaaaaaaaaaaaaaaaaaaaa", PostID: "bbbbbbbbbbbbbbbbbbbbbbbb", TargetID: "cccccccccccccccccccccccc", RecipientID: "dddddddddddddddddddddddd", ReplyID: "eeeeeeeeeeeeeeeeeeeeeeee", ContentHash: exactreply.Hash("synthetic reply"), Reference: exactreply.Reference{PostID: "bbbbbbbbbbbbbbbbbbbbbbbb", Token: "synthetic", Source: "pc_feed"}}
+			var o exactreply.Observation
+			var counts exactreply.ReadbackCounts
+			if mode == "normal-readback" {
+				d := NewExactReplyDriver(p, func() {})
+				d.profileChecked = true
+				o, e = d.Readback(ctx, target.Command(), target.ReplyID)
+				counts = d.readbackCounts
+			} else {
+				d := NewExactReplyVerifier(p, func() {})
+				d.page.profileChecked = true
+				var v exactreply.VerifyObservation
+				v, e = d.Verify(ctx, target)
+				o = v.Reply
+				counts = v.Counts
+				typ := reflect.TypeOf(d)
+				for _, name := range []string{"Select", "Submit", "Input", "Type"} {
+					if _, ok := typ.MethodByName(name); ok {
+						t.Fatal("write method", name)
+					}
+				}
+			}
+			if e != nil || o.ID != target.ReplyID || !exactreply.Matches(o, target.Command()) || counts.InitialMatches != 0 || counts.FinalMatches != 1 || counts.ExpansionWindows != 1 {
+				t.Fatal(o, counts, e)
+			}
+			c, e := p.Eval(`()=>window.counts`)
+			if e != nil || c.Value.Get("expansions").Int() != 1 || c.Value.Get("inputs").Int() != 0 || c.Value.Get("submissions").Int() != 0 {
+				t.Fatal(c, e)
+			}
+		})
+	}
+}

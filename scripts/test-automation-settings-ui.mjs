@@ -94,7 +94,7 @@ await dialog.getByRole('checkbox',{name:'选择账号 合成账号 11',exact:tru
  // worker refreshes stale qualification before any quota or send. UI never clears restrictions.
  accounts[10].systemBlockReason=null;for(const a of accounts){a.healthy=false;a.canCheck=true;a.sendEligibility={state:'UNKNOWN',canSend:false,stale:true};}
  await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});await page.reload();await open('自动回复');
- const sendSwitch=dialog.getByRole('switch',{name:'自动回复',exact:true});assert(await sendSwitch.isEnabled());await sendSwitch.click();await settled();assert.equal(ct.rules.find(r=>r.platform==='XHS').enabled,true);await screenshot('normal-reply-enabled-'+width+'.png');
+ assert((await dialog.innerText()).includes('历史采集和旧结果不补发'));const sendSwitch=dialog.getByRole('switch',{name:'自动回复',exact:true});assert(await sendSwitch.isEnabled());await sendSwitch.click();await settled();assert.equal(ct.rules.find(r=>r.platform==='XHS').enabled,true);await screenshot('normal-reply-enabled-'+width+'.png');
  await sendSwitch.click();await settled();assert.equal(ct.rules.find(r=>r.platform==='XHS').enabled,false);report.checks.push(width+': normal reply switch authorizes saved rule while fresh checks are pending; enabled/disabled persisted; restriction remains blocked');
  accounts.splice(0,accounts.length,...accountProbe);ct.capabilities.find(c=>c.platform==='XHS'&&c.channel==='COMMENT').available=false;
  // Exactly one target is hidden but every new save binds its actual ID. Zero targets are an error, never a guessed default.

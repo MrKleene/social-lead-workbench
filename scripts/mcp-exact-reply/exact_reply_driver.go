@@ -24,6 +24,7 @@ type exactReplyPage struct {
 	openMu                 sync.Mutex
 	openUsed               bool
 	trace                  exactreply.SelectionTrace
+	readbackCounts         exactreply.ReadbackCounts
 }
 type ExactReplyDriver struct {
 	*exactReplyPage
@@ -630,6 +631,10 @@ func exactReadbackOnce(rows []Comment, postID, replyID string, expand func() ([]
 	return found, nil
 }
 func (d *ExactReplyDriver) Readback(ctx context.Context, c exactreply.Command, replyID string) (exactreply.Observation, error) {
+	return d.exactReplyPage.readback(ctx, c, replyID)
+}
+func (d *exactReplyPage) readback(ctx context.Context, c exactreply.Command, replyID string) (exactreply.Observation, error) {
+	d.readbackCounts = exactreply.ReadbackCounts{}
 	s, err := d.state(ctx, c, true)
 	if err != nil {
 		return exactreply.Observation{}, err
@@ -641,7 +646,11 @@ func (d *ExactReplyDriver) Readback(ctx context.Context, c exactreply.Command, r
 	if err != nil {
 		return exactreply.Observation{}, err
 	}
+	_, initial, _ := exactReadbackCandidate(rows, c.PostID, replyID)
+	d.readbackCounts.InitialMatches = initial
+	d.readbackCounts.FinalMatches = initial
 	return exactReadbackOnce(rows, c.PostID, replyID, func() ([]Comment, error) {
+		d.readbackCounts.ExpansionWindows++
 		// Existing read-only expander, same page and post, no root scrolling,
 		// sender action, navigation retry or guessed private API.
 		_, err := boundedReadDetail(ctx, d.page, c.PostID, BoundedReadConfig{Version: 1, RootPages: 0, ReplyClicks: 12, MaxRoots: 40, MaxComments: 100, MaxRepliesPerRoot: 30, TimeoutMs: 5000})
@@ -655,7 +664,10 @@ func (d *ExactReplyDriver) Readback(ctx context.Context, c exactreply.Command, r
 		if fresh.SenderID != c.SenderID {
 			return nil, errors.New("ACCOUNT_CHANGED")
 		}
-		return exactComments(fresh.Comments)
+		rows, err := exactComments(fresh.Comments)
+		_, count, _ := exactReadbackCandidate(rows, c.PostID, replyID)
+		d.readbackCounts.FinalMatches = count
+		return rows, err
 	})
 }
 func (d *exactReplyPage) Close(ctx context.Context) error {

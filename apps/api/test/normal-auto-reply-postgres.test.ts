@@ -69,7 +69,9 @@ async function normalFixture(){
  const settings=new ContactSettingsService(db,local),service=new AutoContactService(db,local);
  const r=await settings.save(actor,'normal',{version:0,platform:'XHS',policyId:'workspace',policyRevision:1,threshold:90,channel:'COMMENT',channels:['COMMENT'],content:f.template.body,accounts:[{id:f.account.id,version:f.account.version,dailyLimit:3}]});
  const enabled=await settings.toggle(actor,r.id,{version:r.version,enabled:true,consent:autoContactConsent,hash:ruleHash(r)});
- // Only new evaluated rows qualify; fixtures use the normal review completion timestamp.
+ // Synthetic normal runs begin after enable; old source runs never qualify.
+ const review=await db.semanticReview.findUniqueOrThrow({where:{id:f.scope.reviewId}});
+ await db.collectionRun.update({where:{id:review.runId},data:{createdAt:new Date()}});
  await db.semanticReview.update({where:{id:f.scope.reviewId},data:{updatedAt:new Date()}});
  return {...f,local,settings,service,r:enabled,inspection,send,devices,runtime,release};
 }
@@ -116,4 +118,16 @@ it.each(['restricted','unverified','stop-unconfirmed'])('normal qualification %s
  if(kind==='unverified')expect(await db.accountSessionReference.findUnique({where:{accountId:f.account.id}})).toMatchObject({state:'EXPIRED',checkedRuntimeId:null});
  else expect((await db.autoContactControl.findFirstOrThrow()).pauseReason).toBe(kind==='restricted'?'ACCOUNT_RESTRICTED':'STOP_UNCONFIRMED');
  if(kind==='stop-unconfirmed')expect(f.release).not.toHaveBeenCalled();
+});
+
+it('normal enable excludes historical source even if old result is edited after enable',async()=>{
+ const f=await normalFixture(),review=await db.semanticReview.findUniqueOrThrow({where:{id:f.scope.reviewId}});
+ await db.collectionRun.update({where:{id:review.runId},data:{createdAt:new Date(f.r.authorizedAt!.getTime()-1000)}});
+ await db.semanticReview.update({where:{id:review.id},data:{score:100,updatedAt:new Date()}});
+ await f.service.tick();await f.service.tick();expect(f.send).not.toHaveBeenCalled();expect(f.inspection).not.toHaveBeenCalled();expect(await db.contactAttempt.count()).toBe(0);expect(await db.autoContactJob.findFirst()).toMatchObject({status:'SKIPPED'});
+});
+it('normal scope is rechecked after reservation when source is changed to historical run',async()=>{
+ const f=await normalFixture();await f.local.prepare(actor,f.account.id);await f.service.enqueue();const job=await f.service.reserve();expect(job).toBeTruthy();
+ const review=await db.semanticReview.findUniqueOrThrow({where:{id:f.scope.reviewId}});await db.collectionRun.update({where:{id:review.runId},data:{createdAt:new Date(0)}});
+ await f.service.dispatch(job!.id);expect(f.send).not.toHaveBeenCalled();expect(await db.autoContactJob.findUnique({where:{id:job!.id}})).toMatchObject({status:'CANCELLED'});expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(0);
 });
