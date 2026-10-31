@@ -24,6 +24,7 @@ class AutoContactController {
     private service: AutoContactService, @Inject(NormalAcceptanceService) private acceptance:NormalAcceptanceService, @Inject(Db) private db: Db, @Inject(CONTACT_SENDER) private sender: import('./contact-sender').ContactSender) { }
     @Get('acceptance') acceptanceStatus(@Req() r:AuthedRequest){return this.acceptance.status(r.actor);}
     @Post('acceptance') armAcceptance(@Req() r:AuthedRequest){return this.acceptance.arm(r.actor,r.body);}
+    @Post('acceptance/:id/reply-exception') replyException(@Req() r:AuthedRequest,@Param('id') id:string){return this.acceptance.armReplyException(r.actor,id,r.body);}
     @Post('acceptance/:id/close') closeAcceptance(@Req() r:AuthedRequest,@Param('id') id:string){return this.acceptance.close(r.actor,id);}
     @Get()
     @Header('Cache-Control', 'no-store, private')

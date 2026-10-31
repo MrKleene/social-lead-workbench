@@ -64,7 +64,7 @@ export class AutoReviewService {
   * before the first payable call. Preparing/previewing reads no provider key. */
  private async prepareAcceptanceBatch(){
   const a=await activeAcceptance(this.db);if(!a)return true;
-  const s=normalAcceptanceScope.parse(a.scope);if(s.maxPosts===1)return true;
+  const s=normalAcceptanceScope.parse(a.scope);if(s.replyOnly)return false;if(s.maxPosts===1)return true;
   if(!liveAcceptance(a)||!a.runId)return false;
   const enabledPolicy=await this.db.commentReviewPolicy.findUnique({where:{id:s.policyId}});if(!enabledPolicy?.autoEnabled||enabledPolicy.version!==s.policyVersion)return false;
   if(a.batchPlanned)return true;

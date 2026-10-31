@@ -8,10 +8,10 @@ import {requireAdmin,type Actor} from '../auth/security';
 import {lockSinglePost,assertNoSinglePost} from '../collection/single-post-lock';
 import {lockReview} from '../comment-review/review-policy.service';
 import {contactLock} from './contact-lock';
-import {ruleHash} from './contact-policy';
+import {ruleHash,eligible,eligibilityHash,contactTarget} from './contact-policy';
 import {savedReadTarget} from '../collection/saved-post-read';
 import {qwenModel} from '../../../../runtime/qwen-models.cjs';
-import {activeAcceptance,normalAcceptanceInput,normalAcceptanceScope,acceptanceConflict,coverageSkipped} from './normal-acceptance';
+import {activeAcceptance,normalAcceptanceInput,normalAcceptanceScope,replyExceptionInput,acceptanceConflict,coverageSkipped,blockingAcceptanceJobs} from './normal-acceptance';
 /** Administrative finite envelope around normal endpoints and workers, never a sender. */
 @Injectable()
 export class NormalAcceptanceService {
@@ -64,6 +64,26 @@ export class NormalAcceptanceService {
    const scope=normalAcceptanceScope.parse({...s,expiresAt,reviewConfigRevision:config.revision,ruleVersion:rule.version+1,policyVersion:policy.version+1,ruleHash:ruleHash({...rule,version:rule.version+1})});
    await tx.autoReviewJob.updateMany({where:{id:{in:eligible}},data:{status:'PENDING',policyVersion:scope.policyVersion,reason:'仅续接未调用的完整帖子；覆盖未确认帖子保留跳过'}});
    await tx.auditLog.create({data:{actorId:actor.id,entityId:id,action:'NORMAL_ACCEPTANCE_RESUMED_UNSPENT',metadata:{runId:a.runId,priorExpiresAt:s.expiresAt,expiresAt,eligibleJobs:eligible,excluded,claimsReset:false}}});
+   return tx.normalAutomationAcceptance.update({where:{id},data:{state:'ACTIVE',scope:scope as Prisma.InputJsonValue}});
+  });
+ }
+ /** New explicit one-recipient consent over an existing completed evaluation.
+  * The original model claims, run, close audit and global 100 rule stay intact. */
+ async armReplyException(actor:Actor,id:string,raw:unknown){
+  requireAdmin(actor);const input=parse(replyExceptionInput,raw);
+  return this.db.$transaction(async tx=>{await lockSinglePost(tx);await assertNoSinglePost(tx);await lockReview(tx);await contactLock(tx);
+   const a=await tx.normalAutomationAcceptance.findUniqueOrThrow({where:{id}}),s=normalAcceptanceScope.parse(a.scope),expiry=Date.parse(input.expiresAt)-Date.now();
+   if(a.state!=='CLOSED'||a.actorId!==actor.id||!a.runId||!a.modelCallId||a.sendJobId||a.sendClaimedAt||s.replyOnly||s.selection!=='CONFIG_SEARCH'||expiry<=0||expiry>1800000||!a.reviewIds.includes(input.reviewId)||await activeAcceptance(tx)||await tx.auditLog.count({where:{entityId:id,action:'NORMAL_ACCEPTANCE_REPLY_EXCEPTION_ARMED'}}))acceptanceConflict();
+   const [rule,policy,model,user,review]=await Promise.all([tx.autoContactRule.findUniqueOrThrow({where:{id:s.ruleId}}),tx.commentReviewPolicy.findUniqueOrThrow({where:{id:s.policyId}}),tx.modelSettings.findFirstOrThrow(),tx.user.findUnique({where:{id:actor.id}}),tx.semanticReview.findUniqueOrThrow({where:{id:input.reviewId},include:{capture:{include:{post:true}}}})]);
+   if(!user?.active||user.role!=='ADMIN'||rule.enabled||rule.threshold!==100||ruleHash({...rule,version:s.ruleVersion})!==s.ruleHash||policy.autoEnabled||policy.revision!==s.policyRevision||model.version!==s.modelVersion||model.model!==s.model||review.score!==95||!eligible(review,95)||review.policyId!==s.policyId||review.policyRevision!==s.policyRevision||review.selectedModel!==s.model||review.capture?.postId!==input.postId||review.capture.lastRunId!==a.runId||review.capture.post.coverage!=='COMPLETE')acceptanceConflict();
+   const target=contactTarget(review,review.capture,review.capture.post),claim=await tx.normalAcceptancePost.findUnique({where:{acceptanceId_postId:{acceptanceId:id,postId:input.postId}}});
+   if(!target||!claim?.modelCallId||!claim.reviewIds.includes(review.id)||(await tx.semanticModelCall.findUnique({where:{id:claim.modelCallId}}))?.status!=='COMPLETED'||await blockingAcceptanceJobs(tx,a,['PENDING','PROCESSING','FAILED','CANCELLED','SKIPPED']))acceptanceConflict();
+   const identity=await tx.platformIdentity.findUnique({where:{platform_platformUserId:{platform:rule.platform,platformUserId:target.recipientId}},include:{lead:true,contactLedger:{include:{attempts:true}}}});
+   if(identity?.lead&&(identity.lead.doNotContact||identity.lead.contactedAt||['CONTACTED','INTERESTED'].includes(identity.lead.contactStage))||identity?.contactLedger.some(l=>l.attempts.some(t=>t.outcome!=='CANCELLED'))||await tx.autoContactJob.count({where:{recipientId:target.recipientId,mode:rule.mode,status:{not:'CANCELLED'}}}))acceptanceConflict();
+   if(await tx.collectionRun.count({where:{status:{in:['QUEUED','RUNNING']}}})||await tx.autoReviewJob.count({where:{status:{in:['PENDING','PROCESSING']}}})||await tx.manualReviewJob.count({where:{status:{in:['PENDING','PROCESSING']}}})||await tx.semanticModelCall.count({where:{status:'RESERVED'}})||await tx.autoContactJob.count({where:{status:{in:['QUEUED','WAITING_ACCOUNT','WAITING_QUOTA','RESERVED','ATTEMPTED']}}})||await tx.deviceExecutionLease.count()||await tx.autoContactRule.count({where:{enabled:true}})||await tx.commentReviewPolicy.count({where:{autoEnabled:true}}))acceptanceConflict();
+   const replyOnly={reviewId:review.id,postId:input.postId,platformPostId:target.postId,commentId:target.commentId,recipientId:target.recipientId,score:95 as const,reviewHash:eligibilityHash(review),sourceHash:semanticHash({capture:review.capture.snapshot,post:review.capture.post.snapshot})};
+   const scope=normalAcceptanceScope.parse({...s,replyOnly,expiresAt:input.expiresAt,ruleVersion:rule.version+1,ruleHash:ruleHash({...rule,version:rule.version+1})});
+   await tx.auditLog.create({data:{actorId:actor.id,entityId:id,action:'NORMAL_ACCEPTANCE_REPLY_EXCEPTION_ARMED',metadata:{consent:input.consent,priorScope:a.scope,scope:scope as Prisma.InputJsonValue,additionalModelCalls:0,additionalCollections:0,maximumSubmissions:1,claimsReset:false}}});
    return tx.normalAutomationAcceptance.update({where:{id},data:{state:'ACTIVE',scope:scope as Prisma.InputJsonValue}});
   });
  }

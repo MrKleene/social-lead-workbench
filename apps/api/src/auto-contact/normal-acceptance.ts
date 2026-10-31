@@ -3,7 +3,7 @@ import {z} from 'zod';
 import type {Prisma,NormalAutomationAcceptance,AutoContactRule} from '@prisma/client';
 import type {Db} from '../common/db';
 import {wholePostRequestPolicy,type SemanticOutbound} from '@crm/contracts';
-import {ruleHash,contactTarget} from './contact-policy';
+import {ruleHash,contactTarget,eligibilityHash} from './contact-policy';
 import {semanticHash} from '../collection/capture-archive';
 import {estimateWholePostCost} from '../collection/model-cost-estimate';
 
@@ -19,7 +19,9 @@ export const normalAcceptanceInput=z.object({
  maxInputTokens:z.number().int().min(1).max(1000000),maxOutputTokens:z.number().int().min(1).max(131072),
  maxEstimatedMicros:z.number().int().min(1).max(100000000),expiresAt:z.string().datetime(),
 }).strict();
+export const replyExceptionInput=z.object({consent:z.literal('normal-reply-score95-once-v1'),postId:id,reviewId:id,expiresAt:z.string().datetime()}).strict();
 export const normalAcceptanceScope=normalAcceptanceInput.omit({consent:true}).extend({
+ replyOnly:z.object({reviewId:id,postId:id,platformPostId:id,commentId:id,recipientId:id,score:z.literal(95),reviewHash:id,sourceHash:id}).strict().optional(),
  reviewConfigRevision:z.number().int().positive().optional(),platformPostId:id.optional(),replyAccountId:id,ruleHash:id,policyId:id,policyRevision:z.number().int().positive(),model:id,mode:z.enum(['REAL','SIMULATION']),
 });
 export type AcceptanceScope=z.infer<typeof normalAcceptanceScope>;
@@ -34,18 +36,18 @@ export async function acceptanceRuleAllowed(db:Store,rule:AutoContactRule){
 }
 export async function acceptanceCollectionStart(db:Store,input:{actorId:string;configId:string;revision:number;requestKey:string;accountId?:string;plan?:{savedPostId?:string;freshPostsOnly?:boolean;restartCheckpoint?:boolean;postsPerRound:number;rounds:number;commentPages:number}}){
  const a=await activeAcceptance(db);if(!a)return null;const s=normalAcceptanceScope.parse(a.scope);
- if(!liveAcceptance(a)||a.actorId!==input.actorId||s.configId!==input.configId||s.configRevision!==input.revision||s.requestKey!==input.requestKey||s.readAccountId!==input.accountId||!input.plan||input.plan.savedPostId!==s.savedPostId||!!input.plan.freshPostsOnly!==(s.selection==='CONFIG_SEARCH')||input.plan.restartCheckpoint||input.plan.postsPerRound!==s.maxPosts||input.plan.rounds!==1||input.plan.commentPages!==1)acceptanceConflict();
+ if(s.replyOnly||!liveAcceptance(a)||a.actorId!==input.actorId||s.configId!==input.configId||s.configRevision!==input.revision||s.requestKey!==input.requestKey||s.readAccountId!==input.accountId||!input.plan||input.plan.savedPostId!==s.savedPostId||!!input.plan.freshPostsOnly!==(s.selection==='CONFIG_SEARCH')||input.plan.restartCheckpoint||input.plan.postsPerRound!==s.maxPosts||input.plan.rounds!==1||input.plan.commentPages!==1)acceptanceConflict();
  return a;
 }
 export async function acceptanceRunAllowed(db:Store,runId:string){
  const a=await activeAcceptance(db)??await db.normalAutomationAcceptance.findUnique({where:{runId}});
- return !a||liveAcceptance(a)&&a.runId===runId;
+ return !a||liveAcceptance(a)&&!normalAcceptanceScope.parse(a.scope).replyOnly&&a.runId===runId;
 }
 /** Recollection may create a new immutable archive version of the selected platform post. */
 export async function bindAcceptancePost(db:Store,runId:string,postId:string){
  const a=await activeAcceptance(db);if(!a)return acceptanceRunAllowed(db,runId);const s=normalAcceptanceScope.parse(a.scope);
  const post=await db.capturedPost.findUnique({where:{id:postId}});
- if(!liveAcceptance(a)||a.runId!==runId||!post||(s.selection==='SAVED_POST'&&post.platformPostId!==s.platformPostId)||post.configId!==s.configId||post.lastRunId!==runId)return false;
+ if(s.replyOnly||!liveAcceptance(a)||a.runId!==runId||!post||(s.selection==='SAVED_POST'&&post.platformPostId!==s.platformPostId)||post.configId!==s.configId||post.lastRunId!==runId)return false;
  const posts=await db.normalAcceptancePost.findMany({where:{acceptanceId:a.id}});
  if(posts.some(p=>p.postId===postId))return true;
  if(posts.length>=s.maxPosts)return false;
@@ -69,7 +71,7 @@ export async function acceptanceReviewConfigRevision(db:Store,runId:string,origi
 export async function acceptanceReviewAllowed(db:Store,job:{id:string;runId:string;postId:string;policyId:string;policyVersion:number},modelVersion?:number){
  const a=await activeAcceptance(db)??await db.normalAutomationAcceptance.findUnique({where:{runId:job.runId}});
  if(!a)return true;const s=normalAcceptanceScope.parse(a.scope),actor=await db.user.findUnique({where:{id:a.actorId}});
- return !!actor?.active&&actor.role==='ADMIN'&&liveAcceptance(a)&&a.runId===job.runId&&!!await db.normalAcceptancePost.findUnique({where:{acceptanceId_postId:{acceptanceId:a.id,postId:job.postId}}})&&s.policyId===job.policyId&&s.policyVersion===job.policyVersion&&(modelVersion===undefined||modelVersion===s.modelVersion);
+ return !s.replyOnly&&!!actor?.active&&actor.role==='ADMIN'&&liveAcceptance(a)&&a.runId===job.runId&&!!await db.normalAcceptancePost.findUnique({where:{acceptanceId_postId:{acceptanceId:a.id,postId:job.postId}}})&&s.policyId===job.policyId&&s.policyVersion===job.policyVersion&&(modelVersion===undefined||modelVersion===s.modelVersion);
 }
 /** Called under the existing provider lock both before reservation and dispatch.
  * A durable claim is never refunded, including pre-HTTP failures and next-day retries. */
@@ -80,7 +82,7 @@ export async function guardAcceptanceModel(db:Store,input:{autoJobId?:string;pol
  const a=await activeAcceptance(db)??(job?await db.normalAutomationAcceptance.findUnique({where:{runId:job.runId}}):sourceRuns.length?await db.normalAutomationAcceptance.findFirst({where:{runId:{in:sourceRuns.map(c=>c.lastRunId)}}}):null);
  if(!a)return null;
  const s=normalAcceptanceScope.parse(a.scope);
- if(!job||!await acceptanceReviewAllowed(db,job,input.modelVersion)||input.policyId!==s.policyId||input.model!==s.model||input.payload.requestPolicy!==wholePostRequestPolicy)acceptanceConflict();
+ if(s.replyOnly||!job||!await acceptanceReviewAllowed(db,job,input.modelVersion)||input.policyId!==s.policyId||input.model!==s.model||input.payload.requestPolicy!==wholePostRequestPolicy)acceptanceConflict();
  // Bind every actual outbound row to the current captured run, not merely the displayed post.
  const captures=await db.capturedComment.findMany({where:{id:{in:input.rows.flatMap(r=>r.captureId?[r.captureId]:[])}}});
  if(captures.length!==input.rows.length||captures.some(c=>c.lastRunId!==a.runId||c.postId!==job.postId))acceptanceConflict();
@@ -95,11 +97,14 @@ export async function guardAcceptanceModel(db:Store,input:{autoJobId?:string;pol
 }
 export async function claimAcceptanceModel(db:Store,id:string,callId:string,reviewIds:string[],estimate:ReturnType<typeof estimateWholePostCost>,postId:string){
  const a=await db.normalAutomationAcceptance.findUniqueOrThrow({where:{id}}),s=normalAcceptanceScope.parse(a.scope);
- if(!liveAcceptance(a)||await db.normalAcceptancePost.count({where:{acceptanceId:id,modelCallId:{not:null}}})>=s.maxPosts)acceptanceConflict();
+ if(s.replyOnly||!liveAcceptance(a)||await db.normalAcceptancePost.count({where:{acceptanceId:id,modelCallId:{not:null}}})>=s.maxPosts)acceptanceConflict();
  const result=await db.normalAcceptancePost.updateMany({where:{acceptanceId:id,postId,modelCallId:null},data:{modelCallId:callId,reviewIds,estimatedMicros:estimate.estimatedMicros}});
  if(result.count!==1)acceptanceConflict();
  await db.normalAutomationAcceptance.update({where:{id},data:{modelCallId:a.modelCallId??callId,reviewIds:{push:reviewIds},modelClaimedAt:a.modelClaimedAt??new Date()}});
  await db.auditLog.create({data:{action:'NORMAL_ACCEPTANCE_MODEL_CLAIMED',entityId:id,metadata:{callId,postId,maximumCalls:s.maxPosts,perPostMaximum:1,estimate} as Prisma.InputJsonValue}});
+}
+export async function acceptanceSendThreshold(db:Store,rule:AutoContactRule,reviewId:string){
+ const a=await activeAcceptance(db);if(!a||!liveAcceptance(a))return rule.threshold;const s=normalAcceptanceScope.parse(a.scope);return s.ruleId===rule.id&&s.ruleVersion===rule.version&&s.replyOnly?.reviewId===reviewId?s.replyOnly.score:rule.threshold;
 }
 export async function acceptanceSendAllowed(db:Store,rule:AutoContactRule,reviewId:string,jobId?:string){
  const r=await db.semanticReview.findUnique({where:{id:reviewId},include:{capture:{include:{post:true}}}});
@@ -109,7 +114,9 @@ export async function acceptanceSendAllowed(db:Store,rule:AutoContactRule,review
  if(!r||!liveAcceptance(a)||!await acceptanceRuleAllowed(db,rule)||rule.id!==s.ruleId||!r.capture?.postId||runId!==a.runId||!a.reviewIds.includes(reviewId)||!a.modelCallId||a.sendJobId&&a.sendJobId!==jobId)return false;
  const target=contactTarget(r,r.capture,r.capture?.post??null);
  if(!target)return false;
- if(s.selection==='CONFIG_SEARCH'){
+ if(s.replyOnly){
+  const e=s.replyOnly;if(rule.threshold!==100||r.id!==e.reviewId||r.score!==e.score||r.capture.postId!==e.postId||r.capture.post.coverage!=='COMPLETE'||target.postId!==e.platformPostId||target.commentId!==e.commentId||target.recipientId!==e.recipientId||eligibilityHash(r)!==e.reviewHash||semanticHash({capture:r.capture.snapshot,post:r.capture.post.snapshot})!==e.sourceHash)return false;
+ }else if(s.selection==='CONFIG_SEARCH'){
   // The user authorizes a category within this one newly captured post; no
   // need to choose or approve an individual recipient before collection.
   if(rule.threshold!==100||r.score!==100||target.postId!==r.capture?.post.platformPostId)return false;
@@ -130,6 +137,8 @@ export async function settleAcceptance(db:Store){
  const a=await activeAcceptance(db);if(!a||a.state!=='ACTIVE')return;
  const s=normalAcceptanceScope.parse(a.scope);
  let reason=!liveAcceptance(a)?'EXPIRED':null;
+ // Arming freezes the exact old evaluation before the normal rule enable.
+ if(!reason&&s.replyOnly&&(await db.autoContactRule.findUnique({where:{id:s.ruleId}}))?.version===s.ruleVersion-1)return;
  if(!reason&&s.maxPosts>1){const posts=await db.normalAcceptancePost.findMany({where:{acceptanceId:a.id}}),ids=posts.flatMap(p=>p.modelCallId?[p.modelCallId]:[]);if(await db.semanticModelCall.count({where:{id:{in:ids},status:{notIn:['RESERVED','COMPLETED']}}})||a.runId&&await blockingAcceptanceJobs(db,a,['FAILED','CANCELLED','SKIPPED']))reason='MODEL_FAILED_OR_SCOPE_CHANGED';}
  if(!reason&&a.sendJobId){const j=await db.autoContactJob.findUnique({where:{id:a.sendJobId}});if(j&&!['RESERVED','ATTEMPTED'].includes(j.status))reason='SUBMISSION_FINISHED';}
  if(!reason&&a.runId&&!a.sendJobId){

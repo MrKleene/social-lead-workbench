@@ -253,3 +253,38 @@ it('changed payload after all-post cost planning stops the next call without re-
  expect(transport).toHaveBeenCalledTimes(1);
  await nextModelTick();await f.contacts.tick();expect(transport).toHaveBeenCalledTimes(1);expect(send).not.toHaveBeenCalled();
 });
+
+async function score95Fixture(){
+ const f=await freshFinite();modelScore=95;const runId=await f.collect();await automatic.tick();await f.contacts.tick();expect(send).not.toHaveBeenCalled();await normalPost('/auto-contact/acceptance/'+f.scope.id+'/close',{});
+ const envelope=await db.normalAutomationAcceptance.findUniqueOrThrow({where:{id:f.scope.id}}),review=await db.semanticReview.findFirstOrThrow({where:{id:{in:envelope.reviewIds}},orderBy:{id:'asc'}});
+ return {...f,runId,envelope,review,exception:{consent:'normal-reply-score95-once-v1',postId:envelope.capturedPostId!,reviewId:review.id,expiresAt:new Date(Date.now()+600000).toISOString()}};
+}
+it.each(['CONFIRMED','FAILED','UNKNOWN'] as const)('exact old 95 evaluation exception sends once for %s without new models or global threshold change',async kind=>{
+ const f=await score95Fixture();send.mockResolvedValue(kind==='CONFIRMED'?{kind,receipt:'synthetic-only'}:{kind,reason:'synthetic'});
+ const oldCall=f.envelope.modelCallId,oldReviews=f.envelope.reviewIds;
+ // A separate stale high score never joins the selected exception.
+ await db.semanticReview.create({data:{configId:f.c.id,runId:f.p.runId,revision:1,policyId:f.policy.id,policyRevision:1,selectedModel:'qwen3.8-flash',snapshotHash:randomUUID(),platform:'XHS',platformUserId:'demo-collect-other-old',snapshot:{},rules:{},state:'EVALUATED',score:100,context:'SUFFICIENT',isDemo:true}});
+ const armed=await normalPost('/auto-contact/acceptance/'+f.scope.id+'/reply-exception',f.exception);expect(armed.status,JSON.stringify(armed.body)).toBe(201);
+ await f.contacts.tick();expect(await db.normalAutomationAcceptance.findUnique({where:{id:f.scope.id}})).toMatchObject({state:'ACTIVE'});expect(send).not.toHaveBeenCalled();
+ expect((await normalPost('/collection/configs/'+f.c.id+'/runs',{scenario:'BASELINE',mode:'MOCK',requestKey:randomUUID(),readPlan:f.plan})).status).toBe(409);
+ const rule=await db.autoContactRule.findUniqueOrThrow({where:{id:f.rule.id}}),view=await f.settings.overview(actor);await f.settings.toggle(actor,rule.id,{version:rule.version,enabled:true,hash:view.rules.find(r=>r.id===rule.id)!.hash,consent:autoContactConsent});
+ await Promise.all([automatic.tick(),f.contacts.tick(),f.contacts.tick()]);expect(transport).toHaveBeenCalledTimes(1);expect(send).toHaveBeenCalledTimes(1);
+ expect(await db.autoContactJob.findMany()).toHaveLength(1);expect(await db.autoContactJob.findFirst()).toMatchObject({reviewId:f.review.id});
+ expect(await db.normalAutomationAcceptance.findUnique({where:{id:f.scope.id}})).toMatchObject({modelCallId:oldCall,reviewIds:oldReviews,sendJobId:expect.any(String),state:'STOPPED'});
+ expect(await db.autoContactRule.findUnique({where:{id:f.rule.id}})).toMatchObject({threshold:100,enabled:false});
+ await normalPost('/auto-contact/acceptance/'+f.scope.id+'/close',{});expect((await normalPost('/auto-contact/acceptance/'+f.scope.id+'/reply-exception',f.exception)).status).toBe(409);
+ await nextModelTick();await f.contacts.tick();expect(send).toHaveBeenCalledTimes(1);expect(transport).toHaveBeenCalledTimes(1);expect(await db.collectionRun.count({where:{configId:f.c.id}})).toBe(2);
+});
+it('95 exception rejects unrelated evaluations, altered input, expired consent and historical UNKNOWN lock',async()=>{
+ const f=await score95Fixture();const path='/auto-contact/acceptance/'+f.scope.id+'/reply-exception';
+ for(const patch of [{reviewId:'other-review'},{postId:f.p.id},{expiresAt:new Date(0).toISOString()},{expiresAt:new Date(Date.now()+1900000).toISOString()},{threshold:95}])expect((await normalPost(path,{...f.exception,...patch})).status).not.toBe(201);
+ const identity=await db.platformIdentity.create({data:{platform:'XHS',platformUserId:f.review.platformUserId,nickname:'Synthetic'}}),ledger=await db.contactLedger.create({data:{identityId:identity.id,mode:'SIMULATION',accountId:f.account.id}});
+ await db.contactAttempt.create({data:{ledgerId:ledger.id,requestKey:randomUUID(),kind:'FIRST',mode:'SIMULATION',outcome:'UNKNOWN',day:'historical',actorId:actor.id}});
+ expect((await normalPost(path,f.exception)).status).toBe(409);expect(await db.contactAttempt.findFirst()).toMatchObject({outcome:'UNKNOWN'});expect(send).not.toHaveBeenCalled();
+});
+it('95 exception freezes evaluation hash; edits cannot submit or widen to other 95 rows',async()=>{
+ const f=await score95Fixture();expect((await normalPost('/auto-contact/acceptance/'+f.scope.id+'/reply-exception',f.exception)).status).toBe(201);
+ await db.semanticReview.update({where:{id:f.review.id},data:{version:{increment:1}}});
+ const rule=await db.autoContactRule.findUniqueOrThrow({where:{id:f.rule.id}}),view=await f.settings.overview(actor);await f.settings.toggle(actor,rule.id,{version:rule.version,enabled:true,hash:view.rules.find(r=>r.id===rule.id)!.hash,consent:autoContactConsent});
+ await automatic.tick();await f.contacts.tick();expect(send).not.toHaveBeenCalled();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoContactJob.count({where:{reviewId:{not:f.review.id}}})).toBe(0);
+});
