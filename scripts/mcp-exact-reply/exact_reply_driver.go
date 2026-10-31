@@ -589,6 +589,46 @@ func exactObservation(r Comment, postID string) (exactreply.Observation, bool) {
 	o.RecipientID = r.TargetComment.UserInfo.UserID
 	return o, true
 }
+
+// A fresh page can collapse a newly submitted second reply. Absence from the
+// initial tree is not duplication. Expand one bounded read window only when the
+// exact ID is absent; duplicate IDs or incomplete bindings never get retried.
+func exactReadbackCandidate(rows []Comment, postID, replyID string) (exactreply.Observation, int, error) {
+	var found exactreply.Observation
+	count := 0
+	valid := false
+	for _, r := range rows {
+		if r.ID == replyID {
+			count++
+			found, valid = exactObservation(r, postID)
+		}
+	}
+	if count > 1 {
+		return found, count, errors.New("RECEIPT_NOT_UNIQUE")
+	}
+	if count == 1 && !valid {
+		return found, count, errors.New("RECEIPT_BINDING_INCOMPLETE")
+	}
+	return found, count, nil
+}
+func exactReadbackOnce(rows []Comment, postID, replyID string, expand func() ([]Comment, error)) (exactreply.Observation, error) {
+	found, count, err := exactReadbackCandidate(rows, postID, replyID)
+	if err != nil || count == 1 {
+		return found, err
+	}
+	rows, err = expand()
+	if err != nil {
+		return found, err
+	}
+	found, count, err = exactReadbackCandidate(rows, postID, replyID)
+	if err != nil {
+		return found, err
+	}
+	if count == 0 {
+		return found, errors.New("RECEIPT_NOT_VISIBLE")
+	}
+	return found, nil
+}
 func (d *ExactReplyDriver) Readback(ctx context.Context, c exactreply.Command, replyID string) (exactreply.Observation, error) {
 	s, err := d.state(ctx, c, true)
 	if err != nil {
@@ -601,20 +641,22 @@ func (d *ExactReplyDriver) Readback(ctx context.Context, c exactreply.Command, r
 	if err != nil {
 		return exactreply.Observation{}, err
 	}
-	var found exactreply.Observation
-	count := 0
-	for _, r := range rows {
-		if r.ID == replyID {
-			if o, ok := exactObservation(r, c.PostID); ok {
-				found = o
-				count++
-			}
+	return exactReadbackOnce(rows, c.PostID, replyID, func() ([]Comment, error) {
+		// Existing read-only expander, same page and post, no root scrolling,
+		// sender action, navigation retry or guessed private API.
+		_, err := boundedReadDetail(ctx, d.page, c.PostID, BoundedReadConfig{Version: 1, RootPages: 0, ReplyClicks: 12, MaxRoots: 40, MaxComments: 100, MaxRepliesPerRoot: 30, TimeoutMs: 5000})
+		if err != nil {
+			return nil, err
 		}
-	}
-	if count != 1 {
-		return found, errors.New("RECEIPT_NOT_UNIQUE")
-	}
-	return found, nil
+		fresh, err := d.state(ctx, c, false)
+		if err != nil {
+			return nil, err
+		}
+		if fresh.SenderID != c.SenderID {
+			return nil, errors.New("ACCOUNT_CHANGED")
+		}
+		return exactComments(fresh.Comments)
+	})
 }
 func (d *exactReplyPage) Close(ctx context.Context) error {
 	// Cancellable page contexts stop future operations; browser shutdown must also

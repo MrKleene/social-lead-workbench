@@ -320,3 +320,51 @@ func TestExactReplyInitialBindingDelayedSelectionClicksAndTypesOnce(t *testing.T
 		}
 	}
 }
+
+func TestExactReplyCollapsedReadbackExpandsOnceWithoutResubmit(t *testing.T) {
+	var r Comment
+	if err := json.Unmarshal([]byte(`{"id":"eeeeeeeeeeeeeeeeeeeeeeee","noteId":"bbbbbbbbbbbbbbbbbbbbbbbb","content":"synthetic","userInfo":{"userId":"aaaaaaaaaaaaaaaaaaaaaaaa"},"targetComment":{"id":"cccccccccccccccccccccccc","userInfo":{"userId":"dddddddddddddddddddddddd"}}}`), &r); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"collapsed", "present", "duplicate", "missing-binding", "still-absent", "expansion-error"} {
+		t.Run(kind, func(t *testing.T) {
+			rows := []Comment{}
+			calls := 0
+			if kind == "present" {
+				rows = []Comment{r}
+			}
+			if kind == "duplicate" {
+				rows = []Comment{r, r}
+			}
+			if kind == "missing-binding" {
+				x := r
+				x.TargetComment = nil
+				rows = []Comment{x}
+			}
+			out, err := exactReadbackOnce(rows, r.NoteID, r.ID, func() ([]Comment, error) {
+				calls++
+				if kind == "expansion-error" {
+					return nil, errors.New("READ_FAILED")
+				}
+				if kind == "still-absent" {
+					return nil, nil
+				}
+				return []Comment{r}, nil
+			})
+			if kind == "collapsed" || kind == "present" {
+				if err != nil || out.ID != r.ID {
+					t.Fatal(out, err)
+				}
+			} else if err == nil {
+				t.Fatal("unexpected confirmation")
+			}
+			want := 0
+			if kind == "collapsed" || kind == "still-absent" || kind == "expansion-error" {
+				want = 1
+			}
+			if calls != want {
+				t.Fatalf("expansion calls %d want %d", calls, want)
+			}
+		})
+	}
+}
