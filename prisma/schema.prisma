@@ -791,5 +791,18 @@ model NormalAutomationAcceptance {
  sendClaimedAt DateTime?
  createdAt DateTime @default(now())
  closedAt DateTime?
+ batchPlanned Boolean @default(false)
+ posts NormalAcceptancePost[]
  @@index([state])
+}
+
+model NormalAcceptancePost {
+ acceptanceId String
+ acceptance NormalAutomationAcceptance @relation(fields:[acceptanceId],references:[id],onDelete:Restrict)
+ postId String
+ modelCallId String? @unique
+ reviewIds String[] @default([])
+ estimatedMicros Int?
+ payloadHash String?
+ @@id([acceptanceId,postId])
 }

@@ -72,9 +72,9 @@ it('saved reference cannot bypass disabled transport or login verification',asyn
  expect(result.reason).toBe('LOGIN_EXPIRED');expect(t.mock.calls).toHaveLength(1);expect(t.mock.calls[0][0]).toBe('check_login_status');
 });
 
-it('fresh-only single-post plan cannot silently become a multi-post or saved-post run',()=>{
+it('fresh-only plan stays within three posts and rejects a saved-post run',()=>{
  const plan={rounds:1,postsPerRound:1,commentPages:1,freshPostsOnly:true};expect(readPlanSchema.safeParse(plan).success).toBe(true);
- expect(readPlanSchema.safeParse({...plan,postsPerRound:2}).success).toBe(false);expect(readPlanSchema.safeParse({...plan,savedPostId:'old'}).success).toBe(false);
+ expect(readPlanSchema.safeParse({...plan,postsPerRound:3}).success).toBe(true);expect(readPlanSchema.safeParse({...plan,postsPerRound:4}).success).toBe(false);expect(readPlanSchema.safeParse({...plan,savedPostId:'old'}).success).toBe(false);
 });
 it('fresh-only selection reads one new actual search result and preserves raw search evidence',async()=>{
  const {collect}=await import('../src/collection/collector');

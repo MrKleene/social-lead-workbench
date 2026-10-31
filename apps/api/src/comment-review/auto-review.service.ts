@@ -9,6 +9,7 @@ import {ReviewPolicyService,lockReview} from './review-policy.service';
 import {ReviewEvaluationService} from './review-evaluation.service';
 import {assertAutoReview} from './auto-review.guard';
 import {WHOLE_POST_STALE} from '../collection/whole-post-capacity';
+import {semanticHash} from '../collection/capture-archive';
 @Injectable()
 export class AutoReviewService {
  constructor(@Inject(Db) private db:Db,@Inject(ReviewPolicyService) private policies:ReviewPolicyService,@Inject(ReviewEvaluationService) private evaluation:ReviewEvaluationService){}
@@ -31,11 +32,14 @@ export class AutoReviewService {
   if(['FAILED','PAUSED'].includes(result.status))await this.db.autoReviewJob.updateMany({where:{runId:run.id,status:'PENDING'},data:{status:'CANCELLED',reason:`采集未完成：${result.reason||result.status}`}});
  }
  async tick(){
+  if(!await this.prepareAcceptanceBatch())return;
   // No replay after an uncertain worker exit. Unstarted jobs can resume; claimed work requires manual review.
   await this.db.autoReviewJob.updateMany({where:{status:'PROCESSING',updatedAt:{lt:new Date(Date.now()-WHOLE_POST_STALE)}},data:{status:'FAILED',reason:'执行中断，调用结果可能未知；请手动核查，不自动重试'}});
   const job=await this.db.$transaction(async tx=>{await lockReview(tx);
-   const envelope=await activeAcceptance(tx),scope=envelope?normalAcceptanceScope.parse(envelope.scope):null;if(envelope&&(!liveAcceptance(envelope)||envelope.modelCallId||!envelope.runId||!envelope.capturedPostId))return null;
-   const next=await tx.autoReviewJob.findFirst({where:{status:'PENDING',...(scope?{policyId:scope.policyId,runId:envelope!.runId!,postId:envelope!.capturedPostId!}:{})},orderBy:{createdAt:'asc'}});if(!next)return null;
+   const envelope=await activeAcceptance(tx),scope=envelope?normalAcceptanceScope.parse(envelope.scope):null;if(envelope&&(!liveAcceptance(envelope)||!envelope.runId||!envelope.capturedPostId))return null;
+   if(envelope&&await tx.autoReviewJob.count({where:{runId:envelope.runId!,status:'PROCESSING'}}))return null;
+   const pendingPosts=envelope?await tx.normalAcceptancePost.findMany({where:{acceptanceId:envelope.id,modelCallId:null}}):[];
+   const next=await tx.autoReviewJob.findFirst({where:{status:'PENDING',...(scope?{policyId:scope.policyId,runId:envelope!.runId!,postId:{in:pendingPosts.map(p=>p.postId)}}:{})},orderBy:{createdAt:'asc'}});if(!next)return null;
    const model=await this.policies.models.resolve(tx);
    await tx.autoReviewJob.update({where:{id:next.id},data:{status:'PROCESSING'}});
    try{await assertAutoReview(tx,next.id,model.configurationVersion);}catch(e){await tx.autoReviewJob.update({where:{id:next.id},data:{status:'CANCELLED',reason:e instanceof Error?e.message:'自动授权已失效'}});return null;}
@@ -55,5 +59,40 @@ export class AutoReviewService {
    const result=await this.evaluation.evaluate(actor,job.policyId,{requestKey:randomUUID(),previewHash:preview.hash,reviewIds:preview.reviewIds,priceVersion:preview.connection.priceVersion!,consent:semanticBatchConsent},job.id);
    await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:result.status==='COMPLETED'?'COMPLETED':'FAILED',processed:{increment:result.status==='COMPLETED'?count:0},reason:result.status==='COMPLETED'?'本次整帖处理完成':(outputFailureReason('errorCode' in result?result.errorCode:null)||'模型请求失败，不自动重试')+` 本批 ${count} 条未采纳，剩余评论未继续送审。`}});
   }catch{await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:'FAILED',reason:'授权、批次或输入安全检查未通过；请手动核查，不自动重试'}});}
+ }
+ /** Freeze every selected post's full payload and reserve the SUM of estimates
+  * before the first payable call. Preparing/previewing reads no provider key. */
+ private async prepareAcceptanceBatch(){
+  const a=await activeAcceptance(this.db);if(!a)return true;
+  const s=normalAcceptanceScope.parse(a.scope);if(s.maxPosts===1)return true;
+  if(!liveAcceptance(a)||!a.runId)return false;if(a.batchPlanned)return true;
+  const run=await this.db.collectionRun.findUnique({where:{id:a.runId}});if(!run||['QUEUED','RUNNING'].includes(run.status))return false;
+  const bound=await this.db.normalAcceptancePost.findMany({where:{acceptanceId:a.id}}),jobs=await this.db.autoReviewJob.findMany({where:{runId:a.runId,policyId:s.policyId}});
+  if(!bound.length)return false;
+  try{
+   if(!['COMPLETE','PARTIAL'].includes(run.status)||bound.length>s.maxPosts||bound.some(p=>!jobs.some(j=>j.postId===p.postId&&j.status==='PENDING')))throw Error('INCOMPLETE_POST');
+   const actor=await this.db.user.findUniqueOrThrow({where:{id:a.actorId}}),plans:{postId:string;reviewIds:string[];estimatedMicros:number;payloadHash:string|null}[]=[];
+   for(const post of bound){
+    const prepared=await this.policies.prepare(actor,s.policyId,{version:s.policyVersion,scope:{kind:'POSTS',postIds:[post.postId]}},true);
+    if(!prepared.count){plans.push({postId:post.postId,reviewIds:[] as string[],estimatedMicros:0,payloadHash:null});continue;}
+    const preview=await this.evaluation.preview(actor,s.policyId,prepared.reviewIds,false,true),e=preview.costEstimate;
+    if(!e.fits||e.priceVersion!==s.priceVersion||e.inputTokensUpper>s.maxInputTokens||e.outputTokens>s.maxOutputTokens||e.estimatedMicros===null)throw Error('POST_CAPACITY');
+    plans.push({postId:post.postId,reviewIds:prepared.reviewIds,estimatedMicros:e.estimatedMicros,payloadHash:semanticHash(preview.payload)});
+   }
+   const estimatedMicros=plans.reduce((n,p)=>n+p.estimatedMicros,0);if(estimatedMicros>s.maxEstimatedMicros)throw Error('TOTAL_ESTIMATE');
+   return await this.db.$transaction(async tx=>{await lockReview(tx);const current=await tx.normalAutomationAcceptance.findUniqueOrThrow({where:{id:a.id}});if(!liveAcceptance(current))return false;if(current.batchPlanned)return true;
+    if(await tx.normalAcceptancePost.count({where:{acceptanceId:a.id,modelCallId:{not:null}}}))throw Error('CLAIM_CHANGED');
+    for(const plan of plans){await tx.normalAcceptancePost.update({where:{acceptanceId_postId:{acceptanceId:a.id,postId:plan.postId}},data:plan});if(!plan.reviewIds.length)await tx.autoReviewJob.updateMany({where:{runId:a.runId!,postId:plan.postId,status:'PENDING'},data:{status:'COMPLETED',reason:'没有新的待评评论'}});}
+    await tx.normalAutomationAcceptance.update({where:{id:a.id},data:{batchPlanned:true}});
+    await tx.auditLog.create({data:{entityId:a.id,action:'NORMAL_ACCEPTANCE_BATCH_BUDGET_READY',metadata:{estimatedMicros,maximumEstimatedMicros:s.maxEstimatedMicros,maximumCalls:s.maxPosts,plans,billingHardCap:false}}});return true;
+   });
+  }catch{
+   // Another worker may have committed the identical plan and started a call
+   // while this reader was previewing. Its now-PROCESSING rows are not a new
+   // budget failure and must not cancel that committed plan.
+   return this.db.$transaction(async tx=>{await lockReview(tx);const current=await tx.normalAutomationAcceptance.findUniqueOrThrow({where:{id:a.id}});if(current.batchPlanned)return liveAcceptance(current);
+    await tx.autoReviewJob.updateMany({where:{runId:a.runId!,status:'PENDING'},data:{status:'FAILED',reason:'本轮全部帖子容量、总费用估算或冻结版本未通过；未调用模型、不拆批'}});return false;
+   });
+  }
  }
 }

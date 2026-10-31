@@ -25,6 +25,7 @@ export class NormalAcceptanceService {
    if(!config||!rule||!model||!user?.active||user.role!=='ADMIN')acceptanceConflict();
    const policy=await tx.commentReviewPolicy.findUnique({where:{id:rule.policyId}}),catalog=qwenModel(model.model);
    const expiry=Date.parse(input.expiresAt)-Date.now();
+   if(input.maxPosts>config.batchLimit||input.selection==='SAVED_POST'&&input.maxPosts!==1)acceptanceConflict();
    if(expiry<=0||expiry>1800000||config.archivedAt||!config.enabled||config.legacyMatchingEnabled||config.revision!==input.configRevision||rule.version!==input.ruleVersion||rule.enabled||rule.platform!=='XHS'||rule.channel!=='COMMENT'||rule.channels.length!==1||rule.accountIds.length!==1||!rule.content.trim()||policy?.version!==input.policyVersion||policy.autoEnabled||policy.revision!==rule.policyRevision||model.version!==input.modelVersion||model.model!==rule.model||catalog?.priceVersion!==input.priceVersion||model.priceVersion!==input.priceVersion)acceptanceConflict();
    if((rule.mode==='REAL'&&(config.mode!=='XHS_MCP'||!input.readAccountId))||(rule.mode==='SIMULATION'&&(config.mode!=='MOCK'||input.readAccountId)))acceptanceConflict();
    if(input.selection==='CONFIG_SEARCH'?(!!input.savedPostId||!!input.targets||rule.threshold!==100):(!input.savedPostId||!input.targets))acceptanceConflict();

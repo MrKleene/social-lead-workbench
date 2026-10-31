@@ -82,5 +82,14 @@ try{
  IF EXISTS(SELECT 1 FROM "AutomationPreferences") THEN RAISE EXCEPTION 'migration chose a new default'; END IF;
  END $$;`);
  results.push({label:'presets-preserve-authorized-rule-content-channel-attempts-quota-and-defaults',exit:0});
+ const acceptancePostsMigration='202610310002_normal_acceptance_posts';
+ for(const name of migrations.filter(n=>n>presetMigration&&n<acceptancePostsMigration))sql('crm_migration_test',readFileSync(join(root,'prisma/migrations',name,'migration.sql'),'utf8'));
+ sql('crm_migration_test',`INSERT INTO "NormalAutomationAcceptance" (id,state,scope,"actorId","runId","capturedPostId","modelCallId","reviewIds","sendJobId","closedAt") VALUES ('old-scope','CLOSED','{}','synthetic','old-run','old-post','old-call',ARRAY['old-review'],'old-send',now()); CREATE TABLE fixture_scope_before AS SELECT to_jsonb(a) AS snapshot FROM "NormalAutomationAcceptance" a;`);
+ sql('crm_migration_test',readFileSync(join(root,'prisma/migrations',acceptancePostsMigration,'migration.sql'),'utf8'));
+ sql('crm_migration_test',`DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM "NormalAutomationAcceptance" a,fixture_scope_before f WHERE to_jsonb(a)-'batchPlanned'=f.snapshot AND NOT a."batchPlanned") THEN RAISE EXCEPTION 'acceptance claim changed'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM "NormalAcceptancePost" WHERE "acceptanceId"='old-scope' AND "postId"='old-post' AND "modelCallId"='old-call' AND "reviewIds"=ARRAY['old-review']) THEN RAISE EXCEPTION 'old post claim not retained'; END IF;
+ END $$;`);
+ results.push({label:'multi-post-preserves-closed-scope-run-model-send-and-review-claims',exit:0});
  run('integration',['npm','run','test:integration','-w','@crm/api'],env);
 }finally{for(const c of containers.reverse())docker(['stop',c]);writeFileSync(join(output,'checks.json'),JSON.stringify({results,isolated:true,removed:containers.length},null,2));console.log('Evidence: '+output);}
