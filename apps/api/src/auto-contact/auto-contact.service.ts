@@ -1,4 +1,4 @@
-import {activeAcceptance,normalAcceptanceScope,acceptanceRuleAllowed,acceptanceSendAllowed,claimAcceptanceSend,settleAcceptance} from './normal-acceptance';
+import {blockingAcceptanceJobs,activeAcceptance,normalAcceptanceScope,acceptanceRuleAllowed,acceptanceSendAllowed,claimAcceptanceSend,settleAcceptance} from './normal-acceptance';
 import {accountModeBlocked} from '../accounts/account-execution-policy';
 import {accountSendObservation} from './send-observation';
 import {postAvailability,postSendBlock} from '../collection/post-availability';
@@ -51,7 +51,7 @@ export class AutoContactService {
             const envelope=await activeAcceptance(tx),scope=envelope?normalAcceptanceScope.parse(envelope.scope):null;
             // Multi-post acceptance selects only after all whole-post model jobs
             // finish; do not prematurely mark the first post's matches SKIPPED.
-            if(scope&&scope.maxPosts>1&&(!envelope!.batchPlanned||!envelope!.runId||await tx.autoReviewJob.count({where:{runId:envelope!.runId!,status:{not:'COMPLETED'}}})))return 0;
+            if(scope&&scope.maxPosts>1&&(!envelope!.batchPlanned||!envelope!.runId||await blockingAcceptanceJobs(tx,envelope!,['PENDING','PROCESSING','FAILED','CANCELLED','SKIPPED'])))return 0;
             const rules = await tx.autoContactRule.findMany({ where: { enabled: true, mode: this.sender.mode } });
             let added = 0;
             for (const r of rules) {

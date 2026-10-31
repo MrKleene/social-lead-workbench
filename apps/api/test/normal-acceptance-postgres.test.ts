@@ -1,3 +1,4 @@
+import {NormalAcceptanceService} from '../src/auto-contact/normal-acceptance.service';
 import {ContactSettingsService} from '../src/auto-contact/contact-settings.service';
 import {AutoContactService} from '../src/auto-contact/auto-contact.service';
 import {CONTACT_SENDER} from '../src/auto-contact/contact-sender';
@@ -221,9 +222,29 @@ it('a failure on the second post never retries that post or calls the third, nor
  expect(transport).toHaveBeenCalledTimes(2);expect(send).not.toHaveBeenCalled();await nextModelTick();await f.contacts.tick();expect(transport).toHaveBeenCalledTimes(2);
  expect(await db.normalAutomationAcceptance.findUnique({where:{id:f.scope.id}})).toMatchObject({state:'STOPPED'});
 });
-it('an incomplete third post blocks the whole round before model spending',async()=>{
- const f=await multiFinite();const original=f.adapter.comments;f.adapter.comments=async(...args)=>({...await original(...args),complete:!args[0].id.endsWith('-2')});
- const started=await f.start();await collection.execute(started.body.id,f.adapter);await automatic.tick();await f.contacts.tick();expect(transport).not.toHaveBeenCalled();expect(send).not.toHaveBeenCalled();expect(await db.normalAutomationAcceptance.findUnique({where:{id:f.scope.id}})).toMatchObject({state:'STOPPED'});
+async function partialRound(){
+ const f=await multiFinite();modelScore=100;const original=f.adapter.comments;f.adapter.comments=async(...args)=>({...await original(...args),complete:!args[0].id.endsWith('-2')});
+ const started=await f.start();await collection.execute(started.body.id,f.adapter);return {...f,runId:started.body.id};
+}
+it('an incomplete third post stays skipped while two complete posts share one atomic send',async()=>{
+ const f=await partialRound();await f.contacts.tick();expect(await db.normalAutomationAcceptance.findUnique({where:{id:f.scope.id}})).toMatchObject({state:'ACTIVE'});
+ await Promise.all([automatic.tick(),automatic.tick()]);await f.contacts.tick();expect(transport).toHaveBeenCalledTimes(1);expect(send).not.toHaveBeenCalled();
+ await nextModelTick();await Promise.all([f.contacts.tick(),f.contacts.tick(),f.contacts.tick()]);expect(transport).toHaveBeenCalledTimes(2);expect(send).toHaveBeenCalledTimes(1);
+ const skipped=await db.autoReviewJob.findFirstOrThrow({where:{runId:f.runId,status:'SKIPPED'}});expect(await db.normalAcceptancePost.findUnique({where:{acceptanceId_postId:{acceptanceId:f.scope.id,postId:skipped.postId}}})).toMatchObject({modelCallId:null,estimatedMicros:0,reviewIds:[]});
+ expect(await db.capturedPost.findUnique({where:{id:skipped.postId}})).toMatchObject({coverage:'PARTIAL'});await nextModelTick();await f.contacts.tick();expect(transport).toHaveBeenCalledTimes(2);expect(send).toHaveBeenCalledTimes(1);
+});
+it('explicit continuation preserves the original run and zero-use ledger, and never extends expiry',async()=>{
+ const f=await partialRound(),service=app.get(NormalAcceptanceService);
+ await db.autoReviewJob.updateMany({where:{runId:f.runId,status:'PENDING'},data:{status:'FAILED',reason:'本轮全部帖子容量、总费用估算或冻结版本未通过；未调用模型、不拆批'}});
+ await service.close(actor,f.scope.id);await collection.change(actor,f.c.id,{batchLimit:1},f.c.revision,true);const before=await db.normalAutomationAcceptance.findUniqueOrThrow({where:{id:f.scope.id}});
+ await expect(service.resumeUnspent(actor,f.scope.id,new Date(Date.parse(f.scope.expiresAt as string)+1).toISOString())).rejects.toThrow();
+ await expect(service.resumeUnspent(actor,f.scope.id,new Date(0).toISOString())).rejects.toThrow();
+ const resumed=await service.resumeUnspent(actor,f.scope.id,f.scope.expiresAt as string),scope=resumed.scope as any;
+ expect(resumed).toMatchObject({id:before.id,runId:before.runId,modelCallId:null,sendJobId:null,reviewIds:[],closedAt:before.closedAt});
+ const policy=await db.commentReviewPolicy.findUniqueOrThrow({where:{id:f.policy.id}});await policies.automatic(actor,policy.id,{version:policy.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});
+ const rule=await db.autoContactRule.findUniqueOrThrow({where:{id:f.rule.id}}),view=await f.settings.overview(actor);await f.settings.toggle(actor,rule.id,{version:rule.version,enabled:true,hash:view.rules.find(r=>r.id===rule.id)!.hash,consent:autoContactConsent});
+ expect(scope.maxEstimatedMicros).toBe(f.scope.maxEstimatedMicros);await automatic.tick();await nextModelTick();await f.contacts.tick();expect(transport,JSON.stringify({jobs:await db.autoReviewJob.findMany(),scope:await db.normalAutomationAcceptance.findUnique({where:{id:f.scope.id}}),calls:await db.semanticModelCall.findMany()})).toHaveBeenCalledTimes(2);expect(send).toHaveBeenCalledTimes(1);
+ await service.close(actor,f.scope.id);await expect(service.resumeUnspent(actor,f.scope.id,f.scope.expiresAt as string)).rejects.toThrow();expect(await db.collectionRun.count({where:{configId:f.c.id}})).toBe(2);
 });
 it('changed payload after all-post cost planning stops the next call without re-estimating into the budget',async()=>{
  const f=await multiFinite();await f.collect();await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);

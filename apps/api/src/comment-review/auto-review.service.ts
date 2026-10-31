@@ -1,4 +1,4 @@
-import {bindAcceptancePost,activeAcceptance,normalAcceptanceScope,acceptanceReviewAllowed,liveAcceptance} from '../auto-contact/normal-acceptance';
+import {coverageSkipped,bindAcceptancePost,activeAcceptance,normalAcceptanceScope,acceptanceReviewAllowed,liveAcceptance} from '../auto-contact/normal-acceptance';
 import {Inject,Injectable} from '@nestjs/common';
 import {randomUUID} from 'node:crypto';
 import {outputFailureReason,semanticBatchConsent,autoReviewInputPolicy} from '@crm/contracts';
@@ -65,14 +65,19 @@ export class AutoReviewService {
  private async prepareAcceptanceBatch(){
   const a=await activeAcceptance(this.db);if(!a)return true;
   const s=normalAcceptanceScope.parse(a.scope);if(s.maxPosts===1)return true;
-  if(!liveAcceptance(a)||!a.runId)return false;if(a.batchPlanned)return true;
+  if(!liveAcceptance(a)||!a.runId)return false;
+  const enabledPolicy=await this.db.commentReviewPolicy.findUnique({where:{id:s.policyId}});if(!enabledPolicy?.autoEnabled||enabledPolicy.version!==s.policyVersion)return false;
+  if(a.batchPlanned)return true;
   const run=await this.db.collectionRun.findUnique({where:{id:a.runId}});if(!run||['QUEUED','RUNNING'].includes(run.status))return false;
   const bound=await this.db.normalAcceptancePost.findMany({where:{acceptanceId:a.id}}),jobs=await this.db.autoReviewJob.findMany({where:{runId:a.runId,policyId:s.policyId}});
   if(!bound.length)return false;
   try{
-   if(!['COMPLETE','PARTIAL'].includes(run.status)||bound.length>s.maxPosts||bound.some(p=>!jobs.some(j=>j.postId===p.postId&&j.status==='PENDING')))throw Error('INCOMPLETE_POST');
+   if(!['COMPLETE','PARTIAL'].includes(run.status)||bound.length>s.maxPosts)throw Error('INCOMPLETE_POST');
    const actor=await this.db.user.findUniqueOrThrow({where:{id:a.actorId}}),plans:{postId:string;reviewIds:string[];estimatedMicros:number;payloadHash:string|null}[]=[];
    for(const post of bound){
+    const job=jobs.find(j=>j.postId===post.postId);if(!job)throw Error('MISSING_JOB');
+    if(await coverageSkipped(this.db,a,job)){plans.push({postId:post.postId,reviewIds:[],estimatedMicros:0,payloadHash:null});continue;}
+    if(job.status!=='PENDING')throw Error('UNSAFE_JOB');
     const prepared=await this.policies.prepare(actor,s.policyId,{version:s.policyVersion,scope:{kind:'POSTS',postIds:[post.postId]}},true);
     if(!prepared.count){plans.push({postId:post.postId,reviewIds:[] as string[],estimatedMicros:0,payloadHash:null});continue;}
     const preview=await this.evaluation.preview(actor,s.policyId,prepared.reviewIds,false,true),e=preview.costEstimate;

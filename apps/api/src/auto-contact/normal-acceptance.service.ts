@@ -1,3 +1,5 @@
+import {configInput} from '../collection/contract';
+import {semanticHash} from '../collection/capture-archive';
 import {ConflictException,Inject,Injectable,NotFoundException} from '@nestjs/common';
 import {Prisma} from '@prisma/client';
 import {Db} from '../common/db';
@@ -9,7 +11,7 @@ import {contactLock} from './contact-lock';
 import {ruleHash} from './contact-policy';
 import {savedReadTarget} from '../collection/saved-post-read';
 import {qwenModel} from '../../../../runtime/qwen-models.cjs';
-import {activeAcceptance,normalAcceptanceInput,normalAcceptanceScope,acceptanceConflict} from './normal-acceptance';
+import {activeAcceptance,normalAcceptanceInput,normalAcceptanceScope,acceptanceConflict,coverageSkipped} from './normal-acceptance';
 /** Administrative finite envelope around normal endpoints and workers, never a sender. */
 @Injectable()
 export class NormalAcceptanceService {
@@ -36,6 +38,33 @@ export class NormalAcceptanceService {
    const scope=normalAcceptanceScope.parse({...bound,ruleVersion:rule.version+1,policyVersion:policy.version+1,platformPostId:target?.id,replyAccountId:rule.accountIds[0],ruleHash:ruleHash({...rule,version:rule.version+1}),policyId:policy.id,policyRevision:policy.revision,model:model.model,mode:rule.mode});
    const row=await tx.normalAutomationAcceptance.create({data:{id:input.id,actorId:actor.id,scope:scope as Prisma.InputJsonValue}});
    await tx.auditLog.create({data:{actorId:actor.id,entityId:row.id,action:'NORMAL_ACCEPTANCE_ARMED',metadata:{consent,scope:scope as Prisma.InputJsonValue,maximumModelCalls:1,maximumSubmissions:1,billingHardCap:false}}});return row;
+  });
+ }
+ /** Explicit administrator continuation of a preflight-only failure. Never renew
+  * a deadline, collect again, clear a claim, or replay an external request. */
+ async resumeUnspent(actor:Actor,id:string,expiresAt:string){
+  requireAdmin(actor);return this.db.$transaction(async tx=>{await lockSinglePost(tx);await assertNoSinglePost(tx);await lockReview(tx);await contactLock(tx);
+   const a=await tx.normalAutomationAcceptance.findUniqueOrThrow({where:{id}}),s=normalAcceptanceScope.parse(a.scope),deadline=Date.parse(expiresAt);
+   if(a.state!=='CLOSED'||a.actorId!==actor.id||!a.runId||s.maxPosts<2||!Number.isFinite(deadline)||deadline<=Date.now()||deadline>Date.parse(s.expiresAt)||a.modelCallId||a.sendJobId||a.modelClaimedAt||a.sendClaimedAt||a.reviewIds.length||a.batchPlanned||await activeAcceptance(tx))acceptanceConflict();
+   const [rule,policy,model,run,posts,jobs]=await Promise.all([tx.autoContactRule.findUniqueOrThrow({where:{id:s.ruleId}}),tx.commentReviewPolicy.findUniqueOrThrow({where:{id:s.policyId}}),tx.modelSettings.findFirstOrThrow(),tx.collectionRun.findUniqueOrThrow({where:{id:a.runId}}),tx.normalAcceptancePost.findMany({where:{acceptanceId:id}}),tx.autoReviewJob.findMany({where:{runId:a.runId}})]);
+   if(rule.enabled||policy.autoEnabled||ruleHash({...rule,version:s.ruleVersion})!==s.ruleHash||policy.revision!==s.policyRevision||model.version!==s.modelVersion||model.model!==s.model||model.priceVersion!==s.priceVersion||run.status!=='PARTIAL'||!posts.length||posts.length>s.maxPosts||posts.some(p=>p.modelCallId||p.reviewIds.length||p.estimatedMicros!==null||p.payloadHash!==null)||jobs.length!==posts.length)acceptanceConflict();
+   if(await tx.collectionRun.count({where:{status:{in:['QUEUED','RUNNING']}}})||await tx.autoReviewJob.count({where:{status:{in:['PENDING','PROCESSING']}}})||await tx.manualReviewJob.count({where:{status:{in:['PENDING','PROCESSING']}}})||await tx.semanticModelCall.count({where:{OR:[{status:'RESERVED'},{createdAt:{gte:a.createdAt}}]}})||await tx.autoContactJob.count({where:{status:{in:['QUEUED','WAITING_ACCOUNT','WAITING_QUOTA','RESERVED','ATTEMPTED']}}})||await tx.deviceExecutionLease.count()||await tx.autoContactRule.count({where:{enabled:true}})||await tx.commentReviewPolicy.count({where:{autoEnabled:true}}))acceptanceConflict();
+   const config=await tx.collectionConfig.findUniqueOrThrow({where:{id:s.configId}}),user=await tx.user.findUnique({where:{id:actor.id}});
+   const currentSnapshot=configInput.parse({name:config.name,platform:config.platform,mode:config.mode,legacyMatchingEnabled:config.legacyMatchingEnabled,...(config.legacyMatchingEnabled?{semanticRules:config.semanticRules,commentRules:config.commentRules}:{}),keywords:config.keywords,excludeWords:config.excludeWords,batchLimit:config.batchLimit,enabled:config.enabled});
+   if(!user?.active||user.role!=='ADMIN'||config.archivedAt||!config.enabled||semanticHash({...currentSnapshot,batchLimit:1})!==semanticHash({...configInput.parse(run.snapshot),batchLimit:1}))acceptanceConflict();
+   const eligible:string[]=[];let excluded=0;
+   for(const job of jobs){
+    if(job.policyId!==s.policyId||!posts.some(p=>p.postId===job.postId))acceptanceConflict();
+    if(await coverageSkipped(tx,a,job)){excluded++;continue;}
+    const post=await tx.capturedPost.findUniqueOrThrow({where:{id:job.postId}});
+    if(post.lastRunId!==a.runId||post.coverage!=='COMPLETE'||job.status!=='FAILED'||job.processed!==0||job.reason!=='本轮全部帖子容量、总费用估算或冻结版本未通过；未调用模型、不拆批')acceptanceConflict();
+    eligible.push(job.id);
+   }
+   if(!eligible.length||!excluded)acceptanceConflict();
+   const scope=normalAcceptanceScope.parse({...s,expiresAt,reviewConfigRevision:config.revision,ruleVersion:rule.version+1,policyVersion:policy.version+1,ruleHash:ruleHash({...rule,version:rule.version+1})});
+   await tx.autoReviewJob.updateMany({where:{id:{in:eligible}},data:{status:'PENDING',policyVersion:scope.policyVersion,reason:'仅续接未调用的完整帖子；覆盖未确认帖子保留跳过'}});
+   await tx.auditLog.create({data:{actorId:actor.id,entityId:id,action:'NORMAL_ACCEPTANCE_RESUMED_UNSPENT',metadata:{runId:a.runId,priorExpiresAt:s.expiresAt,expiresAt,eligibleJobs:eligible,excluded,claimsReset:false}}});
+   return tx.normalAutomationAcceptance.update({where:{id},data:{state:'ACTIVE',scope:scope as Prisma.InputJsonValue}});
   });
  }
  async close(actor:Actor,id:string){

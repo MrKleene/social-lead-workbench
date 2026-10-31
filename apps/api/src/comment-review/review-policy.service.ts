@@ -67,7 +67,8 @@ export class ReviewPolicyService {
     await tx.modelSettings.update({where:{id:MODEL_SETTINGS_ID},data:{consent:true,consentInputPolicy:semanticInputPolicy}});
    }
    const row=await tx.commentReviewPolicy.update({where:{id},data:{autoEnabled:input.enabled,autoModelVersion:input.enabled?model.configurationVersion:null,autoActorId:input.enabled?actor.id:null,version:{increment:1}}});
-   await tx.autoReviewJob.updateMany({where:{policyId:id,status:{in:['PENDING','PROCESSING']}},data:{status:'CANCELLED',reason:'自动设置变化，未开始的调用已取消'}});
+   const continuation=await activeAcceptance(tx),continuationScope=continuation?normalAcceptanceScope.parse(continuation.scope):null;
+   await tx.autoReviewJob.updateMany({where:{policyId:id,status:{in:['PENDING','PROCESSING']},...(input.enabled&&continuation?.runId&&continuationScope?.reviewConfigRevision?{NOT:{runId:continuation.runId,policyVersion:row.version,status:'PENDING'}}:{})},data:{status:'CANCELLED',reason:'自动设置变化，未开始的调用已取消'}});
    await tx.auditLog.create({data:{actorId:actor.id,action:'COMMENT_REVIEW_AUTO_CONSENT',entityId:id,metadata:{enabled:input.enabled,modelVersion:model.configurationVersion,policyVersion:row.version,requestPolicy:wholePostRequestPolicy}}});return row;
   });
  }

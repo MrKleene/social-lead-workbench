@@ -20,7 +20,7 @@ export const normalAcceptanceInput=z.object({
  maxEstimatedMicros:z.number().int().min(1).max(100000000),expiresAt:z.string().datetime(),
 }).strict();
 export const normalAcceptanceScope=normalAcceptanceInput.omit({consent:true}).extend({
- platformPostId:id.optional(),replyAccountId:id,ruleHash:id,policyId:id,policyRevision:z.number().int().positive(),model:id,mode:z.enum(['REAL','SIMULATION']),
+ reviewConfigRevision:z.number().int().positive().optional(),platformPostId:id.optional(),replyAccountId:id,ruleHash:id,policyId:id,policyRevision:z.number().int().positive(),model:id,mode:z.enum(['REAL','SIMULATION']),
 });
 export type AcceptanceScope=z.infer<typeof normalAcceptanceScope>;
 // STOPPED retains the envelope until explicit close, so exhaustion never opens a
@@ -53,6 +53,19 @@ export async function bindAcceptancePost(db:Store,runId:string,postId:string){
  if(!a.capturedPostId)await db.normalAutomationAcceptance.update({where:{id:a.id},data:{capturedPostId:postId}});
  return true;
 }
+/** An incomplete capture can be excluded, never promoted or dispatched. */
+export async function coverageSkipped(db:Store,a:NormalAutomationAcceptance,job:{postId:string;runId:string;status:string;reason:string|null}){
+ if(job.status!=='SKIPPED'||job.runId!==a.runId||!job.reason?.startsWith('覆盖未通过：'))return false;
+ const [post,claim]=await Promise.all([db.capturedPost.findUnique({where:{id:job.postId}}),db.normalAcceptancePost.findUnique({where:{acceptanceId_postId:{acceptanceId:a.id,postId:job.postId}}})]);
+ return !!post&&post.lastRunId===a.runId&&post.coverage!=='COMPLETE'&&!!claim&&!claim.modelCallId&&!claim.reviewIds.length;
+}
+export async function blockingAcceptanceJobs(db:Store,a:NormalAutomationAcceptance,statuses:string[]){
+ const jobs=await db.autoReviewJob.findMany({where:{runId:a.runId!,status:{in:statuses}}});
+ for(const job of jobs)if(!await coverageSkipped(db,a,job))return true;return false;
+}
+export async function acceptanceReviewConfigRevision(db:Store,runId:string,original:number){
+ const a=await db.normalAutomationAcceptance.findUnique({where:{runId}});return a&&liveAcceptance(a)?normalAcceptanceScope.parse(a.scope).reviewConfigRevision??original:original;
+}
 export async function acceptanceReviewAllowed(db:Store,job:{id:string;runId:string;postId:string;policyId:string;policyVersion:number},modelVersion?:number){
  const a=await activeAcceptance(db)??await db.normalAutomationAcceptance.findUnique({where:{runId:job.runId}});
  if(!a)return true;const s=normalAcceptanceScope.parse(a.scope),actor=await db.user.findUnique({where:{id:a.actorId}});
@@ -74,7 +87,7 @@ export async function guardAcceptanceModel(db:Store,input:{autoJobId?:string;pol
  const post=await db.normalAcceptancePost.findUniqueOrThrow({where:{acceptanceId_postId:{acceptanceId:a.id,postId:job.postId}}});
  if(post.modelCallId&&post.modelCallId!==input.callId)acceptanceConflict();
  if(input.callId&&(post.modelCallId!==input.callId||JSON.stringify([...post.reviewIds].sort())!==JSON.stringify(input.rows.map(r=>r.id).sort())))acceptanceConflict();
- if(s.maxPosts>1&&(!a.batchPlanned||post.payloadHash!==semanticHash(input.payload)||await db.autoReviewJob.count({where:{runId:a.runId!,status:{in:['FAILED','CANCELLED','SKIPPED']}}})))acceptanceConflict();
+ if(s.maxPosts>1&&(!a.batchPlanned||post.payloadHash!==semanticHash(input.payload)||await blockingAcceptanceJobs(db,a,['FAILED','CANCELLED','SKIPPED'])))acceptanceConflict();
  const estimate=estimateWholePostCost(input.payload,input.model);
  if(!estimate.fits||estimate.priceVersion!==s.priceVersion||estimate.inputTokensUpper>s.maxInputTokens||estimate.outputTokens>s.maxOutputTokens||estimate.estimatedMicros===null||estimate.estimatedMicros>s.maxEstimatedMicros)acceptanceConflict();
  if(s.maxPosts>1){const plans=await db.normalAcceptancePost.findMany({where:{acceptanceId:a.id}});if(plans.some(p=>p.estimatedMicros===null)||plans.reduce((n,p)=>n+(p.estimatedMicros??0),0)>s.maxEstimatedMicros||post.estimatedMicros!==estimate.estimatedMicros)acceptanceConflict();}
@@ -105,7 +118,7 @@ export async function acceptanceSendAllowed(db:Store,rule:AutoContactRule,review
  if(!post?.modelCallId||!post.reviewIds.includes(reviewId))return false;
  if(s.maxPosts>1){
   if(!a.batchPlanned||posts.some(p=>p.estimatedMicros===null||p.reviewIds.length&&!p.modelCallId))return false;
-  if(await db.autoReviewJob.count({where:{runId:a.runId!,status:{in:['PENDING','PROCESSING','FAILED','CANCELLED','SKIPPED']}}}))return false;
+  if(await blockingAcceptanceJobs(db,a,['PENDING','PROCESSING','FAILED','CANCELLED','SKIPPED']))return false;
   const ids=posts.flatMap(p=>p.modelCallId?[p.modelCallId]:[]);if(await db.semanticModelCall.count({where:{id:{in:ids},status:'COMPLETED'}})!==ids.length)return false;
  }
  return (await db.semanticModelCall.findUnique({where:{id:post.modelCallId}}))?.status==='COMPLETED';
@@ -117,7 +130,7 @@ export async function settleAcceptance(db:Store){
  const a=await activeAcceptance(db);if(!a||a.state!=='ACTIVE')return;
  const s=normalAcceptanceScope.parse(a.scope);
  let reason=!liveAcceptance(a)?'EXPIRED':null;
- if(!reason&&s.maxPosts>1){const posts=await db.normalAcceptancePost.findMany({where:{acceptanceId:a.id}}),ids=posts.flatMap(p=>p.modelCallId?[p.modelCallId]:[]);if(await db.semanticModelCall.count({where:{id:{in:ids},status:{notIn:['RESERVED','COMPLETED']}}})||a.runId&&await db.autoReviewJob.count({where:{runId:a.runId,status:{in:['FAILED','CANCELLED','SKIPPED']}}}))reason='MODEL_FAILED_OR_SCOPE_CHANGED';}
+ if(!reason&&s.maxPosts>1){const posts=await db.normalAcceptancePost.findMany({where:{acceptanceId:a.id}}),ids=posts.flatMap(p=>p.modelCallId?[p.modelCallId]:[]);if(await db.semanticModelCall.count({where:{id:{in:ids},status:{notIn:['RESERVED','COMPLETED']}}})||a.runId&&await blockingAcceptanceJobs(db,a,['FAILED','CANCELLED','SKIPPED']))reason='MODEL_FAILED_OR_SCOPE_CHANGED';}
  if(!reason&&a.sendJobId){const j=await db.autoContactJob.findUnique({where:{id:a.sendJobId}});if(j&&!['RESERVED','ATTEMPTED'].includes(j.status))reason='SUBMISSION_FINISHED';}
  if(!reason&&a.runId&&!a.sendJobId){
   const run=await db.collectionRun.findUnique({where:{id:a.runId}});
