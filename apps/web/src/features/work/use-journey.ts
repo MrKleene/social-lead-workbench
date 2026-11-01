@@ -1,3 +1,4 @@
+import {useRunHistory,runSelection} from './use-run-history';
 import {runReviewStage} from '@/features/comment-review/run-review-model';
 import {useAutomationPreferences} from './settings-data';
 import {useEffect,useRef} from 'react';
@@ -20,8 +21,9 @@ export function useJourney(config: Config | undefined, visible: boolean) {
   const detail = useConfig(config?.id), reviews = useReviewOverview(visible);
   const runs = collectionTaskSession(config, detail.data?.id === config?.id ? detail.data?.runs : []).runs;
   const requested = params.get('run') || '';
-  const run = runs.find(r => r.id === (requested || config?.activeRunId)) ??
-    (!requested && params.get('fresh') !== '1' ? runs[0] : undefined);
+  const historyQuery=useRunHistory(config?.id,requested,'',visible);
+  const selection=runSelection(historyQuery.data,requested,params.get('fresh')==='1');
+  const {run,current,history}=selection;
   const policy = reviews.data?.policies.find(p => p.id === params.get('policy')) ?? (reviews.data?.policies.find(p=>p.id===preferences.data?.policyId)||reviews.data?.policies[0]);
   const version=Number(params.get('reviewVersion'));
   const policyRevision=Number.isInteger(version)&&version>0?version:undefined;
@@ -38,7 +40,7 @@ export function useJourney(config: Config | undefined, visible: boolean) {
   });
   const selectRun = (id: string) => {setParams(old => {
     const p = new URLSearchParams(old); if(id){p.set('run', id);p.delete('fresh');}else{p.delete('run');p.set('fresh','1');}
-    if (config) p.set('config', config.id); return p;
+    if (config) p.set('config', config.id);p.delete('reviewVersion'); return p;
   });};
   const progress=summary.data?journeyProgress(summary.data,!!reviews.data?.policies.some(p=>p.autoEnabled),!!contact.data?.rules.some(r=>r.enabled)):undefined;
   const reviewStage=summary.data?runReviewStage(summary.data.reviewJobs,!!run?.capturedCommentsCount,!!policy?.autoEnabled):undefined;
@@ -53,7 +55,7 @@ export function useJourney(config: Config | undefined, visible: boolean) {
     Object.values(summary.data.reviews).some(n=>n>0)||Object.values(summary.data.reviewJobs).some(n=>n>0)||
     (!!run?.capturedCommentsCount&&!!reviews.data?.policies.some(p=>p.autoEnabled));
   useEffect(()=>{
-    if(!visible||!run||detail.isError)return;
+    if(!visible||!run||detail.isError||history)return;
     const next=followJourney(observed.current,{key:`${config?.id}:${run.id}`,status:run.status,
       safeEnd:['COMPLETE','PARTIAL'].includes(run.status)&&!outcome?.warning,reviewReady,stage});
     observed.current=next.observation;
@@ -63,7 +65,7 @@ export function useJourney(config: Config | undefined, visible: boolean) {
       p.set('stage','review');p.set('run',run.id);if(config)p.set('config',config.id);
       return p;
     },{replace:true});
-  },[visible,run?.id,run?.status,config?.id,detail.isError,outcome?.warning,reviewReady,stage,setParams]);
+  },[history,visible,run?.id,run?.status,config?.id,detail.isError,outcome?.warning,reviewReady,stage,setParams]);
 
-  return {policyRevision,selectVersion:(value:string)=>setParams(old=>{const p=new URLSearchParams(old);if(value)p.set('reviewVersion',value);else p.delete('reviewVersion');return p;}),stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, contact, summary, statuses, notice};
+  return {historyQuery,current,history,missing:selection.missing,returnCurrent:()=>{if(current)selectRun(current.id);},policyRevision,selectVersion:(value:string)=>setParams(old=>{const p=new URLSearchParams(old);if(value)p.set('reviewVersion',value);else p.delete('reviewVersion');return p;}),stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, contact, summary, statuses, notice};
 }

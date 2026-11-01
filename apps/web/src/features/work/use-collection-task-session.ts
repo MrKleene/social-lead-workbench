@@ -2,11 +2,11 @@ import {useCallback,useLayoutEffect,useRef,useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {useQueryClient} from '@tanstack/react-query';
 import {useConfig} from '@/features/collection/use-collection';
-import type {Config} from '@/features/collection/types';
+import type {Config,Run} from '@/features/collection/types';
 import {collectionTaskSession} from './collection-task-session';
 /** One visible visit to one configuration. Late start responses cannot attach
  * to another configuration or a later visit; nothing is persisted in storage. */
-export function useCollectionTaskSession(config:Config|undefined,visible:boolean){
+export function useCollectionTaskSession(config:Config|undefined,visible:boolean,external?:{id:string;run?:Run;pending:boolean;error:unknown}){
  const [params,setParams]=useSearchParams();
  const requested=params.get('run')||'';
  const client=useQueryClient(),detail=useConfig(config?.id),refetchDetail=detail.refetch;
@@ -21,12 +21,12 @@ export function useCollectionTaskSession(config:Config|undefined,visible:boolean
  // A task observed live during this visit also keeps its eventual result.
  useLayoutEffect(()=>{if(visible&&activeId)setStarted(activeId);},[visible,config?.id,activeId]);
  const runs=detail.data?.runs||config?.runs||[];
- const selection=requested||activeId||(params.get('fresh')!=='1'?started||runs[0]?.id:'')||'';
- const view=collectionTaskSession(config,detail.data?.runs,selection,selection);
+ const selection=external?external.id:requested||activeId||(params.get('fresh')!=='1'?started||runs[0]?.id:'')||'';
+ const view=collectionTaskSession(config,[...(detail.data?.runs||[]),...(external?.run?[external.run]:[])],selection,selection);
  // URL state survives refresh and Back/Forward. Reading a task never resumes it.
- useLayoutEffect(()=>{if(visible&&selection&&!requested&&config){setParams(old=>{const p=new URLSearchParams(old);p.set('config',config.id);p.set('run',selection);p.delete('fresh');return p;},{replace:true});}},[visible,selection,requested,config?.id,setParams]);
- const currentRun=view.runs.find(r=>r.id===selection);
- return {...view,currentId:selection,currentRun,checking,error:detail.error,refresh,
+ useLayoutEffect(()=>{if(!external&&visible&&selection&&!requested&&config){setParams(old=>{const p=new URLSearchParams(old);p.set('config',config.id);p.set('run',selection);p.delete('fresh');return p;},{replace:true});}},[external,visible,selection,requested,config?.id,setParams]);
+ const currentRun=external?external.run:view.runs.find(r=>r.id===selection);
+ return {...view,pending:external?external.pending:view.pending,currentId:selection,currentRun,checking,error:external?.error||detail.error,refresh,
   token:()=>scope.current,remember:(id:string,visit:typeof scope.current)=>{if(scope.current===visit&&visit.visible&&visit.id===config?.id){setStarted(id);return true;}return false;}
  };
 }

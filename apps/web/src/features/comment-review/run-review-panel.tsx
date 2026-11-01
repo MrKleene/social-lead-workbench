@@ -9,7 +9,7 @@ import {ErrorNotice,Loading} from '@/components/feedback';
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import {commentReviewLabel,reviewStateLabel,scoreLabel,decisionLabel} from './run-review-model';
 import './run-review.css';
-type Props={runId:string;policyId?:string;policyRevision?:number;onSettings:()=>void};
+type Props={runId:string;policyId?:string;policyRevision?:number;onSettings?:()=>void};
 export function RunReviewPanel({runId,policyId,policyRevision,onSettings}:Props){
  const [postId,setPostId]=useState(''),[offset,setOffset]=useState(0),[postOffset,setPostOffset]=useState(0),[selectedDetail,setDetail]=useState<RunReviewComment|null>(null),trigger=useRef<HTMLElement|null>(null);
  const params=new URLSearchParams({offset:String(offset),postOffset:String(postOffset),...(postId?{postId}:{}),...(policyId?{policyId}:{}),...(policyRevision?{policyRevision:String(policyRevision)}:{})});
@@ -17,8 +17,8 @@ export function RunReviewPanel({runId,policyId,policyRevision,onSettings}:Props)
  const detail=q.data?.comments.find(c=>c.id===selectedDetail?.id)||selectedDetail;
  const d=q.data,post=d?.posts.find(p=>p.id===d.selectedPostId),jobs=post?.jobs||[];
  const choose=(id:string)=>{setPostId(id);setOffset(0);setDetail(null);};
- return <section className="run-review" aria-label="本轮逐帖评论审核"><header className="run-review-heading"><div><h2>评论匹配</h2>{d&&<span>本轮 {d.expectedPosts} 篇帖子 · {d.expectedComments} 条评论</span>}</div><div className="action-row"><Button variant="outline" disabled={q.isFetching} onClick={()=>void q.refetch()}>刷新审核</Button><Button variant="outline" onClick={onSettings}>匹配设置</Button></div></header>
- {!policyId&&<p role="status">尚未选择匹配方案<Button variant="link" onClick={onSettings}>选择方案</Button></p>}
+ return <section className="run-review" aria-label="本轮逐帖评论审核"><header className="run-review-heading"><div><h2>评论匹配</h2>{d&&<span>本轮 {d.expectedPosts} 篇帖子 · {d.expectedComments} 条评论</span>}</div><div className="action-row"><Button variant="outline" disabled={q.isFetching} onClick={()=>void q.refetch()}>刷新审核</Button>{onSettings&&<Button variant="outline" onClick={onSettings}>匹配设置</Button>}</div></header>
+ {!policyId&&onSettings&&<p role="status">尚未选择匹配方案{onSettings&&<Button variant="link" onClick={onSettings}>选择方案</Button>}</p>}
  {q.isError?<div role="alert"><ErrorNotice error={q.error}/><Button variant="outline" onClick={()=>void q.refetch()}>重试读取</Button></div>:q.isPending?<div className="run-review-loading"><Loading/></div>:d&&<>
  {d.limited&&<p className="run-review-warning" role="status">记录超出本次读取范围，当前列表不完整。</p>}
  {d.postTotal<d.expectedPosts&&<p className="run-review-warning" role="status">历史帖子关联不完整 · 已定位 {d.postTotal} / {d.expectedPosts} 篇</p>}

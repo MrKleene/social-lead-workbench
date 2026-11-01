@@ -1,3 +1,4 @@
+import {runHistoryInput} from './run-history';
 import {AutoContactModule} from '../auto-contact/auto-contact.module';
 import {ManualReviewService} from '../comment-review/manual-review.service';
 import {AutoReviewService} from '../comment-review/auto-review.service';
@@ -80,6 +81,8 @@ class CollectionController {
     list(
     @Req()
     r: AuthedRequest) { return this.service.list(r.actor); }
+    @Get("configs/:id/run-history") @Header("Cache-Control","no-store, private")
+    history(@Req() r:AuthedRequest,@Param("id") id:string,@Query() q:unknown){return this.service.history(r.actor,id,parse(runHistoryInput,q));}
     @Get("configs/:id")
     detail(
     @Req()

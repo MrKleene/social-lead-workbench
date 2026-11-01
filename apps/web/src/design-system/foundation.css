@@ -432,3 +432,12 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 @media(max-width:767px){:root .graphite-workspace .journey-version{max-width:none}}
 :root .automation-settings-sheet .automation-tabs{width:calc(100% - 40px);box-sizing:border-box}
 @media(max-width:767px){:root .automation-settings-sheet .automation-tabs{width:calc(100% - 32px)}}
+
+/* The run identifier is operational context, not decorative helper copy. */
+.ui-workspace .journey-run-context{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted-foreground)}
+.ui-workspace .journey-run-context>div{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.ui-workspace .journey-run-context strong{color:var(--foreground);font-weight:500}
+@media(max-width:480px){.ui-workspace .journey-run-context{align-items:flex-start;flex-wrap:wrap}.ui-workspace .journey-run-context>div{gap:6px 10px}}
+.ui-workspace~[data-slot=sheet-content] .task-history-row-head strong,.task-history-sheet .task-history-row-head strong{color:var(--foreground)}
+.task-history-sheet .task-history-list>button{padding:12px;gap:6px;text-align:left;justify-items:stretch;align-items:start;background:var(--background);border-color:var(--border)}
+.task-history-sheet .task-history-list>button>span,.task-history-sheet .task-history-list>button>small{width:100%;text-align:left}
