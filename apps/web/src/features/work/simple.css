@@ -152,3 +152,4 @@ html[data-crm-reduced=true] [data-slot=sheet-content][data-layout=modal],html[da
 /* Saving selections keeps labels and modal geometry stable. Errors remain inline. */
 .automation-settings-sheet .automation-save-status{min-height:20px;flex:1;line-height:20px}
 .automation-settings-sheet[data-applying=true] :is([data-slot=button],[role=tab]):disabled{opacity:1;color:var(--muted-foreground)}
+.collection-start-scope{max-width:100%;overflow-wrap:anywhere;color:var(--muted-foreground);font-size:12px;line-height:1.5}

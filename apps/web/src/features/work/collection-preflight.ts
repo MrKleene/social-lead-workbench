@@ -10,8 +10,8 @@ export function collectionPreflight(config:Config|undefined, readiness:McpReadin
  if(readiness?.captureArchiveVersion!==1)return 'unavailable';
  if(config.mode==='MOCK')return 'ready';
  if(!readiness.enabled||readiness.mode!==config.mode||!readiness.accountBound)return 'unavailable';
- if(!readiness.accounts?.some(a=>a.eligible))return 'account';
+ if(!config.defaultExecutionAccountId||!readiness.accounts?.some(a=>a.id===config.defaultExecutionAccountId&&a.eligible))return 'account';
  if(!readiness.device?.online)return 'device';
  return 'ready';
 }
-export const preflightText:Record<Preflight,string>={loading:'正在读取本地配置与账号状态…',keywords:'先保存你的搜索关键词，下次直接复用。',paused:'所选配置已暂停；请核查原因后在设置中恢复。',backoff:'当前处于退避期；等待后手动重试，不自动换号。',running:'已有任务正在运行，查看本轮进度。',unavailable:'当前采集服务或模式未就绪；不会启动平台读取。',account:'需要已保存并绑定本机的账号；任务启动时核验登录与身份。',device:'执行设备尚未在线或批准，请到账号中心处理。',ready:'关键词已就绪。启动前确认本轮账号授权；模型不是采集门槛。'};
+export const preflightText:Record<Preflight,string>={loading:'正在读取本地配置与账号状态…',keywords:'先保存你的搜索关键词，下次直接复用。',paused:'所选配置已暂停；请核查原因后在设置中恢复。',backoff:'当前处于退避期；等待后手动重试，不自动换号。',running:'已有任务正在运行，查看本轮进度。',unavailable:'当前采集服务或模式未就绪；不会启动平台读取。',account:'需要已保存并绑定本机的账号；任务启动时核验登录与身份。',device:'执行设备尚未在线或批准，请到账号中心处理。',ready:'按已保存账号和范围开始本轮采集。'};

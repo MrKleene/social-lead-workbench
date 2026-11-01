@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {collectionPreflight} from './collection-preflight';
 import type {Config,McpReadiness} from '../collection/types';
-const config:Config={id:'fixture',name:'虚构',mode:'XHS_MCP',platform:'XHS',keywords:['护理'],excludeWords:[],batchLimit:1,enabled:true,revision:1,activeRunId:null,nextAllowedAt:null,pauseReason:null,runs:[]};
+const config:Config={id:'fixture',defaultExecutionAccountId:'fixture',name:'虚构',mode:'XHS_MCP',platform:'XHS',keywords:['护理'],excludeWords:[],batchLimit:1,enabled:true,revision:1,activeRunId:null,nextAllowedAt:null,pauseReason:null,runs:[]};
 const readiness:McpReadiness={enabled:true,mode:'XHS_MCP',reason:'READY',lastCheck:null,coverage:'WINDOW_ONLY',automaticPolling:false,captureArchiveVersion:1,accountBound:true,device:{name:'虚构设备',online:true},accounts:[{id:'fixture',label:'虚构账号',eligible:true,platformUserId:null,reason:'VERIFIED'}]};
 describe('采集与 LLM 独立的前置检查',()=>{
  it('没有配置仅补关键词；账号缺失仅补账号',()=>{expect(collectionPreflight(undefined,readiness)).toBe('keywords');expect(collectionPreflight(config,{...readiness,accounts:[]})).toBe('account');});
