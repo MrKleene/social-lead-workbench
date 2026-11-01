@@ -25,7 +25,7 @@ export function AccountWorkspace({screen:s}:{screen:Screen}) {
     <dl className="account-compact-status"><div><dt>登录</dt><dd>{status.login}</dd></div><div><dt>风险</dt><dd data-warning={!!status.issue}>{status.risk}</dd></div><div><dt>采集</dt><dd>{status.collection}</dd></div><div><dt>回复</dt><dd>{status.reply}</dd></div></dl>
     <div className="account-compact-quota"><span>今日已占用 / 日上限</span><strong>{a.occupied}<span> / {a.dailyLimit}</span></strong></div>
     <div className="account-compact-actions"><Button variant="outline" onClick={()=>s.open('details',a)}>详情</Button>{s.admin&&<Button variant="ghost" onClick={()=>s.open('settings',a)}>设置</Button>}</div>
-    {(status.issue||status.unknown>0)&&<div className="account-compact-alert" role="alert">{status.issue&&<span>{status.issue}</span>}{status.unknown>0&&<Link to="/reply-history">{status.unknown} 条回复结果待核查 · 仍占用额度，勿重发 →</Link>}</div>}
+    {status.unknown>0&&<div className="account-compact-alert" role="alert"><Link to="/reply-history">{status.unknown} 条回复结果待核查 · 仍占用额度，勿重发 →</Link></div>}
 
    </li>;
   })}</ul>}
