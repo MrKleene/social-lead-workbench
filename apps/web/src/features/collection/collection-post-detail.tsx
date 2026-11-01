@@ -1,5 +1,5 @@
 
-import {PostAvailabilityEntry} from './post-availability';
+import {PostAvailabilityEntry,PostStateTag} from './post-availability';
 import {InfoSection} from '@/components/information-panel';
 import {commentCoverage} from './collection-outcome';
 import {SavedCommentConversation} from './saved-comment-conversation';
@@ -33,13 +33,13 @@ export function CollectionPostDetail({configId,post,id,readAction,platform,onBac
  const paneKeys=(event:KeyboardEvent<HTMLDivElement>)=>{if(event.target!==event.currentTarget||event.altKey||event.ctrlKey||event.metaKey||getComputedStyle(event.currentTarget).overflowY!=='auto'||!['Home','End'].includes(event.key))return;event.preventDefault();event.currentTarget.scrollTo({top:event.key==='Home'?0:event.currentTarget.scrollHeight,behavior:'instant'});};
  const openEvidence=(value:ArchivedComment|'post',target:HTMLButtonElement)=>{returnFocus.current=target;setEvidence(value);};
  return <section className="info-post-detail" aria-label="帖子评论详情">
-  <div className="info-detail-bar"><Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft data-icon="inline-start"/>返回列表</Button><div className="info-detail-actions"><Button variant="outline" size="sm" onClick={e=>openEvidence('post',e.currentTarget)}><FileSearch data-icon="inline-start"/>来源与证据</Button><Button variant="outline" size="sm" onClick={()=>{setRefreshVersion(v=>v+1);onRefresh();}}><RefreshCw data-icon="inline-start"/>刷新</Button></div></div>
+  <div className="info-detail-bar"><Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft data-icon="inline-start"/>返回列表</Button><div className="info-detail-actions" role="group" aria-label="帖子操作">{sourceLink&&<Button asChild variant="outline" size="sm"><a href={sourceLink} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" title="打开平台原文，可能需要登录或受访问限制">查看原文<ArrowUpRight data-icon="inline-end"/></a></Button>}{original&&<PostAvailabilityEntry id={original.id}/>}<Button variant="outline" size="sm" onClick={e=>openEvidence('post',e.currentTarget)}><FileSearch data-icon="inline-start"/>来源与证据</Button><Button variant="outline" size="sm" onClick={()=>{setRefreshVersion(v=>v+1);onRefresh();}}><RefreshCw data-icon="inline-start"/>刷新</Button>{readAction}</div></div>
   <div className="info-detail-grid"><aside className="info-story" tabIndex={0} role="region" aria-label="帖子内容阅读区" onKeyDown={paneKeys}>
    <header className="info-story-heading"><h2 ref={heading} tabIndex={-1}>{savedTitleLabel(post?.title)}</h2>
     <div className="info-post-author">{(original?.snapshot.authorNickname||original?.snapshot.authorAvatarUrl)&&<><SavedAvatar url={original.snapshot.authorAvatarUrl}/><span>{displayNickname(original.snapshot.authorNickname)||'昵称未采集'}</span></>}<span>{platformLabel[platform]}</span></div>
     {(publication||post?.lastSeenAt)&&<time className="info-publication" dateTime={publication||post?.lastSeenAt}>{publication?'发布于':'采集于'} {readingTime(publication||post!.lastSeenAt)} · 北京时间</time>}
-    <div className="info-story-meta">{original&&<PostAvailabilityEntry id={original.id} value={original.availability}/>}<span data-warning={reading.warning}>{reading.label}</span></div>
-    <div className="info-original-action">{readAction}{sourceLink?<Button asChild variant="outline" size="sm"><a href={sourceLink} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" title="打开平台原文，可能需要登录或受访问限制">查看原文<ArrowUpRight data-icon="inline-end"/></a></Button>:<small>未保存有效原文链接</small>}</div>
+    <dl className="info-story-facts"><div><dt>访问状态</dt><dd><PostStateTag value={original?.availability}/></dd></div><div><dt>读取覆盖</dt><dd data-warning={reading.warning}>{reading.label}</dd></div></dl>
+    {!sourceLink&&<small className="info-source-missing">未保存有效原文链接</small>}
    </header>
    <div className="info-story-scroll" data-media={!!cover&&failedCover!==cover}>
    {cover&&failedCover!==cover&&<img className="info-detail-cover" src={cover} alt="帖子封面" loading="lazy" decoding="async" crossOrigin="anonymous" referrerPolicy="no-referrer" onError={()=>setFailedCover(cover)}/>}
