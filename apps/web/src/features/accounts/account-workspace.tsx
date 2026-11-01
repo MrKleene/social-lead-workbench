@@ -13,7 +13,7 @@ export function AccountWorkspace({screen:s}:{screen:Screen}) {
  const count=s.state.query.isPending?'正在读取':s.state.query.isError?'读取失败':`${s.rows.length} 个账号`;
  return <div className="account-list-view">
   <header className="account-list-heading"><div><h1>账号中心</h1><span>{count}</span></div>{s.admin&&<div className="account-list-tools"><Button variant="ghost" onClick={()=>s.open('device')}>设备设置</Button><Button disabled={s.adding||s.caps.isPending} onClick={()=>void s.add()}>{s.adding?'添加中…':'＋ 添加账号'}</Button></div>}</header>
-  {!s.admin&&<p className="account-list-note">仅显示分配给你的账号；登录与恢复由管理员处理。</p>}
+
   {s.admin&&!ready&&<div className="candidate-notice" role="status"><span>{s.availability==='loading'?'正在检查登录服务…':s.availability==='error'?'暂时无法读取登录服务':s.availability==='device-required'?'首次使用，请先绑定执行电脑':s.availability==='device-unavailable'?'执行电脑离线或尚未认证':'扫码登录暂不可用'}</span><Button variant="outline" onClick={()=>s.availability==='error'?void s.caps.refetch():s.open('device')}>{s.availability==='error'?'重试':'查看设置'}</Button></div>}
   <ErrorNotice error={s.state.query.error||s.state.mutation.error}/>
   {s.state.query.isError&&<Button variant="outline" onClick={()=>void s.state.query.refetch()}>重新读取账号</Button>}

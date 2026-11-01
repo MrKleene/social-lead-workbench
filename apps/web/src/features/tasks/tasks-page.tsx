@@ -19,7 +19,7 @@ export function TasksPage() {
       <div className="page-heading">
         <div>
           <span className="eyebrow">团队协作 · TASKS</span><h1>任务中心</h1>
-          <p>把每一次人工核验和跟进，落实为清晰的下一步。</p>
+
         </div>
         <Badge variant="secondary" className="heading-pill"><ListChecks size={16} />人工跟进工作流</Badge>
       </div>
@@ -32,9 +32,7 @@ export function TasksPage() {
           <h2>人工任务</h2>
           <Badge variant="secondary">{query.isError?"读取失败":query.isPending?"正在读取":`${rows.length} 项`}</Badge>
         </div>
-        <p className="helper-text">
-          仅展示当前有权访问的人工跟进任务。自动化执行进度与回复结果，请分别查看自动化任务和回复记录。
-        </p>
+
         {query.isPending ? (
           <Loading />
         ) : (

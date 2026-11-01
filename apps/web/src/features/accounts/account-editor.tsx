@@ -102,7 +102,7 @@ export function AccountEditor({
         />
       </FormField>
       <p className="helper-text">
-        每日额度由评论与私信共用，不代表平台发送许可。
+        评论与私信共用日额度。
       </p>
       <div className="action-row">
         <Button disabled={pending || users.isError}>保存账号设置</Button>

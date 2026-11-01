@@ -31,7 +31,7 @@ function HistoryCard({item:a}:{item:ReplyHistoryItem}) {
 export function ReplyHistory({enabled}:{enabled:boolean}) {
     const s=useReplyHistory(enabled),d=s.query.data;
     return <section id="reply-history" className="contact-panel reply-history" aria-labelledby="reply-history-title">
-        <div className="contact-heading"><div><h2 id="reply-history-title">发送结果</h2><p>常规任务与单条测试统一记录；不受规则任务队列筛选影响。</p></div><Button variant="outline" onClick={()=>void s.query.refetch()} disabled={s.query.isFetching}>刷新回复历史</Button></div>
+        <div className="contact-heading"><div><h2 id="reply-history-title">发送结果</h2></div><Button variant="outline" onClick={()=>void s.query.refetch()} disabled={s.query.isFetching}>刷新回复历史</Button></div>
         <div className="contact-heading"><p>{d ? `${d.mode==='REAL'?'真实发送':'模拟记录'}累计 ${d.allTotal} 次尝试 · 平台已确认 ${d.confirmedTotal} 条` : s.query.isError?'历史统计读取失败':'正在读取历史统计'}</p><FormField>历史结果<SelectField aria-label="回复历史结果" value={s.outcome} onValueChange={e=>s.filter(e)}><SelectOption value="">全部结果</SelectOption><SelectOption value="CONFIRMED">回复成功</SelectOption><SelectOption value="NOT_ATTEMPTED">未发送（有明确证据）</SelectOption><SelectOption value="FAILED">全部历史失败</SelectOption><SelectOption value="UNKNOWN">结果未知</SelectOption><SelectOption value="RESERVED">已预占</SelectOption><SelectOption value="ATTEMPTED">执行中</SelectOption><SelectOption value="CANCELLED">已取消</SelectOption><SelectOption value="SIMULATED_SUCCESS">模拟完成</SelectOption></SelectField></FormField></div>
         <ErrorNotice error={s.query.error}/>{s.query.isError && <Alert role="alert"><AlertDescription>历史读取失败，不能据此判断没有回复记录。{d?'下方保留上次成功读取的数据。':''}</AlertDescription></Alert>}
         {s.query.isPending ? <Loading/> : d && <>

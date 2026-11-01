@@ -9,7 +9,7 @@ const results:Record<string,string>={CHECKING:'登录检查正在进行',CONNECT
 export function SavedSessionPanel({account}:{account:Account}){
  const {consent,setConsent,verify}=useSavedSession(account.id),ref=account.sessionReference;
  return <section className="account-login-panel" aria-label="手动登录检查">
-  {ref?<><p>使用已保存的会话，仅检查登录与账号身份。</p><FormField className="login-consent"><Checkbox  checked={consent} disabled={verify.isPending} onCheckedChange={e=>setConsent((e === true))}/>同意检查此账号的登录状态和账号身份</FormField><Button disabled={!consent||verify.isPending||ref.state==='DEVICE_MISMATCH'} onClick={()=>verify.mutate()}>{verify.isPending?'正在检查…':'检查登录'}</Button></>:<p>没有可恢复的本机会话引用，需管理员核查。</p>}
+  {ref?<><FormField className="login-consent"><Checkbox  checked={consent} disabled={verify.isPending} onCheckedChange={e=>setConsent((e === true))}/>同意检查此账号的登录状态和账号身份</FormField><Button disabled={!consent||verify.isPending||ref.state==='DEVICE_MISMATCH'} onClick={()=>verify.mutate()}>{verify.isPending?'正在检查…':'检查登录'}</Button></>:<p>没有可恢复的本机会话引用，需管理员核查。</p>}
   {verify.data&&<p role="status">{verify.data.provider==='offline'?'【离线模拟】':''}{results[verify.data.state]||'核验结果未知，未确认可用'}</p>}
   {verify.error&&<Alert role="alert"><AlertDescription>{verify.error.message}</AlertDescription></Alert>}
   <InfoDialog  title={<>检查范围</>}><p>这是可选的登录检查，不更新回复资格检查记录，也不解除平台限制。任务执行前仍会自动核验；此操作不会采集或发送。</p></InfoDialog>

@@ -19,12 +19,12 @@ export function CommentRuleFields({draft,legacy}:{draft:ReturnType<typeof useCom
  return <FieldSet className="rule-fields"><FieldLegend>评论筛选规则</FieldLegend>
  <FormField className="check-label"><Checkbox  checked={draft.enabled} onCheckedChange={e=>draft.setEnabled((e === true))}/>启用独立评论规则（保存后生效）</FormField>
  {!draft.enabled?<p className="helper-text">{legacy?'此配置沿用旧规则：评论必须包含帖子搜索词。':'当前选择兼容旧规则：评论必须包含帖子搜索词。'}不会自动升级或重放历史采集。</p>:<>
- <p className="helper-text">帖子搜索词只用于找帖子。以下词条独立判断评论；这是可解释规则，不是 AI 语义理解。“高相关”也须人工核验，不代表已同意联系。</p>
+ <p className="helper-text">按词条匹配评论，非模型分析。</p>
  <FormField>目标需求说明（仅供人阅读）<Textarea aria-label="目标需求说明（仅供人阅读）" value={draft.value.description} onChange={e=>set('description',e.target.value)} maxLength={500} rows={3}/></FormField>
  <FormField>专业名与别名<Textarea aria-label="专业名与别名" value={draft.value.professions} onChange={e=>set('professions',e.target.value)} maxLength={7380} rows={5} placeholder="护理学 | 护理&#10;每行一个专业，用 | 分隔别名；最多30个专业，每个最多5个别名"/></FormField>
  <FormField>求助表达<Textarea aria-label="求助表达" value={draft.value.help} onChange={e=>set('help',e.target.value)} maxLength={1230} rows={3}/></FormField>
  <FormField>上下文主题词<Textarea aria-label="上下文主题词" value={draft.value.context} onChange={e=>set('context',e.target.value)} maxLength={1230} rows={3}/></FormField>
- <p className="helper-text">只检查已获取的帖子标题/正文、当前评论及直接上级评论；主题或上级评论缺失时进入待核查。否定、无关用途及服务提供表达按固定保守规则过滤；未列出的专业不会被猜测。</p>
+ <p className="helper-text">上下文不足的评论保留待核查。</p>
  <Button type="button" variant="ghost" onClick={draft.preset}>载入选题/开题预设</Button>
  </>}
  </FieldSet>;

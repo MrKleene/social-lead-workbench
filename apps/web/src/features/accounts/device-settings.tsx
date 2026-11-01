@@ -13,7 +13,7 @@ function Enrollment({state,pending,submit}:{state:DeviceState;pending:boolean;su
     <h3>专用电脑用途</h3>
     <p>绑定的是运行工作台执行程序的电脑，不一定是打开浏览器的电脑。系统由执行程序自动检测。</p>
     <dl><dt>实际执行电脑</dt><dd>{state.binding?.executionHost||'等待后端更新'} · {state.capability.os}</dd><dt>绑定后的权限</dt><dd>只在这台执行机保管各账号的独立登录态并执行获准的只读任务。管理员才能扫码管理账号、启动和停止采集；销售继续处理已分配客户。评论、私信发送和自动持续采集不开放。</dd><dt>设备密钥</dt><dd>{state.provider==='offline'?'虚构离线测试密钥，不连接平台。':state.capability.os==='Windows'?'新绑定的认证私钥使用 Windows 当前用户 DPAPI 加密；换系统用户或解密失败时停止，不回退明文。':'新绑定的认证私钥由本机当前用户的 macOS 钥匙串保护；钥匙串锁定或不可访问时停止执行，不回退明文。'}</dd></dl>
-    <p>点击下方按钮即批准这台执行电脑保存设备认证密钥并使用默认私有目录。平台账号仍需另行本人扫码，每次采集仍需确认；绑定不会自动扫码或采集。</p>
+    <p>点击下方按钮即批准这台执行电脑保存设备认证密钥并使用默认私有目录。平台账号仍需另行本人扫码，点击开始采集授权本轮读取；绑定不会自动扫码或采集。</p>
     {state.device&&!state.device.enabled&&<p>旧授权已撤销。再次绑定将建立新设备密钥；不会搬运或删除旧文件。</p>}
     {!state.binding&&<p role="status">一键绑定需要加载新版后端。请按升级说明在原终端重启同一持久实例，保留原数据库和端口。</p>}
     {state.capability.os==='Windows'&&<p>Windows 11 x64 适配代码已提供，实机验收待完成。真实平台执行还需要受信的 MCP 与浏览器构建；缺少依赖审阅时停止，不自动下载。</p>}{!state.capability.supported&&<p>此执行系统尚未支持；需要 macOS ARM64 或 Windows 11 x64 本机环境，远程设备接入未启用。</p>}
@@ -34,5 +34,5 @@ function Registered({device,state,pending,submit}:{device:NonNullable<DeviceStat
 export function DeviceSettings({ref}:{ref?:Ref<HTMLElement>}){
   const {query,mutation}=useDeviceSettings(),state=query.data;
   const submit:Submit=(path,body,method)=>mutation.mutate({path,body,method});
-  return <InfoSection ref={ref} id="execution-device-settings" className="device-settings" title={<>专用电脑设置 · 仅管理员</>}><p>首版只启用一台专用电脑。只有管理员可以绑定、更换授权、扫码管理账号和启动或停止采集。登录管理员不等于设备认证成功。</p>{query.isPending&&<p>读取执行机信息…</p>}{state&&!state.enabled&&<p>此临时环境未启用设备设置，请使用持久工作台。</p>}{state?.enabled&&(state.device?.enabled||state.device?.accountCount?<Registered key={`${state.device!.id}:${state.device!.version}`} state={state} device={state.device!} pending={mutation.isPending} submit={submit}/>:<Enrollment state={state} pending={mutation.isPending} submit={submit}/>)}{mutation.isSuccess&&<p role="status">设备设置已更新；不会自动扫码或采集。</p>}{(query.error||mutation.error)&&<Alert role="alert"><AlertDescription>{(query.error||mutation.error)?.message}</AlertDescription></Alert>}</InfoSection>;
+  return <InfoSection ref={ref} id="execution-device-settings" className="device-settings" title={<>专用电脑设置 · 仅管理员</>}>{query.isPending&&<p>读取执行机信息…</p>}{state&&!state.enabled&&<p>此临时环境未启用设备设置，请使用持久工作台。</p>}{state?.enabled&&(state.device?.enabled||state.device?.accountCount?<Registered key={`${state.device!.id}:${state.device!.version}`} state={state} device={state.device!} pending={mutation.isPending} submit={submit}/>:<Enrollment state={state} pending={mutation.isPending} submit={submit}/>)}{mutation.isSuccess&&<p role="status">设备设置已更新。</p>}{(query.error||mutation.error)&&<Alert role="alert"><AlertDescription>{(query.error||mutation.error)?.message}</AlertDescription></Alert>}</InfoSection>;
 }

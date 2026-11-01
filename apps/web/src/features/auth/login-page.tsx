@@ -36,9 +36,7 @@ export function LoginPage() {
             <br />
             到有据可查的跟进。
           </h1>
-          <p>
-            保存帖子、评论与回复，专注每一次判断。
-          </p>
+
         </div>
         <p className="login-foot">
           <ShieldCheck size={18} />
@@ -90,9 +88,7 @@ export function LoginPage() {
             {login.isPending ? "正在验证…" : "登录工作台"}
             <ArrowRight data-icon="inline-end" />
           </Button>
-          <p className="login-disclaimer">
-            登录不会启动采集、模型调用或发送消息。
-          </p>
+
         </FieldGroup></form>
       </section>
     </main>

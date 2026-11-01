@@ -32,7 +32,7 @@ export function PlatformsPage() {
       <div className="page-heading">
         <div>
           <h1>平台能力</h1>
-          <p>只读采集与外发能力分开说明；账号是否可用，以账号中心当次核验为准。</p>
+
         </div>
         <span className="page-code">CRM / 03</span>
       </div>
