@@ -21,7 +21,7 @@ describe('post reader action and evidence hierarchy',()=>{
  });
  it('keeps reason, source, observation time, version and long evidence in labeled rows',()=>{
   const html=renderToStaticMarkup(wrap(<PostStateEvidence value={{...unknownPostAvailability,evidence:{note:'虚构长证据\n不可据此改判'}}}/>));
-  for(const label of ['最近状态','检查时间','从未检查','原因','来源','无证据来源','证据版本','记录内容','不可据此改判'])expect(html).toContain(label);
-  expect(html).toContain('<dl');expect(html).toContain('访问状态未知');
+  for(const label of ['独立检查','检查时间','从未检查','原因','来源','无证据来源','证据版本','记录内容','不可据此改判'])expect(html).toContain(label);
+  expect(html).toContain('<dl');expect(html).toContain('未单独检查');
  });
 });

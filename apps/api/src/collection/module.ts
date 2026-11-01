@@ -40,7 +40,7 @@ class CollectionController {
     @Post("single-post-check") @Header("Cache-Control","no-store, private")
     singlePostCheck(@Req() r:AuthedRequest){return this.singlePost.check(r.actor,parse(singlePostInput,r.body));}
     @Get('captured-posts/:id/availability') @Header('Cache-Control','no-store, private')
-    availability(@Req() r:AuthedRequest,@Param('id') id:string){return this.captures.availability(r.actor,id);}
+    availability(@Req() r:AuthedRequest,@Param('id') id:string,@Query('runId') runId?:string){return this.captures.availability(r.actor,id,parse(z.string().max(200).default(''),runId));}
     @Post('captured-posts/:id/availability/recheck') @Header('Cache-Control','no-store, private')
     recheckAvailability(@Req() r:AuthedRequest,@Param('id') id:string){parse(z.object({}).strict(),r.body);return this.captures.availability(r.actor,id);}
     @Patch('captured-posts/:id/availability')
@@ -54,7 +54,7 @@ class CollectionController {
     @Get('configs/:id/posts') @Header('Cache-Control','no-store, private')
     savedPosts(@Req() r:AuthedRequest,@Param('id') id:string,@Query() query:unknown){return this.captures.posts(r.actor,id,parse(savedPostPageInput,query));}
     @Get("configs/:id/captures")
-    capturesList(@Req() r:AuthedRequest,@Param('id') id:string,@Query('offset') offset?:string,@Query('postId') postId?:string){return this.captures.list(r.actor,id,parse(z.coerce.number().int().min(0).max(100000).default(0),offset),parse(z.string().min(1).max(200).optional(),postId));}
+    capturesList(@Req() r:AuthedRequest,@Param('id') id:string,@Query('offset') offset?:string,@Query('postId') postId?:string,@Query('runId') runId?:string){return this.captures.list(r.actor,id,parse(z.coerce.number().int().min(0).max(100000).default(0),offset),parse(z.string().min(1).max(200).optional(),postId),parse(z.string().max(200).default(''),runId));}
     @Get('configs/:id/comment-stream') @Header('Cache-Control','no-store, private')
     commentStream(@Req() r:AuthedRequest,@Param('id') id:string,@Query() query:unknown){return this.captures.commentStream(r.actor,id,parse(commentStreamInput,query));}
     @Patch('configs/:id/semantic-control')

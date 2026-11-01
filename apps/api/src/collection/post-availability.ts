@@ -1,3 +1,4 @@
+import {readPostEvidence} from './post-read-evidence';
 import {ConflictException,NotFoundException} from '@nestjs/common';
 import type {Platform,PostAvailability} from '@prisma/client';
 import {availabilityInput,unknownPostAvailability} from '@crm/contracts';
@@ -37,11 +38,11 @@ export async function recordPostAvailability(tx:ContactDb,actor:Actor,platform:P
  await tx.auditLog.create({data:{actorId:actor.id,entityId:postId,action:'POST_AVAILABILITY_RECORDED',metadata:{platform,version,state,reason:input.reason}}});
  return row;
 }
-export async function readAvailability(db:Db,actor:Actor,id:string){
+export async function readAvailability(db:Db,actor:Actor,id:string,runId=''){
  requireAdmin(actor);const p=await db.capturedPost.findUnique({where:{id},include:{config:{select:{platform:true}}}});if(!p)throw new NotFoundException();
  const row=await postAvailability(db,p.config.platform,p.platformPostId);
  const events=await db.postAvailabilityEvent.findMany({where:{platform:p.config.platform,postId:p.platformPostId},orderBy:{version:'desc'},take:20});
- return {current:row??unknownPostAvailability,events,recheck:{available:false,reason:'当前平台适配器不能独立提供可靠的精确帖子可访问证据；待检查。可查看原文后人工记录来源，不会自动请求平台。'}};
+ return {current:row??unknownPostAvailability,readEvidence:await readPostEvidence(db,p,runId),events,recheck:{available:false,reason:'此处记录独立核查证据，不会自动请求平台；采集时的访问结果单独展示。'}};
 }
 export async function markAvailability(db:Db,actor:Actor,id:string,raw:unknown){
  requireAdmin(actor);const input=availabilityInput.parse(raw);

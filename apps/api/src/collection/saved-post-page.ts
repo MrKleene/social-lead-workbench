@@ -1,3 +1,4 @@
+import {readPostEvidence} from './post-read-evidence';
 import {postAvailabilityMap} from './post-availability';
 import {postStates,unknownPostAvailability} from '@crm/contracts';
 import type {Platform} from '@prisma/client';
@@ -14,7 +15,7 @@ export async function readSavedPostPage(db:Db,configId:string,platform:string,in
   SELECT p.id,p."platformPostId",p."lastSeenAt",ROW_NUMBER() OVER(PARTITION BY p."platformPostId" ORDER BY p."lastSeenAt" DESC,p.id DESC) AS version
   FROM "CapturedPost" p WHERE p."configId"=${configId}
    AND (${availability}='' OR coalesce((SELECT a.state FROM "PostAvailability" a WHERE a.platform::text=${platform} AND a."postId"=p."platformPostId"),'UNKNOWN')=${availability})
-   AND (${runId}='' OR p."runId"=${runId} OR p."lastRunId"=${runId} OR EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."postId"=p.id AND c."configId"=${configId} AND (c."runId"=${runId} OR c."lastRunId"=${runId})))
+   AND (${runId}='' OR EXISTS(SELECT 1 FROM "CollectionRun" r WHERE r.id=${runId} AND r."configId"=${configId} AND r.metrics->'coverage'->'posts' @> jsonb_build_array(jsonb_build_object('postRef',p."platformPostId"))) OR p."runId"=${runId} OR p."lastRunId"=${runId} OR EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."postId"=p.id AND c."configId"=${configId} AND (c."runId"=${runId} OR c."lastRunId"=${runId})))
    AND (${q}='' OR strpos(lower(p."platformPostId" || ' ' || coalesce(p.snapshot->>'title','') || ' ' || coalesce(p.snapshot->>'body','') || ' ' || coalesce(p.snapshot->>'authorNickname','')),lower(${q}))>0
     OR EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."postId"=p.id AND c."configId"=${configId} AND strpos(lower(coalesce(c.snapshot->>'comment','') || ' ' || coalesce(c.snapshot->>'authorNickname','')),lower(${q}))>0))
  ), unique_posts AS (SELECT id,"platformPostId","lastSeenAt" FROM scoped WHERE version=1)
@@ -28,5 +29,5 @@ export async function readSavedPostPage(db:Db,configId:string,platform:string,in
  if(stored.length!==ids.length)throw new ConflictException('帖子记录发生变化，请刷新列表');
  const availabilityRows=await postAvailabilityMap(db,platform as Platform,platformIds);
  const byId=new Map(stored.map(p=>[p.id,p])),saved=new Map(counts.map(p=>[p.platformPostId,Number(p.count)]));
- return {posts:chosen.map(({id})=>{const p=byId.get(id)!;return {...p,availability:availabilityRows.get(p.platformPostId)??unknownPostAvailability,savedComments:saved.get(p.platformPostId)??0,snapshot:publicPostSnapshot(p.snapshot),sourceAvailable:platform==='XHS'&&!!savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId)};}),postTotal:index?.total??0,offset,postPageSize:pageSize,hasMore:offset+chosen.length<(index?.total??0)};
+ return {posts:await Promise.all(chosen.map(async({id})=>{const p=byId.get(id)!;return {...p,readEvidence:await readPostEvidence(db,p,runId),availability:availabilityRows.get(p.platformPostId)??unknownPostAvailability,savedComments:saved.get(p.platformPostId)??0,snapshot:publicPostSnapshot(p.snapshot),sourceAvailable:platform==='XHS'&&!!savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId)};})),postTotal:index?.total??0,offset,postPageSize:pageSize,hasMore:offset+chosen.length<(index?.total??0)};
 }

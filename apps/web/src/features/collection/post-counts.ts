@@ -4,6 +4,6 @@ import type {InfoPost} from './collection-info-model';
 export function postCounts(post:InfoPost|undefined){
  const latest=post?.versions[0],saved=latest?.savedComments;
  const report=safeBoundedReadReport(latest?.snapshot.boundedRead),total=report?.final?.total;
- const declared=total?.state==='EXACT'?total.value:undefined;
+ const declared=latest?.readEvidence?latest.readEvidence.declaredComments:total?.state==='EXACT'?total.value:undefined;
  return {saved,declared,different:saved!==undefined&&declared!==undefined&&declared!==null&&saved!==declared};
 }
