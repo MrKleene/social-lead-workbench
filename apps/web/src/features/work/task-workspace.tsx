@@ -1,3 +1,4 @@
+import {returnRunLabel} from './use-run-history';
 import {RunHistoryDialog} from './run-history-dialog';
 import {useWorkspaceAutomation} from './workspace-automation';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -31,7 +32,7 @@ export function TaskWorkspace(props:Props) {
     <header className="journey-heading"><div><h1>自动化任务</h1></div>
       <div className="journey-heading-tools journey-start-tools"><div className="journey-collection-actions" ref={setActionsHost} hidden={s.stage!=='collect'}/><Button variant="outline" onClick={()=>openSettings('collect')}>采集设置</Button></div>
     </header>
-    <div className="journey-run-context" aria-label="查看轮次"><div><strong>{s.history?'历史任务 · 只读':s.historyQuery.data?.activePhase?'当前任务':'最近一轮'}</strong>{s.run?<time dateTime={s.run.createdAt}>{new Date(s.run.createdAt).toLocaleString()}</time>:<span>{s.historyQuery.isPending?'正在读取任务…':s.missing?'任务不存在':s.historyQuery.isError?'轮次读取失败':'尚未开始'}</span>}{s.history&&s.current&&<Button size="sm" variant="outline" onClick={s.returnCurrent}>返回当前任务</Button>}</div><RunHistoryDialog key={config?.id} configId={config?.id} selectedId={s.run?.id} onSelect={s.selectRun}/></div>
+    <div className="journey-run-context" aria-label="查看轮次"><div><strong>{s.history?'历史任务 · 只读':s.historyQuery.data?.activePhase?'当前任务':'最近一轮'}</strong>{s.run?<time dateTime={s.run.createdAt}>{new Date(s.run.createdAt).toLocaleString()}</time>:<span>{s.historyQuery.isPending?'正在读取任务…':s.missing?'任务不存在':s.historyQuery.isError?'轮次读取失败':'尚未开始'}</span>}{s.history&&s.current&&<Button size="sm" variant="outline" onClick={s.returnCurrent}>{returnRunLabel(s.historyQuery.data?.activePhase)}</Button>}</div><RunHistoryDialog key={config?.id} configId={config?.id} selectedId={s.run?.id} onSelect={s.selectRun}/></div>
     <nav className="journey-steps" aria-label="任务步骤">{journeyStages.map((step,i)=><Button variant="ghost" size="content" key={step.id} aria-current={s.stage===step.id?'step':undefined} onClick={()=>visit(step.id)}><span className="journey-number">0{i+1}</span><span><strong>{step.label}</strong><small>{s.statuses[i]}</small></span><span className="journey-dot"/></Button>)}</nav>
     <ErrorNotice error={s.historyQuery.error||s.detail.error||s.summary.error}/>
     {s.missing&&<Alert role="alert" className="journey-notice"><AlertDescription>未找到任务，请重新选择。</AlertDescription></Alert>}

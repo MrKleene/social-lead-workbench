@@ -415,7 +415,25 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 :root .graphite-workspace .contact-panel:first-of-type>a{font-size:12px;color:var(--foreground)}
 :root .graphite-workspace .journey-conclusion{background:#fffbeb;color:#92400e}
 /* Neutral emphasis; semantic warning/error colors remain on their status elements. */
-:root[data-crm-theme] :is([data-slot=input],textarea,[data-slot=select-trigger]):focus{border-color:var(--ring)!important;box-shadow:0 0 0 2px #52525b22!important}
+/* One focus perimeter for editable controls. It joins the border, with no halo.
+   Portaled dialogs and login fields use the same contract as the workspace. */
+:root :is([data-slot=input],textarea,select,[data-slot=select-trigger],[role=combobox]):focus,
+:root[data-crm-theme] :is([data-slot=input],textarea,select,[data-slot=select-trigger],[role=combobox]):focus{
+ outline:2px solid var(--field-focus,var(--ring))!important;outline-offset:-1px!important;
+ border-color:var(--field-focus,var(--ring))!important;box-shadow:none!important;
+}
+:root :is([data-slot=input],textarea,select,[data-slot=select-trigger],[role=combobox])[aria-invalid=true]{--field-focus:var(--destructive);border-color:var(--destructive)!important}
+/* An icon/search shell owns focus; its nested input never draws a second frame. */
+:root :is(.space-search-small,.info-comment-search):focus-within,
+:root[data-crm-theme] :is(.space-search-small,.info-comment-search):focus-within{
+ outline:2px solid var(--field-focus,var(--ring))!important;outline-offset:-1px!important;
+ border-color:var(--field-focus,var(--ring))!important;box-shadow:none!important;
+}
+:root :is(.space-search-small,.info-comment-search):has(input[aria-invalid=true]){--field-focus:var(--destructive)}
+:root :is(.space-search-small,.info-comment-search) input:focus,
+:root[data-crm-theme] :is(.space-search-small,.info-comment-search) input:focus{outline:none!important;border-color:transparent!important;box-shadow:none!important}
+@media(forced-colors:active){:root :is([data-slot=input],textarea,select,[role=combobox],.space-search-small,.info-comment-search){--field-focus:Highlight!important}}
+
 :root .graphite-workspace .config-card.selected :is(strong,h3),:root .graphite-workspace .connection-banner>svg,:root .graphite-workspace .dashboard-metric svg{color:var(--foreground)}
 
 :root .graphite-workspace .graphite-platform-panel>h2{font-size:16px;margin:0 0 16px}.graphite-platform-table td{white-space:normal;overflow-wrap:anywhere;max-width:300px;line-height:1.7}.graphite-platform-table a{font-size:12px;color:var(--foreground);text-decoration:underline;text-underline-offset:3px}
