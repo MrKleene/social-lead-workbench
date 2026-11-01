@@ -6,7 +6,7 @@ import {Input} from '@/components/ui/input';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {ErrorNotice} from '@/components/feedback';
-import {accountOptionName} from '@/features/accounts/account-presentation';
+import {accountOptionName,collectionAccountReason} from '@/features/accounts/account-presentation';
 import {useMcpReadiness} from '@/features/collection/use-collection';
 import type {Config,ConfigDraft} from '@/features/collection/types';
 import {useSettingsOperation} from './settings-data';
@@ -28,7 +28,7 @@ export function CollectionSettings({configs,initialId,onDirty,onBusy,onSaved,onM
  return <div className="preset-form">
  <div className="preset-picker"><FormField>关键词组<SelectField aria-label="关键词组" value={s.value.id} onValueChange={choose} disabled={!configs.length}><SelectOption value="" disabled>暂无关键词组</SelectOption>{configs.map(c=><SelectOption key={c.id} value={c.id}>{c.name}</SelectOption>)}</SelectField></FormField><Button size="sm" variant="outline" disabled={s.busy} onClick={onManage}>关键词设置</Button></div>
  <section className="preset-readonly"><span className="settings-label">搜索关键词</span><div className="preset-tags" aria-label="搜索关键词">{selected?.keywords.map((word,i)=><Badge variant="secondary" key={i}>{word}</Badge>)}</div>{!selected?.keywords.length&&<p>请在关键词设置中添加搜索词。</p>}</section>
- <div className="preset-columns"><FormField>采集账号<SelectField aria-label="采集账号" value={s.value.account} onValueChange={account=>s.change({...s.value,account})} disabled={!selected||readiness.isPending}><SelectOption value="">开始前选择账号</SelectOption>{s.value.account&&!readiness.data?.accounts?.some(a=>a.id===s.value.account)&&<SelectOption value={s.value.account}>原账号当前不可用</SelectOption>}{(selected?.platform==='XHS'?readiness.data?.accounts:[])?.map(a=><SelectOption key={a.id} value={a.id}>{accountOptionName(a)}{a.eligible?'':' · 需处理'}</SelectOption>)}</SelectField></FormField><FormField>本轮帖子数量<Input aria-label="本轮帖子数量" disabled={!selected} type="number" min={1} max={max} step={1} value={numberText} onChange={e=>number(e.target.value)} onBlur={s.flush}/></FormField></div>
+ <div className="preset-columns"><FormField>采集账号<SelectField aria-label="采集账号" value={s.value.account} onValueChange={account=>s.change({...s.value,account})} disabled={!selected||readiness.isPending}><SelectOption value="">开始前选择账号</SelectOption>{s.value.account&&!readiness.data?.accounts?.some(a=>a.id===s.value.account)&&<SelectOption value={s.value.account}>原账号当前不可用</SelectOption>}{(selected?.platform==='XHS'?readiness.data?.accounts:[])?.map(a=><SelectOption key={a.id} value={a.id}>{accountOptionName(a,readiness.data?.accounts)}{!a.eligible&&` · ${collectionAccountReason(a)}`}</SelectOption>)}</SelectField></FormField><FormField>本轮帖子数量<Input aria-label="本轮帖子数量" disabled={!selected} type="number" min={1} max={max} step={1} value={numberText} onChange={e=>number(e.target.value)} onBlur={s.flush}/></FormField></div>
  <ErrorNotice error={readiness.error||numberError}/><AutoApplyStatus {...s}/>
  </div>;
 }

@@ -45,5 +45,5 @@ describe('account names are independent from login state',()=>{
  const a={id:'account-alpha1',label:'小红书 · 待授权账号',loginNickname:'已保存昵称'};
  it('uses the saved nickname without the initial placeholder',()=>{expect(accountName(a)).toBe('已保存昵称');expect(accountRemark(a)).toBe('');expect(accountOptionName(a)).not.toContain('待授权');});
  it('preserves a custom remark without modifying the saved name',()=>{expect(accountOptionName({...a,label:'业务备注'})).toContain('已保存昵称（业务备注）');expect(accountName({...a,label:'业务备注',loginNickname:null})).toBe('业务备注');});
- it('uses neutral fallback and distinguishes same nicknames by account reference',()=>{expect(accountName({...a,loginNickname:null})).toBe('昵称未获取');expect(accountOptionName(a)).not.toBe(accountOptionName({...a,id:'account-bravo2'}));});
+ it('uses neutral fallback and distinguishes same nicknames without exposing account IDs',()=>{expect(accountName({...a,loginNickname:null})).toBe('昵称未获取');const peers=[a,{...a,id:'account-bravo2'}];expect(accountOptionName(a,peers)).not.toBe(accountOptionName(peers[1],peers));expect(accountOptionName(a,peers)).not.toContain('alpha1');});
 });

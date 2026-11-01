@@ -15,7 +15,7 @@ import {BoundedCheckResult} from './bounded-check-result';
 import {reasonLabels} from './types';
 function CheckForm(){
  const s=useSinglePostCheck();
- return <div className="task-settings-body"><FormField>使用账号<SelectField aria-label="单帖检查账号" value={s.accountId} disabled={s.busy||s.submitted} onValueChange={e=>s.setAccountId(e)}>{!s.accounts.length&&<SelectOption value="">没有可核验的账号</SelectOption>}{s.accounts.map(a=><SelectOption key={a.id} value={a.id}>{accountOptionName(a)}{a.reason==='UNVERIFIED'?' · 将先检查登录':''}</SelectOption>)}</SelectField></FormField>
+ return <div className="task-settings-body"><FormField>使用账号<SelectField aria-label="单帖检查账号" value={s.accountId} disabled={s.busy||s.submitted} onValueChange={e=>s.setAccountId(e)}>{!s.accounts.length&&<SelectOption value="">没有可核验的账号</SelectOption>}{s.accounts.map(a=><SelectOption key={a.id} value={a.id}>{accountOptionName(a,s.accounts)}{a.reason==='UNVERIFIED'?' · 将先检查登录':''}</SelectOption>)}</SelectField></FormField>
  <FormField>小红书原文链接<Input aria-label="单帖原文链接" type="url" aria-describedby="single-post-link-status" aria-invalid={!!s.url&&!s.link.valid&&!s.submitted} autoComplete="off" spellCheck={false} value={s.url} onChange={e=>s.setUrl(e.target.value)} disabled={s.submitted} placeholder="粘贴浏览器中可打开的完整帖子链接"/></FormField>
  {!s.submitted&&<p id="single-post-link-status" role="status" aria-live="polite">{s.link.message}</p>}
  {!s.submitted&&<FormField className="login-consent"><Checkbox  aria-label="验证评论翻页与回复" checked={s.expandReplies} onCheckedChange={e=>{s.setExpandReplies((e === true));s.setConsent(false);}}/><span>验证评论翻页与回复</span></FormField>}

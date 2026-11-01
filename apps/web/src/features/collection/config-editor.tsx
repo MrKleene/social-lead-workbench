@@ -3,7 +3,7 @@ import { FieldGroup } from '@/components/ui/field';
 import { FormField } from '@/components/form-field';
 import { SelectField, SelectOption } from '@/components/select-field';
 import { Checkbox } from '@/components/ui/checkbox';
-import {accountOptionName} from '@/features/accounts/account-presentation';
+import {accountOptionName,collectionAccountReason} from '@/features/accounts/account-presentation';
 import { Link } from 'react-router-dom';
 import { useState, useLayoutEffect, FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
@@ -44,7 +44,7 @@ export function ConfigEditor({ availableMode, config, onClose, onSaved, onDirty,
   <ErrorNotice error={mutation.error}/><FormField>配置名称<Input value={name} onChange={e => setName(e.target.value)} maxLength={80} required placeholder="例如：企业部署需求"/></FormField>
   <div className="form-pair"><FormField>来源平台<SelectField value={platform} onValueChange={e => { setPlatform(e as ConfigDraft['platform']); if (e !== 'XHS') setMode('MOCK'); }}><SelectOption value="XHS">小红书</SelectOption><SelectOption value="DOUYIN" disabled={mode !== 'MOCK'}>抖音 · 模拟适配器</SelectOption></SelectField></FormField><FormField>单轮帖子上限<Input type="number" min={1} max={mode==='MOCK'?10:3} value={limit} onChange={e => setLimit(e.target.valueAsNumber)} required/></FormField></div>
   <FormField>采集模式<SelectField aria-label="采集模式" value={mode} onValueChange={e => {setMode(e as ConfigDraft['mode']);if(e!=='MOCK')setLimit(Math.min(limit,3));}}>{Object.entries(modeLabels).map(([value, label]) => <SelectOption key={value} value={value} disabled={value !== 'MOCK' && (platform !== 'XHS' || value !== availableMode)}>{label}{value !== 'MOCK' && value !== availableMode ? '（服务端未开放）' : ''}</SelectOption>)}</SelectField></FormField>
-  <FormField>默认执行账号<SelectField aria-label="默认执行账号" value={defaultAccount} onValueChange={e=>setDefaultAccount(e)} disabled={mutation.isPending||readiness.isPending}><SelectOption value="">暂不设置 · 开始前选择一次</SelectOption>{defaultAccount&&!readiness.data?.accounts?.some(a=>a.id===defaultAccount)&&<SelectOption value={defaultAccount}>原默认账号不可用 · 请重新选择</SelectOption>}{(platform==='XHS'?readiness.data?.accounts:[])?.map(a=><SelectOption key={a.id} value={a.id}>{accountOptionName(a)}{a.eligible?'':' · 当前需处理'}</SelectOption>)}</SelectField><small>按当前关键词组保存；任务中临时更换不会修改这里。</small></FormField>
+  <FormField>默认执行账号<SelectField aria-label="默认执行账号" value={defaultAccount} onValueChange={e=>setDefaultAccount(e)} disabled={mutation.isPending||readiness.isPending}><SelectOption value="">暂不设置 · 开始前选择一次</SelectOption>{defaultAccount&&!readiness.data?.accounts?.some(a=>a.id===defaultAccount)&&<SelectOption value={defaultAccount}>原默认账号不可用 · 请重新选择</SelectOption>}{(platform==='XHS'?readiness.data?.accounts:[])?.map(a=><SelectOption key={a.id} value={a.id}>{accountOptionName(a,readiness.data?.accounts)}{!a.eligible&&` · ${collectionAccountReason(a)}`}</SelectOption>)}</SelectField><small>按当前关键词组保存；任务中临时更换不会修改这里。</small></FormField>
   <ErrorNotice error={readiness.error}/>
   <FormField>搜索关键词<Textarea aria-label="搜索关键词" value={keywords} onChange={e => setKeywords(e.target.value)} required maxLength={328} placeholder="例如：产品部署&#10;每行一个，最多 8 个，每个 40 字" rows={4}/></FormField>
   <p className="helper-text">评论判断请前往 {onReviewSettings?<Button type="button" variant="link" size="sm" onClick={onReviewSettings}>评论匹配页签</Button>:<Link to="/comment-review">评论审核</Link>}，审核需求独立保存，不影响搜索。</p>

@@ -2,7 +2,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FormField } from '@/components/form-field';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SelectField, SelectOption } from '@/components/select-field';
-import {accountOptionName} from '@/features/accounts/account-presentation';
+import {accountOptionName,collectionAccountReason} from '@/features/accounts/account-presentation';
 import {InfoSection} from '@/components/information-panel';
 import {useRef,useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -20,7 +20,7 @@ export function SavedPostRead({config,savedPostId,title,sourceAvailable}:{config
  <p>不执行搜索。分块保存，优先恢复未完成的读取；达到限额会保留进度，不发送评论或私信。</p>
  <p role="status" aria-live="polite">{state.reviewNotice.text}</p>
  <InfoSection  title={<>恢复选项</>}><FormField className="check-label" style={{display:'flex',alignItems:'flex-start',gap:8,marginTop:12}}><Checkbox style={{width:'auto',flexShrink:0,marginTop:3}}  checked={state.restartCheckpoint} disabled={state.mutation.isPending||state.uncertain} onCheckedChange={e=>{state.setRestartCheckpoint((e === true));state.setConsent(false);}}/>从头重新核对，保留所有已存原文</FormField></InfoSection>
- <FormField>执行账号<SelectField aria-label="定向读取账号" value={state.selected} disabled={state.mutation.isPending||state.uncertain} onValueChange={e=>state.setAccount(e)}><SelectOption value="">请选择可用账号</SelectOption>{state.readiness.data?.accounts?.map(a=><SelectOption key={a.id} value={a.id} disabled={!a.eligible}>{accountOptionName(a)}{a.eligible?'':' · 待核验'}</SelectOption>)}</SelectField></FormField>
+ <FormField>执行账号<SelectField aria-label="定向读取账号" value={state.selected} disabled={state.mutation.isPending||state.uncertain} onValueChange={e=>state.setAccount(e)}><SelectOption value="">请选择可用账号</SelectOption>{state.readiness.data?.accounts?.map(a=><SelectOption key={a.id} value={a.id} disabled={!a.eligible}>{accountOptionName(a,state.readiness.data?.accounts)}{!a.eligible&&` · ${collectionAccountReason(a)}`}</SelectOption>)}</SelectField></FormField>
  {open&&!state.mutation.isPending&&!state.uncertain&&!state.accepted&&state.reason&&<p role="status">{state.reason}。<Link to="/work?module=accounts">账号中心</Link></p>}
  <FormField className="check-label"><Checkbox  aria-label="授权重新读取此帖" disabled={!!state.reason||state.mutation.isPending||state.uncertain} checked={state.consent} onCheckedChange={e=>state.setConsent((e === true))}/>使用所选账号的本机会话，仅重新读取这篇并保存结果。</FormField>
  <ErrorNotice error={state.mutation.error}/>{state.uncertain&&<Alert role="alert"><AlertDescription>未确认是否已创建任务，请关闭后查看运行历史，不要重复提交。</AlertDescription></Alert>}
