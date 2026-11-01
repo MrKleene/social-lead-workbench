@@ -17,7 +17,7 @@ const review={policies:[],connection:{state:'UNCONFIGURED'}} as any;
 const contact={rules:[],accounts:[],capability:{available:false}} as any;
 const policy={id:'p',target:'寻找企业中需要部署产品的用户',autoEnabled:true,revision:2};
 const rule={enabled:true,policyId:'p',policyRevision:2,channel:'COMMENT',content:'已保存的回复',accountIds:['a'],accountLimits:[{id:'a',dailyLimit:10}],mode:'REAL'};
-const account={id:'a',healthy:true,workbenchStatus:'READY',isDemo:false,sendEligibility:{canSend:true,stale:false}};
+const account={id:'a',label:'虚构账号',dailyLimit:10,occupied:0,healthy:true,workbenchStatus:'READY',isDemo:false,sendEligibility:{state:'UNKNOWN',canSend:true,stale:false}};
 describe('conditional automation prerequisites',()=>{
  it('allows collection with both later stages off and no model/template/accounts',()=>expect(automationIssue(review,contact)).toBeNull());
  it('does not interpret unreadable settings as disabled',()=>{expect(automationIssue(undefined,contact)?.tab).toBe('review');expect(automationIssue(review,undefined)?.tab).toBe('contact');});
@@ -25,6 +25,6 @@ describe('conditional automation prerequisites',()=>{
  it('locates empty template at reply tab',()=>expect(automationIssue(review,{...contact,rules:[{...rule,content:''}]} )?.tab).toBe('contact'));
  it('requires current enabled matching for enabled sends',()=>expect(automationIssue(review,{...contact,capability:{available:true},rules:[rule],accounts:[account]})?.tab).toBe('review'));
  it('permits fully configured stages but does not grant authorization',()=>expect(automationIssue({...review,policies:[policy],connection:{state:'READY'}},{...contact,capability:{available:true},rules:[rule],accounts:[account]})).toBeNull());
- it.each([{...account,workbenchStatus:'PAUSED'},{...account,sendEligibility:{canSend:false,stale:true}}])('blocks unavailable sending accounts',a=>expect(automationIssue({...review,policies:[policy],connection:{state:'READY'}},{...contact,capability:{available:true},rules:[rule],accounts:[a]})?.tab).toBe('contact'));
+ it.each([{...account,workbenchStatus:'PAUSED',systemBlockReason:'未知暂停原因'},{...account,sendEligibility:{canSend:false,stale:true}}])('blocks unavailable sending accounts',a=>expect(automationIssue({...review,policies:[policy],connection:{state:'READY'}},{...contact,capability:{available:true},rules:[rule],accounts:[a]})?.tab).toBe('contact'));
  it('does not require any disabled rule fields',()=>expect(automationIssue(review,{...contact,rules:[{enabled:false}]})).toBeNull());
 });
