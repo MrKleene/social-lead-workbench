@@ -1,3 +1,4 @@
+import {runReviewQuerySchema} from '@crm/contracts';
 import {ManualReviewService} from './manual-review.service';
 import {manualPostPrepareSchema,manualPostConfirmSchema,reviewResultFilterSchema} from '@crm/contracts';
 import {Controller,Get,Put,Patch,Post,Param,Query,Req,Inject,UseGuards,Header} from '@nestjs/common';
@@ -13,6 +14,7 @@ const offset=(v:unknown)=>parse(z.coerce.number().int().min(0).max(100000).defau
 export class CommentReviewController {
  constructor(@Inject(ReviewPolicyService) private policies:ReviewPolicyService,@Inject(ReviewEvaluationService) private evaluation:ReviewEvaluationService,@Inject(ManualReviewService) private manual:ManualReviewService){}
  @Get() @Header('Cache-Control','no-store') overview(@Req() r:AuthedRequest){return this.policies.overview(r.actor);}
+ @Get('runs/:id/review') @Header('Cache-Control','no-store') runReview(@Req() r:AuthedRequest,@Param('id') id:string,@Query() query:Record<string,unknown>){return this.policies.runReview(r.actor,id,parse(runReviewQuerySchema,query));}
  @Get('posts') posts(@Req() r:AuthedRequest,@Query('offset') n?:string,@Query('search') search?:string){return this.policies.posts(r.actor,offset(n),parse(z.string().trim().max(100).default(''),search));}
  @Get('posts/:id/comments') comments(@Req() r:AuthedRequest,@Param('id') id:string,@Query('offset') n?:string){return this.policies.comments(r.actor,id,offset(n));}
  @Post('policies/:id/manual-post') manualPrepare(@Req() r:AuthedRequest,@Param('id') id:string){return this.manual.prepare(r.actor,id,parse(manualPostPrepareSchema,r.body));}

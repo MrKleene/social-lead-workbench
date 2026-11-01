@@ -1,3 +1,4 @@
+import {readRunReview} from './run-review-query';
 import {activeAcceptance,normalAcceptanceScope,liveAcceptance,acceptanceConflict} from '../auto-contact/normal-acceptance';
 import {randomUUID} from 'node:crypto';
 import {postAvailability} from '../collection/post-availability';
@@ -21,6 +22,7 @@ export const lockReview=async(db:ReviewDb)=>{await db.$queryRaw`SELECT pg_adviso
 @Injectable()
 export class ReviewPolicyService {
  constructor(@Inject(Db) readonly db:Db,@Inject(ModelSettingsService) readonly models:ModelSettingsService,@Inject(QwenMatchingService) readonly qwen:QwenMatchingService){}
+ runReview(actor:Actor,runId:string,input:unknown){return readRunReview(this.db,actor,runId,input);}
  async overview(actor:Actor){requireAdmin(actor);const [policies,settings,status,capturedComments]=await Promise.all([this.db.commentReviewPolicy.findMany({orderBy:{createdAt:'asc'}}),this.models.resolve(),this.qwen.status(),this.db.capturedComment.count()]);const autoJobs=await this.db.autoReviewJob.findMany({orderBy:{createdAt:'desc'},take:20});const jobPosts=await this.db.capturedPost.findMany({where:{id:{in:autoJobs.map(j=>j.postId)}},select:{id:true,snapshot:true}});return {policies,autoJobs:autoJobs.map(j=>({...j,title:(jobPosts.find(p=>p.id===j.postId)?.snapshot as {title?:string})?.title||'已保存帖子'})),...status,modelVersion:settings.configurationVersion,capturedComments};}
  async create(actor:Actor,input:{name:string;target:string}){requireAdmin(actor);return this.save(actor,randomUUID(),{...input,version:0},true);}
  async save(actor:Actor,id:string,input:z.infer<typeof reviewPolicySaveSchema>,create=false){

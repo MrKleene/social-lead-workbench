@@ -1,0 +1,34 @@
+import {useRef,useState} from 'react';
+import {useQuery} from '@tanstack/react-query';
+import type {RunReviewPage,RunReviewComment} from '@crm/contracts';
+import {api} from '@/lib/api';
+import {Button} from '@/components/ui/button';
+import {Badge} from '@/components/ui/badge';
+import {ErrorNotice,Loading} from '@/components/feedback';
+import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
+import {commentReviewLabel,reviewStateLabel,scoreLabel,decisionLabel} from './run-review-model';
+import './run-review.css';
+type Props={runId:string;policyId?:string;policyRevision?:number;onSettings:()=>void};
+export function RunReviewPanel({runId,policyId,policyRevision,onSettings}:Props){
+ const [postId,setPostId]=useState(''),[offset,setOffset]=useState(0),[postOffset,setPostOffset]=useState(0),[selectedDetail,setDetail]=useState<RunReviewComment|null>(null),trigger=useRef<HTMLElement|null>(null);
+ const params=new URLSearchParams({offset:String(offset),postOffset:String(postOffset),...(postId?{postId}:{}),...(policyId?{policyId}:{}),...(policyRevision?{policyRevision:String(policyRevision)}:{})});
+ const q=useQuery({queryKey:['run-review',runId,params.toString()],queryFn:({signal})=>api<RunReviewPage>(`/comment-review/runs/${encodeURIComponent(runId)}/review?${params}`,{signal}),retry:false,refetchInterval:5000,refetchIntervalInBackground:false});
+ const detail=q.data?.comments.find(c=>c.id===selectedDetail?.id)||selectedDetail;
+ const d=q.data,post=d?.posts.find(p=>p.id===d.selectedPostId),jobs=post?.jobs||[];
+ const choose=(id:string)=>{setPostId(id);setOffset(0);setDetail(null);};
+ return <section className="run-review" aria-label="本轮逐帖评论审核"><header className="run-review-heading"><div><h2>评论匹配</h2>{d&&<span>本轮 {d.expectedPosts} 篇帖子 · {d.expectedComments} 条评论</span>}</div><div className="action-row"><Button variant="outline" disabled={q.isFetching} onClick={()=>void q.refetch()}>刷新审核</Button><Button variant="outline" onClick={onSettings}>匹配设置</Button></div></header>
+ {!policyId&&<p role="status">尚未选择匹配方案<Button variant="link" onClick={onSettings}>选择方案</Button></p>}
+ {q.isError?<div role="alert"><ErrorNotice error={q.error}/><Button variant="outline" onClick={()=>void q.refetch()}>重试读取</Button></div>:q.isPending?<div className="run-review-loading"><Loading/></div>:d&&<>
+ {d.limited&&<p className="run-review-warning" role="status">记录超出本次读取范围，当前列表不完整。</p>}
+ {d.postTotal<d.expectedPosts&&<p className="run-review-warning" role="status">历史帖子关联不完整 · 已定位 {d.postTotal} / {d.expectedPosts} 篇</p>}
+ {!d.posts.length?<p className="run-review-empty">{d.expectedPosts?'本轮帖子关联暂不可用':'本轮尚未保存帖子'}</p>:<div className="run-review-layout"><aside className="run-review-posts" aria-label="本轮帖子">{d.posts.map(p=><Button key={p.id} variant="ghost" size="content" className="run-review-post" aria-pressed={d.selectedPostId===p.id} onClick={()=>choose(p.id)}><strong>{p.title}</strong><span>{p.expectedComments===null?'评论数待核对':`${p.expectedComments} 条评论`} · {p.jobs.length?[...new Set(p.jobs.map(j=>reviewStateLabel(j.status)))].join(' / '):'尚无本轮作业'}</span></Button>)}{(postOffset>0||d.postHasMore)&&<div className="action-row"><Button variant="outline" size="sm" disabled={!postOffset} onClick={()=>{setPostOffset(n=>Math.max(0,n-20));choose('');}}>上一页帖子</Button><Button variant="outline" size="sm" disabled={!d.postHasMore} onClick={()=>{setPostOffset(n=>n+20);choose('');}}>下一页帖子</Button></div>}</aside>
+ <div className="run-review-comments"><header><h3>{post?.title||'所选帖子'}</h3><span>可定位 {d.knownComments} 条{post?.expectedComments!==null&&post?.expectedComments!==undefined?` / 本轮确认 ${post.expectedComments} 条`:''}</span></header>
+ {jobs.length>0&&<div className="run-review-jobs" aria-label="本帖本轮审核作业">{jobs.map((j,i)=><p key={i}><Badge variant="secondary">{reviewStateLabel(j.status)}</Badge>{j.reason&&<span>{j.reason}</span>}</p>)}</div>}
+ {d.scope!=='EXACT'&&<p className="run-review-warning" role="status">{d.scope==='UNAVAILABLE'?'本轮评论关联待核查':post?.expectedComments===null?'本轮评论总数待核对':'部分评论缺少本轮关联证据'}</p>}
+ {!d.comments.length?<p className="run-review-empty">{d.knownComments?'本页没有评论，请返回上一页':post?.expectedComments===0?'本帖本轮没有评论':'暂无可可靠关联的评论'}</p>:<div className="run-review-list">{d.comments.map(c=>{const r=c.reviews[0];return <article className="run-review-row" key={c.id}><div className="run-review-row-head"><div><strong>{c.nickname||'评论'}</strong>{c.parentId&&<Badge variant="outline">楼中楼</Badge>}<Badge variant="secondary">{commentReviewLabel(c,policyRevision?[]:jobs)}</Badge></div><span className="run-review-score">{scoreLabel(r)}{r?.state==='EVALUATED'&&r.score!==null&&<small> / 100</small>}</span></div><p className="run-review-text">{c.text||'评论原文未保存'}</p>{r&&<div className="run-review-reason">{decisionLabel(r.decision)&&<strong>{decisionLabel(r.decision)} · </strong>}{r.reason||'尚无判断理由'}</div>}<footer><span>{r?`${r.origin==='BOUND'?'本轮关联':'已有审核'} · 目标版本 ${r.policyRevision??'未记录'}`:'尚无评分'}{c.membership==='RECOVERY'?' · 恢复确认':''}{c.versions>1?` · ${c.versions} 个原文版本`:''}</span><Button variant="outline" size="sm" onClick={()=>{trigger.current=document.activeElement as HTMLElement;setDetail(c);}}>查看详情</Button></footer></article>;})}</div>}
+ {(offset>0||d.hasMore)&&<nav className="action-row run-review-pagination" aria-label="评论分页"><Button variant="outline" disabled={!offset||q.isFetching} onClick={()=>setOffset(n=>Math.max(0,n-30))}>上一页评论</Button><span>第 {Math.floor(offset/30)+1} 页</span><Button variant="outline" disabled={!d.hasMore||q.isFetching} onClick={()=>setOffset(n=>n+30)}>下一页评论</Button></nav>}
+ </div></div>}
+ </>}
+ <Sheet open={!!detail} onOpenChange={open=>{if(!open)setDetail(null);}}><SheetContent className="task-settings-sheet run-review-dialog" onCloseAutoFocus={e=>{e.preventDefault();trigger.current?.isConnected&&trigger.current.focus();}}><SheetHeader><SheetTitle>评论审核详情</SheetTitle><SheetDescription className="sr-only">已保存原文与审核记录</SheetDescription></SheetHeader>{detail&&<div className="task-settings-body"><h3>{detail.nickname||'评论原文'}</h3><p className="run-review-full">{detail.text}</p>{detail.parentId&&<p>{detail.parentKnown?'回复评论：':'父评论未在本轮可定位范围：'}{detail.parentId}</p>}{!detail.reviews.length?<p>尚无本方案审核记录</p>:detail.reviews.map(r=><section key={r.id} className="run-review-evidence"><h3>{reviewStateLabel(r.state)} · {scoreLabel(r)}{r.state==='EVALUATED'&&r.score!==null?' / 100':''}</h3><p>{decisionLabel(r.decision)}{r.reason?` · ${r.reason}`:''}</p><small>{r.origin==='BOUND'?'本轮关联的当前记录，非结果快照':'已有审核记录，未计作本轮新调用'} · 目标版本 {r.policyRevision??'未记录'} · 记录创建于 {new Date(r.createdAt).toLocaleString()}</small></section>)}</div>}</SheetContent></Sheet>
+ </section>;
+}

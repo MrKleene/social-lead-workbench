@@ -7,7 +7,7 @@ import { Empty } from '@/components/ui/empty';
 import {useEffect,useState} from 'react';
 import {Link} from 'react-router-dom';
 import {ArrowRight} from 'lucide-react';
-import {CommentReviewPage} from '@/features/comment-review/comment-review-page';
+import {RunReviewPanel} from '@/features/comment-review/run-review-panel';
 import {AutoContactPage} from '@/features/auto-contact/auto-contact-page';
 import type {Config} from '@/features/collection/types';
 import {ErrorNotice} from '@/components/feedback';
@@ -35,7 +35,7 @@ export function TaskWorkspace(props:Props) {
     {s.requested&&!s.run&&!s.detail.isPending&&<Alert role="alert" className="journey-notice"><AlertDescription>未找到任务，请重新选择。</AlertDescription></Alert>}
     <div className="journey-stage" hidden={s.stage!=='collect'}>{s.stage==='collect'&&s.notice&&<p className="journey-conclusion" role="status">{s.notice}</p>}<CollectionFlow {...props} actionsHost={actionsHost} workspaceVisible={props.visible} visible={props.visible&&s.stage==='collect'} onRunSelect={s.selectRun}/></div>
     {(s.stage==='review'||visited.has('review'))&&<div className="journey-stage" hidden={s.stage!=='review'}>{s.stage==='review'&&s.notice&&<p className="journey-conclusion" role="status">{s.notice}</p>}
-      {scope?<><FormField className="journey-version">审核目标版本<SelectField aria-label="审核目标版本" value={s.policyRevision||''} onValueChange={e=>s.selectVersion(e)}><SelectOption value="">全部历史版本</SelectOption>{Array.from({length:Math.min(s.policy?.revision||0,100)},(_,i)=>i+1).reverse().map(v=><SelectOption key={v} value={v}>版本 {v}{v===s.policy?.revision?' · 当前':''}</SelectOption>)}</SelectField></FormField><CommentReviewPage scope={scope} onSettings={()=>openSettings("review")}/></>:<Empty className="journey-empty"><h2>先选择一次采集</h2><Link to="/comment-review">查看全部评论审核 <ArrowRight size={16}/></Link></Empty>}
+      {scope?<><FormField className="journey-version">审核目标版本<SelectField aria-label="审核目标版本" value={s.policyRevision||''} onValueChange={e=>s.selectVersion(e)}><SelectOption value="">全部历史版本</SelectOption>{Array.from({length:Math.min(s.policy?.revision||0,100)},(_,i)=>i+1).reverse().map(v=><SelectOption key={v} value={v}>版本 {v}{v===s.policy?.revision?' · 当前':''}</SelectOption>)}</SelectField></FormField><RunReviewPanel key={`${scope.runId}:${s.policy?.id}:${s.policyRevision}`} runId={scope.runId} policyId={s.policy?.id} policyRevision={s.policyRevision} onSettings={()=>openSettings("review")}/></>:<Empty className="journey-empty"><h2>先选择一次采集</h2><Link to="/comment-review">查看全部评论审核 <ArrowRight size={16}/></Link></Empty>}
     </div>}
     {(s.stage==='contact'||visited.has('contact'))&&<div className="journey-stage" hidden={s.stage!=='contact'}>{s.stage==='contact'&&s.notice&&<p className="journey-conclusion" role="status">{s.notice}</p>}
       {scope?<><AutoContactPage scope={scope} onSettings={()=>openSettings("contact")}/></>:<Empty className="journey-empty"><h2>选择任务，查看自动回复进展</h2><Link to="/reply-history">查看已有回复记录 <ArrowRight size={16}/></Link></Empty>}
