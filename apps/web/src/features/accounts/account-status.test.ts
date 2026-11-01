@@ -1,0 +1,22 @@
+import {describe,it,expect} from 'vitest';
+import type {Account} from './types';
+import type {AutoContactOverview} from '@crm/contracts';
+import type {McpReadiness} from '@/features/collection/types';
+import {accountStatusView} from './account-status';
+import {accountName,accountRemark} from './account-presentation';
+const account={id:'test-account',label:'小红书 · 待扫码',loginNickname:'测试昵称',platform:'XHS',loginStatus:'PREVIOUSLY_VERIFIED',status:'PAUSED',dailyLimit:10,occupied:1,loginProvider:'real'} as Account;
+const now=Date.parse('2026-11-01T09:30:00Z');
+const readiness={enabled:true,device:{online:true},accounts:[{id:account.id,eligible:true,reason:'PREVIOUSLY_VERIFIED'}]} as McpReadiness;
+const observation={state:'UNKNOWN',canSend:false,stale:true,checkedAt:'2026-10-31T09:00:00Z'};
+const contact={capabilities:[{platform:'XHS',channel:'COMMENT',available:true}],accounts:[{id:account.id,canCheck:true,healthy:false,unknown:1,sendEligibility:observation}]} as AutoContactOverview;
+const context={admin:true,readiness,contact,now};
+describe('account clarity without changing business eligibility',()=>{
+ it('hides creation placeholders but retains real custom remarks',()=>{expect(accountName(account)).toBe('测试昵称');expect(accountRemark(account)).toBe('');expect(accountRemark({...account,label:'小红书 · 待授权账号'})).toBe('');expect(accountRemark({...account,label:'业务号'})).toBe('业务号');});
+ it('saved login does not imply send permission; stale observations stay explicit',()=>{const v=accountStatusView(account,context);expect(v.login).toContain('执行前核验');expect(v.collection).toBe('可选用，启动时核验');expect(v.reply).toBe('检查已过期，发送前核验');expect(v.unknown).toBe(1);});
+ it('preserves historical risk despite a valid login or clean newer observation',()=>{const v=accountStatusView({...account,systemBlockReason:'历史平台限制报告，待复核'},context);expect(v.issue).toBe('历史平台限制报告，待复核');expect(v.collection).toBe('不可采集');expect(v.reply).toBe('不可回复');expect(v.login).toContain('已保存登录');});
+ it('requires fresh qualification and healthy account to describe a passed check',()=>{const c=structuredClone(contact);Object.assign(c.accounts[0],{healthy:true,sendEligibility:{...observation,canSend:true,stale:false,checkedAt:new Date(now-60000).toISOString()}});expect(accountStatusView(account,{...context,contact:c}).reply).toBe('检查通过，发送前复核');expect(accountStatusView(account,{...context,contact:c,now:now+300001}).reply).toContain('已过期');});
+ it('never calls missing, errored or disabled services available',()=>{expect(accountStatusView(account,{admin:true}).reply).toBe('尚未获取资格');expect(accountStatusView(account,{...context,readError:true,replyError:true}).reply).toBe('资格读取失败');expect(accountStatusView(account,{...context,readiness:{...readiness,device:{name:'test',online:false}}}).collection).toBe('执行电脑离线');expect(accountStatusView(account,{...context,contact:{...contact,capabilities:[]}}).reply).toBe('评论回复未开放');});
+ it('shows exhausted quota and unverified login without clearing locks',()=>{expect(accountStatusView({...account,occupied:10},context).reply).toBe('今日额度已用完');expect(accountStatusView({...account,loginStatus:'EXPIRED'},context).login).toBe('本机会话已失效');expect(accountStatusView(account,{admin:false}).reply).toBe('管理员可查看');});
+ it('shows device and workflow blockers separately from a valid login',()=>{expect(accountStatusView(account,{...context,readiness:{...readiness,device:{name:'test',online:false}}}).reply).toBe('执行电脑离线');expect(accountStatusView(account,{...context,contact:{...contact,rules:[{platform:'XHS',mode:'REAL',pauseReason:'UNKNOWN'} as AutoContactOverview['rules'][number]]}}).reply).toBe('自动回复暂停，查看回复任务');});
+ it('distinguishes platform verification restrictions from unknown result locks',()=>{const c=structuredClone(contact);c.accounts[0].sendEligibility!.state='VERIFY_REQUIRED';const v=accountStatusView(account,{...context,contact:c});expect(v.issue).toBe('平台要求验证身份');expect(v.reply).toBe('不可回复');expect(v.unknown).toBe(1);});
+});

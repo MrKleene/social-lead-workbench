@@ -1,5 +1,6 @@
 import {useRef,useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
+import type {AutoContactOverview} from '@crm/contracts';
 import {api,send} from '@/lib/api';
 import {useAuth} from '@/features/auth/use-auth';
 import {useConfirmWorkspaceLeave} from '@/features/work/draft-guard';
@@ -8,10 +9,11 @@ import {useAccountCenter} from './use-accounts';
 import {loginAvailability} from './login-availability';
 import type {LoginCapabilities} from './account-login-panel';
 import type {Account} from './types';
-export type AccountPanel='login'|'recover'|'settings'|'device'|'simulation'|null;
+export type AccountPanel='login'|'recover'|'settings'|'device'|'simulation'|'details'|null;
 export function useAccountScreen(){
  const state=useAccountCenter(),admin=useAuth().user?.role==='ADMIN',client=useQueryClient(),confirmLeave=useConfirmWorkspaceLeave();
  const caps=useQuery({queryKey:['account-login-capabilities'],queryFn:()=>api<LoginCapabilities>('/accounts/login-capabilities'),enabled:admin,retry:false,refetchInterval:10000});
+ const contact=useQuery({queryKey:['auto-contact'],queryFn:()=>api<AutoContactOverview>('/auto-contact'),enabled:admin,retry:false,refetchInterval:10000});
  const readiness=useMcpReadiness(admin),availability=loginAvailability(caps.data,caps.isPending,caps.isError);
  const [panel,setPanel]=useState<AccountPanel>(null),[target,setTarget]=useState<Account|null>(null),[adding,setAdding]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(0);
  const busy=useRef(false),returnFocus=useRef<HTMLElement|null>(null);
@@ -24,8 +26,7 @@ export function useAccountScreen(){
   catch(e){setError(e instanceof Error?e.message:'添加失败，请重试');}finally{busy.current=false;setAdding(false);}
  };
  const rows=state.query.data?.accounts||[];
- const ready=availability==='ready'&&caps.data?.mode==='real'&&!readiness.isError?rows.filter(a=>a.loginProvider==='real'&&readiness.data?.accounts?.some(x=>x.id===a.id&&x.eligible)).length:0;
  const select=async(id:string)=>{if(await confirmLeave())state.select(id);};
  const archive=async()=>{if(account&&await confirmLeave())state.mutation.mutate({path:`/accounts/${account.id}`,method:'DELETE',body:{version:account.version}},{onSuccess:()=>setPanel(null)});};
- return {select,archive,state,admin,caps,availability,panel,account,rows,ready,adding,error,saved,returnFocus,open,close,add,finish:()=>setPanel(null),savedEditor:()=>setSaved(n=>n+1)};
+ return {select,archive,state,admin,caps,readiness,contact,availability,panel,account,rows,adding,error,saved,returnFocus,open,close,add,finish:()=>setPanel(null),savedEditor:()=>setSaved(n=>n+1)};
 }

@@ -1,6 +1,6 @@
 import type {Account} from './types';
 type NamedAccount={id:string;label:string;loginNickname?:string|null};
-const placeholder=/^(?:小红书|抖音)\s*[·・]?\s*待授权账号$/;
+const placeholder=/^(?:小红书|抖音)\s*[·・]?\s*(?:待授权账号|待扫码)$/;
 export function accountRemark(a:NamedAccount){const label=a.label.trim();return placeholder.test(label)?'':label;}
 export function accountTag(a:NamedAccount){return `…${a.id.slice(-6)}`;}
 export function accountName(a:NamedAccount){return a.loginNickname?.trim()||accountRemark(a)||'昵称未获取';}
