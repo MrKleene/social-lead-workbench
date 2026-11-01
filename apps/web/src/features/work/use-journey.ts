@@ -1,6 +1,8 @@
 import {useAutomationPreferences} from './settings-data';
-import {useEffect} from 'react';
+import {useEffect,useRef} from 'react';
+import {followJourney,type JourneyObservation} from './journey-follow';
 import {journeyProgress} from './journey-progress';
+import {collectionTaskSession} from './collection-task-session';
 import {useQuery} from '@tanstack/react-query';
 import {useSearchParams} from 'react-router-dom';
 import type {AutoContactOverview, ReviewResults, JourneySummary} from '@crm/contracts';
@@ -15,7 +17,7 @@ export function useJourney(config: Config | undefined, visible: boolean) {
   const preferences=useAutomationPreferences(visible);
   const [params, setParams] = useSearchParams();
   const detail = useConfig(config?.id), reviews = useReviewOverview(visible);
-  const runs = detail.data && detail.data.id === config?.id ? detail.data.runs : config?.runs ?? [];
+  const runs = collectionTaskSession(config, detail.data?.id === config?.id ? detail.data?.runs : []).runs;
   const requested = params.get('run') || '';
   const run = runs.find(r => r.id === (requested || config?.activeRunId)) ??
     (!requested && params.get('fresh') !== '1' ? runs[0] : undefined);
@@ -46,6 +48,24 @@ export function useJourney(config: Config | undefined, visible: boolean) {
   const statuses=[detail.isError?'状态读取失败':run?collectionOutcome(run).label:'尚未开始',
     unread?'状态读取失败':!run?'等待采集':progress?.review||'正在读取',
     unread?'状态读取失败':!run?'等待采集':progress?.contact||'正在读取'];
-  const conclusion=unread?'进度读取失败，不能判断本轮是否结束。':!run?'选择已有任务或明确开始新一轮。':detail.isError?'采集状态读取失败。':!['COMPLETE','PARTIAL'].includes(run.status)?`采集${run.status==='FAILED'?'失败':run.status==='PAUSED'?'已暂停':'尚未结束'}，不标记本轮完成。`:collectionOutcome(run).warning?'采集存在中断或异常；后续结果仍可回看，不标记本轮全部完成。':progress?.conclusion||'正在读取本轮处理状态。';
-  return {policyRevision,selectVersion:(value:string)=>setParams(old=>{const p=new URLSearchParams(old);if(value)p.set('reviewVersion',value);else p.delete('reviewVersion');return p;}),stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, results, contact, summary, statuses, conclusion};
+  const outcome=run?collectionOutcome(run):undefined;
+  const notice=stage==='collect'?(outcome?.warning?outcome.issue||outcome.label:undefined):unread?'进度读取失败，请重试。':stage==='review'?progress?.reviewNotice:progress?.contactNotice;
+  const observed=useRef<JourneyObservation|undefined>(undefined);
+  const reviewReady=!summary.data||reviews.isPending||unread?undefined:
+    Object.values(summary.data.reviews).some(n=>n>0)||Object.values(summary.data.reviewJobs).some(n=>n>0)||
+    (!!run?.capturedCommentsCount&&!!reviews.data?.policies.some(p=>p.autoEnabled));
+  useEffect(()=>{
+    if(!visible||!run||detail.isError)return;
+    const next=followJourney(observed.current,{key:`${config?.id}:${run.id}`,status:run.status,
+      safeEnd:['COMPLETE','PARTIAL'].includes(run.status)&&!outcome?.warning,reviewReady,stage});
+    observed.current=next.observation;
+    if(next.follow)setParams(old=>{
+      const p=new URLSearchParams(old);
+      if(journeyStage(p.get('stage'))!=='collect')return old;
+      p.set('stage','review');p.set('run',run.id);if(config)p.set('config',config.id);
+      return p;
+    },{replace:true});
+  },[visible,run?.id,run?.status,config?.id,detail.isError,outcome?.warning,reviewReady,stage,setParams]);
+
+  return {policyRevision,selectVersion:(value:string)=>setParams(old=>{const p=new URLSearchParams(old);if(value)p.set('reviewVersion',value);else p.delete('reviewVersion');return p;}),stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, results, contact, summary, statuses, notice};
 }
