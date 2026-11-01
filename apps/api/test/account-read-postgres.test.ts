@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';import {join} from 'node:path';
 import {Db} from '../src/common/db';import {LocalDeviceRuntime} from '../src/devices/device-runtime';import {DeviceService} from '../src/devices/device.service';
 import {LoginRuntime} from '../src/accounts/login-runtime';import {AccountLoginService} from '../src/accounts/account-login.service';
 import {AccountReadService,readConsent} from '../src/collection/account-read.service';import {CollectionService} from '../src/collection/service';import {CollectionQueue} from '../src/collection/queue';import {ReadFailure} from '../src/collection/contract';import {AccountFixtureTransport} from '../src/collection/adapters/account-fixture';
+import {accountSystemBlock} from '../src/accounts/account-execution-policy';
 import type {Actor} from '../src/auth/security';
 const url=process.env.TEST_DATABASE_URL;if(!url||new URL(url).pathname!=='/crm_test')throw Error('isolated crm_test required');
 const db=new Db({datasources:{db:{url}}});let root:string,id:string,local:LocalDeviceRuntime,devices:DeviceService,runtime:LoginRuntime,login:AccountLoginService,reads:AccountReadService,collection:CollectionService,admin:Actor,sales:Actor,accountId:string;const configs:string[]=[];
@@ -97,9 +98,38 @@ it.each(['UNCONNECTED','PAUSED'])('selected account supports task-start verifica
  const run=await start();await collection.execute(run.id);expect(await db.capturedPost.count({where:{runId:run.id}})).toBe(3);
  expect((await db.platformAccount.findUniqueOrThrow({where:{id:accountId}})).status).toBe(status);
 });
-it('historical reported restriction cannot become eligible through neutral metadata',async()=>{
- await db.platformAccount.update({where:{id:accountId},data:{status:'UNCONNECTED',pauseReason:null,loginPlatformUserId:'6334380e000000001802cc73'}});
+const historicalReplyId='6334380e000000001802cc73';
+async function historicalReplyAccount(){await db.platformAccount.update({where:{id:accountId},data:{status:'UNCONNECTED',pauseReason:null,loginPlatformUserId:historicalReplyId}});}
+it('confirmed historical reply hold allows authorized reads through the real execution guards, not replies',async()=>{
+ await historicalReplyAccount();
+ expect((await reads.readiness(admin)).accounts.find(a=>a.id===accountId)).toMatchObject({eligible:true,reason:'PREVIOUSLY_VERIFIED'});
+ const original=runtime.openSaved.bind(runtime);vi.spyOn(runtime,'openSaved').mockImplementation(async(...args)=>{const driver=await original(...args);vi.spyOn(driver,'status').mockResolvedValue({loggedIn:true,userId:historicalReplyId});return driver;});
+ const before=await db.platformAccount.findUniqueOrThrow({where:{id:accountId}}),run=await start();
+ expect(await collection.execute(run.id)).toMatchObject({status:'PARTIAL',reason:'MCP_WINDOW_ONLY',observed:3});
+ expect(await db.capturedPost.count({where:{runId:run.id}})).toBe(3);
+ expect(accountSystemBlock(await db.platformAccount.findUniqueOrThrow({where:{id:accountId}}))).toBe('历史回复限制，禁止回复');
+ expect(await db.platformAccount.findUniqueOrThrow({where:{id:accountId}})).toMatchObject({status:before.status,pauseReason:before.pauseReason,loginSessionKey:before.loginSessionKey});
+});
+it.each(['account-restricted','unknown-pause','audit-restriction'])('historical reply exception retains %s',async kind=>{
+ await historicalReplyAccount();
+ if(kind==='account-restricted')await db.platformAccount.update({where:{id:accountId},data:{status:'RESTRICTED',pauseReason:'RATE_LIMITED'}});
+ if(kind==='unknown-pause')await db.platformAccount.update({where:{id:accountId},data:{status:'PAUSED',pauseReason:'未知风险'}});
+ if(kind==='audit-restriction')await db.auditLog.create({data:{actorId:admin.id,entityId:accountId,action:'ACCOUNT_SEND_OBSERVATION',metadata:{state:'RESTRICTED',source:'USER_REPORT',observedAt:new Date().toISOString()}}});
  expect((await reads.readiness(admin)).accounts.find(a=>a.id===accountId)).toMatchObject({eligible:false,reason:'RESTRICTED'});await expect(start()).rejects.toThrow();
+});
+it('a restriction arriving after authorization still stops the historical account before platform IO',async()=>{
+ await historicalReplyAccount();const run=await start(),open=vi.spyOn(runtime,'openSaved');
+ const evidence=await db.auditLog.create({data:{actorId:admin.id,entityId:accountId,action:'ACCOUNT_SEND_OBSERVATION',metadata:{state:'RESTRICTED',source:'USER_REPORT',observedAt:new Date().toISOString()}}});
+ expect(await collection.execute(run.id)).toMatchObject({status:'FAILED',reason:'ACCOUNT_CHANGED',observed:0});expect(open).not.toHaveBeenCalled();expect(await db.auditLog.findUnique({where:{id:evidence.id}})).not.toBeNull();
+});
+it.each(['EXPIRED','MISSING','NEEDS_REVIEW'])('historical reply scope does not grant reads with session %s',async state=>{
+ await historicalReplyAccount();await db.accountSessionReference.update({where:{accountId},data:{state}});
+ expect((await reads.readiness(admin)).accounts.find(a=>a.id===accountId)?.eligible).toBe(false);await expect(start()).rejects.toThrow();
+});
+it.each(['expired','identity','risk'])('historical reply scope still checks live %s before reading',async kind=>{
+ await historicalReplyAccount();const run=await start(),readTransport=vi.fn();
+ vi.spyOn(runtime,'openSaved').mockResolvedValue({qr:vi.fn(),status:async()=>{if(kind==='risk')throw Error('RESTRICTED');return kind==='expired'?{loggedIn:false}:{loggedIn:true,userId:'wrong-stable-id'};},readTransport,stop:async()=>{}});
+ expect(await collection.execute(run.id)).toMatchObject({status:'FAILED',reason:kind==='expired'?'LOGIN_EXPIRED':kind==='identity'?'IDENTITY_MISMATCH':'RESTRICTED',observed:0});expect(readTransport).not.toHaveBeenCalled();
 });
 it('append-only restriction evidence overrides an initial-login pause and later clean reads',async()=>{
  await db.platformAccount.update({where:{id:accountId},data:{status:'PAUSED',pauseReason:'登录已验证；只读采集须逐次确认，发送禁用'}});

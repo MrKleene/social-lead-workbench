@@ -53,13 +53,15 @@ describe("服务端权限与安全原语", () => {
   });
 });
 
-import {accountSystemBlock,accountModeBlocked} from '../src/accounts/account-execution-policy';
+import {accountSystemBlock,accountReadBlock,accountModeBlocked} from '../src/accounts/account-execution-policy';
 describe('system account eligibility without manual participation state',()=>{
  it.each(['UNCONNECTED','PAUSED'])('accepts neutral/initial-login metadata %s without granting send authority',status=>{
   const a={status,pauseReason:'登录已验证；只读采集须逐次确认，发送禁用'};
   expect(accountSystemBlock(a)).toBeNull();expect(accountModeBlocked(a,'REAL')).toBe(false);
  });
  it.each([{status:'RESTRICTED',pauseReason:'RATE_LIMITED'},{status:'PAUSED',pauseReason:null},{status:'PAUSED',pauseReason:'管理员风控暂停'}])('retains conservative legacy holds %#',a=>{expect(accountSystemBlock(a)).toBeTruthy();expect(accountModeBlocked(a,'REAL')).toBe(true);});
- it('retains the historical reported restriction independently of neutral status or a fresh login',()=>{for(const status of ['UNCONNECTED','PAUSED'])expect(accountSystemBlock({platform:'XHS',loginPlatformUserId:'6334380e000000001802cc73',status,pauseReason:null})).toBe('历史平台限制报告，待复核');});
+ it('retains the historical reported restriction independently of neutral status or a fresh login',()=>{for(const status of ['UNCONNECTED','PAUSED'])expect(accountSystemBlock({platform:'XHS',loginPlatformUserId:'6334380e000000001802cc73',status,pauseReason:null})).toBe('历史回复限制，禁止回复');});
+ it.each(['UNCONNECTED','PAUSED'])('scopes only the confirmed historical reply hold away from reads: %s',status=>{const a={platform:'XHS',loginPlatformUserId:'6334380e000000001802cc73',status,pauseReason:'登录已验证；只读采集须逐次确认，发送禁用'};expect(accountReadBlock(a)).toBeNull();expect(accountSystemBlock(a)).toBe('历史回复限制，禁止回复');expect(accountModeBlocked(a,'REAL')).toBe(true);});
+ it.each([{status:'RESTRICTED',pauseReason:'RATE_LIMITED'},{status:'RESTRICTED',pauseReason:'RESTRICTED'},{status:'PAUSED',pauseReason:null},{status:'PAUSED',pauseReason:'未知风险'}])('historical reply scope never clears additional account-wide metadata %#',state=>{expect(accountReadBlock({platform:'XHS',loginPlatformUserId:'6334380e000000001802cc73',...state})).toBeTruthy();});
  it('does not grant simulation tasks to paused legacy simulation accounts',()=>expect(accountModeBlocked({status:'PAUSED',pauseReason:'登录已验证；只读采集须逐次确认，发送禁用'},'SIMULATION')).toBe(true));
 });

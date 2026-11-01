@@ -1,4 +1,4 @@
-import {accountSystemBlock,recordedAccountBlocks} from '../accounts/account-execution-policy';
+import {accountReadBlock,recordedAccountBlocks} from '../accounts/account-execution-policy';
 import {boundAccountNickname} from '../accounts/account-display';
 import {randomUUID} from 'node:crypto';
 import {sessionHealth} from '../accounts/session-health';
@@ -19,14 +19,14 @@ export type ReadExecution = z.infer<typeof executionSchema>;
 export class AccountReadService {
   constructor(@Inject(Db) private db:Db,@Inject(DeviceService) private devices:DeviceService,@Inject(LoginRuntime) private runtime:LoginRuntime){}
   private eligible(a:{platform:string;archivedAt:Date|null;loginProvider:string|null;loginPlatformUserId:string|null;status:string;pauseReason:string|null}) {
-    return a.platform==='XHS'&&!a.archivedAt&&a.loginProvider===this.runtime.mode()&&!!a.loginPlatformUserId&&!accountSystemBlock(a);
+    return a.platform==='XHS'&&!a.archivedAt&&a.loginProvider===this.runtime.mode()&&!!a.loginPlatformUserId&&!accountReadBlock(a);
   }
   async readiness(actor:Actor){
     requireAdmin(actor); const mode=accountReadMode(); const state=await this.devices.status(actor);
     const approved=await this.db.executionDevice.findFirst({where:{enabled:true},select:{id:true,keyId:true}});
     const rows=mode?await this.db.platformAccount.findMany({where:{archivedAt:null,platform:'XHS'},include:{sessionReference:true},orderBy:{createdAt:'asc'}}):[];
     const riskBlocks=await recordedAccountBlocks(this.db,rows.map(a=>a.id));
-    return {enabled:!!mode,mode:mode||null,accountBound:true,reason:state.device?.online?'READY':'DEVICE_UNAVAILABLE',lastCheck:null,loginOnly:false,configurationOnly:false,coverage:'WINDOW_ONLY',automaticPolling:false,maxPosts:3,device:state.device,sessionCheckVersion:2,accounts:rows.map(a=>{const health=sessionHealth(a.sessionReference,process.env.CRM_RUNTIME_ID),ref=a.sessionReference,bound=!!ref&&ref.sessionKey===a.loginSessionKey&&ref.provider===a.loginProvider&&ref.deviceId===approved?.id&&ref.deviceKeyId===approved?.keyId,allowed=this.eligible(a)&&!riskBlocks.has(a.id)&&bound;return {id:a.id,label:a.label,loginNickname:bound?boundAccountNickname(a):null,platformUserId:a.loginPlatformUserId,eligible:allowed&&health.taskAllowed,reason:accountSystemBlock(a)||riskBlocks.has(a.id)?'RESTRICTED':ref&&!bound?'NEEDS_REVIEW':health.state==='VERIFIED'?'PREVIOUSLY_VERIFIED':health.state,canCheck:allowed&&health.checkable,retryAt:health.retryAt,verifiedAt:health.verifiedAt};})};
+    return {enabled:!!mode,mode:mode||null,accountBound:true,reason:state.device?.online?'READY':'DEVICE_UNAVAILABLE',lastCheck:null,loginOnly:false,configurationOnly:false,coverage:'WINDOW_ONLY',automaticPolling:false,maxPosts:3,device:state.device,sessionCheckVersion:2,accounts:rows.map(a=>{const health=sessionHealth(a.sessionReference,process.env.CRM_RUNTIME_ID),ref=a.sessionReference,bound=!!ref&&ref.sessionKey===a.loginSessionKey&&ref.provider===a.loginProvider&&ref.deviceId===approved?.id&&ref.deviceKeyId===approved?.keyId,allowed=this.eligible(a)&&!riskBlocks.has(a.id)&&bound;return {id:a.id,label:a.label,loginNickname:bound?boundAccountNickname(a):null,platformUserId:a.loginPlatformUserId,eligible:allowed&&health.taskAllowed,reason:accountReadBlock(a)||riskBlocks.has(a.id)?'RESTRICTED':ref&&!bound?'NEEDS_REVIEW':health.state==='VERIFIED'?'PREVIOUSLY_VERIFIED':health.state,canCheck:allowed&&health.checkable,retryAt:health.retryAt,verifiedAt:health.verifiedAt};})};
   }
   async authorize(tx:Prisma.TransactionClient,actor:Actor,mode:string,accountId?:string,consent?:string):Promise<ReadExecution>{
     requireAdmin(actor);if(!accountId||consent!==readConsent)throw new BadRequestException('请选择账号并逐次确认本机会话只读用途');

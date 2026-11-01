@@ -30,4 +30,5 @@ describe('account clarity without changing business eligibility',()=>{
  it('never leaks an unrecognized backend enum or guesses eligibility',()=>expect(collectionAccountReason({eligible:false,reason:'FUTURE_INTERNAL_CODE'})).toBe('采集条件未满足'));
  it('uses collection readiness independently from reply-only restrictions',()=>{const c=structuredClone(contact);c.accounts[0].sendEligibility!.state='REPLY_DISABLED';const v=accountStatusView(account,{...context,contact:c});expect(v.collection).toBe('启动时自动核验');expect(v.reply).toBe('不可回复');expect(v.risk).toBe('平台限制评论回复');});
  it('does not call collection blocked without its own readiness result',()=>{const v=accountStatusView({...account,systemBlockReason:'历史平台限制报告，待复核'},{...context,readiness:undefined});expect(v.collection).toBe('尚未获取资格');expect(v.reply).toBe('不可回复');});
+ it('shows the confirmed reply-only history without implying a pending collection review',()=>{const v=accountStatusView({...account,systemBlockReason:'历史回复限制，禁止回复'},context);expect(v.risk).toBe('历史回复受限');expect(v.collection).toBe('启动时自动核验');expect(v.reply).toBe('不可回复');expect(v.issue).toBe('历史回复限制，禁止回复');});
 });

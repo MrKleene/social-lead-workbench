@@ -3,10 +3,16 @@ import type {Prisma} from '@prisma/client';
  * Initial login holds meant "no automatic send authorization", not a bad session. */
 const loginOnlyReasons = new Set(['登录已验证；真实采集与发送仍禁用','登录已验证；只读采集须逐次确认，发送禁用','等待本人授权']);
 type AccountSafety = {status:string;pauseReason?:string|null;platform?:string;loginPlatformUserId?:string|null};
+/** The user's confirmed historical report concerns replies only. Keep its exact
+ * account binding and keep it enforced by every existing reply consumer.
+ * This scope does not classify or clear any other metadata/audit/platform risk. */
 export function accountSystemBlock(a:AccountSafety):string|null {
- // Compatibility hold from the user's historical restriction report. This is NOT
- // a fresh platform observation, and login/metadata changes cannot clear it.
- if(a.platform==='XHS'&&a.loginPlatformUserId==='6334380e000000001802cc73')return '历史平台限制报告，待复核';
+ if(a.platform==='XHS'&&a.loginPlatformUserId==='6334380e000000001802cc73')return '历史回复限制，禁止回复';
+ return accountReadBlock(a);
+}
+/** Read capability excludes only the separately scoped historical reply hold.
+ * Unknown pause reasons and current account-wide restrictions remain blocking. */
+export function accountReadBlock(a:AccountSafety):string|null {
  if(a.status==='RESTRICTED')return a.pauseReason||'账号存在限制，待核查';
  if(a.status==='PAUSED'&&!loginOnlyReasons.has(a.pauseReason||''))return a.pauseReason||'历史暂停原因不明，待核查';
  return null;
