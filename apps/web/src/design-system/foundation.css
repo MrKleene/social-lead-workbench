@@ -410,9 +410,9 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 :root .graphite-workspace .auto-contact-page>.contact-panel{margin-bottom:0}
 :root .graphite-workspace .contact-panel .contact-heading{margin-bottom:12px;gap:12px}
 :root .graphite-workspace .auto-contact-page>.contact-heading{margin-bottom:0}
-:root .graphite-workspace .contact-panel:first-of-type{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 16px}
-:root .graphite-workspace .contact-panel:first-of-type>h2{margin:0;font-size:13px}
-:root .graphite-workspace .contact-panel:first-of-type>a{font-size:12px;color:var(--foreground)}
+:root .graphite-workspace .contact-panel.contact-history-link{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 16px}
+:root .graphite-workspace .contact-panel.contact-history-link>h2{margin:0;font-size:13px}
+:root .graphite-workspace .contact-panel.contact-history-link>a{font-size:12px;color:var(--foreground)}
 :root .graphite-workspace .journey-conclusion{background:#fffbeb;color:#92400e}
 /* Neutral emphasis; semantic warning/error colors remain on their status elements. */
 /* One focus perimeter for editable controls. It joins the border, with no halo.

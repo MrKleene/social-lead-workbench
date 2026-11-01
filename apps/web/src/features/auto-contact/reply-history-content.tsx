@@ -23,7 +23,7 @@ export function ReplyHistoryTable({items,onOpen}:{items:ReplyHistoryItem[];onOpe
   <TableCell className="reply-cell-channel" data-label="渠道">{channel(item)}</TableCell>
   <TableCell className="reply-cell-time" data-label="执行开始"><time dateTime={item.attemptedAt??undefined}>{item.attemptedAt?time(item.attemptedAt):'—'}</time></TableCell>
   <TableCell className="reply-cell-result" data-label="结果"><Outcome item={item}/><small>{notes[item.displayStatus]??'查看记录详情'}</small></TableCell>
-  <TableCell className="reply-cell-action"><Button variant="link" size="sm" aria-label={`查看回复详情 ${item.id}`} onClick={()=>onOpen(item)}>查看详情</Button></TableCell>
+  <TableCell className="reply-cell-action"><Button variant="outline" size="sm" aria-label={`查看回复详情 ${item.id}`} onClick={()=>onOpen(item)}>查看详情</Button></TableCell>
  </TableRow>)}</TableBody></Table>;
 }
 

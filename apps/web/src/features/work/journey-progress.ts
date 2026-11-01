@@ -14,6 +14,6 @@ export function journeyProgress(s:JourneySummary,reviewEnabled:boolean,sendEnabl
  const settled=ended&&!reviewPending&&!reviewFailed&&!reviewOther;
  const conclusion=unknown||other?'本轮仍有结果待核查，不标记完成；未知发送保留额度与去重锁。':pending?'本轮仍有待处理发送，请查看账号、额度或执行状态。':settled?'本轮发送处理已结束，不等待对方回复。':reviewPending||reviewFailed||reviewOther?'本轮匹配尚有待处理或异常，请查看匹配记录。':!sendEnabled?'自动回复关闭，本轮未继续发送；这不代表三步全部成功。':total(r)>0&&!s.matches?'本轮没有匹配对象，未产生发送；后续跟进独立处理。':'本轮暂无发送任务，不据此推断自动化已全部完成。';
  const reviewNotice=reviewFailed?'评论匹配失败，请查看匹配记录。':reviewOther?'匹配状态待核查，请查看匹配记录。':reviewPending?'评论匹配待处理，请查看匹配进度。':undefined;
- const contactNotice=unknown?'发送结果未知，请先核查；保留额度与去重锁，勿重发或换号补发。':other?'发送状态待核查，请查看回复记录。':c.WAITING_QUOTA?'发送额度不足，任务等待中。':c.WAITING_ACCOUNT?'发送账号待核验，任务等待中。':c.FAILED?'存在发送失败，请查看回复记录。':undefined;
+ const contactNotice=unknown?'发送结果未知，请先核查；保留额度与去重锁，勿重发或换号补发。':other?'发送状态待核查，请查看回复记录。':c.WAITING_QUOTA?'发送额度不足，任务等待中。':c.WAITING_ACCOUNT?'等待可用发送账号，请查看账号资格与今日额度。':c.FAILED?'存在发送失败，请查看回复记录。':undefined;
  return {review,contact,conclusion,settled,reviewNotice,contactNotice};
 }
