@@ -51,7 +51,7 @@ export class AutoReviewService {
   try{
    const policy=await this.db.commentReviewPolicy.findUniqueOrThrow({where:{id:job.policyId}}),actor=await this.db.user.findUnique({where:{id:policy.autoActorId||''}});
    if(!actor||actor.role!=='ADMIN')throw Error('自动授权管理员已失效');
-   const prepared=await this.policies.prepare(actor,job.policyId,{version:job.policyVersion,scope:{kind:'POSTS',postIds:[job.postId]}},true);
+   const prepared=await this.policies.prepare(actor,job.policyId,{version:job.policyVersion,scope:{kind:'POSTS',postIds:[job.postId]}},true,job.runId);
    if(!prepared.count){await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:'COMPLETED',reason:'没有新的可自动送审内容；已有待处理或失败记录可手动测试'}});return;}
    const rows=await this.db.semanticReview.findMany({where:{id:{in:prepared.reviewIds}},orderBy:{id:'asc'}});
    const count=rows.length;
@@ -78,7 +78,7 @@ export class AutoReviewService {
     const job=jobs.find(j=>j.postId===post.postId);if(!job)throw Error('MISSING_JOB');
     if(await coverageSkipped(this.db,a,job)){plans.push({postId:post.postId,reviewIds:[],estimatedMicros:0,payloadHash:null});continue;}
     if(job.status!=='PENDING')throw Error('UNSAFE_JOB');
-    const prepared=await this.policies.prepare(actor,s.policyId,{version:s.policyVersion,scope:{kind:'POSTS',postIds:[post.postId]}},true);
+    const prepared=await this.policies.prepare(actor,s.policyId,{version:s.policyVersion,scope:{kind:'POSTS',postIds:[post.postId]}},true,a.runId);
     if(!prepared.count){plans.push({postId:post.postId,reviewIds:[] as string[],estimatedMicros:0,payloadHash:null});continue;}
     const preview=await this.evaluation.preview(actor,s.policyId,prepared.reviewIds,false,true),e=preview.costEstimate;
     if(!e.fits||e.priceVersion!==s.priceVersion||e.inputTokensUpper>s.maxInputTokens||e.outputTokens>s.maxOutputTokens||e.estimatedMicros===null)throw Error('POST_CAPACITY');

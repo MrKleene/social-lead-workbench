@@ -1,3 +1,4 @@
+import {autoReviewScope} from '../comment-review/auto-review-scope';
 import {ConflictException} from '@nestjs/common';
 import {z} from 'zod';
 import type {Prisma,NormalAutomationAcceptance,AutoContactRule} from '@prisma/client';
@@ -85,7 +86,8 @@ export async function guardAcceptanceModel(db:Store,input:{autoJobId?:string;pol
  if(s.replyOnly||!job||!await acceptanceReviewAllowed(db,job,input.modelVersion)||input.policyId!==s.policyId||input.model!==s.model||input.payload.requestPolicy!==wholePostRequestPolicy)acceptanceConflict();
  // Bind every actual outbound row to the current captured run, not merely the displayed post.
  const captures=await db.capturedComment.findMany({where:{id:{in:input.rows.flatMap(r=>r.captureId?[r.captureId]:[])}}});
- if(captures.length!==input.rows.length||captures.some(c=>c.lastRunId!==a.runId||c.postId!==job.postId))acceptanceConflict();
+ const members=new Set((await autoReviewScope(db,job.postId,a.runId!)).map(c=>c.id));
+ if(captures.length!==input.rows.length||captures.some(c=>!members.has(c.id)))acceptanceConflict();
  const post=await db.normalAcceptancePost.findUniqueOrThrow({where:{acceptanceId_postId:{acceptanceId:a.id,postId:job.postId}}});
  if(post.modelCallId&&post.modelCallId!==input.callId)acceptanceConflict();
  if(input.callId&&(post.modelCallId!==input.callId||JSON.stringify([...post.reviewIds].sort())!==JSON.stringify(input.rows.map(r=>r.id).sort())))acceptanceConflict();

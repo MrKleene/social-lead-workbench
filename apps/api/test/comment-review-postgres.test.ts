@@ -1,3 +1,5 @@
+import type {Prisma} from '@prisma/client';
+import {autoReviewScope} from '../src/comment-review/auto-review-scope';
 import {ContactSettingsService} from '../src/auto-contact/contact-settings.service';
 import {AutoContactService} from '../src/auto-contact/auto-contact.service';
 import {CONTACT_SENDER} from '../src/auto-contact/contact-sender';
@@ -185,10 +187,9 @@ describe('independent comment review: disposable database and mocked provider on
  });
 
  it('completed resumed posts include earlier saved chunks and a never-dispatched manual preview',async()=>{
-  const p=await autoEnabled(),s=await source();await db.capturedComment.update({where:{id:s.capture.id},data:{lastRunId:'earlier-confirmed-chunk'}});
-  const preview=await batch(p.version,[s.p.id]);expect(preview.count).toBe(1);expect(transport).not.toHaveBeenCalled();
-  await db.capturedPost.update({where:{id:s.p.id},data:{coverage:'COMPLETE'}});const run=await db.collectionRun.findUniqueOrThrow({where:{id:s.capture.runId}});
-  await automatic.postFinished(run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.semanticReview.findFirst()).toMatchObject({state:'EVALUATED'});
+  const p=await autoEnabled(),s=await resumedObservation();
+  const preview=await batch(p.version,[s.p.id]);expect(preview.count).toBe(5);expect(transport).not.toHaveBeenCalled();
+  await automatic.postFinished(s.run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.semanticReview.findFirst()).toMatchObject({state:'EVALUATED'});
  });
 
 });
@@ -331,10 +332,15 @@ describe('single-request whole-post retry eligibility and frozen history (mock o
 });
 
 async function autoEnabled(){const p=await saved();return policies.automatic(actor,p.id,{version:p.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});}
-async function resumedObservation(){
- const s=await wholeSource(6),d=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/root-scope-wire.json'),'utf8')).data.boundedRead;
+async function resumedObservation(n=6){
+ const s=await wholeSource(n),d=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/root-scope-wire.json'),'utf8')).data.boundedRead;
+ if(n!==6){
+  Object.assign(d.chunkSummary,{roots:n,replies:0,unique:n,declared:{state:'EXACT',value:n},rootScopedLeafGroups:0,unknownReplyGroups:0});
+  d.actions.addedRoots=n;d.actions.addedReplies=0;
+  for(const sample of [d.initial,d.final,d.retained]){sample.total.value=n;sample.loaded={roots:n,replies:0,uniqueKnown:n,duplicateIds:0,missingIds:0,invalidNodes:0};sample.groups=Array.from({length:n},(_,i)=>({ordinal:i+1,parent:null,depth:0,declared:{state:'EXACT',value:0},loaded:{state:'EXACT',value:0}}));sample.relations={version:1,scanned:n,limited:false,fields:[]};}
+ }
  const captures=await db.capturedComment.findMany({where:{postId:s.p.id},orderBy:{id:'asc'}}),accountId=randomUUID(),deviceId=randomUUID();
- const entry={postRef:s.p.platformPostId,ordinal:1,saved:0,roots:0,replies:0,complete:true,reason:'DECLARED_TREE_EXHAUSTED',boundedRead:d,recovery:{confirmedTotal:6,remainingAnchors:0,sequence:1}};
+ const entry={postRef:s.p.platformPostId,ordinal:1,saved:0,roots:0,replies:0,complete:true,reason:'DECLARED_TREE_EXHAUSTED',boundedRead:d,recovery:{confirmedTotal:n,remainingAnchors:0,sequence:1}};
  const run=await db.collectionRun.create({data:{configId:s.c.id,revision:1,snapshot:{mode:'XHS_MCP'},execution:{accountId,deviceId},requestKey:randomUUID(),scenario:'BASELINE',status:'COMPLETE',capturedPosts:1,capturedCommentsCount:0,metrics:{coverage:{version:1,search:'UNKNOWN',reasons:[],posts:[entry]}}}});
  const marks=[];for(let i=0;i<captures.length;i++){const c=captures[i],snap={...(c.snapshot as any),parentId:i%2?captures[i-1].platformCommentId:null,parent:i%2?(captures[i-1].snapshot as any).comment:null};captures[i]=await db.capturedComment.update({where:{id:c.id},data:{snapshot:snap}});marks.push({id:snap.commentId,parent:snap.parentId||'',digest:commentDigest(s.p.platformPostId,{id:snap.commentId,userId:snap.userId,text:snap.comment,parentId:snap.parentId||undefined,nickname:'',hasReplies:false})});}
  await db.capturedPost.update({where:{id:s.p.id},data:{lastRunId:run.id,coverage:'COMPLETE',snapshot:{...(s.p.snapshot as any),boundedRead:d}}});
@@ -376,4 +382,57 @@ it('reusable matching schemes create independently and edits preserve history an
  const renamed=await write('put','/policies/'+made.body.id,{version:made.body.version,name:'重命名的描述',target:made.body.target});expect(renamed.status).toBe(200);expect(renamed.body.revision).toBe(1);
  const edited=await write('put','/policies/'+made.body.id,{version:renamed.body.version,name:'重命名的描述',target:'只识别明确询问护理学选题的评论'});expect(edited.body.revision).toBe(2);expect(await db.commentReviewPolicyVersion.count({where:{policyId:made.body.id}})).toBe(2);expect((await db.commentReviewPolicy.findUniqueOrThrow({where:{id:first.id}})).target).toBe(first.target);
  expect((await write('post','/policies',{name:'',target:'短'})).status).toBe(400);expect((await write('post','/policies',{name:'销售不能写',target:'只识别明确写出学科专业的评论'},'sales')).status).toBe(403);expect(await db.semanticModelCall.count()).toBe(0);
+});
+
+describe('automatic exact run membership regression',()=>{
+ async function withOld(){
+  const policy=await autoEnabled(),s=await resumedObservation(33);
+  const snap={...(s.captures[0].snapshot as any),commentId:randomUUID(),comment:'历史不属于本轮',parentId:null,parent:null};
+  const old=await db.capturedComment.create({data:{configId:s.c.id,postId:s.p.id,runId:s.capture.runId,lastRunId:s.capture.runId,platformCommentId:snap.commentId,contentHash:semanticHash(snap),contextVersion:'captured-context-v1',snapshot:snap,isDemo:true}});
+  await automatic.postFinished(s.run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});
+  return {...s,policy,old};
+ }
+ it('33 verified reused members plus one old original sends all 33 once, across display pages',async()=>{
+  const s=await withOld(),before=await db.capturedComment.findMany({where:{postId:s.p.id},orderBy:{id:'asc'}});
+  expect(await autoReviewScope(db,s.p.id,s.run.id)).toHaveLength(33);
+  await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);
+  const payload=JSON.parse(JSON.parse(transport.mock.calls[0][1].body as string).messages[1].content);
+  expect(payload.items).toHaveLength(33);expect(payload.items.some((i:any)=>i.comment==='历史不属于本轮')).toBe(false);
+  expect(payload.items.every((i:any)=>i.observation.coverage==='COMPLETE')).toBe(true);
+  expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'COMPLETED',processed:33});
+  expect(await db.capturedComment.findMany({where:{postId:s.p.id},orderBy:{id:'asc'}})).toEqual(before);
+  await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.contactAttempt.count()).toBe(0);
+ });
+ it('reuses 30 scores, sends only 3 remaining current members, preserving historical reviews',async()=>{
+  const s=await withOld(),p=await policies.prepare(actor,s.policy.id,{version:s.policy.version,scope:{kind:'POSTS',postIds:[s.p.id]}},true,s.run.id);
+  expect(p.count).toBe(33);await db.semanticReview.updateMany({where:{id:{in:p.reviewIds.slice(0,30)}},data:{state:'EVALUATED',score:70}});
+  const history=await db.semanticReview.findMany({where:{state:'EVALUATED'},orderBy:{id:'asc'}});
+  await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(JSON.parse(transport.mock.calls[0][1].body as string).messages[1].content).items).toHaveLength(3);
+  expect(await db.semanticReview.findMany({where:{id:{in:history.map(r=>r.id)}},orderBy:{id:'asc'}})).toEqual(history);
+  expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'COMPLETED',processed:3});expect(await db.semanticReview.count({where:{captureId:s.old.id}})).toBe(0);
+ });
+ it('missing a confirmed member cancels the post; later data restoration never revives it',async()=>{
+  const s=await withOld(),c=s.captures[0];await db.capturedComment.delete({where:{id:c.id}});
+  await automatic.tick();expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'CANCELLED',processed:0});expect(transport).not.toHaveBeenCalled();
+  await db.capturedComment.create({data:{...c,snapshot:c.snapshot as Prisma.InputJsonValue}});await automatic.tick();expect(transport).not.toHaveBeenCalled();expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'CANCELLED'});
+ });
+ it('never replays failed/uncertain prior items, even after scope is repaired',async()=>{
+  const s=await withOld(),p=await policies.prepare(actor,s.policy.id,{version:s.policy.version,scope:{kind:'POSTS',postIds:[s.p.id]}},true,s.run.id);
+  await db.semanticReview.updateMany({where:{id:{in:p.reviewIds}},data:{state:'FAILED',reason:'执行结果未知'}});
+  await automatic.tick();expect(transport).not.toHaveBeenCalled();expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'COMPLETED',processed:0});
+  expect(await db.semanticReview.count({where:{state:'FAILED'}})).toBe(33);expect(await db.contactAttempt.count()).toBe(0);
+ });
+});
+
+it('automatic frozen input is rechecked before dispatch if checkpoint membership changes',async()=>{
+ const policy=await autoEnabled(),s=await resumedObservation();
+ await automatic.postFinished(s.run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});
+ const job=await db.autoReviewJob.findFirstOrThrow();await db.autoReviewJob.update({where:{id:job.id},data:{status:'PROCESSING'}});
+ const prepared=await policies.prepare(actor,policy.id,{version:policy.version,scope:{kind:'POSTS',postIds:[s.p.id]}},true,s.run.id);
+ const preview=await evaluation.preview(actor,policy.id,prepared.reviewIds,false,true),cp=await db.commentReadCheckpoint.findFirstOrThrow({where:{configId:s.c.id}});
+ const checkpoint=cp.checkpoint as any;checkpoint.marks[0].digest='0'.repeat(64);
+ const original=db.$transaction.bind(db);let count=0;
+ const spy=vi.spyOn(db,'$transaction').mockImplementation((async(...args:any[])=>{const result=await (original as any)(...args);if(++count===1)await db.commentReadCheckpoint.update({where:{id:cp.id},data:{checkpoint}});return result;}) as any);
+ try{expect(await evaluation.evaluate(actor,policy.id,input(preview),job.id)).toMatchObject({status:'FAILED'});expect(transport).not.toHaveBeenCalled();expect(await db.contactAttempt.count()).toBe(0);}finally{spy.mockRestore();}
 });

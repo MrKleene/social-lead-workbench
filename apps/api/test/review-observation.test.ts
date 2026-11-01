@@ -1,3 +1,4 @@
+import {autoReviewScope,assertAutoReviewTargets} from '../src/comment-review/auto-review-scope';
 import {it,expect,vi} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -27,3 +28,24 @@ it.each(['missing-report','unknown','partial','remaining','count','sequence','id
 });
 it('evidence changes invalidate hashes without mutating semantic identities',async()=>{const f=fixture(),before=await reviewObservations(f.db,['capture0']);f.run.cancelRequested=true;const after=await reviewObservations(f.db,['capture0']);expect(before.get('capture0')?.evidenceHash).not.toBe(after.get('capture0')?.evidenceHash);expect(f.captures[0].snapshot.coverage).toBe('PARTIAL');});
 it.each(['unknown','partial','remaining','mismatch','forged'])('resumed count does not turn %s into full coverage',mode=>{const f=fixture();if(mode==='unknown'||mode==='partial'){f.report.state=mode==='unknown'?'UNKNOWN':'PARTIAL';f.report.reason='BUTTON_NOT_FOUND';f.report.replyStop='BUTTON_NOT_FOUND';}if(mode==='remaining')f.evidence.recovery.remainingAnchors=1;if(mode==='mismatch')f.evidence.recovery.confirmedTotal=7;if(mode==='forged')f.report.final.ready.rootEndVisible=false;expect(observedReadCounts(f.evidence as any).recovered).toBe(false);});
+
+it('automatic scope excludes old non-members and refuses incomplete current membership',async()=>{
+ const f=fixture();Object.assign(f.run,{configId:'config',snapshot:{mode:'XHS_MCP'},config:{mode:'XHS_MCP'}});
+ f.db.capturedPost={findUnique:vi.fn(async()=>f.post)};f.db.collectionRun.findUnique=vi.fn(async()=>f.run);
+ const old={...f.captures[0],id:'historical-only',platformCommentId:'old',snapshot:{...f.captures[0].snapshot,commentId:'old',comment:'历史范围外'}};
+ f.captures.forEach(c=>Object.assign(c,{platformCommentId:c.snapshot.commentId}));f.captures.push(old as any);
+ const selected=await autoReviewScope(f.db,f.post.id,f.run.id);expect(selected).toHaveLength(6);expect(selected.some(c=>c.id===old.id)).toBe(false);
+ expect(()=>assertAutoReviewTargets(selected,[{captureId:old.id,snapshot:old.snapshot,state:'UNANALYSED'}])).toThrow('本轮');
+ expect(()=>assertAutoReviewTargets(selected,[{captureId:selected[0].id,snapshot:selected[0].snapshot,state:'FAILED'}])).toThrow('待审核');
+ f.captures.shift();await expect(autoReviewScope(f.db,f.post.id,f.run.id)).rejects.toThrow('缺失');
+});
+it.each(['checkpoint','digest','report','run','identity'])('automatic exact scope fails closed for %s',async mode=>{
+ const f=fixture();Object.assign(f.run,{configId:'config',snapshot:{mode:'XHS_MCP'},config:{mode:'XHS_MCP'}});f.captures.forEach(c=>Object.assign(c,{platformCommentId:c.snapshot.commentId}));
+ f.db.capturedPost={findUnique:vi.fn(async()=>f.post)};f.db.collectionRun.findUnique=vi.fn(async()=>f.run);
+ if(mode==='checkpoint')f.db.commentReadCheckpoint.findMany.mockResolvedValue([]);
+ if(mode==='digest')f.checkpoint.checkpoint.marks[0].digest='0'.repeat(64);
+ if(mode==='report')f.post.snapshot={} as any;
+ if(mode==='run')f.post.lastRunId='newer-run';
+ if(mode==='identity')(f.captures[0] as any).platformCommentId='wrong';
+ await expect(autoReviewScope(f.db,f.post.id,f.run.id)).rejects.toThrow();
+});

@@ -59,7 +59,7 @@ describe('bounded plain-text reasons and exact grounded evidence (synthetic only
 
 // In-memory transaction doubles exercise real dispatch/evidence/guard code without Docker or production DB.
 function harness(bad:boolean){
- const rows=inputs.map((input,i)=>({...input,version:1,state:'UNANALYSED',reviewStatus:'PENDING',id:input.id,createdAt:new Date(i)}));
+ const rows=inputs.map((input,i)=>({...input,captureId:'capture-'+i,version:1,state:'UNANALYSED',reviewStatus:'PENDING',id:input.id,createdAt:new Date(i)}));
  const policy={id:'workspace',version:1,revision:1,autoEnabled:true,autoModelVersion:1};
  const config={id:'config',semanticRules:rules,revision:1,archivedAt:null,enabled:true};
  let call:any=null;
@@ -72,9 +72,9 @@ function harness(bad:boolean){
   semanticModelCall:{findUnique:async()=>call,aggregate:async()=>({_count:{_all:0},_sum:{}}),findFirst:async()=>null,count:async()=>0,create:vi.fn(async({data}:any)=>{call={id:'call',...data};return call;}),update:vi.fn(async({data}:any)=>Object.assign(call,data))},
   auditLog:{findFirst:async()=>({metadata:{requestPolicy:wholePostRequestPolicy}}),create:vi.fn(async()=>({}))},user:{findUnique:async()=>({role:'ADMIN'})},
   autoReviewJob:{findUnique:async()=>({id:'auto',policyId:'workspace',policyVersion:1,status:'PROCESSING',inputPolicyVersion:autoReviewInputPolicy,postId:'post',runId:'run'})},
-  capturedComment:{findMany:async()=>[]},commentReadCheckpoint:{findMany:async()=>[]},
-  collectionRun:{findMany:async()=>[],findUnique:async()=>({id:'run',status:'COMPLETE',revision:1,config,cancelRequested:false,snapshot:{mode:'MOCK'}})},
-  capturedPost:{findUnique:async()=>({coverage:'COMPLETE',lastRunId:'run',snapshot:{}})},
+  capturedComment:{findMany:async()=>rows.map(r=>({id:r.captureId,configId:'config',postId:'post',lastRunId:'run',snapshot:r.snapshot,post:{id:'post',configId:'config',lastRunId:'run',snapshot:{}}}))},commentReadCheckpoint:{findMany:async()=>[]},
+  collectionRun:{findMany:async()=>[],findUnique:async()=>({id:'run',configId:'config',status:'COMPLETE',revision:1,config,cancelRequested:false,snapshot:{mode:'MOCK'}})},
+  capturedPost:{findUnique:async()=>({id:'post',configId:'config',coverage:'COMPLETE',lastRunId:'run',snapshot:{}})},
   manualReviewJob:{findUnique:async()=>({id:'manual',status:'PROCESSING',policy,policyRevision:1,modelVersion:1,actorId:'admin',batchIds:rows.map(r=>r.id),items:rows.map(r=>({reviewId:r.id,reviewVersion:r.version})),preview:{...payload,requestPolicy:wholePostRequestPolicy,items:payload.items.map((item,i)=>({...item,id:rows[i].id}))}})},
  };
  const settings={...qwenSettings(env),status:{...qwenSettings(env).status,authorized:true},configurationVersion:1};

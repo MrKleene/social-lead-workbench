@@ -34,7 +34,7 @@ export class ReviewEvaluationService {
   const reserved=await this.db.$transaction(async tx=>{await lockReview(tx);
    const previous=await tx.semanticModelCall.findUnique({where:{requestKey:input.requestKey}});if(previous){if(previous.policyId!==id||previous.actorId!==actor.id||previous.previewHash!==input.previewHash)throw new ConflictException('请求标识已使用');return {previous};}
    const b=await this.batch(tx,id,input.reviewIds!,!!manualJobId,!!manualJobId||!!autoJobId),status=await this.policies.qwen.status(tx,undefined,{enabled:true,version:b.policy.version});
-   if(autoJobId)await assertAutoReview(tx,autoJobId,b.settings.configurationVersion);
+   if(autoJobId)await assertAutoReview(tx,autoJobId,b.settings.configurationVersion,b.rows);
    if(manualJobId)await assertManualReview(tx,manualJobId,b.settings.configurationVersion,b.rows.map(r=>r.id),b.payload);
    if(!status.usage.canCall||!b.settings.status.authorized)throw new ConflictException('模型未授权、预算不足或仍在请求间隔内；未外发');
    if(b.hash!==input.previewHash||input.priceVersion!==qwenModel(b.settings.status.model)?.priceVersion)throw new ConflictException('需求、模型或批次已变化，请重新预览');
@@ -49,7 +49,7 @@ export class ReviewEvaluationService {
    await this.db.$transaction(async tx=>{await lockReview(tx);const policy=await tx.commentReviewPolicy.findUniqueOrThrow({where:{id}});
     if(manualJobId?policy.revision!==b.policy.revision:policy.version!==b.policy.version)throw new QwenError('REVIEW_CHANGED');
     const metadata=await this.policies.models.resolve(tx);if(!metadata.status.authorized||metadata.configurationVersion!==b.settings.configurationVersion)throw new QwenError('MODEL_SETTINGS_CHANGED');
-    if(autoJobId)await assertAutoReview(tx,autoJobId,metadata.configurationVersion);
+    if(autoJobId)await assertAutoReview(tx,autoJobId,metadata.configurationVersion,b.rows);
     if(manualJobId)await assertManualReview(tx,manualJobId,metadata.configurationVersion,b.rows.map(r=>r.id),b.payload);
     const current=await prepareReviewOutbound(tx,b.rows,b.wholePost);if(b.wholePost)current.payload.requestPolicy=wholePostRequestPolicy;
     if(semanticHash(current.payload)!==semanticHash(b.payload))throw new QwenError('REVIEW_CHANGED');
