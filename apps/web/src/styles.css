@@ -1593,3 +1593,8 @@ html[data-crm-reduced=true] [data-slot=alert-dialog-content],html[data-crm-reduc
 @media(prefers-reduced-motion:reduce){.settings-loading-indicator svg{animation:none}}
 
 .reply-readiness-list{margin:8px 0 12px;padding-left:20px;color:var(--muted-foreground);font-size:13px;line-height:1.7}.reply-readiness-list li+li{margin-top:6px}
+
+/* Settings explain unavailable actions in text. Keep controls readable while
+   saving: a disabled field label and its disabled input otherwise fade twice. */
+:root .automation-settings-sheet :is([data-slot=input],[data-slot=select-trigger],[data-slot=switch],[data-slot=checkbox],[data-slot=tabs-trigger],[data-slot=button]):disabled,
+:root .automation-settings-sheet [data-slot=field][data-disabled=true] [data-slot=field-label]{opacity:1}

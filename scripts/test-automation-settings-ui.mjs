@@ -17,7 +17,7 @@ try{
  browser=await chromium.launch({headless:true,ignoreDefaultArgs:['--hide-scrollbars'],executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE});
  for(const width of [1440,390]){
  const context=await browser.newContext({viewport:{width,height:900},reducedMotion:width===390?'reduce':'no-preference'});context.setDefaultTimeout(12000);
- let configs=[structuredClone(config),{...structuredClone(config),id:'group-B',name:'第二关键词组',keywords:['第二组关键词'],runs:[]}],rv=structuredClone(initialReview),model=structuredClone(initialModel),prefs={id:'workspace',version:0,configId:null,policyId:null},templates=[{id:'template-A',version:0,name:'合成模板A',body:'合成正文A',channel:'COMMENT'},{id:'template-B',version:0,name:'合成模板B',body:'合成正文B',channel:'COMMENT'}],delaySelection=0,delayRule=0,failSelection=false,failReply=false,failRead=false,failModel=false,failSummary=false,failConfigs=false,slowConfigs=0;
+ let configs=[structuredClone(config),{...structuredClone(config),id:'group-B',name:'第二关键词组',keywords:['第二组关键词'],runs:[]}],rv=structuredClone(initialReview),model=structuredClone(initialModel),prefs={id:'workspace',version:0,configId:null,policyId:null},templates=[{id:'template-A',version:0,name:'合成模板A',body:'合成正文A',channel:'COMMENT'},{id:'template-B',version:0,name:'合成模板B',body:'合成正文B',channel:'COMMENT'}],delaySelection=0,delayRule=0,failSelection=false,failReply=false,failRead=false,failModel=false,failSummary=false,failConfigs=false,slowConfigs=0,toggleHold=null,failToggle=false;
  const accounts=Array.from({length:12},(_,i)=>({id:'a'+i,version:1,label:'合成账号 '+i,platform:'XHS',dailyLimit:2,isDemo:true,healthy:true,workbenchStatus:'UNCONNECTED',occupied:i===0?1:0,unknown:i===0?1:0,remaining:2,confirmed:0,reserved:0}));
  configs[0].runs.push({...structuredClone(config.runs[0]),id:'older',createdAt:'2026-10-28T00:00:00Z'});
  let archivedConfigs=[],emptyProject=false;
@@ -33,12 +33,12 @@ try{
   if(p==='/collection/configs'){const c={...structuredClone(config),...body,id:'group-'+configs.length,revision:1,runs:[]};configs.push(c);return ok(c);}
   if(p.startsWith('/collection/configs/')&&req.method()==='PATCH'){const c=configs.find(c=>c.id===p.split('/').at(-1));Object.assign(c,body.config,{revision:c.revision+1});return ok(c);}
   if(p==='/comment-review/policies'){const v={...body,id:'policy-'+rv.policies.length,version:1,revision:1,autoEnabled:false};rv.policies.push(v);ct.policies=rv.policies;return ok(v);}
-  if(p.endsWith('/automatic')){const v=rv.policies.find(v=>v.id===p.split('/').at(-2));assert.equal(body.consent,'comment-review-continuous-single-post-v3');Object.assign(v,{autoEnabled:body.enabled,version:v.version+1});return ok(v);}
+  if(p.endsWith('/automatic')){if(toggleHold)await toggleHold;if(failToggle)return bad('合成开关保存失败');const v=rv.policies.find(v=>v.id===p.split('/').at(-2));assert.equal(body.consent,body.enabled?'comment-review-continuous-single-post-v3':undefined);Object.assign(v,{autoEnabled:body.enabled,version:v.version+1});return ok(v);}
   if(p.startsWith('/comment-review/policies/')&&req.method()==='PUT'){const v=rv.policies.find(v=>v.id===p.split('/').at(-1));Object.assign(v,body,{version:v.version+1,revision:v.revision+(v.target!==body.target?1:0),autoEnabled:false});return ok(v);}
   if(p==='/model-settings'){if(failModel)return bad('合成模型保存失败');Object.assign(model,body,{version:model.version+1});rv.modelVersion++;rv.connection.model=model.model;rv.policies.forEach(v=>{v.autoEnabled=false;v.version++;});return ok(model);}
   if(p==='/reply-templates'){const t={...body,id:'template-'+templates.length,version:1};templates.push(t);return ok(t);}
   if(p.startsWith('/reply-templates/')){const t=templates.find(t=>t.id===p.split('/').at(-1));Object.assign(t,body.draft,{version:t.version+1});return ok(t);}
-  if(p.startsWith('/auto-contact/rules/')&&p.endsWith('/enabled')){const rule=ct.rules.find(r=>r.id===p.split('/').at(-2));assert.equal(body.version,rule.version);assert.equal(body.hash,body.enabled?rule.hash:undefined);Object.assign(rule,{enabled:body.enabled,version:rule.version+1});return ok(rule);}
+  if(p.startsWith('/auto-contact/rules/')&&p.endsWith('/enabled')){if(toggleHold)await toggleHold;if(failToggle)return bad('合成开关保存失败');const rule=ct.rules.find(r=>r.id===p.split('/').at(-2));assert.equal(body.version,rule.version);assert.equal(body.hash,body.enabled?rule.hash:undefined);Object.assign(rule,{enabled:body.enabled,version:rule.version+1});return ok(rule);}
   if(p.startsWith('/auto-contact/rules/')&&req.method()==='PUT'){if(delayRule)await new Promise(r=>setTimeout(r,delayRule));if(failReply)return bad('合成平台保存失败');const id=p.split('/').at(-1),existing=ct.rules.find(r=>r.id===id),r={...body,id,version:(existing?.version??0)+1,accountIds:body.accounts.map(a=>a.id),accountLimits:body.accounts.map(({id,dailyLimit})=>({id,dailyLimit})),enabled:false,mode:'REAL',hash:'fixture',pauseReason:null};body.accounts.forEach(a=>{const found=accounts.find(x=>x.id===a.id);assert.equal(found.version,a.version);assert.equal(body.preserveAccountLimits,true);});ct.rules=ct.rules.filter(x=>x.id!==id).concat(r);return ok(r);}
   report.unexpected.push(req.method()+' '+p);return route.abort();
  }
@@ -56,6 +56,38 @@ try{
  const tab=name=>dialog.getByRole('tab',{name:new RegExp('^'+name)}).first();
  const open=async(name='采集')=>{await page.getByRole('button',{name:'自动化设置',exact:true}).click();await dialog.waitFor();await tab(name).click();};
  const metrics=()=>page.evaluate(()=>({url:location.href,history:history.length,module:document.querySelector('.spatial-work').dataset.module,dock:document.querySelector('.simple-dock').getBoundingClientRect().x}));
+ if(process.env.SETTINGS_TOGGLE_FOCUS){
+  prefs.policyId='policy-B';ct.capabilities.find(c=>c.platform==='XHS'&&c.channel==='COMMENT').available=true;
+  for(const a of accounts){a.isDemo=false;a.canCheck=true;}
+  ct.rules=[{id:'workspace-XHS',version:1,platform:'XHS',policyId:'policy-B',policyRevision:1,threshold:100,channels:['COMMENT'],channel:'COMMENT',templateId:'template-B',templateVersion:0,content:'合成正文B',accountIds:['a10'],accountLimits:[{id:'a10',dailyLimit:2}],enabled:false,mode:'REAL',hash:'fixture',pauseReason:null}];
+  await page.reload();await open('自动回复');
+  const rendering=()=>dialog.evaluate(e=>{
+   const panel=e.querySelector('[role=tabpanel]:not([hidden])'),box=x=>{const b=x.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height};};
+   const slots=['input','select-trigger','switch','checkbox','field-label','button'];
+   const controls=[...panel.querySelectorAll(slots.map(s=>'[data-slot="'+s+'"]').join(','))].filter(x=>x.getBoundingClientRect().height>0&&!x.closest('[aria-hidden=true]')&&!x.closest('[data-slot=select-content]'));
+   return {dialog:box(e),stage:box(e.querySelector('.automation-settings-stage')),footer:box(e.querySelector('.automation-settings-footer')),scroll:panel.scrollTop,opacity:getComputedStyle(e).opacity,controls:controls.map((x,i)=>({key:i+':'+x.dataset.slot+':'+(x.getAttribute('aria-label')||x.textContent.trim().slice(0,30)),opacity:getComputedStyle(x).opacity,disabled:!!x.disabled,box:box(x)}))};
+  });
+  for(const [section,label] of [['自动回复','自动回复'],['评论匹配','自动识别']]){
+   await tab(section).click();const sw=dialog.getByRole('switch',{name:label,exact:true});
+   for(const [scenario,next,fail,fast] of [['on',true,false,false],['off',false,false,false],['failure',true,true,false],['recovery',true,false,false],['fast-off',false,false,true]]){
+    await dialog.locator('[role=tabpanel]:not([hidden])').evaluate(e=>{e.scrollTop=0;});const before=await rendering(),count=writes.length;failToggle=fail;
+    let release;if(!fast)toggleHold=new Promise(ok=>release=ok);
+    await sw.click({clickCount:2});
+    if(!fast){
+     await dialog.locator('.settings-loading-overlay').waitFor();assert(await sw.isDisabled());await sw.evaluate(e=>e.click());await page.keyboard.press('Escape');assert(await dialog.isVisible());assert(await dialog.getByRole('button',{name:'完成设置',exact:true}).isDisabled());
+     const during=await rendering();await page.screenshot({path:join(out,`toggle-${section}-${scenario}-pending-${width}.png`)});await writeFile(join(out,`toggle-${section}-${scenario}-${width}.json`),JSON.stringify({before,during},null,2));
+     assert.equal(during.opacity,before.opacity);assert.deepEqual(during.dialog,before.dialog);assert.deepEqual(during.stage,before.stage);assert.deepEqual(during.footer,before.footer);assert.equal(during.scroll,before.scroll);
+     for(const c of before.controls.filter(c=>!c.disabled)){const d=during.controls.find(d=>d.key===c.key);assert(d,'control retained '+c.key);assert.equal(d.opacity,c.opacity,'temporary disabling must not fade '+c.key);assert.deepEqual(d.box,c.box,'no layout shift '+c.key);}
+     const indicator=await dialog.locator('.settings-loading-indicator').boundingBox();assert(Math.abs(indicator.x+indicator.width/2-during.stage.x-during.stage.width/2)<1);assert(Math.abs(indicator.y+indicator.height/2-during.stage.y-during.stage.height/2)<1);assert.equal(await dialog.getByText('正在应用…',{exact:true}).count(),0);release();toggleHold=null;
+    }
+    await settled();await page.waitForFunction(()=>!document.querySelector('.settings-loading-overlay'));assert.equal(writes.length-count,1,'double click must send once');assert.equal(await sw.getAttribute('aria-checked'),String(fail?!next:next));
+    if(fail)await dialog.getByText('合成开关保存失败',{exact:true}).waitFor();else assert.equal(await dialog.getByText('合成开关保存失败',{exact:true}).count(),0);
+    await page.screenshot({path:join(out,`toggle-${section}-${scenario}-settled-${width}.png`)});await dialog.getByRole('button',{name:'完成设置',exact:true}).click();await dialog.waitFor({state:'hidden'});await open(section);assert.equal(await dialog.getByRole('switch',{name:label,exact:true}).getAttribute('aria-checked'),String(fail?!next:next));
+    report.checks.push(`${width}: ${section} ${scenario}; opacity/layout retained; one mutation; close/reopen; no real requests`);
+   }
+  }
+  assert(await dialog.getByRole('button',{name:'完成设置',exact:true}).isEnabled());assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await context.close();continue;
+ }
  await page.getByRole('button',{name:'自动化设置',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'自动化设置',exact:true}).count(),1);assert.equal(await page.getByRole('button',{name:/关键词与采集范围|设置需求与匹配开关|设置回复内容与账号/}).count(),0);assert.equal(await page.locator('.simple-home-stages>article').count(),3);await page.screenshot({path:join(out,'home-'+width+'.png')});report.screenshots.push('home-'+width+'.png');
  for(const [name,close] of [['采集','Escape'],['评论匹配','backdrop'],['自动回复','button']]){
   await page.getByRole('button',{name:'自动化设置',exact:true}).scrollIntoViewIfNeeded();const before=await metrics();await open(name);await dialog.getByRole('button',{name:'完成设置',exact:true}).waitFor();assert.deepEqual(await metrics(),before);
