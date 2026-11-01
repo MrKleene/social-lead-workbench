@@ -13,7 +13,7 @@ export function TasksPage() {
   const [filter, setFilter] = useState("PENDING");
   const rows = (query.isError ? [] : query.data || []).filter(task => filter === "all" || task.status === filter);
   const options = [{ value: "PENDING", label: "待处理" }, { value: "DONE", label: "已完成" }, { value: "PAUSED", label: "已暂停" }, { value: "all", label: "全部" }]
-    .map(option => ({ ...option, count: (query.data || []).filter(task => option.value === "all" || task.status === option.value).length }));
+    .map(option => ({ ...option, count: query.isError||query.isPending?undefined:(query.data || []).filter(task => option.value === "all" || task.status === option.value).length }));
   return (
     <>
       <div className="page-heading">
@@ -30,10 +30,10 @@ export function TasksPage() {
         {update.isSuccess && <p className="success-note" role="status" key={update.submittedAt}><Check size={16} />任务状态已更新</p>}
         <div className="section-title">
           <h2>人工任务</h2>
-          <Badge variant="secondary">{rows.length} 项</Badge>
+          <Badge variant="secondary">{query.isError?"读取失败":query.isPending?"正在读取":`${rows.length} 项`}</Badge>
         </div>
         <p className="helper-text">
-          仅展示当前有权访问的人工跟进任务。小红书只读采集请前往采集任务；真实自动评论、私信发送与收信未验收，保持关闭。
+          仅展示当前有权访问的人工跟进任务。自动化执行进度与回复结果，请分别查看自动化任务和回复记录。
         </p>
         {query.isPending ? (
           <Loading />

@@ -17,7 +17,7 @@ function ShellContent(){
  useEffect(()=>{if(previousLocation.current===location.key)return;previousLocation.current=location.key;const frame=requestAnimationFrame(()=>{if(document.activeElement===document.body)document.getElementById('workspace-main')?.focus({preventScroll:true});});return()=>cancelAnimationFrame(frame);},[location.key]);
  const spatial=isWorkPath(location.pathname)||location.pathname==='/home'||location.pathname==='/automation',module=new URLSearchParams(location.search).get('module');
  const phase=module==='follow'?'handoff':module||location.pathname!=='/work'?'review':'overview';
- return <AuroraMotionContext.Provider value={motion.reduced}><div className="space-shell" data-phase={phase}>
+ return <AuroraMotionContext.Provider value={motion.reduced}><div className="space-shell ui-workspace candidate-preview candidate-automation" data-phase={phase}>
  <a className="aurora-skip" href="#workspace-main">跳到工作内容</a>
  <header className="space-topbar app-topbar"><Link className="app-brand" to="/home"><Layers aria-hidden="true"/><span><strong>Social Lead</strong><small>轻序 · AI 辅助获客</small></span></Link><AppNavigation admin={user?.role==='ADMIN'} name={user?.name||''} motion={motion} loggingOut={logout.isPending} onLogout={async()=>{if(await confirmLeave())logout.mutate();}}/></header>
  <main id="workspace-main" tabIndex={-1} className={spatial?'space-page':'page space-document'} key={location.pathname.split('/')[1]}><ErrorNotice error={logout.error}/>{!spatial&&<Link className="back-to-space" to="/work">← 返回工作台</Link>}<Outlet/></main>

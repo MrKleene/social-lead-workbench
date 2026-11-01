@@ -4,8 +4,8 @@ import { useTasks } from "@/features/tasks/use-tasks";
 import { formatDate } from "@/lib/types";
 import { ErrorNotice } from "@/components/feedback";
 
-export function LeadOverview({ total, pending, following, loading }: {
-  total: number; pending: number; following: number; loading: boolean;
+export function LeadOverview({ total, pending, following, loading, error }: {
+  total: number; pending: number; following: number; loading: boolean; error?: boolean;
 }) {
   const { query } = useTasks();
   const tasks = (query.isError ? [] : query.data || []).filter(t => t.status === "PENDING")
@@ -22,8 +22,8 @@ export function LeadOverview({ total, pending, following, loading }: {
           ].map(({ label, value, icon: Icon, hint }, i) => (
             <section className={`metric metric-${i}`} key={label}>
               <div className="metric-top"><p>{label}</p><span className={`metric-icon tone-${i}`}><Icon size={17} /></span></div>
-              <strong>{loading ? "—" : value.toString().padStart(2, "0")}</strong>
-              <small>{hint}</small>
+              <strong>{error ? "—" : loading ? "—" : value.toString()}</strong>
+              <small>{error?"读取失败，请重试":hint}</small>
             </section>
           ))}
         </div>

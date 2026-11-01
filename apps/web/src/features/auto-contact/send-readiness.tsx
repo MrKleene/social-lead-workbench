@@ -1,7 +1,7 @@
 import { Disclosure } from '@/components/disclosure';
 import type {ContactAccount} from '@crm/contracts';
 const labels:Record<string,string>={RESTRICTED:'账号受限',VERIFY_REQUIRED:'平台要求验证',RATE_LIMITED:'平台频率限制',REPLY_DISABLED:'评论权限受限',UNKNOWN:'账号待核验'};
-export function SendReadiness(){return <div className="send-readiness" role="status"><span>识别已测 · 离线规则</span><span>持续自动发送未验收</span><span>账号受限或待核验</span><p>登录有效不等于允许发送。持续自动发送仍保持关闭；已执行的受控测试结果以“回复记录”页面为准。模拟结果不代表真实送达。</p></div>;}
+export function SendReadiness(){return <div className="send-readiness" role="status"><span>规则开关</span><span>账号资格</span><span>执行结果</span><p>分别查看下方当前规则与账号证据；登录有效不等于允许发送。已执行结果以“回复记录”为准，模拟结果不代表真实送达。</p></div>;}
 export function AccountSendEvidence({account}:{account:ContactAccount}){
  const e=account.sendEligibility;
  if(account.isDemo)return <p>模拟账号 · 不向平台发送</p>;

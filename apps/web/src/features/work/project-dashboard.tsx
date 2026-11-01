@@ -11,7 +11,7 @@ const time=(at:string)=>new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai
 const statuses:Record<string,string>={CONFIRMED:'平台已确认',UNKNOWN:'结果未知',FAILED:'失败',CANCELLED:'已取消',RESERVED:'已预占',ATTEMPTED:'待确认',COMPLETE:'采集结束',PARTIAL:'采集窗口结束',RUNNING:'采集中',QUEUED:'等待采集',PAUSED:'已暂停',STOPPED:'已停止'};
 export function ProjectDashboard(){
  const q=useProjectOverview(),d=q.data;
- return <section className="work-dashboard project-dashboard" aria-label="项目数据概览"><header className="dashboard-heading"><div><p className="eyebrow">项目概览</p><h1>工作台</h1><p>归档、评论匹配与发送结果，一处看清。</p></div><Button variant="outline" disabled={q.isFetching} onClick={()=>void q.refetch()}><RefreshCw size={15}/>刷新数据</Button></header>
+ return <section className="work-dashboard project-dashboard" aria-label="项目数据概览"><header className="dashboard-heading"><div><h1>项目概览</h1><p>归档、评论匹配与发送结果，一处看清。</p></div><Button variant="outline" disabled={q.isFetching} onClick={()=>void q.refetch()}><RefreshCw size={15}/>刷新数据</Button></header>
  <ErrorNotice error={q.error}/>{q.isPending?<div aria-label="正在读取项目数据" className="dashboard-loading"><Skeleton className="h-48"/><Skeleton className="h-32"/></div>:q.isError?<Card className="dashboard-empty"><h2>项目数据暂时无法读取</h2><p>请重新读取，未将缺失数据记为零。</p></Card>:d&&<ProjectData data={d}/>}
  </section>;
 }

@@ -1,12 +1,11 @@
 import { Link } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ShieldAlert, LockKeyhole, Unplug } from "lucide-react";
-import { api, send } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { ShieldAlert, Unplug } from "lucide-react";
+import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ErrorNotice, Loading } from "@/components/feedback";
-import { useAuth } from "@/features/auth/use-auth";
+
 type Data = {
   capabilities: {
     platform: string;
@@ -24,15 +23,9 @@ type Data = {
   }[];
 };
 export function PlatformsPage() {
-  const { user } = useAuth(),
-    client = useQueryClient();
   const query = useQuery({
     queryKey: ["platforms"],
     queryFn: () => api<Data>("/platforms"),
-  });
-  const pause = useMutation({
-    mutationFn: (id: string) => send(`/platforms/${id}/pause`, "POST", {}),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["platforms"] }),
   });
   return (
     <>
@@ -45,12 +38,12 @@ export function PlatformsPage() {
       </div>
       <Alert className="demo-notice">
         <ShieldAlert />
-        <AlertTitle>小红书只读采集已实现 · 外发与收信未验收</AlertTitle>
+        <AlertTitle>按能力与账号资格分别核验</AlertTitle>
         <AlertDescription>
-          已支持手动有限读取、保存原文与人工跟进。真实自动评论、私信发送与收信未验收，保持关闭；不代表完整获客流程已打通。受限账号不测试发送，不自动换号规避限制。
+          采集、自动回复与收信具有不同的能力和授权条件。请以自动化任务中的当前资格与执行结果为准；平台受限时不换号规避。
         </AlertDescription>
       </Alert>
-      <ErrorNotice error={query.error || pause.error} />
+      <ErrorNotice error={query.error} />
       {query.isPending ? (
         <Loading />
       ) : (
@@ -70,17 +63,7 @@ export function PlatformsPage() {
                 </div>
                 <h3>读取能力</h3>
                 <p>{cap.platform === "XHS" ? "支持手动有限搜索、帖子与评论读取、分块保存及符合条件的进度恢复。每次需确认账号与本机会话；不保证全量覆盖、规模或延迟。" : cap.read}</p>
-                <div className="disabled-features">
-                  {["自动评论", "私信发送", "收信与内嵌聊天"].map((feature) => (
-                    <div key={feature}>
-                      <span>{feature}</span>
-                      <Button size="sm" variant="outline" disabled>
-                        <LockKeyhole data-icon="inline-start" />
-                        未验收 · 关闭
-                      </Button>
-                    </div>
-                  ))}
-                </div>
+                <div className="disabled-features"><Link to="/auto-contact">查看自动回复的实时能力与资格 →</Link><p>收信与聊天能力需单独核验。</p></div>
                 <p className="capability-reason">{cap.platform === "XHS" ? "功能已实现不等于当前账号已核验、设备在线或读取成功。请到账号中心查看实际状态。" : cap.reason}</p>
               </section>
             ))}
@@ -109,15 +92,6 @@ export function PlatformsPage() {
                     }[account.status] || "状态待核对"
                   }
                 </Badge>
-                {user?.role === "ADMIN" && (
-                  <Button
-                    variant="outline"
-                    disabled={account.status === "PAUSED" || pause.isPending}
-                    onClick={() => pause.mutate(account.id)}
-                  >
-                    暂停
-                  </Button>
-                )}
               </div>
             ))}
           </section>

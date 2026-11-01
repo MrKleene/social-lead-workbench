@@ -5,6 +5,9 @@ import {ReplyHistoryPage} from '@/features/auto-contact/reply-history-page';
 import {AutoContactPage} from '@/features/auto-contact/auto-contact-page';
 import {CommentReviewPage} from '@/features/comment-review/comment-review-page';
 import React from "react";
+import {AutomationDesignPreview} from "@/features/design-preview/automation-design-preview";
+import {ComponentPreview} from "@/features/design-preview/component-preview";
+import {AccountDesignPreview} from "@/features/accounts/account-design-preview";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -23,7 +26,10 @@ import "./features/auth/login.css";
 import "./features/work/ui-consistency.css";
 import "./components/app-navigation/app-navigation.css";
 import "./features/work/simple.css";
+import "./features/design-preview/representatives.css";
+import "./design-system/foundation.css";
 
+const designPreview = import.meta.env.VITE_UI_DESIGN_PREVIEW === '1';
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 10000 } },
 });
@@ -40,6 +46,9 @@ function App() {
   if (!user) return <LoginPage />;
   return (
     <Routes>
+      {designPreview&&<Route path="/design-preview/automation" element={<AutomationDesignPreview/>}/>}
+      {designPreview&&<Route path="/design-preview/components" element={<ComponentPreview/>}/>}
+      {designPreview&&<Route path="/design-preview/accounts" element={<AccountDesignPreview/>}/>}
       <Route element={<AppShell />}>
         <Route path="/home" element={<HomePage />} />
         <Route path="/work/:id?" element={<WorkRoute />} />

@@ -38,7 +38,7 @@ export function RunPostStream({configId,run,visible,compact=false}:{configId:str
  if(feed.unsupported)return <p className="run-post-notice" role="status">逐篇明细需后台升级；本轮总进度仍可查看。</p>;
  if(data?.availability==='SUPERSEDED')return <p className="run-post-notice">旧任务未保留完整的逐篇快照，请从采集信息查看现存原文。</p>;
  return <section className="run-post-feed" aria-label="本轮帖子信息流">
-  <div className="run-post-feed-head"><span>已保存帖子 · {items.length} 篇</span><Button variant="ghost" size="content" onClick={()=>void feed.refetch()} className="info-text-action">刷新帖子</Button></div>
+  <div className="run-post-feed-head"><span>{!data&&feed.isError?'帖子数量读取失败':`已保存帖子 · ${items.length} 篇`}</span><Button variant="ghost" size="content" onClick={()=>void feed.refetch()} className="info-text-action">刷新帖子</Button></div>
   {feed.isError&&<Alert role="alert" className="run-post-notice"><AlertDescription>帖子明细读取失败，已有内容可能未更新。<Button variant="ghost" size="content" onClick={()=>void feed.refetch()}>重试</Button></AlertDescription></Alert>}
   {data?.limited&&<p className="run-post-notice">明细超出本次返回范围，数量暂不汇总。</p>}
   <div ref={viewport} tabIndex={0} role="region" aria-label="逐篇帖子列表" className="run-post-list" onScroll={e=>{const el=e.currentTarget;following.current=el.scrollHeight-el.clientHeight-el.scrollTop<64;if(following.current)setUnseen(false);}}>

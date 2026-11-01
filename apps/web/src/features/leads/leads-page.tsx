@@ -43,9 +43,9 @@ export function LeadsPage() {
         <Button variant="outline" asChild><Link to="/tasks"><ListChecks size={16} />查看任务</Link></Button>
       </div>
       <DemoNotice />
-      <LeadOverview total={state.total} pending={state.pending} following={state.following} loading={state.query.isPending} />
+      <LeadOverview total={state.total} pending={state.pending} following={state.following} loading={state.query.isPending} error={state.query.isError} />
       <section className="table-panel" aria-label="线索列表">
-        <div className="list-heading"><div><h2>全部线索 <span>{state.rows.length}</span></h2><p>需求、负责人和下一步，在这里有序流转。</p></div><Badge variant="secondary" className="list-scope"><SlidersHorizontal size={14} />灵活筛选</Badge></div>
+        <div className="list-heading"><div><h2>全部线索 <span>{state.query.isError?"读取失败":state.query.isPending?"—":state.rows.length}</span></h2><p>需求、负责人和下一步，在这里有序流转。</p></div><Badge variant="secondary" className="list-scope"><SlidersHorizontal size={14} />灵活筛选</Badge></div>
         <div className="list-controls">
         <div className="list-tabs">
           <SegmentedControl label="线索状态" value={state.status} onChange={state.setStatus} options={[
@@ -171,7 +171,7 @@ export function LeadsPage() {
             </Empty>
           )}
         <div className="table-footer">
-          <span role="status" aria-live="polite">共 {state.rows.length} 条 · 仅显示你有权访问的线索</span>
+          <span role="status" aria-live="polite">{state.query.isError?"数量读取失败":state.query.isPending?"正在读取":`共 ${state.rows.length} 条`} · 仅显示你有权访问的线索</span>
           <span>最多显示 500 条</span>
         </div>
       </section>

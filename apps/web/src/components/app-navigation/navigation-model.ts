@@ -1,13 +1,14 @@
 import {activeWorkModule,type SpaceModule} from '../../features/work/navigation-policy';
 export type NavigationItem={id:string;label:string;path:string;module?:SpaceModule;adminOnly?:boolean;group?:string};
 export const primaryNavigation:NavigationItem[]=[
- {id:'home',label:'首页',path:'/home'},
- {id:'overview',label:'工作台',path:'/work'},
- {id:'archive',label:'采集信息',path:'/work?module=archive',module:'archive',adminOnly:true},
+ {id:'home',label:'启动配置',path:'/home'},
+ {id:'overview',label:'项目概览',path:'/work'},
+ {id:'runs',label:'自动化任务',path:'/automation',module:'runs',adminOnly:true},
+ {id:'accounts',label:'账号中心',path:'/work?module=accounts',module:'accounts'},
  {id:'reply-history',label:'回复记录',path:'/reply-history',adminOnly:true},
 ];
 export const secondaryNavigation:NavigationItem[]=[
- {id:'runs',label:'自动化任务',path:'/automation',module:'runs',adminOnly:true,group:'工作管理'},
+ {id:'archive',label:'采集信息',path:'/work?module=archive',module:'archive',adminOnly:true,group:'工作管理'},
  {id:'review',label:'评论审核',path:'/comment-review',adminOnly:true,group:'工作管理'},
  {id:'auto-contact',label:'自动回复与账号矩阵',path:'/auto-contact',adminOnly:true,group:'工作管理'},
  {id:'matches',label:'线索池',path:'/work?module=matches',module:'matches',group:'工作管理'},
@@ -16,7 +17,6 @@ export const secondaryNavigation:NavigationItem[]=[
  {id:'tasks',label:'人工任务',path:'/tasks',group:'工作管理'},
  {id:'templates',label:'联系与回复',path:'/work?module=templates',module:'templates',adminOnly:true,group:'工作管理'},
  {id:'notices',label:'提醒与异常',path:'/work?module=notices',module:'notices',group:'工作管理'},
- {id:'accounts',label:'账号中心',path:'/work?module=accounts',module:'accounts',group:'设置'},
  {id:'settings',label:'搜索与模型',path:'/work?module=settings',module:'settings',adminOnly:true,group:'设置'},
  {id:'platforms',label:'平台能力',path:'/platforms',group:'设置'},
 ];
