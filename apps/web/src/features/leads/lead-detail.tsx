@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import {useConfirmWorkspaceLeave} from "@/features/work/draft-guard";
 import { useLead } from "./use-leads";
 import { DetailForms } from "./lead-detail-forms";
 import { useAuth } from "@/features/auth/use-auth";
@@ -9,6 +10,7 @@ import { platformLabel, statusLabel } from "@/lib/types";
 
 export function LeadDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const { user } = useAuth();
+  const confirmLeave = useConfirmWorkspaceLeave();
   const state = useLead(id, user?.role === "ADMIN");
   const [open, setOpen] = useState(true);
   const restoreFocus = useRef(document.activeElement);
@@ -22,7 +24,7 @@ export function LeadDetail({ id, onClose }: { id: string; onClose: () => void })
   }, [open, onClose]);
   const lead = state.query.data;
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={next => { if(next)setOpen(true);else void confirmLeave().then(ok=>{if(ok)setOpen(false);}); }}>
       <SheetContent className="detail-sheet" onCloseAutoFocus={event => {
         event.preventDefault();
         if (restoreFocus.current instanceof HTMLElement && restoreFocus.current.isConnected) restoreFocus.current.focus();

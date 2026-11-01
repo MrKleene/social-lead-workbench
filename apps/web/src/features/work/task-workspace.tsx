@@ -28,7 +28,7 @@ export function TaskWorkspace(props:Props) {
   const scope = s.run ? {runId:s.run.id, configId:config!.id,policyRevision:s.policyRevision} : undefined;
   return <section className="journey-workspace" aria-label="本轮工作">
     <header className="journey-heading"><div><p className="eyebrow">本轮工作 {s.run ? ` / ${new Date(s.run.createdAt).toLocaleString()}` : ''}</p><h1>自动化任务</h1></div>
-      <div className="journey-heading-tools"><Button className="candidate-settings-entry" onClick={()=>openSettings()}>自动化设置</Button><FormField className="journey-run-picker"><span>查看任务</span><SelectField aria-label="查看任务" value={s.run?.id ?? ''} onValueChange={e=>s.selectRun(e)}><SelectOption value="">新一轮 / 当前任务</SelectOption>{s.runs.map(r=><SelectOption value={r.id} key={r.id}>{new Date(r.createdAt).toLocaleString()} · {r.snapshot?.name || config?.name}</SelectOption>)}</SelectField></FormField><div className="journey-collection-actions" ref={setActionsHost} hidden={s.stage!=='collect'}/></div>
+      <div className="journey-heading-tools journey-start-tools"><div className="journey-collection-actions" ref={setActionsHost} hidden={s.stage!=='collect'}/><Button variant="outline" onClick={()=>openSettings('collect')}>采集设置</Button></div>
     </header>
     <nav className="journey-steps" aria-label="任务步骤">{journeyStages.map((step,i)=><Button variant="ghost" size="content" key={step.id} aria-current={s.stage===step.id?'step':undefined} onClick={()=>visit(step.id)}><span className="journey-number">0{i+1}</span><span><strong>{step.label}</strong><small>{s.statuses[i]}</small></span><span className="journey-dot"/></Button>)}</nav>
     <ErrorNotice error={s.detail.error||s.summary.error}/>

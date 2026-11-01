@@ -7,7 +7,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
       data-slot="table-container"
       tabIndex={0}
       role="region"
-      aria-label="线索表格，可左右滚动"
+      aria-label={`${props["aria-label"] || "数据表格"}，可左右滚动`}
       className="relative w-full overflow-x-auto"
     >
       <table

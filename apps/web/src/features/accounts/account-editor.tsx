@@ -7,6 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { User } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+import { ErrorNotice } from "@/components/feedback";
+import { Spinner } from "@/components/ui/spinner";
 import { useDraftGuard } from "@/features/work/draft-guard";
 import type { Account } from "./types";
 export function AccountEditor({
@@ -46,7 +48,6 @@ export function AccountEditor({
   };
   return (
     <form className="account-form" onSubmit={submit}><FieldGroup className="form-fields">
-      <h3>{account ? "账号设置" : "添加模拟账号"}</h3>
       <FormField>
         平台
         <SelectField
@@ -88,6 +89,7 @@ export function AccountEditor({
             ))}
         </SelectField>
       </FormField>
+      {users.isError&&<div className="account-owner-error"><ErrorNotice error={users.error}/><Button type="button" variant="outline" size="sm" onClick={()=>void users.refetch()}>重新读取负责人</Button></div>}
       <FormField>
         每日共用额度{account?.isDemo?'（UTC 演示）':'（北京时间）'}
         <Input
@@ -105,7 +107,7 @@ export function AccountEditor({
         评论与私信共用日额度。
       </p>
       <div className="action-row">
-        <Button disabled={pending || users.isError}>保存账号设置</Button>
+        <Button disabled={pending || users.isError}>{pending&&<Spinner/>}{pending?'保存中…':'保存账号设置'}</Button>
         {onArchive && (
           <Button
             type="button"

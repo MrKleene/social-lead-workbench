@@ -1235,8 +1235,8 @@ body { background: radial-gradient(ellipse at 78% 0%, #e3eafa 0, transparent 45%
 .filters { align-items: center; }
 :is(select, [data-slot=select-trigger]) { border-color: #e4e9f2; height: 36px; border-radius: 9px; font-size: 11px; background-color: #fbfcfe; }
 thead { background: #f8fafd; }
-th { color: #8593aa !important; font-size: 10px !important; height: 39px !important; }
-td, th { padding: 11px 19px !important; }
+th { color: var(--muted-foreground); font-size: 12px; height: 40px; }
+td, th { padding: 10px 12px; }
 .lead-row { height: 75px; transition: background-color .18s; }
 .lead-identity .avatar { width: 34px; height: 34px; border-radius: 11px; font-size: 12px; }
 .lead-name { font-size: 13px; font-weight: 550; }

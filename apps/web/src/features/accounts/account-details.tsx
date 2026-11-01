@@ -7,6 +7,8 @@ export function AccountDetails({account:a,status,admin}:{account:Account;status:
   <dt>平台账号 ID</dt><dd>{a.loginPlatformUserId||'尚未获取'}</dd>
   <dt>系统账号编号</dt><dd>{a.id}</dd>
   <dt>登录状态</dt><dd>{status?.login||'登录状态待核查'}</dd>
+  <dt>采集能力</dt><dd>{status?.collection||'尚未获取资格'}</dd>
+  <dt>回复能力</dt><dd>{status?.reply||'尚未获取资格'}</dd>
   <dt>上次登录核验</dt><dd>{verifiedAt?new Date(verifiedAt).toLocaleString():'尚无核验记录'}</dd>
   {admin&&<><dt>上次回复资格检查</dt><dd>{status?.checkedAt?new Date(status.checkedAt).toLocaleString():'尚无检查记录'}</dd></>}
   <dt>自动核验</dt><dd>采集启动和回复执行前，系统自动核验；历史检查不代表持续在线或保证可发送。</dd>

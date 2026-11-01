@@ -153,3 +153,10 @@ html[data-crm-reduced=true] [data-slot=sheet-content][data-layout=modal],html[da
 .automation-settings-sheet .automation-save-status{min-height:20px;flex:1;line-height:20px}
 .automation-settings-sheet[data-applying=true] :is([data-slot=button],[role=tab]):disabled{opacity:1;color:var(--muted-foreground)}
 .collection-start-scope{max-width:100%;overflow-wrap:anywhere;color:var(--muted-foreground);font-size:12px;line-height:1.5}
+
+/* The task header contains only the current collection action and settings. */
+:root .ui-workspace .journey-heading-tools.journey-start-tools{display:flex;align-items:center;justify-content:flex-end;gap:12px;max-width:none}
+:root .ui-workspace .journey-start-tools .collection-toolbar{margin:0;padding:0;gap:0}
+:root .ui-workspace .journey-start-tools .task-actions{margin:0}
+:root .ui-workspace .journey-start-tools .journey-collection-actions{width:auto}
+@media(max-width:760px){:root .ui-workspace .journey-heading-tools.journey-start-tools{justify-content:flex-start;gap:10px}:root .ui-workspace .journey-start-tools .collection-toolbar>.task-actions{margin-left:0}}

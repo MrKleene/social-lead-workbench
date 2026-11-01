@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldAlert, Unplug } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { api } from "@/lib/api";
+import {Table,TableHeader,TableHead,TableBody,TableRow,TableCell} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ErrorNotice, Loading } from "@/components/feedback";
@@ -48,52 +49,14 @@ export function PlatformsPage() {
         <Loading />
       ) : (
         <>
-          <div className="platform-grid">
-            {query.data?.capabilities.map((cap) => (
-              <section className="capability-card" key={cap.platform}>
-                <div className="capability-head">
-                  <span className="capability-icon">
-                    <Unplug />
-                  </span>
-                  <div>
-                    <h2>{cap.name}</h2>
-                    <p>{cap.platform === "XHS" ? "只读功能已实现" : cap.status}</p>
-                  </div>
-                  <Badge variant="outline">{cap.platform === "XHS" ? "使用前需核验账号" : cap.platform === "DOUYIN" ? "读取适配器未实现" : "能力以验证结果为准"}</Badge>
-                </div>
-                <h3>读取能力</h3>
-                <p>{cap.platform === "XHS" ? "支持手动有限搜索、帖子与评论读取、分块保存及符合条件的进度恢复。每次需确认账号与本机会话；不保证全量覆盖、规模或延迟。" : cap.read}</p>
-                <div className="disabled-features"><Link to="/auto-contact">查看自动回复的实时能力与资格 →</Link><p>收信与聊天能力需单独核验。</p></div>
-                <p className="capability-reason">{cap.platform === "XHS" ? "功能已实现不等于当前账号已核验、设备在线或读取成功。请到账号中心查看实际状态。" : cap.reason}</p>
-              </section>
-            ))}
-          </div>
+          <section className="table-panel graphite-platform-panel"><h2>接入与读取能力</h2><Table className="graphite-platform-table" aria-label="平台接入与读取能力"><TableHeader><TableRow><TableHead>平台</TableHead><TableHead>接入状态</TableHead><TableHead>已实现读取范围</TableHead><TableHead>当前限制</TableHead><TableHead>入口</TableHead></TableRow></TableHeader><TableBody>{query.data?.capabilities.map(cap=><TableRow key={cap.platform}><TableCell><strong>{cap.name}</strong></TableCell><TableCell data-label="接入状态"><Badge variant="secondary">{cap.platform==='XHS'?'只读功能已实现':cap.platform==='DOUYIN'?'读取适配器未实现':cap.status}</Badge></TableCell><TableCell data-label="读取范围">{cap.platform==='XHS'?'有限搜索、帖子与评论读取、分块保存及符合条件的进度恢复。':cap.read}</TableCell><TableCell data-label="当前限制">{cap.platform==='XHS'?'执行前核验账号、设备与授权；读取覆盖以实际结果为准。':cap.reason}</TableCell><TableCell><Link to="/auto-contact">查看回复能力与资格 →</Link></TableCell></TableRow>)}</TableBody></Table></section>
           <section className="task-panel">
             <div className="section-title">
               <h2>账号记录</h2>
               <Badge variant="secondary">记录状态与会话核验分开</Badge>
             </div>
             <p className="helper-text">本页记录状态不代表本机会话有效。<Link to="/work?module=accounts">前往账号中心核验</Link></p>
-            {query.data?.accounts.map((account) => (
-              <div className="account-row" key={account.id}>
-                <div>
-                  <strong>{account.label}</strong>
-                  <p>
-                    {account.isDemo === true ? "模拟账号；不代表真实平台连接。" : account.isDemo === false ? "非模拟账号记录；会话是否有效需另行核验。" : "账号来源未标明；请到账号中心核对。"}
-                    {account.pauseReason && ` 已有状态备注：${account.pauseReason}`}
-                  </p>
-                </div>
-                <Badge variant="outline">
-                  {
-                    {
-                      UNCONNECTED: "未连接",
-                      RESTRICTED: "受限",
-                      PAUSED: "已暂停",
-                    }[account.status] || "状态待核对"
-                  }
-                </Badge>
-              </div>
-            ))}
+            <Table className="graphite-platform-table" aria-label="平台账号记录"><TableHeader><TableRow><TableHead>账号</TableHead><TableHead>来源</TableHead><TableHead>记录状态</TableHead><TableHead>状态备注</TableHead><TableHead>详情</TableHead></TableRow></TableHeader><TableBody>{query.data?.accounts.map(account=><TableRow key={account.id}><TableCell><strong>{account.label}</strong></TableCell><TableCell data-label="来源">{account.isDemo===true?'模拟账号':account.isDemo===false?'非模拟记录':'来源待核对'}</TableCell><TableCell data-label="记录状态"><Badge variant="outline">{{UNCONNECTED:'未连接',RESTRICTED:'受限',PAUSED:'已暂停'}[account.status]||'状态待核对'}</Badge></TableCell><TableCell data-label="状态备注">{account.pauseReason||'—'}</TableCell><TableCell><Link to="/work?module=accounts">账号中心 →</Link></TableCell></TableRow>)}</TableBody></Table>
           </section>
         </>
       )}

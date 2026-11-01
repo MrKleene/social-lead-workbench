@@ -1,3 +1,4 @@
+import {Table,TableHeader,TableHead,TableBody,TableRow,TableCell} from '@/components/ui/table';
 import { Empty } from '@/components/ui/empty';
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -37,34 +38,20 @@ export function TasksPage() {
           <Loading />
         ) : (
           !query.isError &&
-          rows.map((task) => (
-            <article
-              key={task.id}
-              className={`task-row ${task.status === "DONE" ? "task-done" : ""}`}
-            >
-              <span className="task-icon">
-                <ListChecks size={21} />
-              </span>
-              <div className="task-main">
-                <h3>{task.title}</h3>
-                <p>
-                  <Link to={`/leads/${task.lead.id}`}>
-                    {task.lead.identity.nickname}
-                  </Link>
-                  <span>·</span>
-                  {task.lead.owner?.name || "未分配"}
-                  <span>·</span>
-                  {formatDate(task.dueAt)}
-                </p>
-              </div>
+          <Table className="graphite-task-table" aria-label="人工任务"><TableHeader><TableRow><TableHead>任务</TableHead><TableHead>关联线索</TableHead><TableHead>负责人</TableHead><TableHead>到期时间</TableHead><TableHead>状态</TableHead><TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{rows.map((task) => (
+            <TableRow key={task.id} className={task.status === "DONE" ? "task-done" : ""}>
+              <TableCell data-label="任务" className="task-title-cell"><strong>{task.title}</strong></TableCell>
+              <TableCell data-label="关联线索"><Link to={`/leads/${task.lead.id}`}>{task.lead.identity.nickname}</Link></TableCell>
+              <TableCell data-label="负责人">{task.lead.owner?.name||'未分配'}</TableCell>
+              <TableCell data-label="到期">{formatDate(task.dueAt)}</TableCell><TableCell data-label="状态">
               <Badge variant="outline">
                 {
                   { PENDING: "待处理", DONE: "已完成", PAUSED: "已暂停" }[
                     task.status
                   ]
                 }
-              </Badge>
-              <div className="task-actions">
+              </Badge></TableCell>
+              <TableCell><div className="graphite-task-actions">
                 {task.status !== "DONE" && (
                   <Button
                     size="sm"
@@ -94,9 +81,9 @@ export function TasksPage() {
                 >
                   {task.status === "PENDING" ? <Pause /> : <RotateCcw />}
                 </Button>
-              </div>
-            </article>
-          ))
+              </div></TableCell>
+            </TableRow>
+          ))}</TableBody></Table>
         )}
         {!query.isPending && !query.isError && rows.length === 0 && (
           <Empty className="empty-state">

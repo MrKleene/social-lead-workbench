@@ -82,7 +82,7 @@ export function LeadsPage() {
         {state.query.isPending ? (
           <Loading />
         ) : (
-          <Table>
+          <Table className="graphite-all-leads" aria-label="全部线索">
             <TableHeader>
               <TableRow>
                 <TableHead>线索</TableHead>
@@ -102,7 +102,7 @@ export function LeadsPage() {
                   key={lead.id}
                   className="lead-row"
                 >
-                  <TableCell>
+                  <TableCell className="all-lead-identity">
                     <div className="lead-identity">
                       <span className={`avatar tone-${i % 3}`}>
                         {lead.identity.nickname.slice(0, 1)}
@@ -118,7 +118,7 @@ export function LeadsPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="来源平台">
                     <Badge
                       variant="secondary"
                       className={`platform-${lead.identity.platform}`}
@@ -126,15 +126,15 @@ export function LeadsPage() {
                       {platformLabel[lead.identity.platform]}
                     </Badge>
                   </TableCell>
-                  <TableCell className="evidence-cell" title={lead.evidence}>
+                  <TableCell data-label="需求依据" className="evidence-cell" title={lead.evidence}>
                     {lead.evidence}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="负责人">
                     <span className={lead.owner ? "" : "muted"}>
                       {lead.owner?.name || "未分配"}
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="状态">
                     <Badge
                       variant="outline"
                       className={`status-${lead.status}`}
@@ -143,7 +143,7 @@ export function LeadsPage() {
                       {statusLabel[lead.status]}
                     </Badge>
                   </TableCell>
-                  <TableCell className="date-cell">
+                  <TableCell data-label="下次跟进" className="date-cell">
                     {formatDate(lead.nextFollowUpAt)}
                   </TableCell>
                   <TableCell>

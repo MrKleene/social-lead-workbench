@@ -11,7 +11,7 @@ import {useAccountScreen} from './use-account-screen';
 import {AccountDetails} from './account-details';
 import {SettingsLoading} from '@/features/work/settings-loading';
 import {accountStatusView} from './account-status';
-import {hasSavedLogin,canRecover} from './account-presentation';
+import {hasSavedLogin,canRecover,accountName} from './account-presentation';
 import {loginAvailabilityText} from './login-availability';
 import './accounts.css';
 import {AccountWorkspace} from './account-workspace';
@@ -24,6 +24,7 @@ export function AccountsPage(){
  return <section className="account-center account-candidate">
   <AccountWorkspace screen={s}/>
   <Sheet open={!!s.panel} onOpenChange={v=>{if(!v)s.close();}}><SheetContent className="account-sheet" closeDisabled={s.state.mutation.isPending} onCloseAutoFocus={e=>{e.preventDefault();s.returnFocus.current?.focus();}}><SheetHeader><SheetTitle>{s.panel?titles[s.panel]:''}</SheetTitle><SheetDescription className={s.panel==='login'||s.panel==='recover'?undefined:'sr-only'}>{s.panel==='login'?'本人扫码确认，不自动采集或发送。':s.panel==='recover'?'可选检查，仅核对登录与身份，不采集、不发送。':s.panel==='details'?'历史核验与额度说明。':'按需设置，不影响已保存的业务记录。'}</SheetDescription></SheetHeader><div className="account-sheet-body" aria-busy={s.state.mutation.isPending}><SettingsLoading busy={s.state.mutation.isPending}/>
+   {dialog&&s.panel!=='device'&&s.panel!=='simulation'&&<div className="account-dialog-identity"><strong>{accountName(dialog)}</strong><span>{dialog.platform==='XHS'?'小红书':'抖音'}{dialog.isDemo?' · 模拟账号':''}</span></div>}
    {s.panel==='details'&&dialog&&<><AccountDetails account={dialog} status={status} admin={s.admin}/>{s.admin&&ready&&!status?.issue&&dialog.status!=='RESTRICTED'&&<div className="account-login-actions">{hasSavedLogin(dialog)?canRecover(dialog)?<Button variant="outline" onClick={()=>s.open('recover',dialog)}>手动检查登录</Button>:<Button variant="outline" onClick={()=>s.open('settings',dialog)}>查看恢复信息</Button>:dialog.platform==='XHS'&&<Button onClick={()=>s.open('login',dialog)}>扫码登录</Button>}{hasSavedLogin(dialog)&&dialog.platform==='XHS'&&dialog.loginStatus!=='DEVICE_MISMATCH'&&s.caps.data?.sessionReplacement&&<Button variant="outline" onClick={()=>s.open('login',dialog)}>重新扫码</Button>}</div>}</>}
    {s.admin&&s.panel==='login'&&dialog&&(ready&&s.caps.data?<AccountLoginPanel key={dialog.id} accountId={dialog.id} replacement={hasSavedLogin(dialog)} capabilities={s.caps.data} onDone={s.finish}/>:<Alert role="alert"><AlertDescription>{loginAvailabilityText[s.availability]}</AlertDescription></Alert>)}
    {s.admin&&s.panel==='recover'&&dialog&&(ready?<SavedSessionPanel key={dialog.id} account={dialog}/>:<Alert role="alert"><AlertDescription>{loginAvailabilityText[s.availability]}</AlertDescription></Alert>)}

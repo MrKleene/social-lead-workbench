@@ -1,6 +1,5 @@
 import {useNavigate} from 'react-router-dom';
 import {createPortal} from 'react-dom';
-import {Disclosure} from '@/components/disclosure';
 import {useAutomationPreferences} from './settings-data';
 import {automationIssue} from './automation-validation';
 import {useWorkspaceAutomation} from './workspace-automation';
@@ -8,7 +7,6 @@ import {useQueryClient} from '@tanstack/react-query';
 import {api} from '@/lib/api';
 import type {AutoContactOverview,ReviewOverview} from '@crm/contracts';
 import type {Preferences} from './settings-data';
-import {accountOptionName} from '@/features/accounts/account-presentation';
 import {useSessionPreflight} from './use-session-preflight';
 import {useCollectionTaskSession} from './use-collection-task-session';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
@@ -19,7 +17,6 @@ import {useMcpReadiness,useWorkspaceMutation} from '@/features/collection/use-co
 import {collectionStartRequest,sameCollectionSetup} from './collection-start-request';
 import {type Config,type McpReadiness} from '@/features/collection/types';
 import {collectionPreflight,preflightText} from './collection-preflight';
-import {runFinished} from './collection-progress';
 import {CollectionProgressFeed} from './collection-progress-feed';
 const hints={keywords:'先添加搜索关键词',account:'请登录或恢复一个可用账号',device:'请恢复执行设备连接',paused:'此配置已暂停，请检查设置',backoff:'暂时无法继续，请等待后重试',unavailable:'采集服务未就绪，请检查账号与设置'};
 export function CollectionFlow({configs,loading,error,visible,workspaceVisible=visible,initialId,onAccounts,onSettings,onResults,onSelect,onRunSelect,actionsHost}:{actionsHost?:HTMLElement|null;configs:Config[];loading:boolean;error?:unknown;visible:boolean;workspaceVisible?:boolean;initialId?:string;onAccounts:()=>void;onSettings:()=>void;onResults:()=>void;onSelect:(id:string)=>void;onRunSelect?:(id:string)=>void}){
@@ -42,11 +39,8 @@ export function CollectionFlow({configs,loading,error,visible,workspaceVisible=v
  useEffect(()=>{setLaunchError(null);setUncertain(false);},[visible,selected?.id]);
  const status=baseStatus==='ready'&&selected?.mode!=='MOCK'&&loginCheck.supported&&!loginCheck.candidate?.eligible?'account':baseStatus;
  // Persisted configuration is authoritative for new tasks; history keeps its own readPlan.
- const posts=selected?.batchLimit??1;
  const active=!!session.activeId;
- const finished=!active&&!!session.currentRun&&runFinished(session.currentRun);
  const openSettings=()=>showSettings('collect');
- const selectedAccount=readiness.data?.accounts?.find(a=>a.id===selected?.defaultExecutionAccountId);
  // Only an explicit click authorizes one bounded run. No mount/effect starts work.
  const begin=async()=>{
   if(submitting.current||uncertain||!visible||status!=='ready'||!selected||unavailable||session.pending||mutation.isPending)return;
@@ -83,9 +77,9 @@ export function CollectionFlow({configs,loading,error,visible,workspaceVisible=v
   }catch(error){if(current())setLaunchError(error instanceof Error?error:new Error('启动失败，请检查后重试。'));}
   finally{submitting.current=false;setStarting(false);}
  };
- const taskActions=<> {loginCheck.working?<p role="status">正在检查账号登录，不会启动采集…</p>:active?<Button variant="outline" disabled={mutation.isPending} onClick={()=>mutation.mutate({path:`/collection/runs/${session.activeId}/pause`})}><Square size={15}/>停止采集</Button>:unavailable||session.pending||uncertain?<><p role="status">{uncertain?'提交结果尚未确认，请重新读取任务':unavailable?'暂时无法确认任务状态':'正在确认本次任务'}</p><Button variant="outline" onClick={()=>void session.refresh().then(()=>setUncertain(false))}>重新读取任务</Button></>:nextConfig&&nextConfig.id!==selected?.id?<Button onClick={()=>navigate('/automation?'+new URLSearchParams({stage:'collect',fresh:'1',config:nextConfig.id}))}>使用已选关键词组开始新一轮 · {nextConfig.name}</Button>:status==='backoff'?<p role="status">请稍候，{new Date(selected.nextAllowedAt!).toLocaleTimeString()} 后可重试。</p>:status==='ready'?<><small className="collection-start-scope">{selected?.mode==='MOCK'?'模拟采集':selectedAccount?accountOptionName(selectedAccount,readiness.data?.accounts):''} · 最多 {posts} 篇 · 仅本轮</small><Button variant={finished?'outline':'default'} disabled={starting||mutation.isPending||loginCheck.working} onClick={()=>void begin()}><Play size={16}/>{starting||mutation.isPending?'正在提交…':'开始采集'}</Button></>:<><p role="status">{status==='account'&&loginCheck.supported?loginCheck.message:hints[status as keyof typeof hints]||'请检查当前任务状态'}{status==='account'&&loginCheck.retryAt&&<> · {new Date(loginCheck.retryAt).toLocaleTimeString()} 后可重试</>}</p>{status==='account'&&<Button onClick={openSettings}>设置采集账号</Button>}<Button variant={status==='account'&&loginCheck.supported?'ghost':'default'} onClick={status==='account'||status==='device'?onAccounts:status==='paused'?onSettings:openSettings}>{status==='account'||status==='device'?'前往账号中心':status==='keywords'?'配置关键词':'检查设置'}</Button></>} </>;
+ const taskActions=<> {loginCheck.working?<p role="status">正在检查账号登录，不会启动采集…</p>:active?<Button variant="outline" disabled={mutation.isPending} onClick={()=>mutation.mutate({path:`/collection/runs/${session.activeId}/pause`})}><Square size={15}/>停止采集</Button>:unavailable||session.pending||uncertain?<><p role="status">{uncertain?'提交结果尚未确认，请重新读取任务':unavailable?'暂时无法确认任务状态':'正在确认本次任务'}</p><Button variant="outline" onClick={()=>void session.refresh().then(()=>setUncertain(false))}>重新读取任务</Button></>:nextConfig&&nextConfig.id!==selected?.id?<Button onClick={()=>navigate('/automation?'+new URLSearchParams({stage:'collect',fresh:'1',config:nextConfig.id}))}>使用已选关键词组开始新一轮 · {nextConfig.name}</Button>:status==='backoff'?<p role="status">请稍候，{new Date(selected.nextAllowedAt!).toLocaleTimeString()} 后可重试。</p>:status==='ready'?<><Button disabled={starting||mutation.isPending||loginCheck.working} onClick={()=>void begin()}><Play size={16}/>{starting||mutation.isPending?'正在提交…':'开始采集'}</Button></>:<><p role="status">{status==='account'&&loginCheck.supported?loginCheck.message:hints[status as keyof typeof hints]||'请检查当前任务状态'}{status==='account'&&loginCheck.retryAt&&<> · {new Date(loginCheck.retryAt).toLocaleTimeString()} 后可重试</>}</p>{status==='account'&&<Button onClick={openSettings}>设置采集账号</Button>}<Button variant={status==='account'&&loginCheck.supported?'ghost':'default'} onClick={status==='account'||status==='device'?onAccounts:status==='paused'?onSettings:openSettings}>{status==='account'||status==='device'?'前往账号中心':status==='keywords'?'配置关键词':'检查设置'}</Button></>} </>;
  if(status==='loading'&&!starting)return <Loading/>;
- const toolbar=<div className="collection-toolbar" role="group" aria-label="采集操作">{!session.currentRun&&!actionsHost&&<Button variant="ghost" onClick={openSettings}><Settings2 size={16}/>自动化设置</Button>}<div className="task-actions">{finished&&!unavailable&&!session.pending?<Button variant="outline" onClick={onResults}>查看采集信息</Button>:taskActions}</div>{finished&&!unavailable&&!session.pending&&<Disclosure className="collection-next-run" title="新一轮采集"><div className="task-actions">{taskActions}</div></Disclosure>}</div>;
+ const toolbar=<div className="collection-toolbar" role="group" aria-label="采集操作"><div className="task-actions">{taskActions}</div>{!actionsHost&&<Button variant="outline" onClick={openSettings}><Settings2 size={16}/>采集设置</Button>}</div>;
  return <section className="collection-flow task-room">{actionsHost?createPortal(toolbar,actionsHost):toolbar}
  <ErrorNotice error={unavailable||launchError||mutation.error||loginCheck.error}/>
 

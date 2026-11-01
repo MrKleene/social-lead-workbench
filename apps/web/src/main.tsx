@@ -26,7 +26,7 @@ import "./features/auth/login.css";
 import "./features/work/ui-consistency.css";
 import "./components/app-navigation/app-navigation.css";
 import "./features/work/simple.css";
-import "./features/design-preview/representatives.css";
+
 import "./design-system/foundation.css";
 
 const designPreview = import.meta.env.VITE_UI_DESIGN_PREVIEW === '1';

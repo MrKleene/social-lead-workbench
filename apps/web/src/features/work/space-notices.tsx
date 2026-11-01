@@ -5,7 +5,7 @@ import { reasonLabels, runLabels } from '@/features/collection/types';
 import type { SpatialState } from './use-spatial-work';
 export function SpaceNotices({state:s}:{state:SpatialState}) {
  const notices=s.work.notices,configs=s.work.configs;
- return <section className="notification-workspace"><header className="page-heading"><div><h1>提醒与异常</h1><p>查看新增线索和需要处理的采集异常。</p></div></header><div className="space-notices glass-panel">
+ return <section className="notification-workspace"><header className="page-heading"><div><h1>提醒与异常</h1></div></header><div className="space-notices glass-panel">
   <h2>未读提醒 · {notices.isError?'读取失败':notices.isPending?'正在读取':s.unread.length}</h2>
   <ErrorNotice error={notices.error}/>
   {notices.isPending?<Loading/>:notices.isError?<Button variant="outline" onClick={()=>void notices.refetch()}>重试读取提醒</Button>:s.unread.length?s.unread.map(n=><article key={n.id}><Button variant="ghost" size="content" onClick={()=>s.openLead(n.lead.id)}><strong>{n.lead.identity.nickname}</strong><p>{n.title}</p><span>打开来源与处理 →</span></Button><Button variant="ghost" size="sm" disabled={s.work.mutation.isPending} onClick={()=>s.work.mutation.mutate({path:`/notices/${n.id}/read`})}>标为已读</Button></article>):<p>暂无未读提醒。</p>}

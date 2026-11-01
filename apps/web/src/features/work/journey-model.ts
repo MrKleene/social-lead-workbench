@@ -2,7 +2,7 @@ import type {Config, Run} from '@/features/collection/types';
 
 export const journeyStages = [
   {id: 'collect', label: '采集', description: '发现帖子，保存评论与回复'},
-  {id: 'review', label: 'LLM 评论匹配', description: '判断需求，保留原文证据'},
+  {id: 'review', label: '评论匹配', description: '判断需求，保留原文证据'},
   {id: 'contact', label: '自动回复', description: '按已授权规则处理匹配评论'},
 ] as const;
 export type JourneyStage = typeof journeyStages[number]['id'];
