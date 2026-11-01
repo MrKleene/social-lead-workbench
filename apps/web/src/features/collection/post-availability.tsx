@@ -6,13 +6,14 @@ import { SelectField, SelectOption } from '@/components/select-field';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import {useRef,useState} from 'react';
-import {postStateLabels,postReasonLabels,unknownPostAvailability,type PostAvailabilityView} from '@crm/contracts';
+import {postReasonLabels,unknownPostAvailability,type PostAvailabilityView} from '@crm/contracts';
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import {Button} from '@/components/ui/button';
 import {ErrorNotice,Loading} from '@/components/feedback';
 import {usePostAvailability} from './use-post-availability';
 import './post-availability.css';
-export function PostStateTag({value=unknownPostAvailability}:{value?:PostAvailabilityView}){return <Tooltip><TooltipTrigger asChild><Badge variant="outline" className="post-state-tag" data-state={value.state}>{postStateLabels[value.state]??'待检查'}</Badge></TooltipTrigger><TooltipContent>{postReasonLabels[value.reason]??value.reason} · {value.checkedAt?new Date(value.checkedAt).toLocaleString():'从未检查'}</TooltipContent></Tooltip>;}
+import {postAccessLabel} from './post-reading-labels';
+export function PostStateTag({value=unknownPostAvailability}:{value?:PostAvailabilityView}){return <Tooltip><TooltipTrigger asChild><Badge variant="outline" className="post-state-tag" data-state={value.state}>{postAccessLabel(value.state)}</Badge></TooltipTrigger><TooltipContent>{postReasonLabels[value.reason]??value.reason} · {value.checkedAt?new Date(value.checkedAt).toLocaleString():'从未检查'}</TooltipContent></Tooltip>;}
 export function PostStateEvidence({value=unknownPostAvailability}:{value?:PostAvailabilityView}){const note=value.evidence&&typeof value.evidence==='object'&&'note' in value.evidence?value.evidence.note:undefined;return <div className="post-state-evidence"><PostStateTag value={value}/><p>{postReasonLabels[value.reason]??value.reason}</p><small>最后检查：{value.checkedAt?new Date(value.checkedAt).toLocaleString():'从未检查'} · v{value.version} · {value.source==='MANUAL'?'管理员记录':value.source??'无证据来源'}</small><p>状态仅代表最后一次检查，历史原文与联系记录继续保留。</p>{typeof note==='string'&&<p>{note}</p>}</div>;}
 export function PostAvailabilityEntry({id,value}:{id:string;value?:PostAvailabilityView}){
  const [open,setOpen]=useState(false),trigger=useRef<HTMLButtonElement>(null),s=usePostAvailability(id,open),busy=s.save.isPending||s.recheck.isPending;

@@ -7,7 +7,8 @@ import {postCounts} from './post-counts';
 import {BoundedReadEvidence,BoundedReadWindows} from './bounded-read-evidence';
 import {savedTitleLabel} from '@/features/collection/saved-text';
 import {useEffect,useRef,useState,type KeyboardEvent,type ReactNode} from 'react';
-import {ArrowLeft,ArrowUpRight} from 'lucide-react';
+import {ArrowLeft,ArrowUpRight,FileSearch,RefreshCw} from 'lucide-react';
+import './post-reader.css';
 import {safePostCoverUrl} from '@crm/contracts';
 import {Button} from '@/components/ui/button';
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
@@ -32,14 +33,17 @@ export function CollectionPostDetail({configId,post,id,readAction,platform,onBac
  const paneKeys=(event:KeyboardEvent<HTMLDivElement>)=>{if(event.target!==event.currentTarget||event.altKey||event.ctrlKey||event.metaKey||getComputedStyle(event.currentTarget).overflowY!=='auto'||!['Home','End'].includes(event.key))return;event.preventDefault();event.currentTarget.scrollTo({top:event.key==='Home'?0:event.currentTarget.scrollHeight,behavior:'instant'});};
  const openEvidence=(value:ArchivedComment|'post',target:HTMLButtonElement)=>{returnFocus.current=target;setEvidence(value);};
  return <section className="info-post-detail" aria-label="帖子评论详情">
-  <div className="info-detail-bar"><Button variant="ghost" size="content" onClick={onBack}><ArrowLeft size={15}/>返回帖子列表</Button><div className="info-detail-actions"><Button variant="ghost" size="content" className="info-text-action" onClick={e=>openEvidence('post',e.currentTarget)}>来源与证据</Button><Button variant="ghost" size="content" onClick={()=>{setRefreshVersion(v=>v+1);onRefresh();}}>刷新</Button></div></div>
-  <header className="mist-detail-heading"><div><h2 ref={heading} tabIndex={-1}>{savedTitleLabel(post?.title)}</h2><div className="info-story-meta">{original&&<PostAvailabilityEntry id={original.id} value={original.availability}/>}<span data-warning={reading.warning}>{reading.label}</span><span>{platformLabel[platform]} · 已保存原文</span>{(publication||post?.lastSeenAt)&&<time dateTime={publication||post?.lastSeenAt}>{publication?'发布于':'采集于'} {readingTime(publication||post!.lastSeenAt)} · 北京时间</time>}</div></div><div className="info-original-action">{readAction}{sourceLink?<a className="info-original-link" href={sourceLink} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">查看原文<ArrowUpRight size={14}/></a>:<small>未保存有效原文链接</small>}{sourceLink&&<small>可能需登录或访问受限</small>}</div></header>
+  <div className="info-detail-bar"><Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft data-icon="inline-start"/>返回列表</Button><div className="info-detail-actions"><Button variant="outline" size="sm" onClick={e=>openEvidence('post',e.currentTarget)}><FileSearch data-icon="inline-start"/>来源与证据</Button><Button variant="outline" size="sm" onClick={()=>{setRefreshVersion(v=>v+1);onRefresh();}}><RefreshCw data-icon="inline-start"/>刷新</Button></div></div>
   <div className="info-detail-grid"><aside className="info-story" tabIndex={0} role="region" aria-label="帖子内容阅读区" onKeyDown={paneKeys}>
-   <h3 className="info-story-title">原帖内容</h3>
+   <header className="info-story-heading"><h2 ref={heading} tabIndex={-1}>{savedTitleLabel(post?.title)}</h2>
+    <div className="info-post-author">{(original?.snapshot.authorNickname||original?.snapshot.authorAvatarUrl)&&<><SavedAvatar url={original.snapshot.authorAvatarUrl}/><span>{displayNickname(original.snapshot.authorNickname)||'昵称未采集'}</span></>}<span>{platformLabel[platform]}</span></div>
+    {(publication||post?.lastSeenAt)&&<time className="info-publication" dateTime={publication||post?.lastSeenAt}>{publication?'发布于':'采集于'} {readingTime(publication||post!.lastSeenAt)} · 北京时间</time>}
+    <div className="info-story-meta">{original&&<PostAvailabilityEntry id={original.id} value={original.availability}/>}<span data-warning={reading.warning}>{reading.label}</span></div>
+    <div className="info-original-action">{readAction}{sourceLink?<Button asChild variant="outline" size="sm"><a href={sourceLink} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" title="打开平台原文，可能需要登录或受访问限制">查看原文<ArrowUpRight data-icon="inline-end"/></a></Button>:<small>未保存有效原文链接</small>}</div>
+   </header>
    <div className="info-story-scroll" data-media={!!cover&&failedCover!==cover}>
    {cover&&failedCover!==cover&&<img className="info-detail-cover" src={cover} alt="帖子封面" loading="lazy" decoding="async" crossOrigin="anonymous" referrerPolicy="no-referrer" onError={()=>setFailedCover(cover)}/>}
    {cover&&failedCover===cover&&<small className="info-saved-time">封面暂不可用</small>}
-   {(original?.snapshot.authorNickname||original?.snapshot.authorAvatarUrl)&&<div className="info-post-author"><SavedAvatar url={original.snapshot.authorAvatarUrl}/><span>{displayNickname(original.snapshot.authorNickname)||'昵称未采集'}</span></div>}
    <div className="info-story-body" onKeyDown={paneKeys} role="region" aria-label="帖子正文阅读区" tabIndex={0}>{typeof original?.snapshot.body==='string'?<SavedText key={original.id} text={savedSourceText(original.snapshot.body)} limit={400} label="帖子正文"/>:<p className="info-muted">{original?'帖子正文未获取。':'当前返回内容没有独立帖子原文，可在评论证据中查看已保存上下文。'}</p>}</div>
    </div>
   </aside>

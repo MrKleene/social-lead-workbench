@@ -15,9 +15,9 @@ import type {Config} from './types';
 export function SavedPostRead({config,savedPostId,title,sourceAvailable}:{config:Config;savedPostId:string;title:string;sourceAvailable:boolean}){
  const [open,setOpen]=useState(false),[runId,setRunId]=useState(''),trigger=useRef<HTMLButtonElement>(null);
  const state=useSavedPostRead(config,savedPostId,open,id=>{setRunId(id);setOpen(false);});
- return <><Button ref={trigger} variant="outline" disabled={!sourceAvailable} onClick={()=>{state.reset();setOpen(true);}}>重新读取此帖</Button>{!sourceAvailable&&<small>需有效原文引用</small>}{runId&&<p role="status">本帖读取已提交，<Link to="/work?module=runs">查看采集进度</Link></p>}
+ return <><Button ref={trigger} variant="outline" size="sm" disabled={!sourceAvailable} onClick={()=>{state.reset();setOpen(true);}}>重新读取此帖</Button>{!sourceAvailable&&<small>需有效原文引用</small>}{runId&&<p role="status">本帖读取已提交，<Link to="/work?module=runs">查看采集进度</Link></p>}
  <Sheet open={open} onOpenChange={value=>{if(!state.mutation.isPending)setOpen(value);}}><SheetContent className="task-settings-sheet" onCloseAutoFocus={e=>{e.preventDefault();trigger.current?.focus({preventScroll:true});}}><SheetHeader><SheetTitle>仅重新读取这一帖</SheetTitle><SheetDescription>{savedTitleLabel(title)} · 保存新增原文，已有记录保留。</SheetDescription></SheetHeader><div className="task-settings-body">
- <p>不执行搜索。分块保存，优先恢复未完成的读取；达到限额会保留进度，不发送评论或私信。</p>
+ <p>仅定向读取此帖，不执行搜索；优先恢复未完成进度，已有原文保留。匹配与回复仍按各自已授权规则执行。</p>
  <p role="status" aria-live="polite">{state.reviewNotice.text}</p>
  <InfoSection  title={<>恢复选项</>}><FormField className="check-label" style={{display:'flex',alignItems:'flex-start',gap:8,marginTop:12}}><Checkbox style={{width:'auto',flexShrink:0,marginTop:3}}  checked={state.restartCheckpoint} disabled={state.mutation.isPending||state.uncertain} onCheckedChange={e=>{state.setRestartCheckpoint((e === true));state.setConsent(false);}}/>从头重新核对，保留所有已存原文</FormField></InfoSection>
  <FormField>执行账号<SelectField aria-label="定向读取账号" value={state.selected} disabled={state.mutation.isPending||state.uncertain} onValueChange={e=>state.setAccount(e)}><SelectOption value="">请选择可用账号</SelectOption>{state.readiness.data?.accounts?.map(a=><SelectOption key={a.id} value={a.id} disabled={!a.eligible}>{accountOptionName(a,state.readiness.data?.accounts)}{!a.eligible&&` · ${collectionAccountReason(a)}`}</SelectOption>)}</SelectField></FormField>
