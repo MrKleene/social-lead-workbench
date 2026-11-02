@@ -1,38 +1,36 @@
 import {configurationPath} from '@/features/configuration/configuration-route';
 import {PageState} from '@/components/page-state';
 import {useRef,useState} from 'react';
-import {Link,Navigate,useNavigate,useSearchParams} from 'react-router-dom';
+import {Link,Navigate,useSearchParams} from 'react-router-dom';
 import type {ReviewOverview,ReviewPolicy} from '@crm/contracts';
 import {InfoDrawer} from '@/components/information-panel';
-import {useConfirmWorkspaceLeave} from '@/features/work/draft-guard';
 import {useAuth} from '@/features/auth/use-auth';
 import {Button} from '@/components/ui/button';
 import {ErrorNotice,Loading} from '@/components/feedback';
 import {ReviewCard} from '@/features/collection/semantic-review-panel';
-import {useReviewOverview,useReviewWorkspace,useLegacyReviewHistory} from './use-comment-review';
+import {useReviewOverview,useLegacyReviewHistory} from './use-comment-review';
 import {useManualPost} from './use-manual-post';
 import {useReviewResults} from './use-review-results';
 import {ManualPostPanel} from './manual-post-panel';
 import {ReviewResults} from './review-results';
 import {ReviewTaskActivity} from './review-task-activity';
-import {ReviewDialogs} from './review-dialogs';
 import type {SavedReviewPost} from './post-picker';
 import './comment-review.css';
 function LegacyHistory(){const [open,setOpen]=useState(false),q=useLegacyReviewHistory(open);return <InfoDrawer title="旧版审核记录" open={open} onOpenChange={setOpen} description="历史记录保留当时的审核目标与证据。">{q.isPending?<Loading/>:q.isError?<ErrorNotice error={q.error}/>:q.data?.items.length?q.data.items.map(r=><ReviewCard key={r.id+':'+r.version} item={r}/>):<p>没有旧版审核结果。</p>}</InfoDrawer>;}
-function ReviewWorkspace({policy,overview,onPolicyChange,scope,onSettings,onManage}:{policy?:ReviewPolicy;overview:ReviewOverview;onPolicyChange:(id:string)=>void;scope?:{runId:string;policyRevision?:number};onSettings?:()=>void;onManage:()=>void}){
+function ReviewWorkspace({policy,overview,scope}:{policy?:ReviewPolicy;overview:ReviewOverview;scope?:{runId:string;policyRevision?:number}}){
  const [resultParams,setResultParams]=useSearchParams();
  const resultPost:SavedReviewPost|null=resultParams.get('review_post')?{id:resultParams.get('review_post')!,title:resultParams.get('review_post_title')||'已选帖子',comments:0}:null;
  const setResultPost=(post:SavedReviewPost|null)=>setResultParams(old=>{const p=new URLSearchParams(old);for(const k of ['review_post','review_post_title','review_offset'])p.delete(k);if(post){p.set('review_post',post.id);p.set('review_post_title',post.title);p.set('review_state','');}return p;});
- const s=useReviewWorkspace(policy,overview),manual=useManualPost(policy),results=useReviewResults(policy?.id,resultPost,scope),[settings,setSettings]=useState(false),manualTrigger=useRef<HTMLElement|null>(null),settingsTrigger=useRef<HTMLButtonElement>(null);
- const manualDisabled=s.dirty||s.busy||!policy||overview.connection.state!=='READY';
+ const manual=useManualPost(policy),results=useReviewResults(policy?.id,resultPost,scope),manualTrigger=useRef<HTMLElement|null>(null);
+ const manualDisabled=!policy||overview.connection.state!=='READY';
  const start=()=>{manualTrigger.current=document.activeElement as HTMLElement;manual.start();};
  const unscored=!results.total.isError&&!results.scored.isError&&results.total.data&&results.scored.data?Math.max(0,results.total.data.total-results.scored.data.total):undefined;
- return <><header className="review-workspace-heading"><div><h1>评论审核</h1></div><div className="action-row"><Button variant="outline" onClick={onManage}>方案管理</Button><Button onClick={start} disabled={manualDisabled}>手动测试</Button><Button ref={settingsTrigger} variant="outline" onClick={()=>onSettings?onSettings():setSettings(true)}>识别设置{s.dirty?' · 未保存':''}</Button></div></header><div className="review-overview" aria-label="审核状态摘要"><span><strong>{results.scored.isError?'读取失败':results.scored.data?.total??'—'}</strong> 已评分</span><span><strong>{unscored??'—'}</strong> 未评分</span><span>自动识别 <strong>{policy?.autoEnabled?'开启':'关闭'}</strong></span></div>{manualDisabled&&<p className="helper-text review-setup-hint">{s.dirty?'目标修改尚未保存，请在识别设置中保存后再测试。':!policy?'请先在识别设置中保存审核目标。':overview.connection.state!=='READY'?'请先完成模型设置后再测试。':''}</p>}{scope&&<p className="helper-text">自动识别：本轮任务 · 手动测试：全部记录</p>}<ReviewTaskActivity scoped={!!scope} state={manual} overview={scope?{...overview,autoJobs:overview.autoJobs.filter(j=>j.runId===scope.runId)}:overview} onResults={p=>{setResultPost(p);}}/><ReviewResults state={results} policyId={policy?.id} post={resultPost} onPostChange={setResultPost} onManual={start} manualDisabled={manualDisabled}/><footer className="review-workspace-footer"><Link to="/work?module=archive">查看采集原文</Link><Link to="/auto-contact">自动联系与账号矩阵</Link><LegacyHistory/></footer><ManualPostPanel state={manual} policy={policy} overview={overview} onReturnFocus={()=>manualTrigger.current?.focus()}/><ReviewDialogs state={s} overview={overview} policy={policy} open={settings} onClose={()=>setSettings(false)} onReturnFocus={()=>settingsTrigger.current?.focus()} onPolicyChange={onPolicyChange}/></>;
+ return <><header className="review-workspace-heading"><div><h1>评论审核</h1></div><div className="action-row"><Button variant="ghost" size="sm" onClick={start} disabled={manualDisabled}>手动测试</Button></div></header><div className="review-overview" aria-label="审核状态摘要"><span><strong>{results.scored.isError?'读取失败':results.scored.data?.total??'—'}</strong> 已评分</span><span><strong>{unscored??'—'}</strong> 未评分</span><span>自动识别 <strong>{policy?.autoEnabled?'开启':'关闭'}</strong></span></div>{manualDisabled&&<p className="helper-text review-setup-hint">{!policy?'请先在配置管理中添加评论匹配方案。':overview.connection.state!=='READY'?'请先在配置管理中完成模型配置。':''}</p>}{scope&&<p className="helper-text">自动识别：本轮任务 · 手动测试：全部记录</p>}<ReviewTaskActivity scoped={!!scope} state={manual} overview={scope?{...overview,autoJobs:overview.autoJobs.filter(j=>j.runId===scope.runId)}:overview} onResults={p=>{setResultPost(p);}}/><ReviewResults state={results} policyId={policy?.id} post={resultPost} onPostChange={setResultPost} onManual={start} manualDisabled={manualDisabled}/><footer className="review-workspace-footer"><LegacyHistory/></footer><ManualPostPanel state={manual} policy={policy} overview={overview} onReturnFocus={()=>manualTrigger.current?.focus()}/></>;
 }
 export function CommentReviewPage({scope,onSettings}:{scope?:{runId:string;configId:string;policyRevision?:number};onSettings?:()=>void}={}){
- const [params,setParams]=useSearchParams(),navigate=useNavigate(),confirmLeave=useConfirmWorkspaceLeave(),{user}=useAuth(),q=useReviewOverview(user?.role==='ADMIN'),[selected,setSelected]=useState(params.get('policy')||'');
+ const [params]=useSearchParams(),{user}=useAuth(),q=useReviewOverview(user?.role==='ADMIN'),selected=params.get('policy')||'';
  if(user?.role!=='ADMIN')return <p>评论审核由管理员管理。<Link to="/work">返回工作台</Link></p>;
  if(!scope&&params.get('manage')==='1')return <Navigate replace to={configurationPath('matching',params.toString())}/>;
  const policy=q.data?.policies.find(p=>p.id===(scope?params.get('policy'):selected))||q.data?.policies[0];
- return <div className="comment-review-page">{q.isPending?<PageState title="评论审核" loading/>:q.isError||!q.data?<PageState title="评论审核" error={q.error} onRetry={()=>void q.refetch()}/>:<ReviewWorkspace onManage={()=>navigate(configurationPath('matching',policy?new URLSearchParams({policy:policy.id}).toString():''))} scope={scope} onSettings={onSettings} key={(policy?.id||'workspace')+':'+(scope?.runId||'all')} policy={policy} overview={q.data} onPolicyChange={async id=>{if(scope)setParams(old=>{const p=new URLSearchParams(old);p.set('policy',id);p.delete('reviewVersion');return p;});else if(await confirmLeave())setSelected(id);}}/>}</div>;
+ return <div className="comment-review-page">{q.isPending?<PageState title="评论审核" loading/>:q.isError||!q.data?<PageState title="评论审核" error={q.error} onRetry={()=>void q.refetch()}/>:<ReviewWorkspace scope={scope} key={(policy?.id||'workspace')+':'+(scope?.runId||'all')} policy={policy} overview={q.data}/>}</div>;
 }

@@ -19,10 +19,10 @@ export function TasksPage() {
     <>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">团队协作 · TASKS</span><h1>任务中心</h1>
+          <h1>人工任务</h1>
 
         </div>
-        <Badge variant="secondary" className="heading-pill"><ListChecks size={16} />人工跟进工作流</Badge>
+
       </div>
       <DemoNotice />
       <ErrorNotice error={query.error || update.error} />

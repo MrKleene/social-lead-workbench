@@ -30,7 +30,7 @@ export function LeadDetail({ id, onClose }: { id: string; onClose: () => void })
         if (restoreFocus.current instanceof HTMLElement && restoreFocus.current.isConnected) restoreFocus.current.focus();
       }}>
         <SheetHeader>
-          <div className="detail-kicker"><span className="eyebrow">LEAD PROFILE</span>{lead?.isDemo && <Badge variant="secondary">虚构演示</Badge>}</div>
+          <div className="detail-kicker">{lead?.isDemo && <Badge variant="secondary">虚构演示</Badge>}</div>
           <SheetTitle>{lead?.identity.nickname || "线索详情"}</SheetTitle>
           <SheetDescription>{lead?.summary || "保留需求原文，记录每一步判断与跟进。"}</SheetDescription>
           {lead && <div className="detail-badges"><Badge className={`platform-${lead.identity.platform}`} variant="secondary">{platformLabel[lead.identity.platform]}</Badge><Badge variant="outline" className={`status-${lead.status}`}><span className="status-dot" />{statusLabel[lead.status]}</Badge><span>平台 ID：{lead.identity.platformUserId}</span></div>}

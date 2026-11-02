@@ -20,5 +20,5 @@ export const loginAvailabilityText: Record<LoginAvailability, string> = {
   'device-required': '扫码登录已配置；请先在专用电脑设置中批准执行设备，批准并认证在线后才能扫码。',
   'device-unavailable': '扫码登录已配置；专用电脑已撤销、离线或尚未认证，请查看设备设置。',
   'setup-required': '扫码登录已配置，但执行前置条件未满足；请核对持久工作台与设备设置。',
-  ready: '扫码仅在本人确认后启用；只读采集须另行逐次确认。',
+  ready: '扫码登录可用。',
 };

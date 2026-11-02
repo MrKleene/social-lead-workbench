@@ -35,7 +35,7 @@ export function PlatformsPage() {
           <h1>平台能力</h1>
 
         </div>
-        <span className="page-code">CRM / 03</span>
+
       </div>
       <Alert className="demo-notice">
         <ShieldAlert />
@@ -50,14 +50,7 @@ export function PlatformsPage() {
       ) : (
         <>
           <section className="table-panel graphite-platform-panel"><h2>接入与读取能力</h2><Table className="graphite-platform-table" aria-label="平台接入与读取能力"><TableHeader><TableRow><TableHead>平台</TableHead><TableHead>接入状态</TableHead><TableHead>已实现读取范围</TableHead><TableHead>当前限制</TableHead><TableHead>入口</TableHead></TableRow></TableHeader><TableBody>{query.data?.capabilities.map(cap=><TableRow key={cap.platform}><TableCell><strong>{cap.name}</strong></TableCell><TableCell data-label="接入状态"><Badge variant="secondary">{cap.platform==='XHS'?'只读功能已实现':cap.platform==='DOUYIN'?'读取适配器未实现':cap.status}</Badge></TableCell><TableCell data-label="读取范围">{cap.platform==='XHS'?'有限搜索、帖子与评论读取、分块保存及符合条件的进度恢复。':cap.read}</TableCell><TableCell data-label="当前限制">{cap.platform==='XHS'?'执行前核验账号、设备与授权；读取覆盖以实际结果为准。':cap.reason}</TableCell><TableCell><Link to="/auto-contact">查看回复能力与资格 →</Link></TableCell></TableRow>)}</TableBody></Table></section>
-          <section className="task-panel">
-            <div className="section-title">
-              <h2>账号记录</h2>
-              <Badge variant="secondary">记录状态与会话核验分开</Badge>
-            </div>
-            <p className="helper-text">本页记录状态不代表本机会话有效。<Link to="/work?module=accounts">前往账号中心核验</Link></p>
-            <Table className="graphite-platform-table" aria-label="平台账号记录"><TableHeader><TableRow><TableHead>账号</TableHead><TableHead>来源</TableHead><TableHead>记录状态</TableHead><TableHead>状态备注</TableHead><TableHead>详情</TableHead></TableRow></TableHeader><TableBody>{query.data?.accounts.map(account=><TableRow key={account.id}><TableCell><strong>{account.label}</strong></TableCell><TableCell data-label="来源">{account.isDemo===true?'模拟账号':account.isDemo===false?'非模拟记录':'来源待核对'}</TableCell><TableCell data-label="记录状态"><Badge variant="outline">{{UNCONNECTED:'未连接',RESTRICTED:'受限',PAUSED:'已暂停'}[account.status]||'状态待核对'}</Badge></TableCell><TableCell data-label="状态备注">{account.pauseReason||'—'}</TableCell><TableCell><Link to="/work?module=accounts">账号中心 →</Link></TableCell></TableRow>)}</TableBody></Table>
-          </section>
+
         </>
       )}
     </>

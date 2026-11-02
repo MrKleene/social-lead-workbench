@@ -1,13 +1,11 @@
 import { SelectField, SelectOption } from '@/components/select-field';
 import { Empty } from '@/components/ui/empty';
 import { useCallback } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Search,
   ArrowUpRight,
   Info,
-  SlidersHorizontal,
-  ListChecks,
 } from "lucide-react";
 import { useLeads } from "./use-leads";
 import { LeadDetail } from "./lead-detail";
@@ -36,16 +34,15 @@ export function LeadsPage() {
     <>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">客户协作 · LEADS</span>
-          <h1>线索管理</h1>
+          <h1>全部线索</h1>
 
         </div>
-        <Button variant="outline" asChild><Link to="/tasks"><ListChecks size={16} />查看任务</Link></Button>
+
       </div>
       <DemoNotice />
       <LeadOverview total={state.total} pending={state.pending} following={state.following} loading={state.query.isPending} error={state.query.isError} />
       <section className="table-panel" aria-label="线索列表">
-        <div className="list-heading"><div><h2>全部线索 <span>{state.query.isError?"读取失败":state.query.isPending?"—":state.rows.length}</span></h2></div><Badge variant="secondary" className="list-scope"><SlidersHorizontal size={14} />灵活筛选</Badge></div>
+        <div className="list-heading"><div><h2>全部线索 <span>{state.query.isError?"读取失败":state.query.isPending?"—":state.rows.length}</span></h2></div></div>
         <div className="list-controls">
         <div className="list-tabs">
           <SegmentedControl label="线索状态" value={state.status} onChange={state.setStatus} options={[
@@ -171,7 +168,7 @@ export function LeadsPage() {
             </Empty>
           )}
         <div className="table-footer">
-          <span role="status" aria-live="polite">{state.query.isError?"数量读取失败":state.query.isPending?"正在读取":`共 ${state.rows.length} 条`} · 仅显示你有权访问的线索</span>
+          <span role="status" aria-live="polite">{state.query.isError?"数量读取失败":state.query.isPending?"正在读取":`共 ${state.rows.length} 条`}</span>
           <span>最多显示 500 条</span>
         </div>
       </section>

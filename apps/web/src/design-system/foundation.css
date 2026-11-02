@@ -482,7 +482,7 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 .run-review-thumbnail{flex:0 0 56px;width:56px;height:68px;border-radius:4px;border:1px solid var(--border);overflow:hidden;background:var(--muted);display:grid;place-items:center}
 .run-review-thumbnail img{width:100%;height:100%;object-fit:cover}.run-review-thumbnail>span{font-size:10px}
 .run-review-post-copy{display:flex;flex-direction:column;gap:8px;min-width:0}.run-review-post-copy strong{font-size:14px;color:var(--foreground);line-height:1.6;white-space:normal;overflow-wrap:anywhere}.run-review-post-copy>span{font-size:12px;line-height:1.5}
-:root .graphite-workspace .graphite-run-review-table th:first-child{width:32%}
+:root .graphite-workspace .graphite-run-review-table th:first-child{width:54%}
 :root .graphite-workspace .graphite-run-review-table th:last-child{width:auto}
 :root .graphite-workspace .graphite-run-review-table td{vertical-align:top}
 :root .graphite-workspace .graphite-run-review-table .info-saved-text>p{display:block;overflow:visible;-webkit-line-clamp:unset;margin:5px 0;font-size:13px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;color:inherit}
