@@ -1,0 +1,8 @@
+import {createElement} from 'react';import {renderToStaticMarkup} from 'react-dom/server';import {MemoryRouter} from 'react-router-dom';import {it,expect,vi} from 'vitest';import {PendingReplies} from './pending-replies';
+const state=vi.hoisted(()=>({role:'ADMIN',rows:[{id:'fictional',version:'2026-11-02T00:00:00Z',postTitle:'虚构帖子',comment:'完整原评论',content:'拟回复正文',score:0,reason:'今日额度不足'}],loading:false,error:null as Error|null}));
+vi.mock('@/features/auth/use-auth',()=>({useAuth:()=>({user:{role:state.role}})}));
+vi.mock('./use-pending-replies',()=>({usePendingReplies:()=>({list:{data:{items:state.rows,total:state.rows.length},isPending:state.loading,isError:!!state.error,error:state.error},overview:{data:{accounts:[],rules:[]}},selected:[],accountId:'',offset:0,prepare:{},confirm:{},preview:null,busy:false})}));
+const html=()=>renderToStaticMarkup(createElement(MemoryRouter,null,createElement(PendingReplies)));
+it('pending holds source, zero score and proposed content without claiming sent or retrying unknown',()=>{const s=html();for(const t of ['待处理回复','不会跨天自动续发','完整原评论','拟回复正文','虚构帖子','评论时间未记录','查看全文'])expect(s).toContain(t);expect(s).not.toContain('平台已确认');expect(s).not.toContain('结果未知重试');expect(s).toContain('预览所选回复');expect(s).toContain('disabled');});
+it('sales role cannot render pending send controls',()=>{state.role='SALES';expect(html()).not.toContain('预览所选回复');state.role='ADMIN';});
+it('empty and failure are distinct and never present as confirmed success',()=>{state.rows=[];expect(html()).toContain('暂无待处理回复');state.error=Error('虚构读取失败');expect(html()).toContain('虚构读取失败');expect(html()).not.toContain('暂无待处理回复');state.error=null;});

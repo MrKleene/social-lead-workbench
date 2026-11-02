@@ -24,7 +24,7 @@ export async function runHistory(db:Db,actor:Actor,configId:string,input:z.infer
    FROM "CollectionRun" r WHERE r."configId"=${configId} AND (
     r.status IN ('QUEUED','RUNNING') OR EXISTS(SELECT 1 FROM "AutoReviewJob" a WHERE a."runId"=r.id AND a.status IN ('PENDING','PROCESSING'))
     OR EXISTS(SELECT 1 FROM "SemanticReview" s WHERE s."runId"=r.id AND s.state='PROCESSING')
-    OR EXISTS(SELECT 1 FROM "AutoContactJob" j JOIN "SemanticReview" s ON s.id=j."reviewId" WHERE s."runId"=r.id AND j.status IN ('QUEUED','WAITING_QUOTA','WAITING_ACCOUNT','RESERVED','ATTEMPTED')))
+    OR EXISTS(SELECT 1 FROM "AutoContactJob" j JOIN "SemanticReview" s ON s.id=j."reviewId" WHERE s."runId"=r.id AND j.status IN ('MANUAL_READY','QUEUED','WAITING_QUOTA','WAITING_ACCOUNT','RESERVED','ATTEMPTED')))
    ORDER BY r."createdAt" DESC,r.id DESC LIMIT 1`)
  ]);
  const current=active[0]?await db.collectionRun.findUnique({where:{id:active[0].id},select:projection}):latest;

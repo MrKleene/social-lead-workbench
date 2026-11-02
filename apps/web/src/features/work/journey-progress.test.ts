@@ -28,3 +28,5 @@ describe('conditional automation prerequisites',()=>{
  it.each([{...account,workbenchStatus:'PAUSED',systemBlockReason:'未知暂停原因'},{...account,sendEligibility:{canSend:false,stale:true}}])('blocks unavailable sending accounts',a=>expect(automationIssue({...review,policies:[policy],connection:{state:'READY'}},{...contact,capability:{available:true},rules:[rule],accounts:[a]})?.tab).toBe('contact'));
  it('does not require any disabled rule fields',()=>expect(automationIssue(review,{...contact,rules:[{enabled:false}]})).toBeNull());
 });
+
+it('manual pending remains visible without pretending the worker will automatically send it',()=>{const result=journeyProgress({reviews:{EVALUATED:8},reviewJobs:{COMPLETED:1},contacts:{CONFIRMED:1,PENDING_ACTION:7},matches:8},true,true);expect(result.settled).toBe(false);expect(result.contactNotice).toContain('选择账号并确认');});

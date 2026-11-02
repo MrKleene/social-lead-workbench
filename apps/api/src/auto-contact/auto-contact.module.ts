@@ -1,3 +1,4 @@
+import {PendingRepliesService} from './pending-replies.service';
 import {NormalAcceptanceService} from './normal-acceptance.service';
 import {automationPreferenceInput,readAutomationPreferences,saveAutomationPreferences} from './automation-preferences';
 import {journeySummary} from './journey-summary';
@@ -19,9 +20,12 @@ import { CONTACT_SENDER } from './contact-sender';
 class AutoContactController {
     constructor(
     @Inject(ContactSettingsService)
-    private settings: ContactSettingsService,
+    private settings: ContactSettingsService, @Inject(PendingRepliesService) private pending:PendingRepliesService,
     @Inject(AutoContactService)
     private service: AutoContactService, @Inject(NormalAcceptanceService) private acceptance:NormalAcceptanceService, @Inject(Db) private db: Db, @Inject(CONTACT_SENDER) private sender: import('./contact-sender').ContactSender) { }
+    @Get('pending') @Header('Cache-Control','no-store, private') pendingList(@Req() r:AuthedRequest,@Query() q:unknown){const b=parse(z.object({offset:z.coerce.number().int().min(0).max(1000000).default(0),runId:z.string().min(1).max(200).optional()}).strict(),q);return this.pending.list(r.actor,b.offset,b.runId);}
+    @Post('pending/preview') previewPending(@Req() r:AuthedRequest){return this.pending.preview(r.actor,r.body);}
+    @Post('pending/confirm') confirmPending(@Req() r:AuthedRequest){return this.pending.confirm(r.actor,r.body);}
     @Get('acceptance') acceptanceStatus(@Req() r:AuthedRequest){return this.acceptance.status(r.actor);}
     @Post('acceptance') armAcceptance(@Req() r:AuthedRequest){return this.acceptance.arm(r.actor,r.body);}
     @Post('acceptance/:id/reply-exception') replyException(@Req() r:AuthedRequest,@Param('id') id:string){return this.acceptance.armReplyException(r.actor,id,r.body);}
@@ -77,6 +81,6 @@ class AutoContactController {
     @Param('id')
     id: string) { const b = parse(z.object({ receipt: z.string().trim().min(1).max(500) }).strict(), r.body); return this.service.reconcile(r.actor, id, b.receipt); }
 }
-@Module({ imports: [AuthModule, DevicesModule], controllers: [AutoContactController], providers: [NormalAcceptanceService, LoginRuntime, { provide: CONTACT_SENDER, useFactory: (db: Db, devices: DeviceService, runtime: LoginRuntime) => new LocalXhsReplySender(db, devices, runtime), inject: [Db, DeviceService, LoginRuntime] }, ContactSettingsService, AutoContactService], exports: [AutoContactService] })
+@Module({ imports: [AuthModule, DevicesModule], controllers: [AutoContactController], providers: [PendingRepliesService, NormalAcceptanceService, LoginRuntime, { provide: CONTACT_SENDER, useFactory: (db: Db, devices: DeviceService, runtime: LoginRuntime) => new LocalXhsReplySender(db, devices, runtime), inject: [Db, DeviceService, LoginRuntime] }, ContactSettingsService, AutoContactService], exports: [AutoContactService] })
 export class AutoContactModule {
 }

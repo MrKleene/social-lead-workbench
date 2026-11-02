@@ -1,3 +1,4 @@
+import {manualAuthority,type ManualAuthority} from './manual-reply-authority';
 import {acceptanceSendThreshold,blockingAcceptanceJobs,activeAcceptance,normalAcceptanceScope,acceptanceRuleAllowed,acceptanceSendAllowed,claimAcceptanceSend,settleAcceptance} from './normal-acceptance';
 import {accountModeBlocked} from '../accounts/account-execution-policy';
 import {accountSendObservation} from './send-observation';
@@ -32,9 +33,9 @@ export class AutoContactService {
         const [p, m, a, c] = await Promise.all([tx.commentReviewPolicy.findUnique({ where: { id: r.policyId } }), tx.modelSettings.findFirst({ select: { model: true } }), tx.user.findUnique({ where: { id: r.authorizedBy }, select: { active: true, role: true } }), tx.autoContactControl.findUnique({ where: { platform_mode: { platform: r.platform, mode: r.mode } } })]);
         return p?.revision === r.policyRevision && m?.model === r.model && a?.active && a.role === 'ADMIN' && !c?.pauseReason;
     }
-    private async reviewReady(tx: ContactDb, r: AutoContactRule, id: string) {
+    private async reviewReady(tx: ContactDb, r: AutoContactRule, id: string, manual?:ManualAuthority) {
         const row = await tx.semanticReview.findUnique({ where: { id }, include: { capture: { include: { post: true, config: { select: { platform: true } } } } } });
-        if (!row || !await acceptanceSendAllowed(tx,r,id) || row.policyId !== r.policyId || row.policyRevision !== r.policyRevision || row.selectedModel !== r.model || row.platform !== r.platform || !eligible(row, await acceptanceSendThreshold(tx,r,id)) || row.isDemo !== (r.mode === 'SIMULATION') || row.capture?.config.platform !== row.platform)
+        if (!row || (!manual&&!await acceptanceSendAllowed(tx,r,id)) || row.policyId !== r.policyId || row.policyRevision !== r.policyRevision || row.selectedModel !== r.model || row.platform !== r.platform || !eligible(row, manual?r.threshold:await acceptanceSendThreshold(tx,r,id)) || row.isDemo !== (r.mode === 'SIMULATION') || row.capture?.config.platform !== row.platform)
             return null;
         const target = contactTarget(row, row.capture, row.capture?.post ?? null);
         if (!target)
@@ -43,7 +44,7 @@ export class AutoContactService {
         if (identity?.lead && (identity.lead.doNotContact || (!identity.lead.isDemo && (identity.lead.contactedAt || ['CONTACTED', 'INTERESTED'].includes(identity.lead.contactStage)))))
             return null;
         const availability = await postAvailability(tx,r.platform,target.postId);
-        return { row, target, availability, block:postSendBlock(availability,r.authorizedAt,row.updatedAt) };
+        return { row, target, availability, block:postSendBlock(availability,manual?.authorizedAt??r.authorizedAt,row.updatedAt) };
     }
     async enqueue() {
         return this.db.$transaction(async (tx) => {
@@ -112,22 +113,24 @@ export class AutoContactService {
                     await tx.autoContactJob.update({ where: { id: j.id }, data: { status: 'SKIPPED', reason: '此用户已有联系尝试或成功记录；跨账号与渠道不重复' } });
                     continue;
                 }
-                let selected: string | undefined, healthyCount = 0;
+                let selected: string | undefined, healthyCount = 0, quotaFull = 0;
                 const day = quotaBucket(j.mode, now);
                 for (const id of r.accountIds) {
                     await tx.$queryRaw `SELECT id FROM "PlatformAccount" WHERE id=${id} FOR UPDATE`;
                     const a = await tx.platformAccount.findUnique({ where: { id }, include: { sessionReference: true } });
                     if (!a || a.archivedAt || a.platform !== j.platform || accountModeBlocked(a,j.mode) || (j.mode === 'SIMULATION' ? !a.isDemo || !!a.loginSessionKey : a.isDemo || a.sessionReference?.state !== 'VERIFIED'))
                         continue;
-                    if(j.mode==='REAL'&&!(await accountSendObservation(tx,id,now)).canSend)continue;
-                    healthyCount++;
+                    const observation=j.mode==='REAL'?await accountSendObservation(tx,id,now):null;
+                    if(observation&&(observation.state!=='UNKNOWN'||observation.evidenceInvalid))continue;
                     const usage = await tx.accountDay.findUnique({ where: { accountId_day: { accountId: id, day } } });
-                    if ((usage?.occupied ?? 0) >= limit(r, id, a.dailyLimit))
-                        continue;
+                    if ((usage?.occupied ?? 0) >= limit(r, id, a.dailyLimit)){quotaFull++;continue;}
+                    if(observation&&!observation.canSend)continue;
+                    healthyCount++;
                     selected = id;
                     break;
                 }
                 if (!selected) {
+                    if(quotaFull===r.accountIds.length&&quotaFull>0){await this.holdForAction(tx,j,'今日发送额度不足，转待处理；不会跨天自动续发');continue;}
                     await tx.autoContactJob.update({ where: { id: j.id }, data: { status: healthyCount ? 'WAITING_QUOTA' : 'WAITING_ACCOUNT', reason: healthyCount ? '账号池今日共享额度已用完；上海零点后再分配' : '没有已授权且健康的发送账号' } });
                     continue;
                 }
@@ -158,15 +161,16 @@ export class AutoContactService {
             if (!j || j.status !== 'RESERVED')
                 return null;
             await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${j.accountId!} FOR UPDATE`;
-            const valid = await this.reviewReady(tx, j.rule, j.reviewId), a = await tx.platformAccount.findUnique({ where: { id: j.accountId! }, include: { sessionReference: true } }), now = await this.now(tx);
-            const postBlock = valid ? postSendBlock(valid.availability,j.rule.authorizedAt,valid.row.updatedAt,j.availabilityVersion) : null;
+            const manual=j.manualRequestId?await manualAuthority(tx,j,await this.now(tx)):null;
+            const valid = await this.reviewReady(tx, j.rule, j.reviewId,manual??undefined), a = await tx.platformAccount.findUnique({ where: { id: j.accountId! }, include: { sessionReference: true } }), now = await this.now(tx);
+            const postBlock = valid ? postSendBlock(valid.availability,manual?.authorizedAt??j.rule.authorizedAt,valid.row.updatedAt,j.availabilityVersion) : null;
             if(postBlock){await cancelReserved(tx,j,postBlock);await tx.autoContactJob.update({where:{id:j.id},data:{status:'BLOCKED_POST'}});return null;}
             const attempt = await tx.contactAttempt.findUniqueOrThrow({ where: { id: j.attemptId! } }), usage = await tx.accountDay.findUnique({ where: { accountId_day: { accountId: j.accountId!, day: attempt.day } } });
-            if (!healthy || !a || a.archivedAt || accountModeBlocked(a,j.mode) || !j.rule.accountIds.includes(a.id) || j.ruleVersion !== j.rule.version || !await this.ruleReady(tx, j.rule) || !valid || eligibilityHash(valid.row) !== j.eligibilityHash || !j.leaseUntil || j.leaseUntil < now || attempt.day !== quotaBucket(j.mode, now) || (usage?.occupied ?? 0) > limit(j.rule, a.id, a.dailyLimit) || (j.mode === 'REAL' ? (a.isDemo || a.sessionReference?.state !== 'VERIFIED') : (!a.isDemo || !!a.loginSessionKey))) {
+            if (!healthy || !a || a.archivedAt || accountModeBlocked(a,j.mode) || !j.rule.accountIds.includes(a.id) || (j.manualRequestId?(!manual||manual.accountId!==a.id||!await this.manualRuleReady(tx,j.rule,manual)):j.ruleVersion !== j.rule.version || !await this.ruleReady(tx, j.rule)) || !valid || eligibilityHash(valid.row) !== j.eligibilityHash || !j.leaseUntil || j.leaseUntil < now || attempt.day !== quotaBucket(j.mode, now) || (usage?.occupied ?? 0) > limit(j.rule, a.id, a.dailyLimit) || (j.mode === 'REAL' ? (a.isDemo || a.sessionReference?.state !== 'VERIFIED') : (!a.isDemo || !!a.loginSessionKey))) {
                 await cancelReserved(tx, j, '发送前健康、授权、额度日期或证据已变化；未发送');
                 return null;
             }
-            if(!await claimAcceptanceSend(tx,j.rule,j.reviewId,j.id,j.accountId!)){await cancelReserved(tx,j,'本次限定验收总提交次数已使用或范围变化');return null;}
+            if(!manual&&!await claimAcceptanceSend(tx,j.rule,j.reviewId,j.id,j.accountId!)){await cancelReserved(tx,j,'本次限定验收总提交次数已使用或范围变化');return null;}
             await tx.contactAttempt.update({ where: { id: j.attemptId! }, data: { outcome: 'ATTEMPTED', attemptedAt: now, version: { increment: 1 } } });
             return tx.autoContactJob.update({ where: { id }, data: { status: 'ATTEMPTED' } });
         });
@@ -243,6 +247,51 @@ export class AutoContactService {
             }
         }
     }
-    async tick() { try { await this.enqueue(); let j = await this.reserve(); if(!j){await this.prepareWaiting();j=await this.reserve();} if (j)
+    private async holdForAction(tx:ContactDb,j:{id:string;status:string;attemptId:string|null},reason:string){
+        if(j.attemptId||!['QUEUED','WAITING_ACCOUNT','WAITING_QUOTA','MANUAL_READY'].includes(j.status))return;
+        const result=await tx.autoContactJob.updateMany({where:{id:j.id,status:j.status,attemptId:null},data:{status:'PENDING_ACTION',reason,manualRequestId:null}});
+        if(result.count)await tx.auditLog.create({data:{action:'REPLY_HELD_FOR_MANUAL_ACTION',entityId:j.id,metadata:{from:j.status,reason,attempted:false}}});
+    }
+    private async manualRuleReady(tx:ContactDb,r:AutoContactRule,m:ManualAuthority){
+        const [p,model,control]=await Promise.all([tx.commentReviewPolicy.findUnique({where:{id:r.policyId}}),tx.modelSettings.findFirst({select:{model:true}}),tx.autoContactControl.findUnique({where:{platform_mode:{platform:r.platform,mode:r.mode}}})]);
+        return r.mode===this.sender.mode&&this.sender.capability(r.platform,r.channel)&&r.accountIds.includes(m.accountId)&&p?.revision===r.policyRevision&&model?.model===r.model&&!control?.pauseReason;
+    }
+    private async manualCandidate(tx:ContactDb,id?:string){
+        const j=id?await tx.autoContactJob.findUnique({where:{id},include:{rule:true}}):await tx.autoContactJob.findFirst({where:{mode:this.sender.mode,status:'MANUAL_READY'},include:{rule:true},orderBy:[{createdAt:'asc'},{id:'asc'}]});
+        if(!j||j.status!=='MANUAL_READY'||j.attemptId)return null;
+        const now=await this.now(tx),m=await manualAuthority(tx,j,now);
+        if(!m||!await this.manualRuleReady(tx,j.rule,m)){await this.holdForAction(tx,j,'本次确认已过期或规则已变化，请重新预览');return null;}
+        const control=await tx.autoContactControl.findUnique({where:{platform_mode:{platform:j.platform,mode:j.mode}}});if(control?.activeJobId)return null;
+        const a=await tx.platformAccount.findUnique({where:{id:m.accountId},include:{sessionReference:true}}),valid=await this.reviewReady(tx,j.rule,j.reviewId,m);
+        if(!a||a.archivedAt||accountModeBlocked(a,j.mode)||!valid||eligibilityHash(valid.row)!==j.eligibilityHash||postSendBlock(valid.availability,m.authorizedAt,valid.row.updatedAt,j.availabilityVersion)){
+            await this.holdForAction(tx,j,'账号、原文或评分条件已变化，请核查后重新预览');return null;
+        }
+        const observation=j.mode==='REAL'?await accountSendObservation(tx,a.id,now):null;
+        if(observation&&(observation.state!=='UNKNOWN'||observation.evidenceInvalid)){await this.holdForAction(tx,j,'账号存在平台限制或异常证据，请先处理');return null;}
+        const usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId:a.id,day:quotaBucket(j.mode,now)}}});
+        if((usage?.occupied??0)>=limit(j.rule,a.id,a.dailyLimit)){await this.holdForAction(tx,j,'今日额度不足，已退回待处理；不会跨天自动续发');return null;}
+        const identity=await tx.platformIdentity.findUnique({where:{platform_platformUserId:{platform:j.platform,platformUserId:j.recipientId}},include:{lead:true}});
+        if(identity?.lead&&(identity.lead.doNotContact||(!identity.lead.isDemo&&(identity.lead.contactedAt||['CONTACTED','INTERESTED'].includes(identity.lead.contactStage))))){await this.holdForAction(tx,j,'收件人已联系或标记勿联系');return null;}
+        const ledger=identity?await tx.contactLedger.findUnique({where:{identityId_mode:{identityId:identity.id,mode:j.mode}},include:{attempts:true}}):null;
+        if(ledger?.attempts.some(a=>a.outcome!=='CANCELLED')){await this.holdForAction(tx,j,'已有发送尝试，不能重复或换号补发');return null;}
+        return {j,m,a,now,identity,ledger};
+    }
+    async reserveManual(){
+        const candidate=await this.db.$transaction(async tx=>{await contactLock(tx);return this.manualCandidate(tx);});if(!candidate)return null;
+        const {j,m}=candidate;let ready=false;
+        try{ready=await this.sender.healthy(m.accountId);if(!ready&&this.sender.prepare){const actor=await this.db.user.findUnique({where:{id:m.actorId},select:{id:true,name:true,email:true,role:true,active:true}});if(actor?.active&&actor.role==='ADMIN')ready=await this.sender.prepare(actor,m.accountId);}}catch{}
+        if(!ready){await this.db.$transaction(async tx=>{await contactLock(tx);const current=await tx.autoContactJob.findUnique({where:{id:j.id}});if(current?.status==='MANUAL_READY')await this.holdForAction(tx,current,'执行前账号核验未通过，请处理后重新预览');});return null;}
+        return this.db.$transaction(async tx=>{await contactLock(tx);const v=await this.manualCandidate(tx,j.id);if(!v)return null;const {a,now}=v;
+            await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${a.id} FOR UPDATE`;
+            if(v.j.mode==='REAL'&&(a.sessionReference?.state!=='VERIFIED'||!(await accountSendObservation(tx,a.id,now)).canSend)){await this.holdForAction(tx,v.j,'登录或发送资格已变化，请重新预览');return null;}
+            const identity=v.identity??await tx.platformIdentity.create({data:{platform:v.j.platform,platformUserId:v.j.recipientId,nickname:'',isDemo:v.j.mode==='SIMULATION'}});
+            const ledger=v.ledger?await tx.contactLedger.update({where:{id:v.ledger.id},data:{accountId:a.id}}):await tx.contactLedger.create({data:{identityId:identity.id,mode:v.j.mode,accountId:a.id}}),day=quotaBucket(v.j.mode,now);
+            await tx.accountDay.upsert({where:{accountId_day:{accountId:a.id,day}},create:{accountId:a.id,day,occupied:1},update:{occupied:{increment:1}}});
+            const attempt=await tx.contactAttempt.create({data:{ledgerId:ledger.id,requestKey:'auto-contact:'+v.j.id,jobId:v.j.id,mode:v.j.mode,kind:'FIRST',channel:v.j.channel,content:v.j.content,outcome:'RESERVED',day,actorId:v.m.actorId,accountIdSnapshot:a.id,historySnapshot:json({platform:v.j.platform,recipientId:v.j.recipientId,postId:v.j.postId,commentId:v.j.commentId,accountId:a.id,accountLabel:a.loginNickname||a.label,senderPlatformId:a.loginPlatformUserId,source:v.j.sourceSnapshot,evidence:v.j.evidence,manualRequestId:v.m.requestId})}}),leaseUntil=new Date(now.getTime()+120000);
+            await tx.autoContactControl.upsert({where:{platform_mode:{platform:v.j.platform,mode:v.j.mode}},create:{platform:v.j.platform,mode:v.j.mode,activeJobId:v.j.id,leaseUntil},update:{activeJobId:v.j.id,leaseUntil}});
+            return tx.autoContactJob.update({where:{id:v.j.id},data:{status:'RESERVED',accountId:a.id,attemptId:attempt.id,leaseUntil,reason:null}});
+        });
+    }
+    async tick() { try { await this.enqueue(); let j = await this.reserveManual();if(!j)j=await this.reserve(); if(!j){await this.prepareWaiting();j=await this.reserve();} if (j)
         await this.dispatch(j.id); } finally { await this.db.$transaction(async tx=>{await contactLock(tx);await settleAcceptance(tx);}); } }
 }

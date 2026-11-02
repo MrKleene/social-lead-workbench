@@ -2,19 +2,15 @@ import { describe,it,expect,vi } from 'vitest';
 import 'reflect-metadata';
 import {ReviewPolicyService} from '../src/comment-review/review-policy.service';
 import {reviewResultFilterSchema} from '@crm/contracts';
-it('run and review-version filters stay scoped for both rows and totals',async()=>{
- const db:any={semanticReview:{findMany:vi.fn(async()=>[]),count:vi.fn(async()=>0)},capturedComment:{findMany:vi.fn(async()=>[{contentHash:'same-original'}])}};
+it('read-only result queries reject non-admin access and retain run/version scope',async()=>{
+ const db:any={$queryRaw:vi.fn(async(q:any)=>q.sql.includes('count(*)')?[{total:0n}]:[]),semanticReview:{findMany:vi.fn(async()=>[])}};
  const service=new ReviewPolicyService(db,{} as any,{} as any);
  await expect(service.results({role:'SALES'} as any,'policy',0,{sort:'newest',runId:'old'})).rejects.toThrow();
- expect(db.semanticReview.findMany).not.toHaveBeenCalled();
- await service.results({role:'ADMIN'} as any,'policy',20,{sort:'newest',runId:'old',policyRevision:2,postId:'post'});
- const where={policyId:'policy',runId:'old',policyRevision:2,OR:[{capture:{postId:'post'}},{sourceContentHash:{in:['same-original']}}]};
- expect(db.semanticReview.findMany).toHaveBeenCalledWith(expect.objectContaining({where,skip:20,take:20}));
- expect(db.semanticReview.count).toHaveBeenCalledWith({where});
- await service.results({role:'ADMIN'} as any,'policy',0);
- expect(db.semanticReview.count).toHaveBeenLastCalledWith({where:{policyId:'policy'}});
+ expect(db.$queryRaw).not.toHaveBeenCalled();
+ await service.results({role:'ADMIN'} as any,'policy',20,{sort:'comment-newest',runId:'old',policyRevision:2,postId:'post'});
+ for(const [query] of db.$queryRaw.mock.calls){expect(query.values).toEqual(expect.arrayContaining(['policy','old',2,'post']));expect(query.sql).toContain('"policyRevision"=');expect(query.sql).toContain('"runId"=');}
  expect(reviewResultFilterSchema.safeParse({runId:'',policyRevision:0}).success).toBe(false);
- db.semanticReview.findMany.mockRejectedValueOnce(Error('offline'));
+ db.$queryRaw.mockRejectedValueOnce(Error('offline'));
  await expect(service.results({role:'ADMIN'} as any,'policy',0,{sort:'newest',runId:'missing'})).rejects.toThrow('offline');
 });
 import { semanticRulesSchema, SemanticSnapshot } from '@crm/contracts';

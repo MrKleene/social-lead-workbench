@@ -710,6 +710,7 @@ model AutoContactControl {
  @@id([platform,mode])
 }
 model AutoContactJob {
+ manualRequestId String?
  availabilityVersion Int @default(0)
  sourceSnapshot Json?
  id String @id @default(uuid())
@@ -805,4 +806,19 @@ model NormalAcceptancePost {
  estimatedMicros Int?
  payloadHash String?
  @@id([acceptanceId,postId])
+}
+
+// Short-lived explicit approval for exact pending replies. Never auto-renewed.
+model ManualReplyRequest {
+ id String @id
+ actorId String
+ accountId String
+ accountVersion Int
+ tokenHash String
+ scope Json
+ expiresAt DateTime
+ confirmedAt DateTime?
+ submissionKey String? @unique
+ createdAt DateTime @default(now())
+ @@index([expiresAt])
 }

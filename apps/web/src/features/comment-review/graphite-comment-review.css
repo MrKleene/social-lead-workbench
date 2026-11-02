@@ -58,7 +58,7 @@
  :root .graphite-workspace .graphite-review-table thead {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
  :root .graphite-workspace .graphite-review-table,:root .graphite-workspace .graphite-review-table tbody {display:block;width:100%;}
  :root .graphite-workspace .graphite-review-table tbody tr {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px 12px;padding:14px 18px;border-bottom:1px solid var(--border,#e4e4e7);}
- :root .graphite-workspace .graphite-review-table td {display:block;padding:0;border:0;min-width:0;}
+ :root .graphite-workspace .graphite-review-table td {display:block;padding:0!important;border:0;min-width:0;}
  :root .graphite-workspace .graphite-review-table .graphite-review-comment,:root .graphite-workspace .graphite-review-table .graphite-review-source {grid-column:1/-1;}
  :root .graphite-workspace .graphite-review-table .graphite-review-source {display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;}
  :root .graphite-workspace .graphite-review-table .graphite-review-source>p {font-size:12px;color:var(--muted-foreground,#71717a);font-weight:400;}
@@ -101,3 +101,33 @@
 .graphite-job-progress progress::-webkit-progress-bar {background:var(--muted,#e4e4e7);border-radius:99px;}
 .graphite-job-progress progress::-webkit-progress-value {background:var(--primary,#202124);border-radius:99px;}
 .graphite-job-progress progress::-moz-progress-bar {background:var(--primary,#202124);border-radius:99px;}
+/* Compact review workspace with publication metadata, A16 / A19. */
+:root .graphite-workspace .comment-review-page{gap:14px;}
+:root .graphite-workspace .comment-review-page .review-workspace-heading h1{font-size:22px;line-height:30px;margin:0;}
+:root .graphite-workspace .comment-review-page .review-workspace-heading .action-row{gap:8px;}
+:root .graphite-workspace .comment-review-page .review-overview{padding:0 0 12px;background:transparent;border:0;border-bottom:1px solid var(--border);border-radius:0;gap:24px;font-size:12px;}
+:root .graphite-workspace .comment-review-page .review-overview strong{font-size:15px;}
+:root .graphite-workspace .comment-review-page .review-activity{margin:0;padding:8px 12px;border-radius:6px;font-size:12px;background:var(--muted);}
+:root .graphite-workspace .graphite-review-results .review-result-toolbar{display:grid;grid-template-columns:minmax(160px,1fr) 185px 310px auto;align-items:end;gap:8px;}
+.graphite-review-results .review-date-field{gap:4px;font-size:11px;color:var(--muted-foreground);}
+.graphite-review-results .review-result-tabs{padding:0;border:0;box-shadow:none;}
+.graphite-review-table .review-author{display:flex;align-items:center;gap:8px;margin-bottom:8px;min-width:0;}
+.review-author>div{min-width:0;}.review-author-name{display:block;font-size:12px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.review-author .graphite-review-meta{font-size:11px;margin:2px 0 0;}.review-author .info-avatar{flex-shrink:0;width:28px;height:28px;}
+.review-reply-label{font-size:11px;color:var(--muted-foreground);}
+.review-source-media{display:flex;align-items:flex-start;gap:10px;min-width:0;}.review-source-media>div{min-width:0;}
+.review-source-cover{display:grid;place-items:center;flex:0 0 44px;width:44px;height:58px;overflow:hidden;border-radius:4px;border:1px solid var(--border);color:var(--muted-foreground);background:var(--muted);}
+.review-source-cover img{width:100%;height:100%;object-fit:cover;}.review-source-cover svg{width:18px;height:18px;}
+.graphite-review-table .review-source-media p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;font-weight:500;}
+.review-source-media a{height:auto;min-height:24px;padding:2px 0;font-size:12px;}
+.graphite-review-source>.post-state-tag{margin-top:6px;}
+.graphite-review-dialog .review-author{display:flex;gap:10px;align-items:center;margin-bottom:12px;}
+.graphite-review-dialog .review-parent-context{border-left:2px solid var(--border);padding:8px 12px;margin:0 0 10px;color:var(--muted-foreground);font-size:12px;}
+.graphite-review-dialog .review-parent-context p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+@media(max-width:1150px){:root .graphite-workspace .graphite-review-results .review-result-toolbar{grid-template-columns:minmax(160px,1fr) 185px auto;}.review-date-field{grid-row:2;}:root .graphite-workspace .graphite-review-results .review-result-toolbar>button{grid-column:3;grid-row:1;}}
+@media(max-width:560px){:root .graphite-workspace .comment-review-page .review-workspace-heading{gap:10px;}:root .graphite-workspace .comment-review-page .review-workspace-heading .action-row{flex-wrap:wrap;}:root .graphite-workspace .comment-review-page .review-overview{gap:12px;flex-wrap:wrap;}:root .graphite-workspace .graphite-review-results .review-result-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}:root .graphite-workspace .graphite-review-results .review-result-toolbar>button{grid-column:2;grid-row:2;}:root .graphite-workspace .graphite-review-results .review-result-toolbar>.review-search{grid-row:1;}.graphite-review-results .review-date-field{grid-row:3;}.graphite-review-results .review-date-field input{width:100%;min-width:0;}:root .graphite-workspace .graphite-review-results .review-result-toolbar>label:nth-child(2){grid-column:1;grid-row:2;}.graphite-review-table .review-source-media{width:100%;}:root .graphite-workspace .comment-review-page .review-result-tabs{gap:2px;}:root .graphite-workspace .comment-review-page .review-result-tabs button{font-size:12px;padding:6px 8px;}.graphite-review-dialog .review-source-media a{min-height:36px;}}
+
+.review-date-range{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;min-width:0;}
+.graphite-review-dialog .review-parent-context{background:var(--muted);}
+@media(max-width:1150px){.review-date-range{grid-row:2;grid-column:1/3;}}
+@media(max-width:560px){:root .graphite-workspace .graphite-review-results .review-result-toolbar{grid-template-columns:minmax(0,1fr) 64px;}:root .graphite-workspace .graphite-review-results .review-result-toolbar .review-date-range{grid-row:3;grid-column:1/-1;}:root .graphite-workspace .comment-review-page .review-workspace-heading{align-items:flex-start;text-align:left;margin-bottom:0;}:root .graphite-workspace .graphite-review-results .review-result-toolbar [data-slot=select-trigger]{font-size:12px;padding-inline:8px;}.review-date-range .review-date-field{grid-row:auto;}}

@@ -28,7 +28,7 @@ describe("未认证 HTTP 边界", () => {
   it("ready 在数据库不可用时失败且不泄露细节", async()=>{databaseProbe.mockRejectedValueOnce(new Error("internal connection detail"));const r=await request(app.getHttpServer()).get("/api/health/ready");expect(r.status).toBe(503);expect(JSON.stringify(r.body)).not.toContain("internal connection detail")});
   for (const route of [
     "leads",
-    "auto-contact/attempts",
+    "auto-contact/attempts", "auto-contact/pending",
     "tasks",
     "users",
     "audit",
