@@ -16,6 +16,7 @@ import {semanticHash} from '../collection/capture-archive';
 import {dmPreviewInput} from './dm-preparation';
 import {DM_EXECUTOR,type DmExecutor} from './dm-executor';
 import {DM_SEND_PROTOCOL,dmDigest,type DmCommand,type DmExecution,parseDmExecution,validDmMessageId} from './dm-send-protocol';
+import {resolveConfirmedDmPause} from './resolved-dm-pause';
 const scopeSchema=z.object({protocol:z.literal('manual-dm-v1'),input:dmPreviewInput,hash:z.string(),day:z.string(),content:z.string(),recipientId:z.string()}).strict();
 export const dmConfirmInput=z.object({previewId:z.string().uuid(),token:z.string().min(32).max(200),requestKey:z.string().uuid()}).strict();
 function fail(s:string):never{throw new ConflictException(s)}
@@ -67,16 +68,15 @@ export class DmSendService {
  async verify(actor:Actor,id:string,signal:AbortSignal=AbortSignal.timeout(100000)){
   requireAdmin(actor);const user=await this.db.user.findUnique({where:{id:actor.id}});if(!user?.active||user.role!=='ADMIN')fail('管理员权限已变化');const req=await this.db.manualReplyRequest.findUnique({where:{id}});if(!req||req.actorId!==actor.id)throw new NotFoundException();const scope=scopeSchema.parse(req.scope);
   const attempt=await this.db.contactAttempt.findUnique({where:{requestKey:'dm:'+req.id},include:{ledger:{include:{identity:true}}}});
-  if(!attempt||attempt.channel!=='DM'||attempt.mode!=='REAL')throw new NotFoundException();if(attempt.outcome==='CONFIRMED')return this.status(actor,id);if(attempt.outcome!=='UNKNOWN')fail('当前记录不需要核查');
+  if(!attempt||attempt.channel!=='DM'||attempt.mode!=='REAL')throw new NotFoundException();if(attempt.outcome==='CONFIRMED'){const pauseRecovery=await this.db.$transaction(async tx=>{await contactLock(tx);return resolveConfirmedDmPause(tx,actor,attempt.id)});return {...await this.status(actor,id),pauseRecovery};}if(attempt.outcome!=='UNKNOWN')fail('当前记录不需要核查');
   const account=await this.db.platformAccount.findUnique({where:{id:req.accountId},include:{sessionReference:true}}),snap=attempt.historySnapshot as {senderPlatformId?:string};
   if(!account||account.archivedAt||!account.loginSessionKey||account.loginPlatformUserId!==snap?.senderPlatformId||account.sessionReference?.state!=='VERIFIED'||account.sessionReference.sessionKey!==account.loginSessionKey||attempt.ledger.identity.platformUserId!==scope.recipientId||attempt.content!==scope.content||!this.executor.verify)fail('原发送账号或记录无法核对');
   const c:DmCommand={protocol:DM_SEND_PROTOCOL,attemptId:attempt.id,requestKey:attempt.requestKey,accountId:account.id,senderId:account.loginPlatformUserId!,recipientId:scope.recipientId,content:scope.content,contentSha256:dmDigest(scope.content),maxSubmissions:1,expiresAt:new Date(Date.now()+180000).toISOString()};
   let proof:Awaited<ReturnType<NonNullable<DmExecutor['verify']>>>;try{proof=await this.executor.verify(actor,c,account.loginSessionKey,signal)}catch{fail('暂未取得可靠回执，保留未知状态，请勿重发')}
   const obs=proof!.observations;if(proof!.stopped!==true||obs.length!==2||obs[0].inspectionId===obs[1].inspectionId||obs[0].messageId!==obs[1].messageId||obs.some(o=>!validDmMessageId(o.messageId,c.senderId,c.recipientId)||o.senderId!==c.senderId||o.recipientId!==c.recipientId||o.contentSha256!==c.contentSha256||!Number.isFinite(Date.parse(o.observedAt))||Date.parse(o.observedAt)<Date.now()-180000||Date.parse(o.observedAt)>Date.now()+5000))fail('回执不一致，保留未知状态');
   await this.db.$transaction(async tx=>{await contactLock(tx);const changed=await tx.contactAttempt.updateMany({where:{id:attempt.id,outcome:'UNKNOWN',version:attempt.version},data:{outcome:'CONFIRMED',platformReceipt:obs[0].messageId,confirmedAt:await contactNow(tx),resolutionNote:'私信已发送，两次独立会话回读一致',version:{increment:1}}});if(changed.count!==1)fail('记录已变化，请刷新结果');
-   // Retain quota and recipient dedupe; clear only our own uncertainty pause, never user settings.
-   if(!await tx.contactAttempt.count({where:{mode:'REAL',outcome:'UNKNOWN',ledger:{identity:{platform:'XHS'}}}}))await tx.autoContactControl.updateMany({where:{platform:'XHS',mode:'REAL',pauseReason:'DM_SUBMISSION_UNKNOWN',activeJobId:null},data:{pauseReason:null,pausedAt:null}});
    await tx.auditLog.create({data:{actorId:actor.id,entityId:attempt.requestKey,action:'DM_UNKNOWN_READBACK_CONFIRMED',metadata:{attemptId:attempt.id,previousOutcome:'UNKNOWN',proof:proof! as unknown as Prisma.InputJsonValue}}});
+   await resolveConfirmedDmPause(tx,actor,attempt.id);
   });return this.status(actor,id);
  }
  async confirm(actor:Actor,raw:unknown,signal:AbortSignal=AbortSignal.timeout(90000)){
