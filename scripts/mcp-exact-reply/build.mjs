@@ -26,7 +26,7 @@ const compiler=await run(['version'],'compiler.log');if(compiler!=='go version g
 await run(['test','-mod=readonly','-count=1','-v','./exactreply'],'engine-tests.log');
 await run(['test','-mod=readonly','-count=1','-v','-run','^TestExactReply','./xiaohongshu'],'driver-tests.log');
 await run(['test','-mod=readonly','-count=1','-v','-run','^TestExactPreflightRoutes|^TestSelectionDiagnostic|^TestExactVerify','.'],'route-tests.log');
-const version='v2.5.5-local-dm-entry-inspection-v1',binary=join(out,'xiaohongshu-mcp-candidate');
+const version='v2.5.5-local-dm-profile-inspection-v3',binary=join(out,'xiaohongshu-mcp-candidate');
 const flags=['build','-mod=readonly','-trimpath','-buildvcs=false','-ldflags=-buildid= -X main.version='+version,'-o',binary,'.'];await run(flags,'build.log');
 const overlay={};for(const f of [...(await paths(join(bundle,'exactreply'))).map(p=>'exactreply/'+p),'exact_reply_driver.go','exact_verify_driver.go','exact_reply_receipt.go','exact_reply_receipt_test.go','exact_reply_driver_test.go','selection_diagnostic_driver.go','selection_diagnostic_driver_test.go','exact_preflight_driver.go','exact_preflight_page.go','restriction_inspection_driver.go','dm_entry_driver.go','exact_preflight_routes_test.go','selection_diagnostic_tools_test.go','exact_reply_tools.go'])overlay[f]=createHash('sha256').update(await readFile(join(bundle,f))).digest('hex');
 await writeFile(join(out,'SOURCE-OVERLAY.json'),JSON.stringify(overlay,null,2)+'\n');

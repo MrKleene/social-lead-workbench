@@ -39,6 +39,16 @@ try{
  const account=await db.platformAccount.findUnique({where:{id:scope.accountId},include:{sessionReference:true}}),ref=account?.sessionReference;
  if(!account||account.isDemo||account.archivedAt||account.platform!=='XHS'||account.status!=='PAUSED'||account.loginPlatformUserId!==scope.senderId||!account.loginSessionKey||ref?.sessionKey!==account.loginSessionKey||ref.provider!=='real'||ref.deviceId!==manifest.deviceId||ref.state!=='VERIFIED')throw Error('SAVED_ACCOUNT_MISMATCH');
  if(await db.autoContactJob.count({where:{status:{in:['QUEUED','WAITING_ACCOUNT','WAITING_QUOTA','RESERVED','ATTEMPTED']}}})||await db.collectionRun.count({where:{status:{in:['QUEUED','RUNNING']}}})||await db.autoReviewJob.count({where:{status:{in:['PENDING','RUNNING']}}})||await db.semanticReview.count({where:{state:'PROCESSING'}}))throw Error('ACTIVE_TASKS_PRESENT');
+
+ if(scope.recipientId){
+  const review=await db.semanticReview.findUnique({where:{id:scope.reviewId},include:{capture:{include:{post:true}}}});
+  if(!review||review.version!==scope.reviewVersion||review.isDemo||review.platform!=='XHS'||review.platformUserId!==scope.recipientId||review.state!=='EVALUATED'||review.context!=='SUFFICIENT'||review.score===null||review.score<95||review.reviewStatus==='REJECTED'||!review.capture)throw Error('SAVED_RECIPIENT_MISMATCH');
+  const {contactTarget}=require('../apps/api/dist/auto-contact/contact-policy.js');if(contactTarget(review,review.capture,review.capture.post)?.recipientId!==scope.recipientId)throw Error('SAVED_RECIPIENT_MISMATCH');
+  const identity=await db.platformIdentity.findUnique({where:{platform_platformUserId:{platform:'XHS',platformUserId:scope.recipientId}},include:{lead:true}});
+  if(identity?.lead&&(identity.lead.doNotContact||identity.lead.contactedAt||['CONTACTED','INTERESTED'].includes(identity.lead.contactStage)))throw Error('RECIPIENT_CONTACT_BLOCK');
+  if(identity&&await db.contactAttempt.count({where:{ledger:{identityId:identity.id,mode:'REAL'},outcome:{not:'CANCELLED'}}}))throw Error('RECIPIENT_LEDGER_BLOCK');
+  if(await db.autoContactJob.count({where:{platform:'XHS',mode:'REAL',recipientId:scope.recipientId,status:{in:['PENDING_ACTION','QUEUED','WAITING_ACCOUNT','WAITING_QUOTA','RESERVED','ATTEMPTED','UNKNOWN','CONFIRMED']}}}))throw Error('RECIPIENT_JOB_BLOCK');
+ }
  // The permission is consumed before opening a platform session, even on failure.
  const consumed=join(directory,'dm-entry-inspection-consents');await mkdir(consumed,{recursive:true,mode:0o700});await privateDirectory(consumed);
  await writeFile(join(consumed,scope.approvalId+'.json'),JSON.stringify({scope,consumedAt:new Date().toISOString(),submissions:0})+'\n',{flag:'wx',mode:0o600});
@@ -50,6 +60,11 @@ try{
  driver=await runtime.openSavedForDMEntryInspection(scope.accountId,ref.sessionKey,signal,permit.root,scope.candidateSha256);stopped=false;
  if(!driver.replyEndpoint)throw Error('ENDPOINT_MISSING');
  outcome=await inspectDMEntry(driver.replyEndpoint(),scope,signal);
+ if(outcome.result?.observation?.screenshotPng){
+  const image=Buffer.from(outcome.result.observation.screenshotPng,'base64');delete outcome.result.observation.screenshotPng;
+  if(!scope.recipientId||image.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('INVALID_PROFILE_IMAGE');
+  await writeFile(join(output,'recipient-profile.png'),image,{flag:'wx',mode:0o600});outcome.profileScreenshot='recipient-profile.png';
+ }
 }catch(e){outcome={kind:'STOPPED',reason:e instanceof Error&&/^[A-Z_]+$/.test(e.message)?e.message:'READ_ONLY_DIAGNOSTIC_STOPPED'};process.exitCode=1;}
 finally{
  let leaseReleased=!permit,cleanupIssue=null;

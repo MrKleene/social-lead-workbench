@@ -8,13 +8,14 @@ import (
 const DMEntryProtocol = "workbench.xhs.dm-entry-inspection.v1"
 
 type DMEntryTarget struct {
-	Protocol  string `json:"protocol"`
-	AccountID string `json:"accountId"`
-	SenderID  string `json:"senderId"`
+	Protocol    string `json:"protocol"`
+	AccountID   string `json:"accountId"`
+	SenderID    string `json:"senderId"`
+	RecipientID string `json:"recipientId,omitempty"`
 }
 
 func (t DMEntryTarget) Valid() bool {
-	return t.Protocol == DMEntryProtocol && opaque.MatchString(t.AccountID) && id.MatchString(t.SenderID)
+	return t.Protocol == DMEntryProtocol && opaque.MatchString(t.AccountID) && id.MatchString(t.SenderID) && (t.RecipientID == "" || (id.MatchString(t.RecipientID) && t.RecipientID != t.SenderID))
 }
 
 type DMEntryLink struct {
@@ -23,12 +24,26 @@ type DMEntryLink struct {
 	Path     string `json:"path"`
 	Disabled bool   `json:"disabled"`
 }
+type DMIconParent struct {
+	Tag       string `json:"tag"`
+	ClassName string `json:"className"`
+}
+type DMIconControl struct {
+	Icon    string         `json:"icon"`
+	X       int            `json:"x"`
+	Y       int            `json:"y"`
+	Width   int            `json:"width"`
+	Height  int            `json:"height"`
+	Parents []DMIconParent `json:"parents"`
+}
 type DMEntryObservation struct {
-	Identity       string        `json:"identity"`
-	Route          string        `json:"route"`
-	LoginChallenge bool          `json:"loginChallenge"`
-	Risk           bool          `json:"risk"`
-	Entries        []DMEntryLink `json:"entries"`
+	IconControls   []DMIconControl `json:"iconControls,omitempty"`
+	Identity       string          `json:"identity"`
+	Route          string          `json:"route"`
+	LoginChallenge bool            `json:"loginChallenge"`
+	Risk           bool            `json:"risk"`
+	Entries        []DMEntryLink   `json:"entries"`
+	ScreenshotPNG  string          `json:"screenshotPng,omitempty"`
 }
 type DMEntryResult struct {
 	Protocol           string             `json:"protocol"`
@@ -76,7 +91,7 @@ func InspectDMEntry(ctx context.Context, t DMEntryTarget, factory func() (DMEntr
 	case o.LoginChallenge || o.Risk:
 		r.Code = "PLATFORM_BLOCKED"
 		r.Observation.Entries = nil
-	case o.Route != "/explore":
+	case (t.RecipientID == "" && o.Route != "/explore") || (t.RecipientID != "" && o.Route != "PROFILE"):
 		r.Code = "ROUTE_CHANGED"
 		r.Observation.Entries = nil
 	case len(o.Entries) == 0:
