@@ -2,13 +2,13 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {CollectionProgressFeed} from './collection-progress-feed';
 import type {Run} from '@/features/collection/types';
-const fixture=vi.hoisted(()=>({items:[{platformPostId:'fictional-post',title:'虚构帖子标题',body:'虚构正文',savedCount:3,rootCount:2,replyCount:1,newCount:1,reusedCount:2,savedAt:'2026-11-02T00:00:00Z',stopReason:null}],isPending:false,isError:false,availability:'AVAILABLE'}));
+const fixture=vi.hoisted(()=>({items:[{platformPostId:'fictional-post',title:'虚构帖子标题',body:'虚构正文',savedCount:3,rootCount:2,replyCount:1,newCount:1,reusedCount:2,savedAt:'2026-11-02T00:00:00Z',publishedAt:undefined as string|undefined,stopReason:null}],isPending:false,isError:false,availability:'AVAILABLE'}));
 vi.mock('./use-run-post-feed',()=>({useRunPostFeed:()=>({data:{items:fixture.items,availability:fixture.availability},isPending:fixture.isPending,isError:fixture.isError,refetch:vi.fn()}),useRunPostSnapshot:()=>({configId:'config-fixture',runId:'run-fixture',items:fixture.items,availability:fixture.availability,limited:false})}));
 const run={id:'run-fixture',status:'COMPLETE',reason:null,capturedPosts:1,capturedCommentsCount:3,createdAt:'2026-11-01T23:59:00Z',finishedAt:'2026-11-02T00:01:00Z',readPlan:{rounds:1,postsPerRound:3,commentPages:20}} as Run;
-const render=(options:{run?:Run;pending?:boolean;error?:unknown}={})=>renderToStaticMarkup(<CollectionProgressFeed configId="config-fixture" run={run} pending={false} error={null} visible onRefresh={vi.fn()} {...options}/>);
-beforeEach(()=>{fixture.isPending=false;fixture.isError=false;fixture.availability='AVAILABLE';});
+const render=(options:{run?:Run;pending?:boolean;error?:unknown}={})=>renderToStaticMarkup(<CollectionProgressFeed configId="config-fixture" platform="XHS" run={run} pending={false} error={null} visible onRefresh={vi.fn()} {...options}/>);
+beforeEach(()=>{fixture.isPending=false;fixture.isError=false;fixture.availability='AVAILABLE';fixture.items[0].publishedAt=undefined;});
 it('shows facts inline and post data without separate detail, refresh or view actions',()=>{
- const html=render();for(const text of ['评论 / 回复','主评论 2','回复 1','采集时间（北京）','虚构帖子标题','新存 / 复用原文','开始时间（北京）','覆盖待确认'])expect(html).toContain(text);
+ const html=render();for(const text of ['评论 / 回复','主评论 2','回复 1','发布时间（北京）','采集于','未获取','虚构帖子标题','新存 / 复用原文','开始时间（北京）','覆盖待确认','帖子原文'])expect(html).toContain(text);
  for(const text of ['覆盖与读取明细','采集详情','刷新帖子','>查看<','已采集当前可见评论'])expect(html).not.toContain(text);
  expect(html).toMatch(/<button[^>]*>虚构帖子标题<\/button>/);expect(html).toContain('2026/11/02 08:00');
 });
@@ -23,4 +23,9 @@ it('running keeps progress visible and unknown coverage distinct from success',(
 });
 it('old run without retained snapshot remains explicit and does not show another run posts',()=>{
  fixture.availability='SUPERSEDED';const html=render();expect(html).toContain('旧任务未保留完整的逐篇快照');expect(html).not.toContain('虚构帖子标题');
+});
+
+it('distinguishes actual publication from collection time and rejects unnormalized dates',()=>{
+ fixture.items[0].publishedAt='2026-10-31T05:00:00Z';const html=render();expect(html).toContain('2026/10/31 13:00');expect(html).toContain('采集于');expect(html).toContain('2026/11/02 08:00');expect(html).not.toContain('未获取');
+ fixture.items[0].publishedAt='昨天';expect(render()).toContain('未获取');
 });

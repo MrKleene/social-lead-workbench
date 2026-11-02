@@ -83,6 +83,6 @@ export function CollectionFlow({configs,loading,error,visible,workspaceVisible=v
  return <section className="collection-flow task-room">{actionsHost?createPortal(toolbar,actionsHost):toolbar}
  <ErrorNotice error={unavailable||launchError||mutation.error||loginCheck.error}/>
 
- {selected?<CollectionProgressFeed configId={selected.id} key={selected.id} run={session.currentRun} visible={visible} pending={session.pending} error={unavailable} onRefresh={()=>void session.refresh()}/>:!unavailable&&<div className="task-feed-empty"><h2>先选择关键词组</h2></div>}
+ {selected?<CollectionProgressFeed configId={selected.id} platform={selected.platform} key={selected.id} run={session.currentRun} visible={visible} pending={session.pending} error={unavailable} onRefresh={()=>void session.refresh()}/>:!unavailable&&<div className="task-feed-empty"><h2>先选择关键词组</h2></div>}
  </section>;
 }

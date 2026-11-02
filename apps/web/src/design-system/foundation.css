@@ -475,3 +475,26 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 @media(max-width:767px){.collection-result-facts dl{gap:8px 16px}.collection-result-facts .collection-result-meta{gap:8px 16px}:root .graphite-workspace .task-results-inline .run-post-table td[data-label]{grid-column:1/-1}}
 
 @media(max-width:767px){:root .graphite-workspace .task-results-inline .run-post-table td{padding:2px 0!important;min-width:0}:root .graphite-workspace .task-results-inline .run-post-table tr{grid-template-columns:minmax(0,1fr);gap:6px}:root .graphite-workspace .task-results-inline .run-post-table-title>button{display:inline-block;max-width:calc(100% - 50px);min-width:0}}
+
+/* Read-only matching results: balanced post list and inline review evidence. */
+:root .graphite-workspace .run-review-layout{grid-template-columns:minmax(280px,28%) minmax(0,1fr);gap:24px}
+:root .graphite-workspace .run-review-post{display:flex;flex-direction:row;align-items:flex-start;justify-content:flex-start;gap:12px;padding:12px!important;border-radius:6px;min-width:0}
+.run-review-thumbnail{flex:0 0 56px;width:56px;height:68px;border-radius:4px;border:1px solid var(--border);overflow:hidden;background:var(--muted);display:grid;place-items:center}
+.run-review-thumbnail img{width:100%;height:100%;object-fit:cover}.run-review-thumbnail>span{font-size:10px}
+.run-review-post-copy{display:flex;flex-direction:column;gap:8px;min-width:0}.run-review-post-copy strong{font-size:14px;color:var(--foreground);line-height:1.6;white-space:normal;overflow-wrap:anywhere}.run-review-post-copy>span{font-size:12px;line-height:1.5}
+:root .graphite-workspace .graphite-run-review-table th:first-child{width:32%}
+:root .graphite-workspace .graphite-run-review-table th:last-child{width:auto}
+:root .graphite-workspace .graphite-run-review-table td{vertical-align:top}
+:root .graphite-workspace .graphite-run-review-table .info-saved-text>p{display:block;overflow:visible;-webkit-line-clamp:unset;margin:5px 0;font-size:13px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;color:inherit}
+:root .graphite-workspace .graphite-run-review-table .info-text-action{font-size:12px;min-height:28px;padding:0;line-height:1.5;color:var(--foreground);text-decoration:underline;text-underline-offset:3px}
+.run-review-evidence-line{display:block!important;font-size:11px!important;line-height:1.6;margin-top:6px;overflow-wrap:anywhere;color:var(--muted-foreground)}
+.run-review-other-evidence{font-size:12px;margin-top:8px}.run-review-other-evidence summary{cursor:pointer;min-height:28px}.run-review-other-evidence>div{margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+:root .graphite-workspace .run-review-pagination{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--muted-foreground)}
+@media(max-width:1050px){:root .graphite-workspace .run-review-layout{grid-template-columns:minmax(0,1fr);gap:16px}:root .graphite-workspace .run-review-posts{max-height:280px;overflow:auto}:root .graphite-workspace .graphite-run-review-table tr{grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:14px 0}:root .graphite-workspace .graphite-run-comment{grid-column:1/-1;grid-row:1}:root .graphite-workspace .graphite-run-score{grid-column:1;grid-row:2;text-align:left}:root .graphite-workspace .graphite-run-score::before{content:'评分：';font-weight:400;color:var(--muted-foreground)}:root .graphite-workspace .graphite-run-state{grid-column:2;grid-row:2}:root .graphite-workspace .graphite-run-reason{grid-column:1/-1;grid-row:3}:root .graphite-workspace .graphite-run-reason small{display:block}:root .graphite-workspace .graphite-run-review-table td{padding:0!important;min-width:0}}
+@media(max-width:600px){:root .graphite-workspace .run-review-pagination{align-items:flex-start;flex-direction:column}:root .graphite-workspace .run-review-pagination>.action-row{width:100%;justify-content:space-between}:root .graphite-workspace .graphite-run-review-table .info-text-action{min-height:44px}.run-review-other-evidence summary{min-height:44px}}
+
+:root .graphite-workspace .task-results-inline .run-post-table th:first-child{width:32%}
+:root .graphite-workspace .task-results-inline .run-post-table th:nth-child(4){width:20%}
+:root .graphite-workspace .task-results-inline .run-post-table th:last-child{width:96px}
+:root .graphite-workspace .run-post-original-action{text-align:right}
+@media(max-width:767px){:root .graphite-workspace .run-post-original-action{grid-column:1/-1;text-align:left;margin-top:4px}}

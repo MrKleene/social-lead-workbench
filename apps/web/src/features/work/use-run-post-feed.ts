@@ -14,7 +14,7 @@ export function useRunPostSnapshot(configId:string,runId?:string){
  const snapshot=useCallback(()=>client.getQueryData<RunPostFeed>(runPostFeedKey(configId,runId||'none')),[client,configId,runId]);
  return useSyncExternalStore(subscribe,snapshot,snapshot);
 }
-export function useRunPostFeed(configId:string,run:Run,visible:boolean){
+export function useRunPostFeed(configId:string,run:Pick<Run,'id'|'status'>,visible:boolean){
  const query=useQuery({queryKey:runPostFeedKey(configId,run.id),queryFn:async()=>{
   const data=runPostFeedSchema.parse(await api(`/collection/configs/${encodeURIComponent(configId)}/runs/${encodeURIComponent(run.id)}/posts`));
   if(data.runId!==run.id||data.configId!==configId)throw Error('任务明细不匹配，请刷新');return data;
