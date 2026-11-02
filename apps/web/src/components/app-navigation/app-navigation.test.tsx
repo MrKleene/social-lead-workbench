@@ -9,7 +9,7 @@ const render=(admin:boolean,path='/home')=>renderToStaticMarkup(<MemoryRouter in
 describe('graphite navigation preserves authorized destinations',()=>{
  it('keeps all administrator modules reachable and marks the current route',()=>{
   const html=render(true,'/automation?config=example&run=example-run');
-  for(const name of ['工作台','自动化任务','采集信息','评论审核','自动回复','待处理回复','回复记录','线索池','销售跟进','全部线索','人工任务','账号中心','发送模板','提醒与异常','关键词配置','评论匹配方案','配置管理','平台能力'])expect(html).toContain(name);
+  for(const name of ['工作台','自动化任务','采集信息','评论审核','自动回复','待处理回复','回复记录','线索池','销售跟进','全部线索','人工任务','账号中心','发送模板配置','提醒与异常','关键词配置','评论匹配方案配置','配置管理','平台能力'])expect(html).toContain(name);
   expect(html).toContain('href="/automation?config=example&amp;run=example-run"');
   expect(html).toContain('aria-current="page"');
   expect(html).toContain('aria-label="打开导航"');
@@ -39,12 +39,12 @@ it('home is reached through desktop and mobile brand links, not a sidebar item',
 
 it('groups the three existing configuration destinations without duplicate legacy labels',()=>{
  const html=render(true,'/comment-review?manage=1');
- for(const label of ['关键词配置','评论匹配方案','发送模板'])expect(html).toContain(label);
+ for(const label of ['关键词配置','评论匹配方案配置','发送模板配置'])expect(html).toContain(label);
  expect(html).toContain('<h2>配置管理</h2>');
  expect(html).not.toContain('搜索与模型');expect(html).not.toContain('联系与回复话术');
  expect(html).toMatch(/<a(?=[^>]*href="\/comment-review\?manage=1")(?=[^>]*aria-current="page")[^>]*>/);
  expect(html).not.toMatch(/<a(?=[^>]*href="\/comment-review")(?=[^>]*aria-current="page")[^>]*>/);
- expect(html).toContain('<span>配置管理</span><span aria-hidden="true">/</span><span>评论匹配方案</span>');
+ expect(html).toContain('<span>配置管理</span><span aria-hidden="true">/</span><span>评论匹配方案配置</span>');
  const sales=render(false,'/comment-review?manage=1');
- for(const label of ['配置管理','关键词配置','评论匹配方案','发送模板'])expect(sales).not.toContain(label);
+ for(const label of ['配置管理','关键词配置','评论匹配方案配置','发送模板配置'])expect(sales).not.toContain(label);
 });
