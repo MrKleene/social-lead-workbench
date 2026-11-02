@@ -1,3 +1,4 @@
+import {manualReviewLabel} from './manual-review-label';
 import {MemoryRouter} from 'react-router-dom';
 import {createElement,type ReactNode} from 'react';
 import {TooltipProvider} from '@/components/ui/tooltip';
@@ -11,9 +12,9 @@ const item:SemanticReviewItem={id:'synthetic-review',revision:3,version:2,state:
 const render=(child:ReactNode)=>renderToStaticMarkup(createElement(MemoryRouter,{children:createElement(TooltipProvider,{children:child})}));
 const table=(items:SemanticReviewItem[])=>render(createElement(ReviewResultsTable,{items,onOpen:()=>{}}));
 describe('standalone review presentation',()=>{
- it('keeps low scores and separates model completion from manual pending',()=>{const html=table([item]);for(const s of ['<table','相关度','24','已评估','待审核','合成样本'])expect(html).toContain(s);expect(html.match(/data-slot="table-head"/g)).toHaveLength(6);expect(html).not.toContain('已人工确认');expect(html).not.toContain('自动发送');});
+ it('keeps low scores and separates model completion from manual pending',()=>{const html=table([item]);for(const s of ['<table','相关度','24','已评估','合成样本'])expect(html).toContain(s);expect(html.match(/data-slot="table-head"/g)).toHaveLength(5);expect(html).not.toContain('已人工确认');expect(html).not.toContain('自动发送');expect(html).not.toContain('待审核');expect(html).not.toContain('人工状态');});
  it('does not render a stale score on failed, processing or unanalysed results',()=>{for(const state of ['FAILED','PROCESSING','UNANALYSED']){const html=table([{...item,state,score:92}]);expect(html).toContain('未评分');expect(html).not.toContain('>92<');}expect(table([{...item,state:'FAILED',displayReason:'示例模型请求失败'}])).toContain('示例模型请求失败');});
- it('keeps manual decisions explicit without changing model status',()=>{const html=table([{...item,reviewStatus:'REJECTED'},{...item,id:'second',reviewStatus:'APPROVED'}]);expect(html).toContain('已排除');expect(html).toContain('已人工确认');expect(html).toContain('已评估');});
+ it('keeps manual decisions explicit without changing model status',()=>{const html=table([{...item,reviewStatus:'REJECTED'},{...item,id:'second',reviewStatus:'APPROVED'}]);expect(html).toContain('已人工排除');expect(html).not.toContain('已人工确认');expect(html).toContain('已评估');});
  it('retains full comment data and source fallback without invented task or nickname',()=>{const long='长评论内容'.repeat(120);const html=table([{...item,snapshot:{...item.snapshot,title:'',comment:long}}]);expect(html).toContain(long);expect(html).toContain('来源帖子标题缺失');expect(html).not.toContain('<img');expect(html).not.toContain('自动化 ·');});
  it('retains source evidence, reasons, versions and context in details',()=>{const html=render(createElement(ReviewResultEvidence,{item}));for(const text of ['有内容但不符合服务范围','模型判断不相关','分数不是准确率','仅查看内容','test-model-v1','已保存的帖子正文','示例父评论','历史输入：未记录当前观察版本','沿用当时保存的快照'])expect(html).toContain(text);});
  it('shows absent evidence honestly rather than claiming a model judgement',()=>{const html=render(createElement(ReviewResultEvidence,{item:{...item,state:'UNANALYSED',score:null,reason:null,result:null}}));expect(html).toContain('尚未获得模型判断');expect(html).toContain('没有模型原文引用证据');expect(html).not.toContain('模型判断相关');});
@@ -28,3 +29,5 @@ describe('saved publication and source metadata',()=>{
  it('does not use review timestamp for missing publication and rejects unsafe media',()=>{const html=table([{...item,source:{authorAvatarUrl:'file:///private/secret',coverUrl:'javascript:bad'}}]);expect(html).toContain('评论发布时间未知');expect(html).toContain('用户名称未保存');expect(html).not.toContain('file:///');expect(html).not.toContain('javascript:');expect(html).toContain('封面未保存或不可用');});
  it('keeps parent context and complete long comment in details',()=>{const html=render(createElement(ReviewResultEvidence,{item}));expect(html).toContain('回复父评论');expect(html).toContain('示例父评论');expect(html).toContain('审核记录时间');});
 });
+
+it('uses neutral manual labels without changing model pending labels',()=>{expect(manualReviewLabel('PENDING')).toBe('未人工复核');expect(manualReviewLabel('APPROVED')).toBe('已人工确认');expect(manualReviewLabel('REJECTED')).toBe('已人工排除');});
