@@ -1,39 +1,20 @@
-import {useConfirmDiscard} from '@/features/work/draft-guard';
-import { FieldGroup } from '@/components/ui/field';
-import { FormField } from '@/components/form-field';
-import { SelectField, SelectOption } from '@/components/select-field';
-import { FormEvent, useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { api } from '@/lib/api';
-import { Lead } from '@/lib/types';
-import { useAuth } from '@/features/auth/use-auth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { ErrorNotice, Loading } from '@/components/feedback';
-import { ReplyTemplate, useReplyTemplates, useReplyMutation, useReplyPreview } from './use-replies';
-import { useDraftGuard } from '@/features/work/draft-guard';
-import { SoftSwap } from '@/features/work/space-panel';
-import { PreviewText } from './reply-preview';
-function TemplateEditor({ item, onSaved, onDirty }: { item?: ReplyTemplate; onSaved: () => void; onDirty:(dirty:boolean)=>void }) {
-  const [name,setName] = useState(item?.name || ''), [channel,setChannel] = useState<'COMMENT'|'DM'>(item?.channel || 'COMMENT'), [body,setBody] = useState(item?.body || ''), [leadId,setLeadId] = useState('');
-  const mutation = useReplyMutation(), preview = useReplyPreview();
-  const leads = useQuery({ queryKey: ['leads'], queryFn: () => api<Lead[]>('/leads') });
-  const dirty=name!==(item?.name||'')||body!==(item?.body||'')||channel!==(item?.channel||'COMMENT');
-  useDraftGuard(dirty);
-  useEffect(()=>{onDirty(dirty);return()=>onDirty(false);},[dirty,onDirty]);
-  const resetPreview = () => preview.reset();
-  const submit = (e: FormEvent) => { e.preventDefault(); mutation.mutate({ path: `/reply-templates${item ? `/${item.id}` : ''}`, method: item ? 'PATCH' : 'POST', body: item ? { draft: { name,channel,body }, version: item.version } : { name,channel,body } }, { onSuccess: onSaved }); };
-  return <form className="config-form table-panel collection-body" onSubmit={submit}><FieldGroup className="form-fields"><h2>{item ? '编辑话术' : '新增话术'}</h2><ErrorNotice error={mutation.error || preview.error || leads.error}/><FormField>话术名称<Input value={name} onChange={e => setName(e.target.value)} required maxLength={80}/></FormField><FormField>使用渠道<SelectField aria-label="使用渠道" value={channel} onValueChange={e => setChannel(e as 'COMMENT'|'DM')}><SelectOption value="COMMENT">评论</SelectOption><SelectOption value="DM">私信</SelectOption></SelectField></FormField><FormField>话术内容<Textarea value={body} onChange={e => { setBody(e.target.value); resetPreview(); }} required maxLength={2000} rows={5}/></FormField><p>支持：{['昵称','关键词','帖子标题','平台','专业'].map(f => `{{${f}}}`).join('、')}。专业字段目前未采集，不会根据关键词推断。</p><FormField>预览来源<SelectField aria-label="预览来源" value={leadId} onValueChange={e => { setLeadId(e); resetPreview(); }}><SelectOption value="">未选择来源（显示缺失字段）</SelectOption>{leads.data?.map(l => <SelectOption key={l.id} value={l.id}>{l.identity.nickname} · {l.summary}</SelectOption>)}</SelectField></FormField><div className="action-row"><Button type="button" variant="outline" disabled={preview.isPending} onClick={() => preview.mutate({ body, ...(leadId ? { leadId } : {}) })}>预览最终文本</Button><Button disabled={mutation.isPending}>保存话术</Button></div><PreviewText value={preview.data || { text: body, missing: [], unknown: [], source: '草稿原文：点击预览最终文本填充来源字段', sent: false }}/></FieldGroup></form>;
-}
-export function RepliesPage() {
-  const { user } = useAuth(), admin = user?.role === 'ADMIN';
-  const query = useReplyTemplates(admin), mutation = useReplyMutation();
-  const [editing,setEditing] = useState<ReplyTemplate | null>(null), [key,setKey] = useState(0), [feedback,setFeedback] = useState('');
-  const [dirty,setDirty]=useState(false);
-  const confirmDiscard=useConfirmDiscard();
-    const discard=async()=>!dirty||await confirmDiscard('当前话术尚未保存，确定放弃修改并切换吗？');
-  if (!admin) return <p>仅管理员可管理回复话术。<Link to="/work">返回工作台</Link></p>;
-  return <><div className="page-heading"><div><h1>发送模板配置</h1></div><Button onClick={async () => { if(await discard()){setEditing(null); setKey(v => v+1);} }}>新增话术</Button></div><ErrorNotice error={query.error || mutation.error}/>{feedback && <p role="status">{feedback}</p>}<div className="collection-layout"><aside className="config-list" aria-label="已保存话术">{query.isPending?<Loading/>:!query.isError&&!query.data?.length?<div className="config-card"><h2>尚无话术</h2><p>在右侧编写第一条回复话术，保存前可以预览。</p></div>:null}{query.data?.map(t => <article className="config-card" key={t.id}><h3>{t.name}</h3><p>{t.channel === 'COMMENT' ? '评论' : '私信'} · {t._count?.configs || 0} 份设置关联</p><div className="action-row"><Button size="sm" variant="outline" onClick={async () => { if(await discard()){setEditing(t); setKey(v=>v+1);} }}>编辑<span className="sr-only">{t.name}</span></Button><Button size="sm" variant="ghost" onClick={async () => {if(await discard())mutation.mutate({ path: `/reply-templates/${t.id}`, method: 'DELETE', body: { version: t.version } }, { onSuccess: () => { setEditing(null); setKey(v=>v+1); setFeedback('话术已删除，审计保留'); } });}}>删除<span className="sr-only">{t.name}</span></Button></div></article>)}</aside><SoftSwap identity={String(key)}><TemplateEditor onDirty={setDirty} key={key} item={editing || undefined} onSaved={() => { setFeedback('话术已保存，未发送任何消息'); setEditing(null); setKey(v=>v+1); }}/></SoftSwap></div></>;
+import {useState} from 'react';
+import {Link} from 'react-router-dom';
+import {useAuth} from '@/features/auth/use-auth';
+import {Button} from '@/components/ui/button';
+import {Empty,EmptyHeader,EmptyTitle} from '@/components/ui/empty';
+import {ErrorNotice} from '@/components/feedback';
+import {PageState} from '@/components/page-state';
+import {useConfigurationEditor} from '@/features/work/use-configuration-editor';
+import {useReplyTemplates,useReplyMutation} from './use-replies';
+import {TemplateEditor} from './template-editor';
+import '@/components/configuration-browser.css';
+export function RepliesPage(){
+ const {user}=useAuth(),admin=user?.role==='ADMIN',query=useReplyTemplates(admin),mutation=useReplyMutation();
+ const state=useConfigurationEditor(query.data||[]),[feedback,setFeedback]=useState(''),item=state.selected;
+ if(!admin)return <p>仅管理员可管理发送模板。<Link to="/work">返回工作台</Link></p>;
+ if(query.isPending)return <PageState title="发送模板配置" loading/>;
+ if(query.isError)return <PageState title="发送模板配置" error={query.error} onRetry={()=>void query.refetch()}/>;
+ const busy=state.busy||mutation.isPending;
+ return <><header className="page-heading"><h1>发送模板配置</h1><Button disabled={busy} onClick={()=>void state.create()}>新增模板</Button></header><ErrorNotice error={mutation.error}/>{feedback&&<p role="status">{feedback}</p>}<div className="configuration-browser"><aside className="configuration-items" aria-label="已有发送模板"><h2>已有模板 · {query.data.length}</h2>{query.data.map(t=><Button key={t.id} className="configuration-item" variant="ghost" aria-pressed={!state.editor&&item?.id===t.id} disabled={busy} onClick={()=>void state.select(t)}><span>{t.name}</span><small>{t.channel==='COMMENT'?'评论':'私信'} · {t._count?.configs||0} 份设置关联</small></Button>)}</aside><section className="configuration-detail" aria-label="模板内容">{state.editor?<TemplateEditor key={state.editor.key} item={state.editor.item} onDirty={state.setDirty} onBusy={state.setBusy} onCancel={()=>void state.cancel()} onSaved={id=>{state.saved(id);setFeedback('模板已保存');}}/>:item?<><header><h2>{item.name}</h2><div className="action-row"><Button variant="outline" size="sm" disabled={busy} onClick={()=>void state.edit()}>编辑模板</Button><Button variant="ghost" size="sm" disabled={busy} onClick={()=>mutation.mutate({path:`/reply-templates/${item.id}`,method:'DELETE',body:{version:item.version}},{onSuccess:()=>{state.saved();setFeedback('模板已删除，审计保留');}})}>删除</Button></div></header><dl><div><dt>使用渠道</dt><dd>{item.channel==='COMMENT'?'评论':'私信'}</dd></div><div><dt>模板内容</dt><dd>{item.body}</dd></div></dl></>:<Empty><EmptyHeader><EmptyTitle>暂无发送模板</EmptyTitle></EmptyHeader></Empty>}</section></div></>;
 }

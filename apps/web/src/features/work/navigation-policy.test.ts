@@ -31,6 +31,8 @@ it('distinguishes policy configuration from review results while preserving exis
  expect(activeNavigation('/work','?module=settings&config=example',true)).toBe('settings');
  expect(activeNavigation('/work','?module=templates',true)).toBe('templates');
  const item=secondaryNavigation.find(i=>i.id==='review-policies')!;
- expect(navigationPath(item,{pathname:'/comment-review',search:'?policy=old'},{},'')).toBe('/comment-review?manage=1');
+ expect(navigationPath(item,{pathname:'/comment-review',search:'?policy=old'},{},'')).toBe('/review-policies');
  expect(navigationPath(secondaryNavigation.find(i=>i.id==='review')!,{pathname:'/comment-review',search:'?manage=1'},{},'')).toBe('/comment-review');
 });
+
+it('recognizes the standalone policy route without broadening sales access',()=>{expect(activeNavigation('/review-policies','',true)).toBe('review-policies');expect(activeNavigation('/review-policies','',false)).toBeNull();});

@@ -3,6 +3,7 @@ import {automationPath} from '@/features/work/navigation-policy';
 import {HomePage} from '@/features/work/home-page';
 import {ReplyHistoryPage} from '@/features/auto-contact/reply-history-page';
 import {AutoContactPage} from '@/features/auto-contact/auto-contact-page';
+import {PolicyConfigurationPage} from '@/features/comment-review/policy-configuration-page';
 import {CommentReviewPage} from '@/features/comment-review/comment-review-page';
 import React from "react";
 import {AutomationDesignPreview} from "@/features/design-preview/automation-design-preview";
@@ -57,6 +58,7 @@ function App() {
         <Route path="/collection/:configId?" element={<LegacySettings />} />
         <Route path="/reply-history" element={<ReplyHistoryPage />} />
         <Route path="/auto-contact" element={<AutoContactPage />} />
+        <Route path="/review-policies" element={<PolicyConfigurationPage />} />
         <Route path="/comment-review" element={<CommentReviewPage />} />
         <Route path="/leads/:id?" element={<LeadsPage />} />
         <Route path="/tasks" element={<TasksPage />} />

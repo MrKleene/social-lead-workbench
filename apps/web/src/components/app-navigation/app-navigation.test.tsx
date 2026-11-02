@@ -38,11 +38,11 @@ it('home is reached through desktop and mobile brand links, not a sidebar item',
 
 
 it('groups the three existing configuration destinations without duplicate legacy labels',()=>{
- const html=render(true,'/comment-review?manage=1');
+ const html=render(true,'/review-policies');
  for(const label of ['关键词配置','评论匹配方案配置','发送模板配置'])expect(html).toContain(label);
  expect(html).toContain('<h2>配置管理</h2>');
  expect(html).not.toContain('搜索与模型');expect(html).not.toContain('联系与回复话术');
- expect(html).toMatch(/<a(?=[^>]*href="\/comment-review\?manage=1")(?=[^>]*aria-current="page")[^>]*>/);
+ expect(html).toMatch(/<a(?=[^>]*href="\/review-policies")(?=[^>]*aria-current="page")[^>]*>/);
  expect(html).not.toMatch(/<a(?=[^>]*href="\/comment-review")(?=[^>]*aria-current="page")[^>]*>/);
  expect(html).toContain('<span>配置管理</span><span aria-hidden="true">/</span><span>评论匹配方案配置</span>');
  const sales=render(false,'/comment-review?manage=1');

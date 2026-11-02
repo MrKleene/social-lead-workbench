@@ -9,7 +9,7 @@ export const primaryNavigation:NavigationItem[]=[
 export const secondaryNavigation:NavigationItem[]=[
  {id:'archive',label:'采集信息',path:'/work?module=archive',module:'archive',adminOnly:true,group:'工作管理'},
  {id:'review',label:'评论审核',path:'/comment-review',adminOnly:true,group:'工作管理'},
- {id:'review-policies',label:'评论匹配方案配置',path:'/comment-review?manage=1',adminOnly:true,group:'配置管理'},
+ {id:'review-policies',label:'评论匹配方案配置',path:'/review-policies',adminOnly:true,group:'配置管理'},
  {id:'pending-replies',label:'待处理回复',path:'/auto-contact?view=pending',adminOnly:true,group:'工作管理'},
  {id:'auto-contact',label:'自动回复与账号矩阵',path:'/auto-contact',adminOnly:true,group:'工作管理'},
  {id:'matches',label:'线索池',path:'/work?module=matches',module:'matches',group:'工作管理'},
@@ -28,6 +28,7 @@ export function activeNavigation(path:string,search:string,admin:boolean){
  if(isWorkPath(path))return activeWorkModule(search,path.split('/')[2],admin)||'overview';
  if(/^\/reply-history(?:\/|$)/.test(path))return admin?'reply-history':null;
  if(path==='/auto-contact')return admin?(new URLSearchParams(search).get('view')==='pending'?'pending-replies':'auto-contact'):null;
+ if(path==='/review-policies')return admin?'review-policies':null;
  if(/^\/comment-review(?:\/|$)/.test(path))return admin?(new URLSearchParams(search).get('manage')==='1'?'review-policies':'review'):null;
  if(/^\/leads(?:\/|$)/.test(path))return 'all-leads';
  if(path==='/tasks')return 'tasks';
