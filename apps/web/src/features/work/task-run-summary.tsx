@@ -1,9 +1,9 @@
-import { Disclosure } from '@/components/disclosure';
 import {collectionOutcome} from '../collection/collection-outcome';
 import {useRunPostSnapshot} from './use-run-post-feed';
 import {taskFeedTotals} from './task-feed-totals';
 import {safeRunCoverage,observedReadCounts} from '@crm/contracts';
-import {Clock3,FileText,MessageSquare} from 'lucide-react';
+import {readingTime} from '@/features/collection/display-metadata';
+import {safeCollectionDiagnostic,searchFailureLabels,postFailureLabels} from '@crm/contracts';
 import {type Run} from '@/features/collection/types';
 /** Values belong to this task. Missing or uncommitted statistics stay unknown. */
 export function TaskRunSummary({run,configId}:{run?:Run;configId:string}){
@@ -13,5 +13,11 @@ export function TaskRunSummary({run,configId}:{run?:Run;configId:string}){
  const roots=recovered?coverage!.posts.reduce((n,p)=>n+observedReadCounts(p).roots,0):metrics?.version===1?metrics.rootComments:coverage?coverage.posts.reduce((n,p)=>n+p.roots,0):undefined;
  const replies=recovered?coverage!.posts.reduce((n,p)=>n+observedReadCounts(p).replies,0):metrics?.version===1?metrics.replies:coverage?coverage.posts.reduce((n,p)=>n+p.replies,0):undefined;
  if(!run)return null;
- return <aside className="mist-task-summary mist-panel" aria-label="本轮记录"><div className="mist-summary-count"><FileText size={19}/><span>已保存帖子</span><strong>{run?.capturedPosts??'—'}<small>篇</small></strong></div><div className="mist-summary-count"><MessageSquare size={19}/><span>已确认评论 / 回复</span><strong>{totals?totals.newCount+totals.reusedCount:run?.capturedCommentsCount??'—'}<small>条</small></strong></div><Disclosure title={<> 覆盖与读取明细 </>}><dl><dt>评论覆盖</dt><dd>{run?collectionOutcome(run).coverage:'等待读取'}</dd><dt>已读取主评论</dt><dd>{roots??'—'}</dd><dt>已读取回复</dt><dd>{replies??'—'}</dd><dt>本次新存原文</dt><dd>{totals?.newCount??'—'}</dd><dt>本次复用原文</dt><dd>{totals?.reusedCount??'—'}</dd><dt>执行轮数</dt><dd>{run.readPlan?.rounds??'—'}</dd><dt>每轮帖子上限</dt><dd>{run.readPlan?.postsPerRound??'—'}</dd><dt>本轮范围</dt><dd>{run?.readPlan?run.readPlan.savedPostId?'指定帖子':`最多 ${run.readPlan.rounds*run.readPlan.postsPerRound} 篇`:run?'范围未返回':'等待开始'}</dd></dl>{run&&<div className="mist-summary-time"><Clock3 size={14}/><span>开始于 {new Date(run.createdAt).toLocaleTimeString()}{run.finishedAt&&<small>结束于 {new Date(run.finishedAt).toLocaleTimeString()}</small>}</span></div>}<small className="mist-summary-note">新存与复用按评论原文版本计数。仅统计本轮已返回信息，不等于平台总数。</small></Disclosure></aside>;
+ const outcome=collectionOutcome(run),diagnostic=safeCollectionDiagnostic(metrics?.diagnostic);
+ const diagnosticReason=diagnostic?.searchReason?searchFailureLabels[diagnostic.searchReason]:diagnostic?.postReason?postFailureLabels[diagnostic.postReason]:diagnostic?.kind==='SCHEMA_VALIDATION'?'返回内容未通过校验':diagnostic?'读取异常':undefined;
+ return <div className="collection-result-facts" aria-label="本轮采集结果">
+  <dl className="collection-result-counts"><div><dt>帖子</dt><dd>{run.capturedPosts??'待确认'} 篇</dd></div><div><dt>评论 / 回复</dt><dd>{totals?totals.newCount+totals.reusedCount:run.capturedCommentsCount??'待确认'} 条</dd></div><div><dt>任务状态</dt><dd>{outcome.label}</dd></div><div><dt>读取状态</dt><dd>{outcome.coverage}</dd></div></dl>
+  <dl className="collection-result-meta"><div><dt>主评论 / 回复</dt><dd>{roots??'待确认'} / {replies??'待确认'}</dd></div><div><dt>新存 / 复用原文</dt><dd>{totals?.newCount??'待确认'} / {totals?.reusedCount??'待确认'}</dd></div>{run.readPlan&&<div><dt>采集范围</dt><dd>{run.readPlan.savedPostId?'指定帖子':`最多 ${run.readPlan.rounds*run.readPlan.postsPerRound} 篇`}</dd></div>}<div><dt>开始时间（北京）</dt><dd><time dateTime={run.createdAt}>{readingTime(run.createdAt)}</time></dd></div>{run.finishedAt&&<div><dt>结束时间（北京）</dt><dd><time dateTime={run.finishedAt}>{readingTime(run.finishedAt)}</time></dd></div>}</dl>
+  {diagnosticReason&&<p className="collection-result-warning" role="status">{diagnostic?.postOrdinal?`第 ${diagnostic.postOrdinal} 篇：`:''}{diagnosticReason}</p>}
+ </div>;
 }

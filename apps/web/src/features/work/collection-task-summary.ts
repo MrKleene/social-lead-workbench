@@ -26,9 +26,9 @@ export function collectionTaskSummary(run:Run){
  return `任务状态待确认。${saved}，请刷新状态。`;
 }
 
-/** Short primary message; full reasons remain in task details. */
+/** Short primary message; preserves actual interruption reasons. */
 export function collectionTaskHeadline(run:Run){
  if(['QUEUED','RUNNING','FAILED','PAUSED'].includes(run.status))return collectionTaskSummary(run);
  const outcome=collectionOutcome(run);
- return `${outcome.label}。已保存 ${savedCollectionCounts(run)}。${outcome.coverage}。${outcome.warning?`${outcome.issue||'请查看停止原因'}；可在采集详情核查后手动重试。`:''}`;
+ return `${outcome.label}。已保存 ${savedCollectionCounts(run)}。${outcome.coverage}。${outcome.warning?`${outcome.issue?.replace('，请查看诊断详情','')||'停止原因待核查'}；请核查原因后再手动重试。`:''}`;
 }
