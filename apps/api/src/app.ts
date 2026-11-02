@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { DirectMessagesModule } from "./direct-messages/direct-messages.module";
 import { AccountsModule } from "./accounts/accounts";
 import { RepliesModule } from "./replies/replies";
 import { Controller, Get, Module, Inject, ServiceUnavailableException } from "@nestjs/common";
@@ -34,6 +35,7 @@ class HealthController {
     DatabaseModule,
     AccountsModule,
     RepliesModule,
+    DirectMessagesModule,
     AuthModule,
     UsersModule,
     LeadsModule,
