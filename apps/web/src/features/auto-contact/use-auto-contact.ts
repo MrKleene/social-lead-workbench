@@ -1,15 +1,17 @@
+import {contactPagination} from './contact-pagination';
 import {accountReadyForRule} from './account-ready';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { autoContactConsent, type AutoContactOverview, type AutoContactRuleInput, type AutoContactJobView } from '@crm/contracts';
 import { api, send } from '@/lib/api';
 export function useAutoContact(enabled: boolean, runId?:string) {
     const client = useQueryClient(), [offset, setOffset] = useState(0), [status, setStatus] = useState(''), [draft, setDraft] = useState<AutoContactRuleInput | null>(null), [confirm, setConfirm] = useState(false), [detail, setDetail] = useState<AutoContactJobView | null>(null), trigger = useRef<HTMLElement | null>(null);
     const overview = useQuery({ queryKey: ['auto-contact'], queryFn: () => api<AutoContactOverview>('/auto-contact'), enabled, refetchInterval: 5000 });
-    const jobs = useQuery({ queryKey: ['auto-contact-jobs', offset, status, runId], queryFn: () => api<{
+    const jobs = useQuery({ queryKey: ['auto-contact-jobs', offset, status, runId], queryFn: ({signal}) => api<{
             items: AutoContactJobView[];
             total: number;
-        }>(`/auto-contact/jobs?offset=${offset}${status ? '&status=' + status : ''}${runId?'&runId='+encodeURIComponent(runId):''}`), enabled, refetchInterval: 5000 });
+        }>(`/auto-contact/jobs?offset=${offset}${status ? '&status=' + status : ''}${runId?'&runId='+encodeURIComponent(runId):''}`,{signal}), enabled, refetchInterval: 5000 });
+    useEffect(()=>{if(jobs.isFetching||!jobs.data||jobs.isError)return;const last=contactPagination(jobs.data.total,offset).last;if(offset>last)setOffset(last);},[jobs.data?.total,jobs.isFetching,jobs.isError,offset]);
     const rule = overview.data?.rules[0], refresh = () => Promise.all([client.invalidateQueries({ queryKey: ['auto-contact'] }), client.invalidateQueries({ queryKey: ['auto-contact-jobs'] }), client.invalidateQueries({ queryKey: ['accounts'] })]);
     const canEnable = Boolean(overview.data?.capability.available && rule?.content.trim() && rule.accountIds.length && !rule.pauseReason && rule.accountIds.every(id => {
         const account = overview.data?.accounts.find(a => a.id === id);

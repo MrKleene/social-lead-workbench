@@ -25,7 +25,7 @@ export function TaskWorkspace(props:Props) {
   const [visited, setVisited] = useState<Set<JourneyStage>>(new Set());
   useEffect(()=>{setVisited(v=>v.has(s.stage)?v:new Set([...v,s.stage]));},[s.stage]);
   const visit = (stage:JourneyStage) => {setVisited(v => new Set([...v, s.stage, stage])); s.changeStage(stage);};
-  const scope = s.run ? {runId:s.run.id, configId:config!.id} : undefined;
+  const scope = s.run ? {runId:s.run.id, configId:config!.id,platform:config!.platform} : undefined;
   return <section className="journey-workspace" aria-label="本轮工作">
     <header className="journey-heading"><div><h1>自动化任务</h1></div>
       <div className="journey-heading-tools journey-start-tools"><div className="journey-collection-actions" ref={setActionsHost} hidden={s.stage!=='collect'}/><Button variant="outline" onClick={()=>openSettings('collect')}>采集设置</Button></div>

@@ -18,7 +18,7 @@ describe('Single application navigation',()=>{
 
 it('reply records have a direct administrator-only primary route',()=>{expect(primaryNavigation.find(x=>x.id==='reply-history')).toMatchObject({label:'回复记录',path:'/reply-history',adminOnly:true});expect(activeNavigation('/reply-history','?outcome=UNKNOWN',true)).toBe('reply-history');expect(activeNavigation('/reply-history','',false)).toBeNull();});
 
-it('separates homepage and data workspace while retaining task deep links',()=>{expect(activeNavigation('/home','',true)).toBe('home');expect(activeNavigation('/work','',true)).toBe('overview');expect(activeNavigation('/work','?module=runs&run=old&stage=contact',true)).toBe('runs');expect(navigationPath(primaryNavigation.find(i=>i.id==='home')!,{pathname:'/work',search:'?module=runs&run=old'}, {},'')).toBe('/home');});
+it('separates homepage and data workspace while retaining task deep links',()=>{expect(activeNavigation('/home','',true)).toBe('home');expect(activeNavigation('/work','',true)).toBe('overview');expect(activeNavigation('/work','?module=runs&run=old&stage=contact',true)).toBe('runs');expect(primaryNavigation.some(i=>i.id==='home')).toBe(false);expect(primaryNavigation.find(i=>i.id==='overview')?.label).toBe('工作台');});
 
 import {automationPath} from './navigation-policy';
 it('canonical task links are distinct from project overview and preserve legacy identity',()=>{expect(automationPath('?module=runs&config=a&run=b&stage=review&view=new')).toBe('/automation?config=a&run=b&stage=review');expect(activeNavigation('/automation','?run=b',true)).toBe('runs');expect(navigationPath(primaryNavigation.find(x=>x.id==='runs')!,{pathname:'/work',search:''},{},'')).toBe('/automation');});

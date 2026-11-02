@@ -1,8 +1,7 @@
 import {activeWorkModule,type SpaceModule} from '../../features/work/navigation-policy';
 export type NavigationItem={id:string;label:string;path:string;module?:SpaceModule;adminOnly?:boolean;group?:string};
 export const primaryNavigation:NavigationItem[]=[
- {id:'home',label:'首页',path:'/home'},
- {id:'overview',label:'项目概览',path:'/work'},
+ {id:'overview',label:'工作台',path:'/work'},
  {id:'runs',label:'自动化任务',path:'/automation',module:'runs',adminOnly:true},
  {id:'accounts',label:'账号中心',path:'/work?module=accounts',module:'accounts'},
  {id:'reply-history',label:'回复记录',path:'/reply-history',adminOnly:true},

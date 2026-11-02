@@ -1,0 +1,15 @@
+import {renderToStaticMarkup} from 'react-dom/server';
+import {MemoryRouter} from 'react-router-dom';
+import {expect,it,vi,beforeEach} from 'vitest';
+import {HomeCollectionActions} from './home-collection-actions';
+import {HomePage} from './home-page';
+const state=vi.hoisted(()=>({props:{} as any,provider:{} as any,role:'ADMIN',configs:[{id:'other',enabled:true},{id:'saved',enabled:true}],queryError:null as unknown}));
+vi.mock('@/features/auth/use-auth',()=>({useAuth:()=>({user:{role:state.role}})}));
+vi.mock('@/features/collection/use-collection',()=>({useConfigs:()=>({data:state.configs,isPending:false,error:state.queryError})}));
+vi.mock('./settings-data',()=>({useAutomationPreferences:()=>({data:{configId:'saved'},isPending:false,error:null})}));
+vi.mock('./workspace-automation',()=>({WorkspaceAutomationProvider:(p:any)=>{state.provider=p;return p.children;}}));
+vi.mock('./collection-flow',()=>({CollectionFlow:(p:any)=>{state.props=p;return <><button>开始采集</button><button>采集设置</button></>;}}));
+beforeEach(()=>{state.role='ADMIN';state.queryError=null;});
+it('uses saved configuration and the original explicit-click start path, without starting during render',()=>{const html=renderToStaticMarkup(<MemoryRouter><HomeCollectionActions/></MemoryRouter>);expect(html).toContain('开始采集');expect(state.props.actionsOnly).toBe(true);expect(state.props.initialId).toBe('saved');expect(state.provider.initialId).toBe('saved');expect(state.props.visible).toBe(true);expect(typeof state.props.onRunSelect).toBe('function');});
+it('passes failed metadata to existing guards instead of hiding the error',()=>{state.queryError=Error('fixture');renderToStaticMarkup(<MemoryRouter><HomeCollectionActions/></MemoryRouter>);expect(state.props.error).toBe(state.queryError);});
+it('sales sees the project introduction without administrator launch controls',()=>{state.role='SALES';const html=renderToStaticMarkup(<MemoryRouter><HomePage/></MemoryRouter>);expect(html).toContain('AI 辅助获客工作台');expect(html).not.toContain('开始采集');expect(html).not.toContain('采集设置');});

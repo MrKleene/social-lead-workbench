@@ -498,3 +498,80 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 :root .graphite-workspace .task-results-inline .run-post-table th:last-child{width:96px}
 :root .graphite-workspace .run-post-original-action{text-align:right}
 @media(max-width:767px){:root .graphite-workspace .run-post-original-action{grid-column:1/-1;text-align:left;margin-top:4px}}
+
+/* Reply results: scoped controls, readable source/content, explicit bottom pagination. */
+:root .graphite-workspace .contact-results-page{gap:16px}
+:root .graphite-workspace .selected-reply-accounts .contact-heading{margin-bottom:12px}
+:root .graphite-workspace .selected-reply-accounts h2,:root .graphite-workspace .contact-results-toolbar h2{font-size:15px;line-height:1.5;margin:0}
+:root .graphite-workspace .selected-reply-accounts .contact-heading small{display:block;margin-top:3px;color:var(--muted-foreground);font-size:12px}
+:root .graphite-workspace .contact-results-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+:root .graphite-workspace .contact-results-controls{display:flex;align-items:center;gap:12px;min-width:0}
+:root .graphite-workspace .contact-results-controls .contact-status-filter{width:180px;margin:0}
+:root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table){table-layout:fixed;width:100%;min-width:0}
+:root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) :is(th,td){white-space:normal;overflow-wrap:anywhere;padding:12px;vertical-align:top}
+:root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) th{font-size:12px;vertical-align:middle}
+:root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) td{font-size:13px;line-height:1.6}
+:root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) small{display:block;color:var(--muted-foreground);font-size:11px;line-height:1.55;margin-top:4px}
+:root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) [data-slot=badge]{max-width:100%;white-space:normal;text-align:left}
+:root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) [data-tone=warning]{color:var(--ui-warning);border-color:var(--border)}
+:root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) [data-tone=success]{color:var(--ui-success,#24643b);border-color:var(--border)}
+:root .graphite-workspace .selected-reply-account-table th:nth-child(1){width:22%}
+:root .graphite-workspace .selected-reply-account-table th:nth-child(2){width:40%}
+:root .graphite-workspace .selected-reply-account-table th:nth-child(3){width:16%}
+:root .graphite-workspace .contact-results-table th:nth-child(1){width:25%}
+:root .graphite-workspace .contact-results-table th:nth-child(2){width:23%}
+:root .graphite-workspace .contact-results-table th:nth-child(3){width:14%}
+:root .graphite-workspace .contact-results-table th:nth-child(4){width:7%;text-align:right}
+:root .graphite-workspace .contact-results-table th:nth-child(5){width:24%}
+:root .graphite-workspace .contact-results-table th:last-child{width:72px;text-align:right}
+:root .graphite-workspace .contact-result-action,:root .graphite-workspace .contact-result-score{text-align:right}
+:root .graphite-workspace .contact-results-table .info-saved-text p{font-size:13px;line-height:1.6;white-space:pre-wrap;color:var(--foreground);margin:4px 0 0}
+:root .graphite-workspace .contact-result-state .info-saved-text p{font-size:12px;color:var(--muted-foreground)}
+:root .graphite-workspace .contact-results-table .info-text-action{margin-top:4px;font-size:12px}
+:root .graphite-workspace .contact-result-source>strong{display:block;font-weight:600}
+:root .graphite-workspace .contact-results-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:14px;border-top:1px solid var(--border);font-size:12px;color:var(--muted-foreground)}
+:root .graphite-workspace .contact-results-pagination [data-slot=pagination]{width:auto;margin:0}
+:root .graphite-workspace .contact-results-empty{padding:24px 0;margin:0;text-align:center;font-size:13px;color:var(--muted-foreground)}
+@media(max-width:767px){
+ :root .graphite-workspace .contact-results-toolbar{align-items:flex-start;flex-direction:column;gap:12px}
+ :root .graphite-workspace .contact-results-controls{width:100%;flex-wrap:wrap}
+ :root .graphite-workspace .contact-results-controls .contact-status-filter{flex:1;min-width:140px;width:auto}
+ :root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table),:root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) tbody{display:block}
+ :root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ :root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:16px 0;border-bottom:1px solid var(--border)}
+ :root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) td{display:block;min-width:0;padding:0!important;border:0;text-align:left}
+ :root .graphite-workspace :is(.selected-reply-account-table,.contact-results-table) td[data-label]::before{content:attr(data-label);display:block;font-size:11px;color:var(--muted-foreground);margin-bottom:4px}
+ :root .graphite-workspace .selected-reply-account-table td:nth-child(-n+2),:root .graphite-workspace .selected-reply-account-table td[colspan],:root .graphite-workspace :is(.contact-result-source,.contact-result-content,.contact-result-state){grid-column:1/-1}
+ :root .graphite-workspace .contact-results-table .contact-result-action{grid-column:1/-1;justify-self:end}
+ :root .graphite-workspace .contact-results-pagination{align-items:flex-start;flex-direction:column;gap:12px}
+ :root .graphite-workspace .selected-reply-accounts .contact-heading{align-items:flex-start;gap:8px}
+}
+
+/* A-style project introduction: editorial hierarchy and existing two-action launch. */
+:root .graphite-workspace .home-intro{max-width:1080px;margin:0 auto;padding:12px 0 28px}
+:root .graphite-workspace .home-product-label{display:block;font-size:11px;letter-spacing:.12em;color:var(--muted-foreground);margin-bottom:14px}
+:root .graphite-workspace .home-intro h1{font-size:32px;line-height:1.35;letter-spacing:-.8px}
+:root .graphite-workspace .home-intro-heading{padding-bottom:28px}
+:root .graphite-workspace .home-intro-heading>p{max-width:64ch;font-size:14px}
+:root .graphite-workspace .home-intro-actions{margin-top:22px}
+:root .graphite-workspace .home-collection-actions{width:100%;display:grid;gap:10px}
+:root .graphite-workspace .home-collection-buttons{display:flex;gap:10px;flex-wrap:wrap}
+:root .graphite-workspace .home-collection-actions>p{font-size:12px;color:var(--muted-foreground);margin:0}
+:root .graphite-workspace .home-intro .simple-home-stages{gap:0;padding:28px 0}
+:root .graphite-workspace .home-intro .simple-home-stages article{text-align:left;padding:0 24px;border-right:1px solid var(--border)}
+:root .graphite-workspace .home-intro .simple-home-stages article:first-child{padding-left:0}
+:root .graphite-workspace .home-intro .simple-home-stages article:last-child{padding-right:0;border-right:0}
+:root .graphite-workspace .home-intro-step{flex-direction:row;justify-content:flex-start;gap:10px;align-items:center;margin-bottom:14px}
+:root .graphite-workspace .home-intro-step>svg{width:32px;height:32px;padding:6px;border-radius:6px}
+:root .graphite-workspace .home-intro-follow{padding:22px 0;align-items:center}
+.graphite-brand:focus-visible{outline:2px solid var(--ring);outline-offset:-2px;border-radius:6px}
+@media(max-width:767px){
+ :root .graphite-workspace .home-intro{padding:8px 0 12px}
+ :root .graphite-workspace .home-intro h1{font-size:25px}
+ :root .graphite-workspace .home-intro .simple-home-stages{gap:20px;padding:24px 0}
+ :root .graphite-workspace .home-intro .simple-home-stages article{display:block;border-right:0;padding:0}
+ :root .graphite-workspace .home-intro-step{margin-bottom:8px}
+ :root .graphite-workspace .home-intro-step .simple-stage-number{position:static}
+ :root .graphite-workspace .home-collection-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ :root .graphite-workspace .home-intro-actions [data-slot=button]{min-width:0;width:100%}
+}
