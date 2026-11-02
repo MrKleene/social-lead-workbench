@@ -25,8 +25,8 @@ export function useJourney(config: Config | undefined, visible: boolean) {
   const selection=runSelection(historyQuery.data,requested,params.get('fresh')==='1');
   const {run,current,history}=selection;
   const policy = reviews.data?.policies.find(p => p.id === params.get('policy')) ?? (reviews.data?.policies.find(p=>p.id===preferences.data?.policyId)||reviews.data?.policies[0]);
-  const version=Number(params.get('reviewVersion'));
-  const policyRevision=Number.isInteger(version)&&version>0?version:undefined;
+  // Retired display filter: old links must not silently hide task results.
+  useEffect(()=>{if(visible&&params.has('reviewVersion'))setParams(old=>{const p=new URLSearchParams(old);p.delete('reviewVersion');return p;},{replace:true});},[visible,params,setParams]);
   const contact = useQuery({queryKey: ['auto-contact'], queryFn: () => api<AutoContactOverview>('/auto-contact'),
     enabled: visible, refetchInterval: 5000});
   const stage = journeyStage(params.get('stage'));
@@ -67,5 +67,5 @@ export function useJourney(config: Config | undefined, visible: boolean) {
     },{replace:true});
   },[history,visible,run?.id,run?.status,config?.id,detail.isError,outcome?.warning,reviewReady,stage,setParams]);
 
-  return {historyQuery,current,history,missing:selection.missing,returnCurrent:()=>{if(current)selectRun(current.id);},policyRevision,selectVersion:(value:string)=>setParams(old=>{const p=new URLSearchParams(old);if(value)p.set('reviewVersion',value);else p.delete('reviewVersion');return p;}),stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, contact, summary, statuses, notice};
+  return {historyQuery,current,history,missing:selection.missing,returnCurrent:()=>{if(current)selectRun(current.id);},stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, contact, summary, statuses, notice};
 }

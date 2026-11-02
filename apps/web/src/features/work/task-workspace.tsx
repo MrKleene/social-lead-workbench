@@ -2,8 +2,6 @@ import {returnRunLabel} from './use-run-history';
 import {RunHistoryDialog} from './run-history-dialog';
 import {useWorkspaceAutomation} from './workspace-automation';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { FormField } from '@/components/form-field';
-import { SelectField, SelectOption } from '@/components/select-field';
 import { Button } from '@/components/ui/button';
 import { Empty } from '@/components/ui/empty';
 import {useEffect,useState} from 'react';
@@ -27,7 +25,7 @@ export function TaskWorkspace(props:Props) {
   const [visited, setVisited] = useState<Set<JourneyStage>>(new Set());
   useEffect(()=>{setVisited(v=>v.has(s.stage)?v:new Set([...v,s.stage]));},[s.stage]);
   const visit = (stage:JourneyStage) => {setVisited(v => new Set([...v, s.stage, stage])); s.changeStage(stage);};
-  const scope = s.run ? {runId:s.run.id, configId:config!.id,policyRevision:s.policyRevision} : undefined;
+  const scope = s.run ? {runId:s.run.id, configId:config!.id} : undefined;
   return <section className="journey-workspace" aria-label="本轮工作">
     <header className="journey-heading"><div><h1>自动化任务</h1></div>
       <div className="journey-heading-tools journey-start-tools"><div className="journey-collection-actions" ref={setActionsHost} hidden={s.stage!=='collect'}/><Button variant="outline" onClick={()=>openSettings('collect')}>采集设置</Button></div>
@@ -38,7 +36,7 @@ export function TaskWorkspace(props:Props) {
     {s.missing&&<Alert role="alert" className="journey-notice"><AlertDescription>未找到任务，请重新选择。</AlertDescription></Alert>}
     <div className="journey-stage" hidden={s.stage!=='collect'}>{s.stage==='collect'&&s.notice&&<p className="journey-conclusion" role="status">{s.notice}</p>}<CollectionFlow {...props} view={{id:s.requested||s.run?.id||'',run:s.run,pending:s.historyQuery.isPending||!!s.requested&&!s.run&&!s.missing&&!s.historyQuery.isError,error:s.historyQuery.error}} actionsHost={actionsHost} workspaceVisible={props.visible} visible={props.visible&&s.stage==='collect'} onRunSelect={s.selectRun}/></div>
     {(s.stage==='review'||visited.has('review'))&&<div className="journey-stage" hidden={s.stage!=='review'}>{s.stage==='review'&&s.notice&&<p className="journey-conclusion" role="status">{s.notice}</p>}
-      {scope?<>{!s.history&&<FormField className="journey-version">审核目标版本<SelectField aria-label="审核目标版本" value={s.policyRevision||''} onValueChange={e=>s.selectVersion(e)}><SelectOption value="">全部历史版本</SelectOption>{Array.from({length:Math.min(s.policy?.revision||0,100)},(_,i)=>i+1).reverse().map(v=><SelectOption key={v} value={v}>版本 {v}{v===s.policy?.revision?' · 当前':''}</SelectOption>)}</SelectField></FormField>}<RunReviewPanel key={`${scope.runId}:${s.policy?.id}:${s.policyRevision}`} runId={scope.runId} policyId={s.history?undefined:s.policy?.id} policyRevision={s.policyRevision} onSettings={s.history?undefined:()=>openSettings("review")}/></>:<Empty className="journey-empty"><h2>先选择一次采集</h2><Link to="/comment-review">查看全部评论审核 <ArrowRight size={16}/></Link></Empty>}
+      {scope?<><RunReviewPanel key={`${scope.runId}:${s.policy?.id}`} runId={scope.runId} policyId={s.history?undefined:s.policy?.id} onSettings={s.history?undefined:()=>openSettings("review")}/></>:<Empty className="journey-empty"><h2>先选择一次采集</h2><Link to="/comment-review">查看全部评论审核 <ArrowRight size={16}/></Link></Empty>}
     </div>}
     {(s.stage==='contact'||visited.has('contact'))&&<div className="journey-stage" hidden={s.stage!=='contact'}>{s.stage==='contact'&&s.notice&&<p className="journey-conclusion" role="status">{s.notice}</p>}
       {scope?<><AutoContactPage key={scope.runId} readOnly={s.history} scope={scope} onSettings={()=>openSettings("contact")}/></>:<Empty className="journey-empty"><h2>选择任务，查看自动回复进展</h2><Link to="/reply-history">查看已有回复记录 <ArrowRight size={16}/></Link></Empty>}
