@@ -61,3 +61,13 @@ it.each(['same-account','later-other-account','platform-risk','rewritten-same-pa
  expect(executor.verify).not.toHaveBeenCalled();expect(executor.run).toHaveBeenCalledTimes(1);
  expect(await db.auditLog.count({where:{action:'DM_CONFIRMED_OWN_PAUSE_RESOLVED',actorId:actor.id}})).toBe(0);
 });
+
+it('freezes the bound sender nickname before dispatch and keeps it after account rename',async()=>{
+ await db.platformAccount.update({where:{id:account.id},data:{loginNickname:'虚构发送昵称',label:'小红书 · 待扫码'}});
+ const p=await service.prepare(actor,input);await service.confirm(actor,{previewId:p.previewId,token:p.token,requestKey:randomUUID()});
+ const a=await db.contactAttempt.findFirstOrThrow({where:{actorId:actor.id}});
+ expect(a.historySnapshot).toMatchObject({senderNickname:'虚构发送昵称',senderPlatformId:account.loginPlatformUserId,accountLabel:'小红书 · 待扫码'});
+ await db.platformAccount.update({where:{id:account.id},data:{loginNickname:'后来的昵称'}});
+ expect((await db.contactAttempt.findUniqueOrThrow({where:{id:a.id}})).historySnapshot).toEqual(a.historySnapshot);
+ expect(executor.run).toHaveBeenCalledTimes(1);
+});

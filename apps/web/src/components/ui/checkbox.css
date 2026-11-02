@@ -1,0 +1,9 @@
+/* Checked state and its newly mounted indicator must change together.
+   Unlayered legacy button transitions otherwise override Tailwind utilities. */
+:root [data-slot="checkbox"] {
+  transition-property: box-shadow;
+  transition-duration: 120ms;
+  transition-timing-function: ease;
+}
+/* A checkbox is a stable target, not a press-scaled action button. */
+:root [data-slot="checkbox"]:active:not(:disabled) { transform: none !important; }

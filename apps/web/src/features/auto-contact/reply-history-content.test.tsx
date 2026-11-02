@@ -16,3 +16,10 @@ describe('reply history presentation',()=>{
  it('does not claim missing historical evidence proves no submission',()=>{const html=detail({...fixture,executionEvidence:[],reason:null});expect(html).toContain('不能根据日志缺失推断是否提交');expect(html).toContain('不能推断实际提交次数');});
  it('uses a semantic table with all eight columns and keeps long text in the DOM',()=>{const item={...fixture,content:'完整正文'.repeat(100)};const html=table(item);expect(html).toContain('<table');expect(html.match(/data-slot="table-head"/g)).toHaveLength(8);expect(html).toContain(item.content);expect(html).toContain('原帖与评论');});
 });
+
+it('identifies missing historical sender by saved ID without implying send failure',()=>{
+ const item={...fixture,senderName:null,senderId:'5bbf06da6cc8c10001993e24',displayStatus:'CONFIRMED',channel:'DM'};
+ for(const html of [table(item),detail(item)]){expect(html).toContain('账号 · 993e24');expect(html).toContain('发送时昵称未记录');expect(html).toContain('回复成功');expect(html).not.toContain('发送昵称未保存');}
+ expect(table({...item,senderName:'虚构发送账号'})).not.toContain('发送时昵称未记录');
+ expect(table({...item,senderId:null})).toContain('发送账号未记录');
+});

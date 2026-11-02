@@ -52,3 +52,9 @@ it('not-attempted filter requires same request and attempt terminal proof and ne
  const service=new ContactSettingsService({$transaction:async(fn:any)=>fn(tx)} as any,{mode:'REAL'} as any);
  await service.history({role:'ADMIN'} as any,0,'NOT_ATTEMPTED');expect(tx.contactAttempt.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{mode:'REAL',outcome:'FAILED',confirmedAt:null,platformReceipt:null,OR:[{id:'attempt',requestKey:'single:1'}]}}));
 });
+
+it('projects a frozen DM sender nickname and never substitutes recipient or later account identity',()=>{
+ const saved={...attempt,channel:'DM',historySnapshot:{...attempt.historySnapshot,senderNickname:'发送时昵称'}};
+ expect(replyHistoryItem(saved,[])).toMatchObject({senderName:'发送时昵称',senderNameSource:'发送时昵称快照',recipientName:'原收件人',displayStatus:'CONFIRMED'});
+ expect(replyHistoryItem({...attempt,channel:'DM'},[])).toMatchObject({senderName:null,senderId:sender,displayStatus:'CONFIRMED'});
+});

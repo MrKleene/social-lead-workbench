@@ -131,3 +131,12 @@ it('normal scope is rechecked after reservation when source is changed to histor
  const review=await db.semanticReview.findUniqueOrThrow({where:{id:f.scope.reviewId}});await db.collectionRun.update({where:{id:review.runId},data:{createdAt:new Date(0)}});
  await f.service.dispatch(job!.id);expect(f.send).not.toHaveBeenCalled();expect(await db.autoContactJob.findUnique({where:{id:job!.id}})).toMatchObject({status:'CANCELLED'});expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(0);
 });
+
+it('automatic reservation freezes its bound nickname without reading a later account name for history',async()=>{
+ const f=await normalFixture();await db.platformAccount.update({where:{id:f.account.id},data:{label:'小红书 · 待扫码',loginNickname:'虚构发送昵称'}});
+ await f.local.prepare(actor,f.account.id);await f.service.enqueue();const job=await f.service.reserve();expect(job).toBeTruthy();
+ const a=await db.contactAttempt.findUniqueOrThrow({where:{id:job!.attemptId!}});expect(a.historySnapshot).toMatchObject({senderNickname:'虚构发送昵称',senderPlatformId:f.scope.senderId});
+ await db.platformAccount.update({where:{id:f.account.id},data:{loginNickname:'后来的昵称'}});
+ expect((await f.settings.history(actor)).items[0]).toMatchObject({senderName:'虚构发送昵称',senderNameSource:'发送时昵称快照'});
+ expect(f.send).not.toHaveBeenCalled();
+});

@@ -57,3 +57,5 @@
 :root .graphite-workspace .reply-history-table .reply-cell-action [data-slot=button]{min-height:32px;padding:5px 8px;text-decoration:none;}
 .reply-history-toolbar>div:first-child{min-width:0;}.reply-history-toolbar h2{white-space:nowrap;}
 @media(max-width:560px){.reply-history-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;}.reply-history-controls>.form-field{min-width:0;max-width:none;width:100%;}.reply-history-controls>[data-slot=button]{padding-inline:8px;white-space:normal;max-width:100px;}.reply-history-pagination .action-row{flex-wrap:wrap;}.reply-history-toolbar p{overflow-wrap:anywhere;}:root .graphite-workspace .reply-history-table .reply-cell-action [data-slot=button]{min-height:44px;}}
+
+.reply-sender-missing{display:block;margin-top:3px;font-size:11px;line-height:1.5;color:var(--muted-foreground)}

@@ -1,3 +1,4 @@
+import {boundAccountNickname} from '../accounts/account-display';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {ConflictException,Inject,Injectable,NotFoundException} from '@nestjs/common';
 import {Prisma} from '@prisma/client';
@@ -91,7 +92,7 @@ export class DmSendService {
    await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${v.account.id} FOR UPDATE`;
    const identity=v.identity??await tx.platformIdentity.create({data:{platform:'XHS',platformUserId:v.target.recipientId,nickname:v.display.authorNickname||'',isDemo:false}});
    const ledger=await tx.contactLedger.upsert({where:{identityId_mode:{identityId:identity.id,mode:'REAL'}},create:{identityId:identity.id,mode:'REAL',accountId:v.account.id},update:{accountId:v.account.id}});
-   const attempt=await tx.contactAttempt.create({data:{id:randomUUID(),ledgerId:ledger.id,requestKey:key,kind:'FIRST',mode:'REAL',channel:'DM',content:v.content,outcome:'RESERVED',day:v.day,actorId:actor.id,accountIdSnapshot:v.account.id,historySnapshot:{platform:'XHS',...v.target,reviewId:v.review.id,runId:v.review.runId,accountId:v.account.id,accountLabel:v.account.loginNickname||v.account.label,senderPlatformId:v.account.loginPlatformUserId,source:{comment:v.review.snapshot,post:{title:(v.review.snapshot as {title?:string}).title??''}}} as Prisma.InputJsonValue}});
+   const attempt=await tx.contactAttempt.create({data:{id:randomUUID(),ledgerId:ledger.id,requestKey:key,kind:'FIRST',mode:'REAL',channel:'DM',content:v.content,outcome:'RESERVED',day:v.day,actorId:actor.id,accountIdSnapshot:v.account.id,historySnapshot:{platform:'XHS',...v.target,reviewId:v.review.id,runId:v.review.runId,accountId:v.account.id,accountLabel:v.account.label,senderNickname:boundAccountNickname(v.account),senderPlatformId:v.account.loginPlatformUserId,source:{comment:v.review.snapshot,post:{title:(v.review.snapshot as {title?:string}).title??''}}} as Prisma.InputJsonValue}});
    await tx.accountDay.upsert({where:{accountId_day:{accountId:v.account.id,day:v.day}},create:{accountId:v.account.id,day:v.day,occupied:1},update:{occupied:{increment:1}}});
    await tx.autoContactControl.upsert({where:{platform_mode:{platform:'XHS',mode:'REAL'}},create:{platform:'XHS',mode:'REAL',activeJobId:key,leaseUntil:new Date(v.now.getTime()+120000)},update:{activeJobId:key,leaseUntil:new Date(v.now.getTime()+120000)}});
    await tx.manualReplyRequest.update({where:{id:req.id},data:{confirmedAt:v.now,submissionKey:input.requestKey}});
