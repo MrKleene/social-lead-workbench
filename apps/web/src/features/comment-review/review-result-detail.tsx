@@ -1,3 +1,5 @@
+import {SavedText} from '@/features/collection/saved-text';
+import {ReviewRowActions} from './review-manual-actions';
 import {manualReviewLabel} from './manual-review-label';
 import {ReviewAuthor,ReviewSource} from './review-source';
 import {Badge} from '@/components/ui/badge';
@@ -17,13 +19,13 @@ export const hasReviewScore=(r:SemanticReviewItem)=>r.state==='EVALUATED'&&r.sco
 const modelLabel=(r:SemanticReviewItem)=>r.state==='FAILED'?(isBatchOutputFailure(r.reason)?'批次校验未通过':'评估失败'):(semanticStateLabels[r.state]||r.state);
 function ReviewModelStatus({item:r}:{item:SemanticReviewItem}){return <Badge variant="secondary" className={'graphite-review-status state-'+r.state.toLowerCase()}>{modelLabel(r)}</Badge>;}
 function HumanStatus({item:r}:{item:SemanticReviewItem}){return <Badge variant="secondary" className={'graphite-review-status human-'+r.reviewStatus.toLowerCase()}>{manualReviewLabel(r.reviewStatus)}</Badge>;}
-export function ReviewResultsTable({items,onOpen}:{items:SemanticReviewItem[];onOpen:(r:SemanticReviewItem)=>void}){
- return <Table className="graphite-review-table" aria-label="独立评论审核结果"><TableCaption className="sr-only">评论原文、来源、可信相关度、模型状态及人工排除标记</TableCaption><TableHeader><TableRow><TableHead>评论原文</TableHead><TableHead>来源帖子</TableHead><TableHead>相关度</TableHead><TableHead>模型状态</TableHead><TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{items.map((r,index)=><TableRow key={r.id}>
- <TableCell className="graphite-review-comment"><ReviewAuthor item={r}/>{r.snapshot.parentId&&<span className="review-reply-label">楼中楼回复</span>}<p>{r.snapshot.comment}</p>{r.reviewStatus==='REJECTED'&&<HumanStatus item={r}/>} {r.isDemo&&<span className="graphite-review-meta">合成样本</span>}</TableCell>
+export function ReviewResultsTable({items,onOpen,canReview=false}:{items:SemanticReviewItem[];onOpen:(r:SemanticReviewItem,trigger:HTMLButtonElement|null)=>void;canReview?:boolean}){
+ return <Table className="graphite-review-table" aria-label="独立评论审核结果"><TableCaption className="sr-only">评论原文、来源、可信相关度、模型状态及人工排除标记</TableCaption><TableHeader><TableRow><TableHead>评论原文</TableHead><TableHead>来源帖子</TableHead><TableHead>相关度</TableHead><TableHead>模型状态</TableHead>{canReview&&<TableHead><span className="sr-only">操作</span></TableHead>}</TableRow></TableHeader><TableBody>{items.map((r,index)=><TableRow key={r.id}>
+ <TableCell className="graphite-review-comment"><ReviewAuthor item={r}/>{r.snapshot.parentId&&<span className="review-reply-label">楼中楼回复</span>}<SavedText key={r.id} text={r.snapshot.comment} limit={240} label="原文"/>{r.reviewStatus==='REJECTED'&&<HumanStatus item={r}/>} {r.isDemo&&<span className="graphite-review-meta">合成样本</span>}</TableCell>
  <TableCell className="graphite-review-source"><ReviewSource item={r}/><PostStateTag value={r.availability}/></TableCell>
  <TableCell className="graphite-review-score"><span className="sr-only">相关度：</span><strong>{hasReviewScore(r)?r.score:'—'}</strong>{!hasReviewScore(r)&&<span className="graphite-review-meta">未评分</span>}</TableCell>
  <TableCell className="graphite-review-model"><ReviewModelStatus item={r}/>{r.state==='FAILED'&&<p className="graphite-review-failure">{r.displayReason||displayReviewFailure(r.reason)}</p>}</TableCell>
- <TableCell className="graphite-review-action"><Button variant="outline" size="sm" aria-label={`查看评论详情 ${index+1}`} onClick={()=>onOpen(r)}>查看详情</Button></TableCell>
+ {canReview&&<TableCell className="graphite-review-action"><ReviewRowActions item={r} index={index} onOpen={onOpen}/></TableCell>}
  </TableRow>)}</TableBody></Table>;
 }
 export function ReviewResultEvidence({item:r}:{item:SemanticReviewItem}){
