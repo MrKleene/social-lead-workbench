@@ -155,3 +155,19 @@ func TestExactVerifyExclusiveAndRejectsSendArguments(t *testing.T) {
 		t.Fatal(r, e)
 	}
 }
+
+func TestExactPreflightRoutesDMExclusiveTool(t *testing.T) {
+	t.Setenv("CRM_DM_ENTRY_INSPECTION_ONLY", "1")
+	t.Setenv("CRM_EXACT_REPLY_ENABLED", "1")
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	registerTools(server, &AppServer{})
+	cs := diagnosticSession(t, server)
+	list, err := cs.ListTools(context.Background(), nil)
+	if err != nil || len(list.Tools) != 1 || list.Tools[0].Name != "workbench_dm_entry_inspect" || !list.Tools[0].Annotations.ReadOnlyHint {
+		t.Fatal(list, err)
+	}
+	r, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "workbench_dm_entry_inspect", Arguments: map[string]any{"protocol": exactreply.DMEntryProtocol, "accountId": "test", "senderId": "aaaaaaaaaaaaaaaaaaaaaaaa", "content": "forbidden"}})
+	if err == nil && !r.IsError {
+		t.Fatal("extra send content accepted")
+	}
+}

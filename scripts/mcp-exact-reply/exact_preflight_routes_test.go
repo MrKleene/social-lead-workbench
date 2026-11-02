@@ -36,3 +36,13 @@ func TestExactPreflightRoutesRestrictionModeExcludesWrites(t *testing.T) {
 		}
 	}
 }
+
+func TestExactPreflightRoutesDMInspectionExcludesWrites(t *testing.T) {
+	t.Setenv("CRM_DM_ENTRY_INSPECTION_ONLY", "1")
+	t.Setenv("CRM_EXACT_REPLY_ENABLED", "1")
+	for _, route := range setupRoutes(&AppServer{}).Routes() {
+		if route.Path != "/health" && route.Path != "/mcp" && route.Path != "/mcp/*path" {
+			t.Fatal(route.Path)
+		}
+	}
+}

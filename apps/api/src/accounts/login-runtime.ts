@@ -109,9 +109,15 @@ export class LoginRuntime {
     return this.open(accountId,key,signal,true,executionRoot,reviewedSha256,false,false,false,true);
   }
 
+  /** Dedicated DM entry observation in the same owned saved-session runtime. No sending tools. */
+  async openSavedForDMEntryInspection(accountId:string,key:string,signal:AbortSignal,executionRoot:string,reviewedSha256:string){
+    if(process.platform!=='darwin'||this.mode()!=='real'||!this.persistent()||!/^[a-f0-9]{64}$/.test(reviewedSha256))throw Error('DM_INSPECTION_RUNTIME_DISABLED');
+    return this.open(accountId,key,signal,true,executionRoot,reviewedSha256,false,false,false,false,true);
+  }
+
   mode():LoginMode|undefined { const v=process.env.XHS_ACCOUNT_LOGIN_MODE; return v==='real'||v==='offline'?v:undefined; }
   storage(){return process.env.XHS_SESSION_ROOT || (this.mode()==='real'?join(process.env.CRM_PROJECT_ROOT || '', '.local/xhs-qr'):'离线演示：不写平台会话');}
-  async open(accountId:string, attemptId:string, signal:AbortSignal,saved=false,executionRoot?:string,replySha256?:string,preflightOnly=false,restrictionOnly=false,selectionOnly=false,verifyOnly=false):Promise<SessionDriver> {
+  async open(accountId:string, attemptId:string, signal:AbortSignal,saved=false,executionRoot?:string,replySha256?:string,preflightOnly=false,restrictionOnly=false,selectionOnly=false,verifyOnly=false,dmEntryOnly=false):Promise<SessionDriver> {
     if(this.mode()==='offline') {
       let scenario='PENDING',stopped=false;
       const directory=this.persistent()?await this.directory(accountId,attemptId,!saved,executionRoot):undefined;
@@ -137,7 +143,7 @@ export class LoginRuntime {
     const env=minimalEnvironment();
     if(process.platform==='win32')env.LOCALAPPDATA=windowsDataRoot(); // match Go os.UserCacheDir to the OS-known folder
     if(signal.aborted)throw Error('CANCELLED');
-    const child=spawnOwned(bin,['-headless=true','-port',`127.0.0.1:${port}`],{cwd:directory,env:{...env,COOKIES_PATH:join(directory,'cookies.json'),AUTH_TOKEN:token,...(verifyOnly?{CRM_EXACT_VERIFY_ONLY:'1'}:selectionOnly?{CRM_REPLY_SELECTION_DIAGNOSTIC_ONLY:'1'}:restrictionOnly?{CRM_ACCOUNT_INSPECTION_ONLY:'1'}:preflightOnly?{CRM_EXACT_PREFLIGHT_ONLY:'1'}:replySha256?{CRM_EXACT_REPLY_ENABLED:'1'}:{})},detached:true,stdio:['ignore','ignore','pipe']});
+    const child=spawnOwned(bin,['-headless=true','-port',`127.0.0.1:${port}`],{cwd:directory,env:{...env,COOKIES_PATH:join(directory,'cookies.json'),AUTH_TOKEN:token,...(dmEntryOnly?{CRM_DM_ENTRY_INSPECTION_ONLY:'1'}:verifyOnly?{CRM_EXACT_VERIFY_ONLY:'1'}:selectionOnly?{CRM_REPLY_SELECTION_DIAGNOSTIC_ONLY:'1'}:restrictionOnly?{CRM_ACCOUNT_INSPECTION_ONLY:'1'}:preflightOnly?{CRM_EXACT_PREFLIGHT_ONLY:'1'}:replySha256?{CRM_EXACT_REPLY_ENABLED:'1'}:{})},detached:true,stdio:['ignore','ignore','pipe']});
     const diagnostics=new ProcessDiagnostics();
     child.stderr?.on('data',(chunk:Buffer)=>diagnostics.accept(chunk));
     child.once('close',()=>diagnostics.clear());

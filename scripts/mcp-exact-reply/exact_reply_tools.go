@@ -152,3 +152,23 @@ func registerSelectionDiagnosticFactory(server *mcp.Server, factory func() (exac
 func fmtSelectionInvalid() error { return errors.New("SELECTION_DIAGNOSTIC_UNAVAILABLE") }
 
 const selectionDiagnosticSchema = `{"type":"object","additionalProperties":false,"required":["protocol","inspectionId","accountId","senderId","postId","targetCommentId","recipientId","postReference","maxReplySelections","maxInputs","maxSubmissions"],"properties":{"protocol":{"type":"string","const":"workbench.xhs.reply-selection-diagnostic.v1"},"inspectionId":{"type":"string","pattern":"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"},"accountId":{"type":"string","pattern":"^[A-Za-z0-9:_-]{1,200}$"},"senderId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"postId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"targetCommentId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"recipientId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"postReference":{"type":"object","additionalProperties":false,"required":["postId","token","source"],"properties":{"postId":{"type":"string","pattern":"^[a-f0-9]{24}$"},"token":{"type":"string","minLength":1,"maxLength":4096,"pattern":"^[A-Za-z0-9_+/=-]+$"},"source":{"type":"string","enum":["pc_feed","pc_search"]}}},"maxReplySelections":{"type":"integer","const":1},"maxInputs":{"type":"integer","const":0},"maxSubmissions":{"type":"integer","const":0}}}`
+
+// Exclusive inspection mode: no send tool or legacy HTTP endpoint is available.
+func registerDMEntryTool(server *mcp.Server) {
+	mcp.AddTool(server, &mcp.Tool{Name: "workbench_dm_entry_inspect", Description: exactreply.DMEntryProtocol + " inspect visible entry using owned saved session; never open a conversation or send", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest, t exactreply.DMEntryTarget) (*mcp.CallToolResult, any, error) {
+		r := exactreply.InspectDMEntry(ctx, t, func() (exactreply.DMEntryInspector, error) {
+			b := newBrowser()
+			complete := false
+			defer func() {
+				if !complete {
+					b.Close()
+				}
+			}()
+			p := b.NewPage()
+			d := xiaohongshu.NewDMEntryDriver(p, func() { b.Close() })
+			complete = true
+			return d, nil
+		})
+		return nil, r, nil
+	})
+}
