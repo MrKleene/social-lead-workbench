@@ -5,6 +5,7 @@ export type Account = {
   ownerId: string | null;
   owner: { id: string; name: string } | null;
   dailyLimit: number;
+  todayLimit?: number;
   occupied: number;
   day: string;
   status: "UNCONNECTED" | "PAUSED" | "RESTRICTED";

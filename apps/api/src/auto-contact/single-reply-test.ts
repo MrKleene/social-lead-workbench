@@ -1,3 +1,4 @@
+import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {accountSystemBlock} from '../accounts/account-execution-policy';
 import {verifyCaptureRecoveryChain} from './capture-recovery-chain';
 import {accountSendObservation} from './send-observation';
@@ -80,7 +81,7 @@ export class SingleReplyTestService {
    }else if(blocking.length)throw Error('RECIPIENT_ALREADY_RESERVED_OR_CONTACTED');
    await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${s.accountId} FOR UPDATE`;
    const usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId:s.accountId,day:v.day}}});
-   if(v.account.dailyLimit<=0||(usage?.occupied??0)>=v.account.dailyLimit)throw Error('QUOTA_EXHAUSTED');
+   if(effectiveAccountLimit(v.account.dailyLimit,usage,v.day)<=0||(usage?.occupied??0)>=effectiveAccountLimit(v.account.dailyLimit,usage,v.day))throw Error('QUOTA_EXHAUSTED');
    const l=ledger?(s.previousNotAttemptedId?ledger:await tx.contactLedger.update({where:{id:ledger.id},data:{accountId:s.accountId}})):await tx.contactLedger.create({data:{identityId:identity.id,mode:'REAL',accountId:s.accountId}});
    const attempt=await tx.contactAttempt.create({data:{ledgerId:l.id,requestKey:key,kind:'FIRST',mode:'REAL',channel:'COMMENT',content:s.content,outcome:'RESERVED',day:v.day,actorId:actor.id,accountIdSnapshot:s.accountId,historySnapshot:{previousNotAttemptedId:s.previousNotAttemptedId??null,platform:'XHS',recipientId:s.recipientId,postId:s.postId,commentId:s.commentId,accountId:s.accountId,accountLabel:v.account.label,senderPlatformId:s.senderId,source:v.source} as Prisma.InputJsonValue}});
    await tx.accountDay.upsert({where:{accountId_day:{accountId:s.accountId,day:v.day}},create:{accountId:s.accountId,day:v.day,occupied:1},update:{occupied:{increment:1}}});
@@ -96,7 +97,7 @@ export class SingleReplyTestService {
    const current=await tx.contactAttempt.findUnique({where:{id:attempt.id}}),control=await tx.autoContactControl.findUnique({where:{platform_mode:{platform:'XHS',mode:'REAL'}}});
    if(current?.outcome!=='RESERVED'||control?.activeJobId!==key||control.pauseReason)return false;
    const checked=await this.validate(tx,actor,s);if(checked.hash!==v.hash)return false;
-   const usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId:s.accountId,day:v.day}}});if(!usage||usage.occupied<=0||usage.occupied>checked.account.dailyLimit)return false;
+   const usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId:s.accountId,day:v.day}}});if(!usage||usage.occupied<=0||usage.occupied>effectiveAccountLimit(checked.account.dailyLimit,usage,v.day))return false;
    await tx.contactAttempt.update({where:{id:attempt.id},data:{outcome:'ATTEMPTED',attemptedAt:await contactNow(tx),version:{increment:1}}});
    await tx.auditLog.create({data:{actorId:actor.id,entityId:key,action:'SINGLE_REPLY_TEST_DISPATCHED_ONCE',metadata:{attemptId:attempt.id,scopeHash}}});dispatched=true;return true;
   });

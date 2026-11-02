@@ -1,3 +1,4 @@
+import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {BadRequestException, ConflictException, Injectable, Inject, NotFoundException} from '@nestjs/common';
 import {Prisma} from '@prisma/client';
 import {captureDisplay, previewReply, replyDraft} from '@crm/contracts';
@@ -67,7 +68,7 @@ export class DmPreparationService {
    const session=account.sessionReference;
    if(!account.loginPlatformUserId||!account.loginSessionKey||session?.sessionKey!==account.loginSessionKey||session?.provider!=='real'||session?.state!=='VERIFIED')add('LOGIN_UNVERIFIED','账号登录或身份尚未核实');
    if(account.loginPlatformUserId===target.recipientId)add('SELF_RECIPIENT','不能向当前发送账号自己发送');
-   const remaining=Math.max(0,account.dailyLimit-(usage?.occupied??0));
+   const todayLimit=effectiveAccountLimit(account.dailyLimit,usage,day),remaining=Math.max(0,todayLimit-(usage?.occupied??0));
    if(!remaining)add('QUOTA_EXHAUSTED','账号今日共享额度已用尽');
    if(rendered.missing.length||rendered.unknown.length)add('TEMPLATE_FIELDS_MISSING','模板存在未获取或未知字段');
    add('DM_UNAVAILABLE',capability.reason);
@@ -76,7 +77,7 @@ export class DmPreparationService {
     capability,account:{id:account.id,version:account.version,label:account.loginNickname||account.label},
     source:{reviewId:review.id,reviewVersion:review.version,reviewState:review.state,reviewStatus:review.reviewStatus,score:review.score,runId:review.runId,platform:review.platform,...target,authorNickname:display.authorNickname,postTitle:text(snapshot.title)||null,comment:text(snapshot.comment)||null},
     template:{id:template.id,version:template.version,name:template.name},content:rendered.text,missingFields:rendered.missing,unknownFields:rendered.unknown,
-    quota:{day,timezone:'Asia/Shanghai',accountDailyLimit:account.dailyLimit,occupied:usage?.occupied??0,remaining,reservedByPreview:0},
+    quota:{day,timezone:'Asia/Shanghai',accountDailyLimit:todayLimit,occupied:usage?.occupied??0,remaining,reservedByPreview:0},
     conversation:null,issues,checkedAt:now.toISOString(),
     fingerprint:semanticHash({channel:'DM',accountId:account.id,accountVersion:account.version,reviewHash:eligibilityHash(review),templateId:template.id,templateVersion:template.version,recipient:target,content:rendered.text,day}),
    };

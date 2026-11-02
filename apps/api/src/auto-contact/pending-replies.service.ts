@@ -1,3 +1,4 @@
+import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {randomBytes,randomUUID,createHash,timingSafeEqual} from 'node:crypto';
 import {Inject,Injectable,ConflictException,NotFoundException} from '@nestjs/common';
 import {z} from 'zod';
@@ -35,7 +36,7 @@ export class PendingRepliesService {
   }else if(!account.isDemo||account.loginSessionKey)fail('账号模式不符');
   const control=await tx.autoContactControl.findUnique({where:{platform_mode:{platform:account.platform,mode:this.sender.mode}}});if(control?.pauseReason)fail('发送已因风险暂停，请先核查');if(control?.activeJobId)fail('当前有回复正在执行，请稍后预览');
   const rows=await tx.autoContactJob.findMany({where:{id:{in:jobs.map(j=>j.id)},mode:this.sender.mode},include:{rule:true,review:{include:{capture:{include:{post:true,config:{select:{platform:true}}}}}}}});
-  if(rows.length!==jobs.length)fail('待处理任务不存在或已变化');const day=quotaBucket(this.sender.mode,now),usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId,day}}});let cap=account.dailyLimit;const targets=new Set<string>();
+  if(rows.length!==jobs.length)fail('待处理任务不存在或已变化');const day=quotaBucket(this.sender.mode,now),usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId,day}}});let cap=effectiveAccountLimit(account.dailyLimit,usage,day);const targets=new Set<string>();
   for(const j of rows){
    if(j.status!=='PENDING_ACTION'||j.attemptId||j.updatedAt.toISOString()!==jobs.find(x=>x.id===j.id)!.version)fail('任务状态已变化，请重新选择');
    if(j.platform!==account.platform||j.channel!=='COMMENT'||!j.rule.accountIds.includes(accountId))fail('所选账号不在此任务当前授权账号池中');

@@ -1,3 +1,4 @@
+import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {quotaBucket,shanghaiDay} from '../auto-contact/contact-policy';
 import {accountSystemBlock,recordedAccountBlocks} from './account-execution-policy';
 import {boundAccountNickname} from './account-display';
@@ -52,6 +53,7 @@ export class AccountsService {
         owner: owners.find((u) => u.id === r.ownerId) || null,
         day:r.isDemo?day:shanghaiDay(now),
         occupied: usage.find(u=>u.day===(r.isDemo?day:realDay))?.occupied || 0,
+        todayLimit:effectiveAccountLimit(r.dailyLimit,usage.find(u=>u.day===realDay),r.isDemo?day:realDay),
         available:
           r.isDemo && !r.loginSessionKey &&
           !r.archivedAt &&

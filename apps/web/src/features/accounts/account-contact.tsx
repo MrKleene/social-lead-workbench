@@ -55,7 +55,7 @@ export function AccountContact({ lead }: { lead: Lead }) {
           <SelectOption value="">请选择账号</SelectOption>
           {candidates.map((a) => (
             <SelectOption value={a.id} key={a.id} disabled={!a.available}>
-              {a.label} · {a.occupied}/{a.dailyLimit}
+              {a.label} · {a.occupied}/{a.todayLimit??a.dailyLimit}
               {!a.available ? " · 暂停" : ""}
             </SelectOption>
           ))}

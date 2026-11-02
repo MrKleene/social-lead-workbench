@@ -32,7 +32,7 @@ export function AccountWorkspace({screen:s}:{screen:Screen}) {
      <TableCell className="account-login-cell" data-label="登录"><Badge variant="secondary" data-tone={loginProblem?'danger':'neutral'}>{status.login}</Badge></TableCell>
      <TableCell data-label="采集能力"><Badge variant="secondary">{status.collection}</Badge></TableCell>
      <TableCell data-label="回复能力"><Badge variant="secondary" data-tone={status.issue?'danger':'neutral'}>{status.reply}</Badge>{status.issue&&<small className="account-risk-reason">{status.risk}</small>}</TableCell>
-     <TableCell className="account-quota-cell" data-label="日额度"><span>{a.occupied}<span className="account-quota-separator"> / </span>{a.dailyLimit}</span></TableCell>
+     <TableCell className="account-quota-cell" data-label="日额度"><span>{a.occupied}<span className="account-quota-separator"> / </span>{a.todayLimit??a.dailyLimit}</span></TableCell>
      <TableCell className="account-row-actions"><Button variant="ghost" size="sm" aria-label={`查看${name}详情`} onClick={()=>s.open('details',a)}>详情</Button>{s.admin&&<Button variant="ghost" size="sm" aria-label={`设置${name}`} onClick={()=>s.open('settings',a)}>设置</Button>}</TableCell>
     </TableRow>{status.unknown>0&&<TableRow className="account-unknown-row"><TableCell colSpan={6}><Alert className="account-unknown" role="alert"><AlertCircle/><AlertDescription><span>{name} · {status.unknown} 条回复结果未知，仍占用额度，核查前勿重发。</span><Link to="/reply-history">核查记录</Link></AlertDescription></Alert></TableCell></TableRow>}</Fragment>;
    })}</TableBody>

@@ -14,7 +14,7 @@ export function AccountDetails({account:a,status,admin}:{account:Account;status:
   <dt>自动核验</dt><dd>采集启动和回复执行前，系统自动核验；历史检查不代表持续在线或保证可发送。</dd>
   <dt>执行设备编号</dt><dd>{a.sessionReference?.deviceId||'未关联'}</dd>
   <dt>本机会话</dt><dd>{a.sessionReference?'已登记，执行前自动核验':'未登记'}</dd>
-  <dt>今日回复额度</dt><dd>已用 {a.occupied} / {a.dailyLimit} 条（{a.day}）</dd>
+  <dt>今日回复额度</dt><dd>已用 {a.occupied} / {a.todayLimit??a.dailyLimit} 条（{a.day}）{a.todayLimit!==undefined&&a.todayLimit!==a.dailyLimit?` · 仅今日，默认 ${a.dailyLimit} 条`:null}</dd>
   <dt>额度说明</dt><dd>已用包含已确认、发送中和结果未知的占用；同一账号的任务共用。真实回复按北京时间每日计算。</dd>
   <dt>风险记录</dt><dd>{status?.issue||'暂无账号级限制记录；执行前仍会检查'}{status?.issue?.includes('历史')&&'。历史限制不会因登录检查通过而解除。'}</dd>
  </dl></InfoSection>;

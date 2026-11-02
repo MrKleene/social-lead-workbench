@@ -1,3 +1,4 @@
+import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {manualAuthority,type ManualAuthority} from './manual-reply-authority';
 import {acceptanceSendThreshold,blockingAcceptanceJobs,activeAcceptance,normalAcceptanceScope,acceptanceRuleAllowed,acceptanceSendAllowed,claimAcceptanceSend,settleAcceptance} from './normal-acceptance';
 import {accountModeBlocked} from '../accounts/account-execution-policy';
@@ -123,7 +124,7 @@ export class AutoContactService {
                     const observation=j.mode==='REAL'?await accountSendObservation(tx,id,now):null;
                     if(observation&&(observation.state!=='UNKNOWN'||observation.evidenceInvalid))continue;
                     const usage = await tx.accountDay.findUnique({ where: { accountId_day: { accountId: id, day } } });
-                    if ((usage?.occupied ?? 0) >= limit(r, id, a.dailyLimit)){quotaFull++;continue;}
+                    if ((usage?.occupied ?? 0) >= limit(r, id, effectiveAccountLimit(a.dailyLimit,usage,day))){quotaFull++;continue;}
                     if(observation&&!observation.canSend)continue;
                     healthyCount++;
                     selected = id;
@@ -166,7 +167,7 @@ export class AutoContactService {
             const postBlock = valid ? postSendBlock(valid.availability,manual?.authorizedAt??j.rule.authorizedAt,valid.row.updatedAt,j.availabilityVersion) : null;
             if(postBlock){await cancelReserved(tx,j,postBlock);await tx.autoContactJob.update({where:{id:j.id},data:{status:'BLOCKED_POST'}});return null;}
             const attempt = await tx.contactAttempt.findUniqueOrThrow({ where: { id: j.attemptId! } }), usage = await tx.accountDay.findUnique({ where: { accountId_day: { accountId: j.accountId!, day: attempt.day } } });
-            if (!healthy || !a || a.archivedAt || accountModeBlocked(a,j.mode) || !j.rule.accountIds.includes(a.id) || (j.manualRequestId?(!manual||manual.accountId!==a.id||!await this.manualRuleReady(tx,j.rule,manual)):j.ruleVersion !== j.rule.version || !await this.ruleReady(tx, j.rule)) || !valid || eligibilityHash(valid.row) !== j.eligibilityHash || !j.leaseUntil || j.leaseUntil < now || attempt.day !== quotaBucket(j.mode, now) || (usage?.occupied ?? 0) > limit(j.rule, a.id, a.dailyLimit) || (j.mode === 'REAL' ? (a.isDemo || a.sessionReference?.state !== 'VERIFIED') : (!a.isDemo || !!a.loginSessionKey))) {
+            if (!healthy || !a || a.archivedAt || accountModeBlocked(a,j.mode) || !j.rule.accountIds.includes(a.id) || (j.manualRequestId?(!manual||manual.accountId!==a.id||!await this.manualRuleReady(tx,j.rule,manual)):j.ruleVersion !== j.rule.version || !await this.ruleReady(tx, j.rule)) || !valid || eligibilityHash(valid.row) !== j.eligibilityHash || !j.leaseUntil || j.leaseUntil < now || attempt.day !== quotaBucket(j.mode, now) || (usage?.occupied ?? 0) > limit(j.rule, a.id, effectiveAccountLimit(a.dailyLimit,usage,quotaBucket(j.mode,now))) || (j.mode === 'REAL' ? (a.isDemo || a.sessionReference?.state !== 'VERIFIED') : (!a.isDemo || !!a.loginSessionKey))) {
                 await cancelReserved(tx, j, '发送前健康、授权、额度日期或证据已变化；未发送');
                 return null;
             }
@@ -241,7 +242,7 @@ export class AutoContactService {
                 const control=await this.db.autoContactControl.findUnique({where:{platform_mode:{platform:j.platform,mode:'REAL'}}});if(control?.pauseReason||control?.activeJobId)return;
                 const account=await this.db.platformAccount.findUnique({where:{id}}),day=quotaBucket('REAL',await this.now(this.db));
                 const usage=await this.db.accountDay.findUnique({where:{accountId_day:{accountId:id,day}}});
-                if(!account||accountModeBlocked(account,'REAL')||(usage?.occupied??0)>=limit(r,id,account.dailyLimit))continue;
+                if(!account||accountModeBlocked(account,'REAL')||(usage?.occupied??0)>=limit(r,id,effectiveAccountLimit(account.dailyLimit,usage,day)))continue;
                 // Only qualify accounts when there is actual authorized work. No IO in a DB transaction.
                 if(await this.sender.prepare(actor,id))return;
             }
@@ -269,7 +270,7 @@ export class AutoContactService {
         const observation=j.mode==='REAL'?await accountSendObservation(tx,a.id,now):null;
         if(observation&&(observation.state!=='UNKNOWN'||observation.evidenceInvalid)){await this.holdForAction(tx,j,'账号存在平台限制或异常证据，请先处理');return null;}
         const usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId:a.id,day:quotaBucket(j.mode,now)}}});
-        if((usage?.occupied??0)>=limit(j.rule,a.id,a.dailyLimit)){await this.holdForAction(tx,j,'今日额度不足，已退回待处理；不会跨天自动续发');return null;}
+        if((usage?.occupied??0)>=limit(j.rule,a.id,effectiveAccountLimit(a.dailyLimit,usage,quotaBucket(j.mode,now)))){await this.holdForAction(tx,j,'今日额度不足，已退回待处理；不会跨天自动续发');return null;}
         const identity=await tx.platformIdentity.findUnique({where:{platform_platformUserId:{platform:j.platform,platformUserId:j.recipientId}},include:{lead:true}});
         if(identity?.lead&&(identity.lead.doNotContact||(!identity.lead.isDemo&&(identity.lead.contactedAt||['CONTACTED','INTERESTED'].includes(identity.lead.contactStage))))){await this.holdForAction(tx,j,'收件人已联系或标记勿联系');return null;}
         const ledger=identity?await tx.contactLedger.findUnique({where:{identityId_mode:{identityId:identity.id,mode:j.mode}},include:{attempts:true}}):null;

@@ -1,3 +1,4 @@
+import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {manualAuthority} from './manual-reply-authority';
 import {acceptanceSendThreshold,acceptanceSendAllowed} from './normal-acceptance';
 import {randomUUID} from 'node:crypto';
@@ -84,8 +85,8 @@ export class LocalXhsReplySender implements ContactSender {
         const account = await this.db.platformAccount.findUnique({ where: { id: request.accountId }, include: { sessionReference: true } });
         if (!account?.loginPlatformUserId || !account.sessionReference || account.isDemo || account.archivedAt || accountSystemBlock(account) || account.sessionReference.state !== 'VERIFIED' || !currentRuntimeVerification(account.sessionReference.checkedRuntimeId,this.runtime.runtimeId) || account.sessionReference.deviceId !== this.runtime.deviceId() || account.sessionReference.sessionKey !== account.loginSessionKey || account.sessionReference.provider !== 'real') return null;
         const limits = j.rule.accountLimits as { id: string; dailyLimit: number }[];
-        const limit = Math.min(account.dailyLimit, Array.isArray(limits) ? limits.find(a => a.id === account.id)?.dailyLimit ?? 0 : 0);
         const usage = await this.db.accountDay.findUnique({ where: { accountId_day: { accountId: account.id, day } } });
+        const limit = Math.min(effectiveAccountLimit(account.dailyLimit,usage,day), Array.isArray(limits) ? limits.find(a => a.id === account.id)?.dailyLimit ?? 0 : 0);
         if (!usage || usage.occupied <= 0 || usage.occupied > limit) return null;
         return { actor, account, reference };
     }
