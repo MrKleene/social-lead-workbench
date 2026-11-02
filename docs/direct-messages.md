@@ -76,3 +76,12 @@ They test capability denial, exact binding, stale versions, input injection,
 admin/CSRF, missing variables, no-contact/exclusion/risk/quota, cross-channel
 UNKNOWN, self-contact, and absence of send endpoints. These tests are not a real
 platform or persistent queue acceptance.
+
+## 本地预览入口
+
+配置管理 → 发送模板配置 → 选中已保存的私信模板 → 私信预览。
+选择已保存的来源方案/原评论及真实账号后，显式“生成本地预览”；不会运行模型、访问平台、保存配置或发送。源列表每页 20 条，切换账号/来源/评论会清空旧预览，版本变化后重新读取。正文、收件人来源、额度占用、UNKNOWN/勿联系/排除等问题如实显示，没有发送/确认授权按钮。仅管理员可访问，评论模板不显示私信预览入口。
+
+前端对未部署此 API 的旧服务关闭预览并显示“当前服务尚未启用私信预览”，不会回退为评论发送。能力接口、模板准备与真实发送是三个不同阶段：预览可用不表示 DM sender 已接通。
+
+官方私信通提供网页版入口 https://sxt.xiaohongshu.com/ ，正常网页 UI 是候选路线，不强制要求服务商 API。其官方应用说明面向商业化客户，当前账号的适用范围/会话身份/可靠回执未核验，不能据此开放生产 DM。

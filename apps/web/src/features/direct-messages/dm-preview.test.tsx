@@ -1,0 +1,22 @@
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {describe,it,expect,vi,beforeEach} from 'vitest';
+import {ApiError} from '@/lib/api';
+import {DmPreviewButton,DmPreviewForm} from './dm-preview-dialog';
+import {previewForSelection,previewKey,capabilityError,type DmRequest,type DmPreview} from './use-dm-preview';
+const state=vi.hoisted(()=>({value:{} as any}));
+vi.mock('./use-dm-preview',async importOriginal=>({...await importOriginal<typeof import('./use-dm-preview')>(),useDmPreview:()=>state.value}));
+const template={id:'t',version:2,name:'虚构私信模板',channel:'DM' as const,body:'你好{{昵称}}'};
+const req:DmRequest={accountId:'a',accountVersion:1,reviewId:'r',reviewVersion:2,templateId:'t',templateVersion:2};
+const preview={mode:'PREVIEW_ONLY',canSend:false,sent:false,authorizationCreated:false,content:'虚构预览正文',source:{authorNickname:'虚构用户',recipientId:'fictional-id',postTitle:'虚构帖子',comment:'原评论',score:0},account:{label:'虚构账号'},quota:{remaining:0,occupied:1,accountDailyLimit:1,reservedByPreview:0},issues:[{code:'UNKNOWN_LOCK',message:'存在未知发送结果，不可再次发送'},{code:'DM_UNAVAILABLE',message:'私信发送通道尚未接通'}],missingFields:['职业'],unknownFields:[],checkedAt:'2026-11-02T00:00:00Z'} as DmPreview;
+const html=()=>renderToStaticMarkup(createElement(DmPreviewForm,{template}));
+beforeEach(()=>{state.value={prepare:{isPending:false},capability:{data:{previewAvailable:true,sendingAvailable:false,reason:'私信发送通道尚未接通'}},accounts:{data:{accounts:[{id:'a',label:'虚构账号',platform:'XHS',isDemo:false}]}},overview:{data:{policies:[{id:'p',name:'虚构方案'}]}},results:{data:{items:[],total:0,hasMore:false}},input:null,accountId:'',policyId:'',reviewId:'',offset:0,preview:null};});
+describe('local DM preparation UI',()=>{
+ it('only saved DM templates expose an explicit preview entry',()=>{expect(renderToStaticMarkup(createElement(DmPreviewButton,{template}))).toContain('私信预览');expect(renderToStaticMarkup(createElement(DmPreviewButton,{template:{...template,channel:'COMMENT'}}))).toBe('');});
+ it('does not render any send or confirmation action, even with prepared content',()=>{state.value.preview=preview;state.value.input=req;const s=html();expect(s).toContain('拟发送内容 · 未发送');expect(s).toContain('虚构预览正文');expect(s).toContain('不可发送');expect(s).toContain('未知发送结果');expect(s).toContain('未获取字段：');expect(s).not.toContain('发送所选');expect(s).not.toContain('确认发送');});
+ it('requires selected saved inputs and displays zero without inventing a score',()=>{state.value.policyId='p';state.value.results.data.items=[{id:'r',version:2,score:0,reviewStatus:'REJECTED',snapshot:{comment:'长评论'.repeat(90),title:'来源帖子'},source:{authorNickname:'已排除作者'}}];const s=html();expect(s).toContain('0 分');expect(s).toContain('已人工排除');expect(s).toContain('展开评论');expect(s).toContain('disabled');});
+ it('old backend 404 fails closed without source picker or preview action',()=>{state.value.capability={isError:true,error:new ApiError(404,'Not Found')};const s=html();expect(s).toContain('当前服务尚未启用私信预览');expect(s).not.toContain('生成本地预览');});
+ it('does not render cached result as current after any selected input changes',()=>{for(const key of Object.keys(req) as (keyof DmRequest)[]){const changed={...req,[key]:typeof req[key]==='number'?Number(req[key])+1:`${req[key]}-other`};expect(previewForSelection({key:previewKey(req),value:preview},changed)).toBeNull();}expect(previewForSelection({key:previewKey(req),value:preview},req)).toEqual(preview);expect(previewForSelection({key:previewKey(req),value:preview},null)).toBeNull();});
+ it('shows load, missing capability, empty, error and preparing states distinctly',()=>{state.value.capability={isPending:true};expect(html()).not.toContain('生成本地预览');state.value.capability={data:{previewAvailable:false}};expect(html()).toContain('不支持私信预览');state.value.capability={data:{previewAvailable:true}};state.value.policyId='p';expect(html()).toContain('该方案暂无已保存评论');state.value.results={isError:true,error:Error('虚构来源读取失败')};expect(html()).toContain('虚构来源读取失败');expect(html()).not.toContain('暂无已保存评论');state.value.prepare={isPending:true};expect(html()).toContain('正在准备');});
+ it('uses actionable service error text',()=>{expect(capabilityError(new Error('权限不足'))).toBe('权限不足');expect(capabilityError(null)).toBe('私信能力读取失败');});
+});
