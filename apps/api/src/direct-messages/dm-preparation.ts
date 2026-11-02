@@ -1,3 +1,4 @@
+import {DM_PRODUCTION_ACCEPTED} from './dm-executor';
 import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {BadRequestException, ConflictException, Injectable, Inject, NotFoundException} from '@nestjs/common';
 import {Prisma} from '@prisma/client';
@@ -14,7 +15,7 @@ const id=z.string().min(1).max(200);
 export const dmPreviewInput=z.object({accountId:id,accountVersion:z.number().int().nonnegative(),reviewId:id,reviewVersion:z.number().int().nonnegative(),templateId:id,templateVersion:z.number().int().nonnegative()}).strict();
 /** Deployment facts only. No request/env switch or comment permission enables DM. */
 export function dmCapability(platform:'XHS'|'DOUYIN'){
- return {platform,channel:'DM' as const,previewAvailable:true,sendingAvailable:false as const,conversationLookup:false,inbox:false,readReceipts:false,reason:platform==='XHS'?'私信发送通道尚未接通':'抖音私信尚未接通'};
+ return {platform,channel:'DM' as const,previewAvailable:true,sendingAvailable:platform==='XHS'&&DM_PRODUCTION_ACCEPTED,conversationLookup:false,inbox:false,readReceipts:false,reason:platform==='XHS'?(DM_PRODUCTION_ACCEPTED?'支持核对后单条发送':'私信发送通道尚未接通'):'抖音私信尚未接通'};
 }
 const object=(value:Prisma.JsonValue|null)=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,Prisma.JsonValue>:{};
 const text=(value:Prisma.JsonValue|undefined)=>typeof value==='string'?value:undefined;
@@ -60,6 +61,7 @@ export class DmPreparationService {
    const attempts=ledger?.attempts.filter(a=>a.outcome!=='CANCELLED')??[];
    if(attempts.some(a=>a.outcome==='UNKNOWN'))add('UNKNOWN_LOCK','该用户存在未知发送结果，不可再次发送或换渠道补发');
    else if(attempts.length)add('RECIPIENT_LOCK','该用户已有发送尝试或占用，不可重复联系');
+   if(review.state!=='EVALUATED'||(review.score??-1)<95||review.context!=='SUFFICIENT')add('REVIEW_NOT_READY','请选择已完成评估且不低于95分、依据充分的评论');
    if(review.reviewStatus==='REJECTED')add('EXCLUDED','该评论已人工排除');
    const block=accountReadBlock(account);
    if(block)add('ACCOUNT_RESTRICTION',block);
@@ -71,7 +73,7 @@ export class DmPreparationService {
    const todayLimit=effectiveAccountLimit(account.dailyLimit,usage,day),remaining=Math.max(0,todayLimit-(usage?.occupied??0));
    if(!remaining)add('QUOTA_EXHAUSTED','账号今日共享额度已用尽');
    if(rendered.missing.length||rendered.unknown.length)add('TEMPLATE_FIELDS_MISSING','模板存在未获取或未知字段');
-   add('DM_UNAVAILABLE',capability.reason);
+   if(!capability.sendingAvailable)add('DM_UNAVAILABLE',capability.reason);
    add('CONVERSATION_UNVERIFIED','尚未通过私信通道确认收件人会话和发送资格');
    return {channel:'DM' as const,mode:'PREVIEW_ONLY' as const,sent:false as const,canSend:false as const,authorizationCreated:false as const,
     capability,account:{id:account.id,version:account.version,label:account.loginNickname||account.label},

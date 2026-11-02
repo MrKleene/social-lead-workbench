@@ -3,6 +3,7 @@ import {activeAcceptance,normalAcceptanceScope,liveAcceptance,acceptanceConflict
 import {accountSystemBlock,accountModeBlocked} from '../accounts/account-execution-policy';
 import {replyHistoryItem} from './reply-history';
 import {accountSendObservation} from './send-observation';
+import {channelSendObservation} from './channel-send-observation';
 import {executionEventSchema} from './reply-stage-journal';
 import {postAvailability} from '../collection/post-availability';
 import {unknownPostAvailability} from '@crm/contracts';
@@ -55,7 +56,7 @@ export class ContactSettingsService {
                     }[] | undefined)?.find(x => x.id === a.id)?.dailyLimit ?? a.dailyLimit)) - occupied), authorizedLimit: Math.min(todayLimit, ((rules[0]?.accountLimits as {
                         id: string;
                         dailyLimit: number;
-                    }[] | undefined)?.find(x => x.id === a.id)?.dailyLimit ?? a.dailyLimit)) }; }), policies: await tx.commentReviewPolicy.findMany({ select: { id: true, name:true, revision: true, target: true } }), capabilities:['XHS','DOUYIN'].flatMap(platform=>['COMMENT','DM'].map(channel=>({platform,channel,available:this.sender.capability(platform,channel),supported:this.sender.mode==='SIMULATION'||(platform==='XHS'&&channel==='COMMENT')}))), capability: { available: ['XHS', 'DOUYIN'].some(p => ['COMMENT', 'DM'].some(c => this.sender.capability(p, c))), reason: senderUnavailable, recognition:'OFFLINE_TESTED',sending:this.sender.mode==='SIMULATION'?'SIMULATION_ONLY':'UNVERIFIED' }, timezone: contactTimezone, day: shanghaiDay(now) };
+                    }[] | undefined)?.find(x => x.id === a.id)?.dailyLimit ?? a.dailyLimit)) }; }), policies: await tx.commentReviewPolicy.findMany({ select: { id: true, name:true, revision: true, target: true } }), capabilities:['XHS','DOUYIN'].flatMap(platform=>['COMMENT','DM'].map(channel=>({platform,channel,available:this.sender.capability(platform,channel),supported:this.sender.mode==='SIMULATION'||(platform==='XHS'&&this.sender.capability(platform,channel))}))), capability: { available: ['XHS', 'DOUYIN'].some(p => ['COMMENT', 'DM'].some(c => this.sender.capability(p, c))), reason: senderUnavailable, recognition:'OFFLINE_TESTED',sending:this.sender.mode==='SIMULATION'?'SIMULATION_ONLY':'UNVERIFIED' }, timezone: contactTimezone, day: shanghaiDay(now) };
         });
     }
     async history(actor: Actor, offset = 0, outcome?: ContactOutcome | 'NOT_ATTEMPTED') {
@@ -86,7 +87,8 @@ export class ContactSettingsService {
                 throw new ConflictException('设置已变化，请刷新');
             const channels=input.channels??[input.channel];
             const channel=channels.includes('COMMENT')?'COMMENT':channels.includes('DM')?'DM':input.channel;
-            if(input.templateId){await tx.$queryRaw`SELECT id FROM "ReplyTemplate" WHERE id=${input.templateId} FOR UPDATE`;const template=await tx.replyTemplate.findUnique({where:{id:input.templateId}});if(!template||template.version!==input.templateVersion||template.body!==input.content)throw new ConflictException('发送模板已变化，请重新选择并保存');}
+            if(channel==='DM'&&/\{\{|\}\}/.test(input.content))throw new ConflictException('自动私信请使用固定正文；含变量模板可在私信预览中逐条核对发送');
+            if(input.templateId){await tx.$queryRaw`SELECT id FROM "ReplyTemplate" WHERE id=${input.templateId} FOR UPDATE`;const template=await tx.replyTemplate.findUnique({where:{id:input.templateId}});if(!template||template.channel!==channel||template.version!==input.templateVersion||template.body!==input.content)throw new ConflictException('发送模板已变化，请重新选择并保存');}
             const policy = await tx.commentReviewPolicy.findUnique({ where: { id: input.policyId } });
             if (!policy || policy.revision !== input.policyRevision)
                 throw new ConflictException('审核目标已变化');
@@ -140,7 +142,7 @@ export class ContactSettingsService {
                 if (accounts.length !== r.accountIds.length || !accounts.every(a => !accountModeBlocked(a,r.mode) && (r.mode === 'SIMULATION' ? a.isDemo && !a.loginSessionKey : !a.isDemo && !!a.loginSessionKey && a.sessionReference?.sessionKey===a.loginSessionKey && (a.sessionReference?.state === 'VERIFIED'||!!this.sender.prepare&&['UNVERIFIED','CONNECTION_ERROR'].includes(a.sessionReference?.state??'')))))
                     throw new ConflictException('账号池存在未授权或不健康账号');
                 if(r.mode==='REAL') for(const account of accounts){
-                    const observation=await accountSendObservation(tx,account.id,await contactNow(tx));
+                    const observation=await channelSendObservation(tx,account.id,await contactNow(tx),r.channel);
                     if(observation.state!=='UNKNOWN'||observation.evidenceInvalid||(!this.sender.prepare&&!observation.canSend))
                         throw new ConflictException('账号受限或发送资格待核验，不能开启自动联系');
                 }

@@ -27,7 +27,7 @@ export function replyHistoryItem(a: Attempt, audit: Audit[]): ReplyHistoryItem {
     });
     // Missing evidence never turns a historical failure/unknown into a definite non-submission.
     return {
-        id: a.id, mode: a.mode, channel: a.channel ?? 'UNKNOWN', origin: a.jobId ? 'RULE' : 'SINGLE_TEST', outcome: a.outcome,
+        id: a.id, jobId:a.jobId, canVerifyDm:a.channel==='DM'&&a.mode==='REAL'&&a.outcome==='UNKNOWN'&&(!!a.jobId||a.requestKey.startsWith('dm:')), mode: a.mode, channel: a.channel ?? 'UNKNOWN', origin: a.jobId ? 'RULE' : 'SINGLE_TEST', outcome: a.outcome,
         displayStatus: notAttempted ? 'NOT_ATTEMPTED' : a.outcome, senderId, senderName,
         senderNameSource: senderId && senderTitles.length === 1 ? '发送时同会话身份核验' : frozenNickname ? '发送时昵称快照' : senderName ? '发送时账号名称' : '未保存昵称',
         recipientId, recipientName: publicId(comment.userId) === recipientId && recipientId ? text(comment.authorNickname, 200) : null,

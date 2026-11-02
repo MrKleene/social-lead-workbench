@@ -171,3 +171,40 @@ func TestExactPreflightRoutesDMExclusiveTool(t *testing.T) {
 		t.Fatal("extra send content accepted")
 	}
 }
+
+func TestExactPreflightRoutesDMConversationExclusive(t *testing.T) {
+	t.Setenv("CRM_DM_CONVERSATION_INSPECTION_ONLY", "1")
+	t.Setenv("CRM_EXACT_REPLY_ENABLED", "1")
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	registerTools(server, &AppServer{})
+	list, e := diagnosticSession(t, server).ListTools(context.Background(), nil)
+	if e != nil || len(list.Tools) != 1 || list.Tools[0].Name != "workbench_dm_conversation_inspect" || list.Tools[0].Annotations.ReadOnlyHint {
+		t.Fatal(list, e)
+	}
+	for _, r := range setupRoutes(&AppServer{}).Routes() {
+		if r.Path != "/health" && r.Path != "/mcp" && r.Path != "/mcp/*path" {
+			t.Fatal(r.Path)
+		}
+	}
+}
+
+func TestExactPreflightRoutesDMSendExclusive(t *testing.T) {
+	t.Setenv("CRM_EXACT_DM_ONLY", "1")
+	t.Setenv("CRM_EXACT_REPLY_ENABLED", "1")
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	registerTools(server, &AppServer{})
+	cs := diagnosticSession(t, server)
+	list, e := cs.ListTools(context.Background(), nil)
+	if e != nil || len(list.Tools) != 1 || list.Tools[0].Name != "workbench_dm_exact" || list.Tools[0].Annotations.ReadOnlyHint {
+		t.Fatal(list, e)
+	}
+	for _, r := range setupRoutes(&AppServer{}).Routes() {
+		if r.Path != "/health" && r.Path != "/mcp" && r.Path != "/mcp/*path" {
+			t.Fatal(r.Path)
+		}
+	}
+	r, e := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "workbench_dm_exact", Arguments: map[string]any{}})
+	if e == nil && !r.IsError {
+		t.Fatal("invalid grant accepted")
+	}
+}

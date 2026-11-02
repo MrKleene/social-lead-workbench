@@ -4,4 +4,4 @@
 // sendEligibilityReviewed reviews the application restriction policy, not an
 // asserted platform can-send API. Unknown/empty UI never guarantees acceptance.
 export type ExactReplyDeployment = Readonly<{ enabled: boolean; reviewedSha256: string | null; responseMappingReviewed?: boolean; sendEligibilityReviewed?: boolean }>;
-export const exactReplyDeployment: ExactReplyDeployment = Object.freeze({ enabled: true, reviewedSha256: 'e4ddc86f5d4b4edf87fbeb542ad12e422422116b95c337e13721be3f230714f2', responseMappingReviewed: true, sendEligibilityReviewed: true });
+export const exactReplyDeployment: ExactReplyDeployment = Object.freeze({ enabled: true, reviewedSha256: '22022072f60e3296531d9a417ca06992cc352de758f811b446bfc860aa3e461b', responseMappingReviewed: true, sendEligibilityReviewed: true });

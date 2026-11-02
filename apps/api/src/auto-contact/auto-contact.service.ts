@@ -2,7 +2,7 @@ import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {manualAuthority,type ManualAuthority} from './manual-reply-authority';
 import {acceptanceSendThreshold,blockingAcceptanceJobs,activeAcceptance,normalAcceptanceScope,acceptanceRuleAllowed,acceptanceSendAllowed,claimAcceptanceSend,settleAcceptance} from './normal-acceptance';
 import {accountModeBlocked} from '../accounts/account-execution-policy';
-import {accountSendObservation} from './send-observation';
+import {channelSendObservation} from './channel-send-observation';
 import {postAvailability,postSendBlock} from '../collection/post-availability';
 import {publicPostSnapshot} from '../collection/post-reference';
 import { Inject, Injectable, ConflictException, NotFoundException } from '@nestjs/common';
@@ -30,7 +30,7 @@ export class AutoContactService {
         if(!await acceptanceRuleAllowed(tx,r))return false;
         if (!r.enabled || r.mode !== this.sender.mode || r.authorizedHash !== ruleHash(r) || !r.authorizedAt || !r.authorizedBy || !r.content.trim() || !r.accountIds.length || !this.sender.capability(r.platform, r.channel))
             return false;
-        if(r.mode==='REAL') for(const id of r.accountIds){const o=await accountSendObservation(tx,id,await this.now(tx));const a=await tx.platformAccount.findUnique({where:{id}});if(!a||accountModeBlocked(a,'REAL')||o.state!=='UNKNOWN'||o.evidenceInvalid)return false;}
+        if(r.mode==='REAL') for(const id of r.accountIds){const o=await channelSendObservation(tx,id,await this.now(tx),r.channel);const a=await tx.platformAccount.findUnique({where:{id}});if(!a||accountModeBlocked(a,'REAL')||o.state!=='UNKNOWN'||o.evidenceInvalid)return false;}
         const [p, m, a, c] = await Promise.all([tx.commentReviewPolicy.findUnique({ where: { id: r.policyId } }), tx.modelSettings.findFirst({ select: { model: true } }), tx.user.findUnique({ where: { id: r.authorizedBy }, select: { active: true, role: true } }), tx.autoContactControl.findUnique({ where: { platform_mode: { platform: r.platform, mode: r.mode } } })]);
         return p?.revision === r.policyRevision && m?.model === r.model && a?.active && a.role === 'ADMIN' && !c?.pauseReason;
     }
@@ -121,7 +121,7 @@ export class AutoContactService {
                     const a = await tx.platformAccount.findUnique({ where: { id }, include: { sessionReference: true } });
                     if (!a || a.archivedAt || a.platform !== j.platform || accountModeBlocked(a,j.mode) || (j.mode === 'SIMULATION' ? !a.isDemo || !!a.loginSessionKey : a.isDemo || a.sessionReference?.state !== 'VERIFIED'))
                         continue;
-                    const observation=j.mode==='REAL'?await accountSendObservation(tx,id,now):null;
+                    const observation=j.mode==='REAL'?await channelSendObservation(tx,id,now,j.channel):null;
                     if(observation&&(observation.state!=='UNKNOWN'||observation.evidenceInvalid))continue;
                     const usage = await tx.accountDay.findUnique({ where: { accountId_day: { accountId: id, day } } });
                     if ((usage?.occupied ?? 0) >= limit(r, id, effectiveAccountLimit(a.dailyLimit,usage,day))){quotaFull++;continue;}
@@ -153,7 +153,7 @@ export class AutoContactService {
             return;
         let healthy = false;
         try {
-            healthy = await this.sender.healthy(before.accountId!);
+            healthy = await this.sender.healthy(before.accountId!,before.channel);
         }
         catch { }
         const job = await this.db.$transaction(async (tx) => {
@@ -244,7 +244,7 @@ export class AutoContactService {
                 const usage=await this.db.accountDay.findUnique({where:{accountId_day:{accountId:id,day}}});
                 if(!account||accountModeBlocked(account,'REAL')||(usage?.occupied??0)>=limit(r,id,effectiveAccountLimit(account.dailyLimit,usage,day)))continue;
                 // Only qualify accounts when there is actual authorized work. No IO in a DB transaction.
-                if(await this.sender.prepare(actor,id))return;
+                if(await this.sender.prepare(actor,id,j.channel))return;
             }
         }
     }
@@ -267,7 +267,7 @@ export class AutoContactService {
         if(!a||a.archivedAt||accountModeBlocked(a,j.mode)||!valid||eligibilityHash(valid.row)!==j.eligibilityHash||postSendBlock(valid.availability,m.authorizedAt,valid.row.updatedAt,j.availabilityVersion)){
             await this.holdForAction(tx,j,'账号、原文或评分条件已变化，请核查后重新预览');return null;
         }
-        const observation=j.mode==='REAL'?await accountSendObservation(tx,a.id,now):null;
+        const observation=j.mode==='REAL'?await channelSendObservation(tx,a.id,now,j.channel):null;
         if(observation&&(observation.state!=='UNKNOWN'||observation.evidenceInvalid)){await this.holdForAction(tx,j,'账号存在平台限制或异常证据，请先处理');return null;}
         const usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId:a.id,day:quotaBucket(j.mode,now)}}});
         if((usage?.occupied??0)>=limit(j.rule,a.id,effectiveAccountLimit(a.dailyLimit,usage,quotaBucket(j.mode,now)))){await this.holdForAction(tx,j,'今日额度不足，已退回待处理；不会跨天自动续发');return null;}
@@ -280,11 +280,11 @@ export class AutoContactService {
     async reserveManual(){
         const candidate=await this.db.$transaction(async tx=>{await contactLock(tx);return this.manualCandidate(tx);});if(!candidate)return null;
         const {j,m}=candidate;let ready=false;
-        try{ready=await this.sender.healthy(m.accountId);if(!ready&&this.sender.prepare){const actor=await this.db.user.findUnique({where:{id:m.actorId},select:{id:true,name:true,email:true,role:true,active:true}});if(actor?.active&&actor.role==='ADMIN')ready=await this.sender.prepare(actor,m.accountId);}}catch{}
+        try{ready=await this.sender.healthy(m.accountId,j.channel);if(!ready&&this.sender.prepare){const actor=await this.db.user.findUnique({where:{id:m.actorId},select:{id:true,name:true,email:true,role:true,active:true}});if(actor?.active&&actor.role==='ADMIN')ready=await this.sender.prepare(actor,m.accountId,j.channel);}}catch{}
         if(!ready){await this.db.$transaction(async tx=>{await contactLock(tx);const current=await tx.autoContactJob.findUnique({where:{id:j.id}});if(current?.status==='MANUAL_READY')await this.holdForAction(tx,current,'执行前账号核验未通过，请处理后重新预览');});return null;}
         return this.db.$transaction(async tx=>{await contactLock(tx);const v=await this.manualCandidate(tx,j.id);if(!v)return null;const {a,now}=v;
             await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${a.id} FOR UPDATE`;
-            if(v.j.mode==='REAL'&&(a.sessionReference?.state!=='VERIFIED'||!(await accountSendObservation(tx,a.id,now)).canSend)){await this.holdForAction(tx,v.j,'登录或发送资格已变化，请重新预览');return null;}
+            if(v.j.mode==='REAL'&&(a.sessionReference?.state!=='VERIFIED'||!(await channelSendObservation(tx,a.id,now,j.channel)).canSend)){await this.holdForAction(tx,v.j,'登录或发送资格已变化，请重新预览');return null;}
             const identity=v.identity??await tx.platformIdentity.create({data:{platform:v.j.platform,platformUserId:v.j.recipientId,nickname:'',isDemo:v.j.mode==='SIMULATION'}});
             const ledger=v.ledger?await tx.contactLedger.update({where:{id:v.ledger.id},data:{accountId:a.id}}):await tx.contactLedger.create({data:{identityId:identity.id,mode:v.j.mode,accountId:a.id}}),day=quotaBucket(v.j.mode,now);
             await tx.accountDay.upsert({where:{accountId_day:{accountId:a.id,day}},create:{accountId:a.id,day,occupied:1},update:{occupied:{increment:1}}});

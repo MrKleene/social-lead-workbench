@@ -2,8 +2,8 @@ import {useRef,useState} from 'react';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import type {AutoContactOverview,CaptureDisplay} from '@crm/contracts';
 import {api,send} from '@/lib/api';
-export type PendingReply=CaptureDisplay&{id:string;version:string;runId:string|null;postTitle:string;comment:string;score:number|null;content:string;reason:string|null;createdAt:string};
-type Preview={previewId:string;token:string;expiresAt:string;accountLabel:string;notice:string;items:{id:string;content:string;comment:string;postTitle:string}[]};
+export type PendingReply=CaptureDisplay&{id:string;version:string;runId:string|null;channel?:'COMMENT'|'DM';postTitle:string;comment:string;score:number|null;content:string;reason:string|null;createdAt:string};
+type Preview={previewId:string;token:string;expiresAt:string;accountLabel:string;notice:string;items:{id:string;channel?:'COMMENT'|'DM';content:string;comment:string;postTitle:string}[]};
 export function usePendingReplies(enabled:boolean){
  const client=useQueryClient(),[offset,setOffset]=useState(0),[selected,setSelected]=useState<PendingReply[]>([]),[accountId,setAccount]=useState(''),[preview,setPreview]=useState<(Preview&{requestKey:string})|null>(null),[accepted,setAccepted]=useState(false),lock=useRef(false);
  const list=useQuery({queryKey:['pending-replies',offset],queryFn:()=>api<{items:PendingReply[];total:number}>(`/auto-contact/pending?offset=${offset}`),enabled,refetchInterval:5000});

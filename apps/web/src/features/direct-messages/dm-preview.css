@@ -2,3 +2,5 @@
 
 .dm-source-list{max-height:280px;overflow:auto;overscroll-behavior:contain}.dm-source-list:has(:focus-visible){outline-offset:2px}
 .dm-preview-body{padding:0 20px 20px}.dm-unavailable{margin-top:0}.dm-source p{margin:4px 0}.dm-source small{display:block;margin-top:4px}.dm-preview-action{padding-top:4px}@media(max-width:540px){.dm-preview-body{padding:0 12px 16px}.dm-source-list{max-height:230px}}
+
+.dm-send-confirmation{border-top:1px solid var(--border);padding-top:14px;margin-top:14px;display:grid;gap:12px}.dm-send-confirmation p{overflow-wrap:anywhere}.dm-send-confirmation button{justify-self:start}

@@ -7,6 +7,8 @@ import { DeviceService } from '../devices/device.service';
 import { LoginRuntime } from '../accounts/login-runtime';
 import { Db } from '../common/db';
 import { LocalXhsReplySender } from './local-xhs-reply-sender';
+import {LocalXhsDmSender,ChannelContactSender} from './local-xhs-dm-sender';
+import {LocalDmExecutor} from '../direct-messages/dm-executor';
 import { Controller, Get, Put, Post, Param, Query, Req, Inject, Module, UseGuards, Header } from '@nestjs/common';
 import { z } from 'zod';
 import { autoContactRuleInput, autoContactToggleInput, contactStatuses } from '@crm/contracts';
@@ -81,6 +83,6 @@ class AutoContactController {
     @Param('id')
     id: string) { const b = parse(z.object({ receipt: z.string().trim().min(1).max(500) }).strict(), r.body); return this.service.reconcile(r.actor, id, b.receipt); }
 }
-@Module({ imports: [AuthModule, DevicesModule], controllers: [AutoContactController], providers: [PendingRepliesService, NormalAcceptanceService, LoginRuntime, { provide: CONTACT_SENDER, useFactory: (db: Db, devices: DeviceService, runtime: LoginRuntime) => new LocalXhsReplySender(db, devices, runtime), inject: [Db, DeviceService, LoginRuntime] }, ContactSettingsService, AutoContactService], exports: [AutoContactService] })
+@Module({ imports: [AuthModule, DevicesModule], controllers: [AutoContactController], providers: [PendingRepliesService, NormalAcceptanceService, LoginRuntime, { provide: CONTACT_SENDER, useFactory: (db: Db, devices: DeviceService, runtime: LoginRuntime) => new ChannelContactSender(new LocalXhsReplySender(db, devices, runtime),new LocalXhsDmSender(db,runtime,new LocalDmExecutor(db,devices,runtime))), inject: [Db, DeviceService, LoginRuntime] }, ContactSettingsService, AutoContactService], exports: [AutoContactService] })
 export class AutoContactModule {
 }

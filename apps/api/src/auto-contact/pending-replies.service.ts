@@ -11,7 +11,7 @@ import {activeAcceptance} from './normal-acceptance';
 import {contactLock} from './contact-lock';
 import {contactNow} from './contact-settings.service';
 import {accountModeBlocked} from '../accounts/account-execution-policy';
-import {accountSendObservation} from './send-observation';
+import {channelSendObservation} from './channel-send-observation';
 import {contactTarget,eligible,eligibilityHash,quotaBucket} from './contact-policy';
 import {postAvailability,postSendBlock} from '../collection/post-availability';
 import {manualReplyScope} from './manual-reply-authority';
@@ -29,17 +29,18 @@ export class PendingRepliesService {
   if(await activeAcceptance(tx))fail('限定执行正在生效，不能额外提交待处理回复');
   const currentActor=await tx.user.findUnique({where:{id:actor.id},select:{active:true,role:true}});if(!currentActor?.active||currentActor.role!=='ADMIN')fail('管理员权限已变化');
   const account=await tx.platformAccount.findUnique({where:{id:accountId},include:{sessionReference:true}});
-  if(!account||account.archivedAt||accountModeBlocked(account,this.sender.mode)||!this.sender.capability(account.platform,'COMMENT'))fail('所选账号不可执行评论回复');
+  if(!account||account.archivedAt||accountModeBlocked(account,this.sender.mode))fail('所选账号不可发送');
   if(this.sender.mode==='REAL'){
-   const o=await accountSendObservation(tx,account.id,now),ref=account.sessionReference;
-   if(account.isDemo||!account.loginSessionKey||ref?.sessionKey!==account.loginSessionKey||!['VERIFIED','UNVERIFIED','CONNECTION_ERROR'].includes(ref?.state||'')||o.state!=='UNKNOWN'||o.evidenceInvalid)fail('账号登录、身份或平台限制需处理');
+   const ref=account.sessionReference;
+   if(account.isDemo||!account.loginSessionKey||ref?.sessionKey!==account.loginSessionKey||!['VERIFIED','UNVERIFIED','CONNECTION_ERROR'].includes(ref?.state||''))fail('账号登录、身份或平台限制需处理');
   }else if(!account.isDemo||account.loginSessionKey)fail('账号模式不符');
   const control=await tx.autoContactControl.findUnique({where:{platform_mode:{platform:account.platform,mode:this.sender.mode}}});if(control?.pauseReason)fail('发送已因风险暂停，请先核查');if(control?.activeJobId)fail('当前有回复正在执行，请稍后预览');
   const rows=await tx.autoContactJob.findMany({where:{id:{in:jobs.map(j=>j.id)},mode:this.sender.mode},include:{rule:true,review:{include:{capture:{include:{post:true,config:{select:{platform:true}}}}}}}});
   if(rows.length!==jobs.length)fail('待处理任务不存在或已变化');const day=quotaBucket(this.sender.mode,now),usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId,day}}});let cap=effectiveAccountLimit(account.dailyLimit,usage,day);const targets=new Set<string>();
   for(const j of rows){
    if(j.status!=='PENDING_ACTION'||j.attemptId||j.updatedAt.toISOString()!==jobs.find(x=>x.id===j.id)!.version)fail('任务状态已变化，请重新选择');
-   if(j.platform!==account.platform||j.channel!=='COMMENT'||!j.rule.accountIds.includes(accountId))fail('所选账号不在此任务当前授权账号池中');
+   if(j.platform!==account.platform||!this.sender.capability(j.platform,j.channel)||!j.rule.accountIds.includes(accountId))fail('所选账号不在此任务当前授权账号池中');
+   if(this.sender.mode==='REAL'){const o=await channelSendObservation(tx,account.id,now,j.channel);if(o.state!=='UNKNOWN'||o.evidenceInvalid)fail('账号存在限制，不能发送');}
    const r=j.review,rule=j.rule,policy=await tx.commentReviewPolicy.findUnique({where:{id:rule.policyId}}),model=await tx.modelSettings.findFirst({select:{model:true}});
    if(rule.mode!==this.sender.mode||rule.platform!==j.platform||rule.channel!==j.channel||policy?.revision!==rule.policyRevision||model?.model!==rule.model||r.policyId!==rule.policyId||r.policyRevision!==rule.policyRevision||r.selectedModel!==rule.model||!eligible(r,rule.threshold)||eligibilityHash(r)!==j.eligibilityHash||r.isDemo!==(this.sender.mode==='SIMULATION')||r.capture?.config.platform!==j.platform)fail('评分、来源、模型或规则已变化，不能沿用旧任务');
    const target=contactTarget(r,r.capture,r.capture?.post??null);if(!target||target.recipientId!==j.recipientId||target.postId!==j.postId||target.commentId!==j.commentId)fail('原评论关联已变化');
@@ -53,7 +54,7 @@ export class PendingRepliesService {
   if(cap-(usage?.occupied??0)<rows.length)fail('所选账号今日剩余额度不足，请减少所选项或稍后处理');
   return {account,rows,day};
  }
- async preview(actor:Actor,raw:unknown){requireAdmin(actor);const input=parse(pendingPreviewInput,raw),token=randomBytes(32).toString('base64url');return this.db.$transaction(async tx=>{await contactLock(tx);const now=await contactNow(tx),v=await this.validate(tx,actor,input.accountId,input.jobs,now),id=randomUUID();const scope=manualReplyScope.parse({day:v.day,jobs:v.rows.map(j=>({id:j.id,version:j.updatedAt.toISOString(),ruleId:j.ruleId,ruleVersion:j.rule.version,reviewHash:j.eligibilityHash,content:j.content,recipientId:j.recipientId,postId:j.postId,commentId:j.commentId,availabilityVersion:j.availabilityVersion}))});const expiresAt=new Date(Math.min(now.getTime()+300000,Date.parse(v.day.slice(-10)+'T00:00:00+08:00')+86400000));await tx.manualReplyRequest.create({data:{id,actorId:actor.id,accountId:v.account.id,accountVersion:v.account.version,tokenHash:digest(token),scope,expiresAt}});return {previewId:id,token,expiresAt:expiresAt.toISOString(),accountLabel:v.account.loginNickname||v.account.label,items:v.rows.map(j=>({id:j.id,content:j.content,comment:(j.review.snapshot as {comment?:string}).comment||'',postTitle:(j.review.snapshot as {title?:string}).title||''})),notice:'仅发送所选评论；执行前核验账号。额度或条件变化时退回待处理，不跨天续发。'};});}
+ async preview(actor:Actor,raw:unknown){requireAdmin(actor);const input=parse(pendingPreviewInput,raw),token=randomBytes(32).toString('base64url');return this.db.$transaction(async tx=>{await contactLock(tx);const now=await contactNow(tx),v=await this.validate(tx,actor,input.accountId,input.jobs,now),id=randomUUID();const scope=manualReplyScope.parse({day:v.day,jobs:v.rows.map(j=>({id:j.id,version:j.updatedAt.toISOString(),ruleId:j.ruleId,ruleVersion:j.rule.version,reviewHash:j.eligibilityHash,content:j.content,recipientId:j.recipientId,postId:j.postId,commentId:j.commentId,availabilityVersion:j.availabilityVersion}))});const expiresAt=new Date(Math.min(now.getTime()+300000,Date.parse(v.day.slice(-10)+'T00:00:00+08:00')+86400000));await tx.manualReplyRequest.create({data:{id,actorId:actor.id,accountId:v.account.id,accountVersion:v.account.version,tokenHash:digest(token),scope,expiresAt}});return {previewId:id,token,expiresAt:expiresAt.toISOString(),accountLabel:v.account.loginNickname||v.account.label,items:v.rows.map(j=>({id:j.id,channel:j.channel,content:j.content,comment:(j.review.snapshot as {comment?:string}).comment||'',postTitle:(j.review.snapshot as {title?:string}).title||''})),notice:'仅发送所选任务；执行前核验账号与渠道。额度或条件变化时退回待处理，不跨天续发。'};});}
  async confirm(actor:Actor,raw:unknown){requireAdmin(actor);const input=parse(pendingConfirmInput,raw);return this.db.$transaction(async tx=>{await contactLock(tx);const r=await tx.manualReplyRequest.findUnique({where:{id:input.previewId}});if(!r||r.actorId!==actor.id)throw new NotFoundException();const actual=Buffer.from(digest(input.token));if(!timingSafeEqual(Buffer.from(r.tokenHash),actual))fail('预览凭据不匹配');
    if(r.confirmedAt){if(r.submissionKey!==input.requestKey)fail('此预览已确认，请查看处理结果');return {accepted:true,previewId:r.id,replayed:true};}
    const now=await contactNow(tx),scope=manualReplyScope.parse(r.scope);if(r.expiresAt<=now||scope.day!==quotaBucket(this.sender.mode,now))fail('预览已过期，请重新预览');
