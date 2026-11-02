@@ -9,7 +9,7 @@ const render=(admin:boolean,path='/home')=>renderToStaticMarkup(<MemoryRouter in
 describe('graphite navigation preserves authorized destinations',()=>{
  it('keeps all administrator modules reachable and marks the current route',()=>{
   const html=render(true,'/automation?config=example&run=example-run');
-  for(const name of ['首页','项目概览','自动化任务','采集信息','评论审核','自动回复','回复记录','线索池','销售跟进','全部线索','人工任务','账号中心','联系与回复话术','提醒与异常','搜索与模型','平台能力'])expect(html).toContain(name);
+  for(const name of ['首页','项目概览','自动化任务','采集信息','评论审核','自动回复','待处理回复','回复记录','线索池','销售跟进','全部线索','人工任务','账号中心','联系与回复话术','提醒与异常','搜索与模型','平台能力'])expect(html).toContain(name);
   expect(html).toContain('href="/automation?config=example&amp;run=example-run"');
   expect(html).toContain('aria-current="page"');
   expect(html).toContain('aria-label="打开导航"');
@@ -20,4 +20,16 @@ describe('graphite navigation preserves authorized destinations',()=>{
   for(const label of ['销售跟进','全部线索','人工任务','提醒与异常'])expect(html).toContain(label);
   expect(html).toContain('aria-current="page"');
  });
+});
+
+it('gives pending replies a distinct active destination and preserves the automatic-reply route',()=>{
+ const html=render(true,'/auto-contact?view=pending');
+ expect(html).toMatch(/<a(?=[^>]*href="\/auto-contact\?view=pending")(?=[^>]*aria-current="page")[^>]*>/);
+ expect(html).toMatch(/href="\/auto-contact"[^>]*>/);
+ expect(html.match(/aria-current="page"/g)).toHaveLength(1); // closed mobile dialog is not mounted
+ expect(html).toContain('<span>待处理回复</span></div>'); // breadcrumb
+ expect(render(false,'/auto-contact?view=pending')).not.toContain('待处理回复');
+ const normal=render(true,'/auto-contact');
+ expect(normal).toMatch(/<a(?=[^>]*href="\/auto-contact")(?=[^>]*aria-current="page")[^>]*>/);
+ expect(normal).not.toMatch(/<a(?=[^>]*href="\/auto-contact\?view=pending")(?=[^>]*aria-current="page")[^>]*>/);
 });
