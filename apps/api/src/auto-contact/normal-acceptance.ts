@@ -12,6 +12,7 @@ type Store=Db|Prisma.TransactionClient;
 const id=z.string().min(1).max(200);
 export const normalAcceptanceInput=z.object({
  id:z.string().uuid(),consent:z.literal('normal-automation-acceptance-once-v1'),requestKey:z.string().uuid(),
+ channel:z.enum(['COMMENT','DM']).default('COMMENT'),
  configId:id,configRevision:z.number().int().positive(),savedPostId:id.optional(),
  selection:z.enum(['SAVED_POST','CONFIG_SEARCH']).default('SAVED_POST'),maxPosts:z.number().int().min(1).max(3).default(1),
  readAccountId:id.optional(),ruleId:id,ruleVersion:z.number().int().nonnegative(),policyVersion:z.number().int().nonnegative(),
@@ -22,18 +23,28 @@ export const normalAcceptanceInput=z.object({
 }).strict();
 export const replyExceptionInput=z.object({consent:z.literal('normal-reply-score95-once-v1'),postId:id,reviewId:id,expiresAt:z.string().datetime()}).strict();
 export const normalAcceptanceScope=normalAcceptanceInput.omit({consent:true}).extend({
+ dmTemplate:z.object({id,version:z.number().int().nonnegative(),bodyHash:z.string().regex(/^[a-f0-9]{64}$/)}).strict().optional(),
  replyOnly:z.object({reviewId:id,postId:id,platformPostId:id,commentId:id,recipientId:id,score:z.literal(95),reviewHash:id,sourceHash:id}).strict().optional(),
  reviewConfigRevision:z.number().int().positive().optional(),platformPostId:id.optional(),replyAccountId:id,ruleHash:id,policyId:id,policyRevision:z.number().int().positive(),model:id,mode:z.enum(['REAL','SIMULATION']),
-});
+}).refine(s=>s.channel==='DM'?!!s.dmTemplate:!s.dmTemplate,{message:'私信验收必须绑定模板；评论验收不能携带私信模板'});
 export type AcceptanceScope=z.infer<typeof normalAcceptanceScope>;
 // STOPPED retains the envelope until explicit close, so exhaustion never opens a
 // gap in which unrelated work or another envelope can silently become eligible.
 export async function activeAcceptance(db:Store){return db.normalAutomationAcceptance.findFirst({where:{state:{in:['ACTIVE','STOPPED']}}});}
 export function liveAcceptance(row:NormalAutomationAcceptance){return row.state==='ACTIVE'&&Date.parse(normalAcceptanceScope.parse(row.scope).expiresAt)>Date.now();}
 export function acceptanceConflict():never{throw new ConflictException('本次限定验收范围、期限或总次数不符；未调用外部服务，不自动解除限制');}
+/** The template is part of the finite consent, not merely a UI selection. */
+export async function acceptanceDmTemplate(db:Store,rule:AutoContactRule){
+ if(rule.channel!=='DM'||rule.channels.length!==1||rule.channels[0]!=='DM'||!rule.templateId||rule.templateVersion===null||!rule.content.trim()||rule.content.trim()!==rule.content||rule.content.length>1000||/[\r\n\0]|\{\{|\}\}/.test(rule.content))return null;
+ const template=await db.replyTemplate.findUnique({where:{id:rule.templateId}});
+ if(!template||template.channel!=='DM'||template.version!==rule.templateVersion||template.body!==rule.content)return null;
+ return {id:template.id,version:template.version,bodyHash:semanticHash({body:template.body})};
+}
 export async function acceptanceRuleAllowed(db:Store,rule:AutoContactRule){
  const a=await activeAcceptance(db);if(!a)return true;const s=normalAcceptanceScope.parse(a.scope);
- return liveAcceptance(a)&&s.ruleId===rule.id&&s.ruleVersion===rule.version&&s.ruleHash===ruleHash(rule)&&s.mode===rule.mode;
+ if(!liveAcceptance(a)||s.ruleId!==rule.id||s.ruleVersion!==rule.version||s.ruleHash!==ruleHash(rule)||s.mode!==rule.mode||s.channel!==rule.channel||rule.channels.length!==1||rule.channels[0]!==s.channel)return false;
+ if(s.channel==='DM'){const template=await acceptanceDmTemplate(db,rule);if(!template||semanticHash(template)!==semanticHash(s.dmTemplate))return false;}
+ return true;
 }
 export async function acceptanceCollectionStart(db:Store,input:{actorId:string;configId:string;revision:number;requestKey:string;accountId?:string;plan?:{savedPostId?:string;freshPostsOnly?:boolean;restartCheckpoint?:boolean;postsPerRound:number;rounds:number;commentPages:number}}){
  const a=await activeAcceptance(db);if(!a)return null;const s=normalAcceptanceScope.parse(a.scope);

@@ -1,4 +1,5 @@
 import {NormalAcceptanceService} from '../src/auto-contact/normal-acceptance.service';
+import {acceptanceRuleAllowed,normalAcceptanceScope} from '../src/auto-contact/normal-acceptance';
 import {ContactSettingsService} from '../src/auto-contact/contact-settings.service';
 import {AutoContactService} from '../src/auto-contact/auto-contact.service';
 import {CONTACT_SENDER} from '../src/auto-contact/contact-sender';
@@ -46,7 +47,7 @@ const sender={mode:'SIMULATION' as const,capability:()=>true,healthy:async()=>tr
 const evaluation=new ReviewEvaluationService(db,policies,{transport}),automatic=new AutoReviewService(db,policies,evaluation),manual=new ManualReviewService(db,policies,evaluation);
 let actor:Actor,sales:Actor,app:INestApplication,collection:CollectionService;const auth={admin:{cookie:'',csrf:''},sales:{cookie:'',csrf:''}},origin='http://127.0.0.1:5173';
 const api=()=>request(app.getHttpServer());const write=(method:'put'|'post'|'patch',path:string,body:object,who:'admin'|'sales'='admin')=>api()[method]('/api/comment-review'+path).set('Cookie',auth[who].cookie).set('Origin',origin).set('x-csrf-token',auth[who].csrf).send(body);
-async function clear(){await db.normalAcceptancePost.deleteMany();await db.normalAutomationAcceptance.deleteMany();await db.autoContactJob.deleteMany();await db.contactAttempt.deleteMany();await db.contactLedger.deleteMany();await db.accountDay.deleteMany();await db.autoContactRule.deleteMany();await db.autoContactControl.deleteMany();await db.platformAccount.deleteMany();await db.semanticModelCall.deleteMany();await db.semanticReview.deleteMany();await db.commentReviewPolicyVersion.deleteMany();await db.commentReviewPolicy.deleteMany();await db.modelSettings.deleteMany();await db.noticeRead.deleteMany();await db.collectionNotice.deleteMany();await db.sourceMatch.deleteMany();await db.commentObservation.deleteMany();await db.monitorPost.deleteMany();await db.semanticReview.deleteMany();await db.capturedComment.deleteMany();await db.capturedPost.deleteMany();await db.collectionRun.deleteMany();await db.collectionConfig.deleteMany();await db.sourceComment.deleteMany();await db.sourcePost.deleteMany();await db.lead.deleteMany();await db.platformIdentity.deleteMany();await db.auditLog.deleteMany();}
+async function clear(){await db.normalAcceptancePost.deleteMany();await db.normalAutomationAcceptance.deleteMany();await db.autoContactJob.deleteMany();await db.contactAttempt.deleteMany();await db.contactLedger.deleteMany();await db.accountDay.deleteMany();await db.autoContactRule.deleteMany();await db.replyTemplate.deleteMany();await db.autoContactControl.deleteMany();await db.platformAccount.deleteMany();await db.semanticModelCall.deleteMany();await db.semanticReview.deleteMany();await db.commentReviewPolicyVersion.deleteMany();await db.commentReviewPolicy.deleteMany();await db.modelSettings.deleteMany();await db.noticeRead.deleteMany();await db.collectionNotice.deleteMany();await db.sourceMatch.deleteMany();await db.commentObservation.deleteMany();await db.monitorPost.deleteMany();await db.semanticReview.deleteMany();await db.capturedComment.deleteMany();await db.capturedPost.deleteMany();await db.collectionRun.deleteMany();await db.collectionConfig.deleteMany();await db.sourceComment.deleteMany();await db.sourcePost.deleteMany();await db.lead.deleteMany();await db.platformIdentity.deleteMany();await db.auditLog.deleteMany();}
 async function saved(){await store.save(actor,{version:0,model:'qwen3.8-flash',endpoint:'beijing-standard',note:'FAKE TEST ONLY',key:'FAKE-INDEPENDENT-KEY-0123456789',priceVersion:'beijing-2026-10-21'});return policies.save(actor,'workspace',{version:0,target});}
 async function enabled(){const p=await saved();return policies.toggle(actor,p.id,{version:p.version,enabled:true,consent:reviewUseConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});}
 async function source(word='奇异搜索甲',comment='护理学',sharedHash?:string){const c=await db.collectionConfig.create({data:{name:'独立审核合成来源',platform:'XHS',mode:'MOCK',keywords:[word],excludeWords:[comment],batchLimit:1}}),run=await db.collectionRun.create({data:{configId:c.id,revision:1,snapshot:{},requestKey:randomUUID(),scenario:'BASELINE',status:'COMPLETE'}}),p=await db.capturedPost.create({data:{configId:c.id,runId:run.id,lastRunId:run.id,platformPostId:randomUUID(),contentHash:randomUUID(),snapshot:{title:'',body:''},coverage:'PARTIAL'}});const snap={postId:p.platformPostId,commentId:randomUUID(),userId:randomUUID(),title:'',body:'',comment,parentId:'missing-parent',parent:null,coverage:'PARTIAL',isDemo:true};const capture=await db.capturedComment.create({data:{configId:c.id,runId:run.id,lastRunId:run.id,postId:p.id,platformCommentId:snap.commentId,contentHash:sharedHash||semanticHash(snap),contextVersion:'captured-context-v1',snapshot:snap,isDemo:true}});return {c,p,capture};}
@@ -63,7 +64,8 @@ async function finite(overrides:Record<string,unknown>={}){
  const oldRun=await db.collectionRun.create({data:{configId:c.id,revision:c.revision,snapshot:{},requestKey:randomUUID(),scenario:'BASELINE',status:'COMPLETE'}});
  const p=await db.capturedPost.create({data:{configId:c.id,runId:oldRun.id,lastRunId:oldRun.id,platformPostId:'demo-collect-acceptance-post',snapshot:{title:'Synthetic'},contentHash:randomUUID(),coverage:'PARTIAL'}});
  const account=await db.platformAccount.create({data:{platform:'XHS',label:'Finite synthetic',isDemo:true,version:1,dailyLimit:5}});
- const settings=app.get(ContactSettingsService),rule=await settings.save(actor,'normal',{version:0,platform:'XHS',policyId:policy.id,policyRevision:policy.revision,threshold:overrides.selection==='CONFIG_SEARCH'?100:90,channel:'COMMENT',content:'Synthetic finite reply',accounts:[{id:account.id,version:1,dailyLimit:5}]});
+ const template=overrides.channel==='DM'?await db.replyTemplate.create({data:{name:'Synthetic finite DM',channel:'DM',body:'Synthetic finite reply'}}):null;
+ const settings=app.get(ContactSettingsService),rule=await settings.save(actor,'normal',{version:0,platform:'XHS',policyId:policy.id,policyRevision:policy.revision,threshold:overrides.selection==='CONFIG_SEARCH'?100:90,channel:template?'DM':'COMMENT',content:'Synthetic finite reply',...(template?{templateId:template.id,templateVersion:template.version}:{}),accounts:[{id:account.id,version:1,dailyLimit:5}]});
  const scope={id:randomUUID(),consent:'normal-automation-acceptance-once-v1',requestKey:randomUUID(),configId:c.id,configRevision:c.revision,savedPostId:p.id,ruleId:rule.id,ruleVersion:rule.version,policyVersion:policy.version,modelVersion:1,priceVersion:'beijing-2026-10-21',targets:[0,1].map(i=>({commentId:'demo-collect-finite-comment-'+i,recipientId:'demo-collect-finite-user-'+i})),maxInputTokens:100000,maxOutputTokens:20000,maxEstimatedMicros:100000,expiresAt:new Date(Date.now()+1200000).toISOString(),...overrides};
  const armed=await normalPost('/auto-contact/acceptance',scope);expect(armed.status,JSON.stringify(armed.body)).toBe(201);
  expect((await write('patch','/policies/'+policy.id+'/automatic',{version:policy.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'})).status).toBe(200);
@@ -75,8 +77,8 @@ async function finite(overrides:Record<string,unknown>={}){
  const collect=async()=>{const started=await start();expect(started.status,JSON.stringify(started.body)).toBe(201);await collection.execute(started.body.id,adapter);expect(await db.collectionRun.findUnique({where:{id:started.body.id}})).toMatchObject({status:'COMPLETE'});return started.body.id as string;};
  return {scope,c,p,account,rule,policy,plan,start,collect,adapter,contacts:app.get(AutoContactService),settings};
 }
-it.each(['CONFIRMED','FAILED','UNKNOWN','RISK'] as const)('ordinary HTTP collection/model/send envelope consumes once for %s and never resets with quota or day',async kind=>{
- const f=await finite();send.mockResolvedValue(kind==='CONFIRMED'?{kind,receipt:'synthetic'}:kind==='RISK'?{kind,reason:'RATE_LIMITED'}:{kind,reason:'synthetic'});
+it.each((['COMMENT','DM'] as const).flatMap(channel=>(['CONFIRMED','FAILED','UNKNOWN','RISK'] as const).map(kind=>({channel,kind}))))('ordinary $channel collection/model/send consumes once for $kind and never resets with quota or day',async ({channel,kind})=>{
+ const f=await finite({channel});send.mockResolvedValue(kind==='CONFIRMED'?{kind,receipt:'synthetic'}:kind==='RISK'?{kind,reason:'RATE_LIMITED'}:{kind,reason:'synthetic'});
  const runId=await f.collect();expect(await f.start()).toMatchObject({status:201});expect(f.adapter.search).not.toHaveBeenCalled();
  // A stale unrelated pending job is held while the specified run is processed.
  await db.autoReviewJob.create({data:{policyId:f.policy.id,policyVersion:f.policy.version+1,postId:f.p.id,runId:'unrelated-historical-run'}});
@@ -85,7 +87,8 @@ it.each(['CONFIRMED','FAILED','UNKNOWN','RISK'] as const)('ordinary HTTP collect
  // A separate evaluated history row which happens to satisfy time/score is not scanned.
  const old=reviews[0];await db.semanticReview.create({data:{configId:f.c.id,runId:f.p.runId,revision:1,policyId:f.policy.id,policyRevision:1,selectedModel:'qwen3.8-flash',snapshotHash:randomUUID(),platform:'XHS',platformUserId:'demo-collect-history-user',snapshot:{},rules:{},state:'EVALUATED',score:99,context:'SUFFICIENT',isDemo:true}});
  await Promise.all([f.contacts.tick(),f.contacts.tick(),f.contacts.tick()]);expect(send).toHaveBeenCalledTimes(1);
- const envelope=await db.normalAutomationAcceptance.findUniqueOrThrow({where:{id:f.scope.id}});expect(envelope.runId).toBe(runId);expect(envelope.modelCallId).toBeTruthy();expect(envelope.sendJobId).toBeTruthy();expect(envelope.reviewIds).toHaveLength(6);
+ expect(send.mock.calls[0][0].channel).toBe(channel);
+ const envelope=await db.normalAutomationAcceptance.findUniqueOrThrow({where:{id:f.scope.id}});expect((envelope.scope as any).channel).toBe(channel);expect(envelope.runId).toBe(runId);expect(envelope.modelCallId).toBeTruthy();expect(envelope.sendJobId).toBeTruthy();expect(envelope.reviewIds).toHaveLength(6);
  expect(await db.autoContactJob.count({where:{reviewId:{notIn:reviews.map(r=>r.id)}}})).toBe(0);
  expect(f.scope.targets).toContainEqual({recipientId:send.mock.calls[0][0].recipientId,commentId:send.mock.calls[0][0].commentId});
  if(kind==='FAILED')expect((await db.accountDay.findFirstOrThrow()).occupied).toBe(0);
@@ -144,8 +147,8 @@ it('concurrent arm is singular; active external work is rejected without cancell
  const responses=await Promise.all([normalPost('/auto-contact/acceptance',next),normalPost('/auto-contact/acceptance',{...next,id:randomUUID()})]);expect(responses.map(r=>r.status).sort()).toEqual([201,409]);
 });
 
-async function freshFinite(){
- const f=await finite({selection:'CONFIG_SEARCH',savedPostId:undefined,targets:undefined});
+async function freshFinite(overrides:Record<string,unknown>={}){
+ const f=await finite({selection:'CONFIG_SEARCH',savedPostId:undefined,targets:undefined,...overrides});
  const freshId='demo-collect-new-selected';
  f.adapter.search=vi.fn(async()=>({items:[{id:f.p.platformPostId,title:'Already saved'},{id:freshId,title:'New selected'},{id:'demo-collect-never-read',title:'Not selected'}],complete:true}));
  f.adapter.post=vi.fn(async p=>p);
@@ -192,16 +195,16 @@ it('a fresh 100% post with a failed submit consumes the total opportunity and au
  await new AutoContactService(db,sender).tick();expect(send).toHaveBeenCalledTimes(1);expect(await db.autoContactRule.findUnique({where:{id:f.rule.id}})).toMatchObject({enabled:false});
 });
 
-async function multiFinite(maxEstimatedMicros=1050000){
- const f=await finite({selection:'CONFIG_SEARCH',savedPostId:undefined,targets:undefined,maxPosts:3,maxEstimatedMicros});
+async function multiFinite(maxEstimatedMicros=1050000,channel:'COMMENT'|'DM'='COMMENT'){
+ const f=await finite({selection:'CONFIG_SEARCH',savedPostId:undefined,targets:undefined,maxPosts:3,maxEstimatedMicros,channel});
  f.adapter.search=vi.fn(async()=>({items:[{id:f.p.platformPostId,title:'History'},...[0,1,2,3].map(i=>({id:'demo-collect-multi-post-'+i,title:'New '+i}))],complete:true}));
  f.adapter.post=vi.fn(async p=>p);
  f.adapter.comments=async p=>({items:Array.from({length:6},(_,i)=>({id:p.id+'-comment-'+i,userId:p.id+'-user-'+i,nickname:'Synthetic',text:'护理学',hasReplies:false})),complete:true});
  return f;
 }
 async function nextModelTick(){await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-60000)}});await automatic.tick();}
-it('three fresh posts each get one whole-post call, then share one atomic send across concurrent workers',async()=>{
- const f=await multiFinite();modelScore=100;await f.collect();expect(f.adapter.post).toHaveBeenCalledTimes(3);
+it.each(['COMMENT','DM'] as const)('three fresh posts share one atomic %s send across concurrent workers',async channel=>{
+ const f=await multiFinite(1050000,channel);modelScore=100;await f.collect();expect(f.adapter.post).toHaveBeenCalledTimes(3);
  await Promise.all([automatic.tick(),automatic.tick(),automatic.tick()]);expect(transport).toHaveBeenCalledTimes(1);
  await f.contacts.tick();expect(send).not.toHaveBeenCalled();expect(await db.autoContactJob.count()).toBe(0);
  await nextModelTick();await f.contacts.tick();expect(transport).toHaveBeenCalledTimes(2);expect(send).not.toHaveBeenCalled();
@@ -287,4 +290,63 @@ it('95 exception freezes evaluation hash; edits cannot submit or widen to other 
  await db.semanticReview.update({where:{id:f.review.id},data:{version:{increment:1}}});
  const rule=await db.autoContactRule.findUniqueOrThrow({where:{id:f.rule.id}}),view=await f.settings.overview(actor);await f.settings.toggle(actor,rule.id,{version:rule.version,enabled:true,hash:view.rules.find(r=>r.id===rule.id)!.hash,consent:autoContactConsent});
  await automatic.tick();await f.contacts.tick();expect(send).not.toHaveBeenCalled();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoContactJob.count({where:{reviewId:{not:f.review.id}}})).toBe(0);
+});
+
+it.each(['missing','wrong-version','wrong-channel','changed-body','multiple-channels','implicit-comment'] as const)('DM arm rejects %s without changing business switches or sending',async mutation=>{
+ const f=await finite({channel:'DM'});await normalPost('/auto-contact/acceptance/'+f.scope.id+'/close',{});
+ const rule=await db.autoContactRule.findUniqueOrThrow({where:{id:f.rule.id}}),policy=await db.commentReviewPolicy.findUniqueOrThrow({where:{id:f.policy.id}});
+ if(mutation==='missing')await db.replyTemplate.delete({where:{id:rule.templateId!}});
+ if(mutation==='wrong-version')await db.replyTemplate.update({where:{id:rule.templateId!},data:{version:{increment:1}}});
+ if(mutation==='wrong-channel')await db.replyTemplate.update({where:{id:rule.templateId!},data:{channel:'COMMENT'}});
+ if(mutation==='changed-body')await db.replyTemplate.update({where:{id:rule.templateId!},data:{body:'Different synthetic text'}});
+ if(mutation==='multiple-channels')await db.autoContactRule.update({where:{id:rule.id},data:{channels:['DM','COMMENT']}});
+ const scope={...f.scope,id:randomUUID(),requestKey:randomUUID(),ruleVersion:rule.version,policyVersion:policy.version,...(mutation==='implicit-comment'?{channel:undefined}:{})};
+ expect((await normalPost('/auto-contact/acceptance',scope)).status).toBe(409);
+ expect(await db.normalAutomationAcceptance.count({where:{state:'ACTIVE'}})).toBe(0);
+ expect(await db.autoContactRule.findUnique({where:{id:rule.id}})).toMatchObject({enabled:false});
+ expect(await db.commentReviewPolicy.findUnique({where:{id:policy.id}})).toMatchObject({autoEnabled:false});
+ expect(transport).not.toHaveBeenCalled();expect(send).not.toHaveBeenCalled();
+});
+
+it.each(['template-id','template-version','template-body','rule-content','channel','account'] as const)('DM frozen %s changes block enqueue/dispatch even without a version increment',async mutation=>{
+ const f=await freshFinite({channel:'DM'});modelScore=100;await f.collect();await automatic.tick();
+ let rule=await db.autoContactRule.findUniqueOrThrow({where:{id:f.rule.id}});
+ expect(await acceptanceRuleAllowed(db,rule)).toBe(true);
+ if(mutation==='template-id'){const template=await db.replyTemplate.create({data:{name:'Other synthetic',channel:'DM',body:rule.content}});await db.autoContactRule.update({where:{id:rule.id},data:{templateId:template.id}});}
+ if(mutation==='template-version'){await db.replyTemplate.update({where:{id:rule.templateId!},data:{version:{increment:1}}});await db.autoContactRule.update({where:{id:rule.id},data:{templateVersion:(rule.templateVersion??0)+1}});}
+ if(mutation==='template-body')await db.replyTemplate.update({where:{id:rule.templateId!},data:{body:'Changed'}});
+ if(mutation==='rule-content')await db.autoContactRule.update({where:{id:rule.id},data:{content:'Changed'}});
+ if(mutation==='channel')await db.autoContactRule.update({where:{id:rule.id},data:{channel:'COMMENT',channels:['COMMENT']}});
+ if(mutation==='account')await db.autoContactRule.update({where:{id:rule.id},data:{accountIds:['other-account']}});
+ rule=await db.autoContactRule.findUniqueOrThrow({where:{id:f.rule.id}});
+ expect(await acceptanceRuleAllowed(db,rule)).toBe(false);await f.contacts.tick();
+ expect(send).not.toHaveBeenCalled();expect(await db.contactAttempt.count()).toBe(0);
+});
+
+it('legacy COMMENT scope remains valid while a DM scope without its frozen template fails closed',async()=>{
+ const f=await finite();const a=await db.normalAutomationAcceptance.findUniqueOrThrow({where:{id:f.scope.id}}),legacy={...(a.scope as object)} as any;
+ delete legacy.channel;expect(normalAcceptanceScope.parse(legacy).channel).toBe('COMMENT');
+ expect(()=>normalAcceptanceScope.parse({...legacy,channel:'DM'})).toThrow();
+ const rule=await db.autoContactRule.findUniqueOrThrow({where:{id:f.rule.id}});await db.normalAutomationAcceptance.update({where:{id:a.id},data:{scope:legacy}});
+ expect(await acceptanceRuleAllowed(db,rule)).toBe(true);
+});
+
+it('a DM envelope cannot bypass a real existing control pause or turn an UNKNOWN into success',async()=>{
+ const f=await freshFinite({channel:'DM'});modelScore=100;await f.collect();await automatic.tick();
+ const identity=await db.platformIdentity.create({data:{platform:'XHS',platformUserId:'demo-old-unknown-user',nickname:'Synthetic'}}),ledger=await db.contactLedger.create({data:{identityId:identity.id,mode:'SIMULATION',accountId:f.account.id}});
+ const unknown=await db.contactAttempt.create({data:{ledgerId:ledger.id,requestKey:randomUUID(),kind:'FIRST',mode:'SIMULATION',channel:'COMMENT',outcome:'UNKNOWN',day:'historical',actorId:actor.id}});
+ await db.autoContactControl.upsert({where:{platform_mode:{platform:'XHS',mode:'SIMULATION'}},create:{platform:'XHS',mode:'SIMULATION',pauseReason:'DM_SUBMISSION_UNKNOWN',pausedAt:new Date()},update:{pauseReason:'DM_SUBMISSION_UNKNOWN',pausedAt:new Date()}});
+ await Promise.all([f.contacts.tick(),f.contacts.tick()]);expect(send).not.toHaveBeenCalled();
+ expect(await db.autoContactControl.findUnique({where:{platform_mode:{platform:'XHS',mode:'SIMULATION'}}})).toMatchObject({pauseReason:'DM_SUBMISSION_UNKNOWN'});
+ expect(await db.normalAutomationAcceptance.findUnique({where:{id:f.scope.id}})).toMatchObject({sendJobId:null});
+ expect(await db.contactAttempt.findUnique({where:{id:unknown.id}})).toMatchObject({outcome:'UNKNOWN',platformReceipt:null});
+});
+
+it('DM template changed after reservation blocks final dispatch without consuming the submission claim',async()=>{
+ const f=await freshFinite({channel:'DM'});modelScore=100;await f.collect();await automatic.tick();await f.contacts.enqueue();
+ const reserved=await f.contacts.reserve();expect(reserved?.status).toBe('RESERVED');
+ await db.replyTemplate.update({where:{id:f.rule.templateId!},data:{body:'Changed before submission',version:{increment:1}}});
+ await f.contacts.dispatch(reserved!.id);expect(send).not.toHaveBeenCalled();
+ expect(await db.normalAutomationAcceptance.findUnique({where:{id:f.scope.id}})).toMatchObject({sendJobId:null});
+ expect(await db.contactAttempt.findUnique({where:{id:reserved!.attemptId!}})).toMatchObject({outcome:'CANCELLED'});
 });
