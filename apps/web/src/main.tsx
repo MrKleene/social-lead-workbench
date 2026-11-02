@@ -3,7 +3,7 @@ import {automationPath} from '@/features/work/navigation-policy';
 import {HomePage} from '@/features/work/home-page';
 import {ReplyHistoryPage} from '@/features/auto-contact/reply-history-page';
 import {AutoContactPage} from '@/features/auto-contact/auto-contact-page';
-import {PolicyConfigurationPage} from '@/features/comment-review/policy-configuration-page';
+import {ConfigurationPage,LegacyConfiguration} from '@/features/configuration/configuration-page';
 import {CommentReviewPage} from '@/features/comment-review/comment-review-page';
 import React from "react";
 import {AutomationDesignPreview} from "@/features/design-preview/automation-design-preview";
@@ -35,7 +35,7 @@ const client = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 10000 } },
 });
 function LegacySettings() { const {configId}=useParams();return <Navigate to={legacyWorkspacePath("settings",configId)} replace/>; }
-function WorkRoute(){const [p]=useSearchParams();return p.get('module')==='runs'?<Navigate to={automationPath(p.toString())} replace/>:<WorkPage/>;}
+function WorkRoute(){const [p]=useSearchParams();if(p.get('module')==='settings'||p.get('module')==='templates')return <LegacyConfiguration tab={p.get('module')==='settings'?'keywords':'templates'}/>;return p.get('module')==='runs'?<Navigate to={automationPath(p.toString())} replace/>:<WorkPage/>;}
 function App() {
   const { user, loading } = useAuth();
   if (loading)
@@ -58,7 +58,8 @@ function App() {
         <Route path="/collection/:configId?" element={<LegacySettings />} />
         <Route path="/reply-history" element={<ReplyHistoryPage />} />
         <Route path="/auto-contact" element={<AutoContactPage />} />
-        <Route path="/review-policies" element={<PolicyConfigurationPage />} />
+        <Route path="/configuration" element={<ConfigurationPage />} />
+        <Route path="/review-policies" element={<LegacyConfiguration tab="matching" />} />
         <Route path="/comment-review" element={<CommentReviewPage />} />
         <Route path="/leads/:id?" element={<LeadsPage />} />
         <Route path="/tasks" element={<TasksPage />} />

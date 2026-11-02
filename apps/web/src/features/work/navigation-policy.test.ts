@@ -25,14 +25,14 @@ it('canonical task links are distinct from project overview and preserve legacy 
 
 
 it('distinguishes policy configuration from review results while preserving existing deep links',()=>{
- expect(activeNavigation('/comment-review','?manage=1&policy=example',true)).toBe('review-policies');
+ expect(activeNavigation('/comment-review','?manage=1&policy=example',true)).toBe('configuration');
  expect(activeNavigation('/comment-review','?policy=example',true)).toBe('review');
  expect(activeNavigation('/comment-review','?manage=1',false)).toBeNull();
- expect(activeNavigation('/work','?module=settings&config=example',true)).toBe('settings');
- expect(activeNavigation('/work','?module=templates',true)).toBe('templates');
- const item=secondaryNavigation.find(i=>i.id==='review-policies')!;
- expect(navigationPath(item,{pathname:'/comment-review',search:'?policy=old'},{},'')).toBe('/review-policies');
+ expect(activeNavigation('/work','?module=settings&config=example',true)).toBe('configuration');
+ expect(activeNavigation('/work','?module=templates',true)).toBe('configuration');
+ const item=secondaryNavigation.find(i=>i.id==='configuration')!;
+ expect(navigationPath(item,{pathname:'/comment-review',search:'?policy=old'},{},'')).toBe('/configuration?tab=keywords');
  expect(navigationPath(secondaryNavigation.find(i=>i.id==='review')!,{pathname:'/comment-review',search:'?manage=1'},{},'')).toBe('/comment-review');
 });
 
-it('recognizes the standalone policy route without broadening sales access',()=>{expect(activeNavigation('/review-policies','',true)).toBe('review-policies');expect(activeNavigation('/review-policies','',false)).toBeNull();});
+it('recognizes the standalone policy route without broadening sales access',()=>{expect(activeNavigation('/review-policies','',true)).toBe('configuration');expect(activeNavigation('/review-policies','',false)).toBeNull();});

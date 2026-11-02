@@ -1,3 +1,4 @@
+import {configurationPath} from '@/features/configuration/configuration-route';
 import {PageState} from '@/components/page-state';
 import {useRef,useState} from 'react';
 import {Link,Navigate,useNavigate,useSearchParams} from 'react-router-dom';
@@ -31,7 +32,7 @@ function ReviewWorkspace({policy,overview,onPolicyChange,scope,onSettings,onMana
 export function CommentReviewPage({scope,onSettings}:{scope?:{runId:string;configId:string;policyRevision?:number};onSettings?:()=>void}={}){
  const [params,setParams]=useSearchParams(),navigate=useNavigate(),confirmLeave=useConfirmWorkspaceLeave(),{user}=useAuth(),q=useReviewOverview(user?.role==='ADMIN'),[selected,setSelected]=useState(params.get('policy')||'');
  if(user?.role!=='ADMIN')return <p>评论审核由管理员管理。<Link to="/work">返回工作台</Link></p>;
- if(!scope&&params.get('manage')==='1')return <Navigate replace to={'/review-policies'+(params.get('policy')?'?'+new URLSearchParams({policy:params.get('policy')!}):'')}/>;
+ if(!scope&&params.get('manage')==='1')return <Navigate replace to={configurationPath('matching',params.toString())}/>;
  const policy=q.data?.policies.find(p=>p.id===(scope?params.get('policy'):selected))||q.data?.policies[0];
- return <div className="comment-review-page">{q.isPending?<PageState title="评论审核" loading/>:q.isError||!q.data?<PageState title="评论审核" error={q.error} onRetry={()=>void q.refetch()}/>:<ReviewWorkspace onManage={()=>navigate('/review-policies'+(policy?'?'+new URLSearchParams({policy:policy.id}):''))} scope={scope} onSettings={onSettings} key={(policy?.id||'workspace')+':'+(scope?.runId||'all')} policy={policy} overview={q.data} onPolicyChange={async id=>{if(scope)setParams(old=>{const p=new URLSearchParams(old);p.set('policy',id);p.delete('reviewVersion');return p;});else if(await confirmLeave())setSelected(id);}}/>}</div>;
+ return <div className="comment-review-page">{q.isPending?<PageState title="评论审核" loading/>:q.isError||!q.data?<PageState title="评论审核" error={q.error} onRetry={()=>void q.refetch()}/>:<ReviewWorkspace onManage={()=>navigate(configurationPath('matching',policy?new URLSearchParams({policy:policy.id}).toString():''))} scope={scope} onSettings={onSettings} key={(policy?.id||'workspace')+':'+(scope?.runId||'all')} policy={policy} overview={q.data} onPolicyChange={async id=>{if(scope)setParams(old=>{const p=new URLSearchParams(old);p.set('policy',id);p.delete('reviewVersion');return p;});else if(await confirmLeave())setSelected(id);}}/>}</div>;
 }

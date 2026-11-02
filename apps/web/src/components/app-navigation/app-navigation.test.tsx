@@ -9,14 +9,14 @@ const render=(admin:boolean,path='/home')=>renderToStaticMarkup(<MemoryRouter in
 describe('graphite navigation preserves authorized destinations',()=>{
  it('keeps all administrator modules reachable and marks the current route',()=>{
   const html=render(true,'/automation?config=example&run=example-run');
-  for(const name of ['工作台','自动化任务','采集信息','评论审核','自动回复','待处理回复','回复记录','线索池','销售跟进','全部线索','人工任务','账号中心','发送模板配置','提醒与异常','关键词配置','评论匹配方案配置','配置管理','平台能力'])expect(html).toContain(name);
+  for(const name of ['工作台','自动化任务','采集信息','评论审核','自动回复','待处理回复','回复记录','线索池','销售跟进','全部线索','人工任务','账号中心','提醒与异常','配置管理','平台能力'])expect(html).toContain(name);
   expect(html).toContain('href="/automation?config=example&amp;run=example-run"');
   expect(html).toContain('aria-current="page"');
   expect(html).toContain('aria-label="打开导航"');
  });
  it('does not expose administrator execution or settings links to sales',()=>{
   const html=render(false,'/work?module=follow&view=follow');
-  for(const route of ['/automation','/comment-review','/auto-contact','/reply-history','module=settings','module=templates','module=archive'])expect(html).not.toContain(`href="${route}`);
+  for(const route of ['/automation','/comment-review','/configuration','/auto-contact','/reply-history','module=settings','module=templates','module=archive'])expect(html).not.toContain(`href="${route}`);
   for(const label of ['销售跟进','全部线索','人工任务','提醒与异常'])expect(html).toContain(label);
   expect(html).toContain('aria-current="page"');
  });
@@ -37,14 +37,9 @@ it('gives pending replies a distinct active destination and preserves the automa
 it('home is reached through desktop and mobile brand links, not a sidebar item',()=>{const html=render(true,'/home');expect(html.match(/aria-label="Social Lead 首页"/g)).toHaveLength(2);expect(html).not.toContain('<span>首页</span></a>');expect(html).not.toContain('项目概览');expect(html).toContain('<span>首页</span></div>');expect(render(true,'/work')).toMatch(/<a(?=[^>]*href="\/work")(?=[^>]*aria-current="page")[^>]*>/);});
 
 
-it('groups the three existing configuration destinations without duplicate legacy labels',()=>{
- const html=render(true,'/review-policies');
- for(const label of ['关键词配置','评论匹配方案配置','发送模板配置'])expect(html).toContain(label);
- expect(html).toContain('<h2>配置管理</h2>');
- expect(html).not.toContain('搜索与模型');expect(html).not.toContain('联系与回复话术');
- expect(html).toMatch(/<a(?=[^>]*href="\/review-policies")(?=[^>]*aria-current="page")[^>]*>/);
- expect(html).not.toMatch(/<a(?=[^>]*href="\/comment-review")(?=[^>]*aria-current="page")[^>]*>/);
- expect(html).toContain('<span>配置管理</span><span aria-hidden="true">/</span><span>评论匹配方案配置</span>');
- const sales=render(false,'/comment-review?manage=1');
- for(const label of ['配置管理','关键词配置','评论匹配方案配置','发送模板配置'])expect(sales).not.toContain(label);
+it('shows one configuration menu while tabs are owned by the configuration page',()=>{
+ const html=render(true,'/configuration?tab=matching');
+ expect(html).toMatch(/<a(?=[^>]*href="\/configuration\?tab=matching")(?=[^>]*aria-current="page")[^>]*>/);
+ expect(html).not.toContain('评论匹配方案配置');expect(html).not.toContain('发送模板配置');expect(html).not.toContain('关键词配置');
+ expect(render(false,'/configuration?tab=matching')).not.toContain('<span>配置管理</span></a>');
 });

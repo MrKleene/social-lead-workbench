@@ -6,8 +6,8 @@ import {Switch} from '@/components/ui/switch';
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import type {useWorkspaceMotion} from '@/features/work/use-workspace-motion';
 import {useAppNavigation} from './use-app-navigation';
-const icons:Record<string,typeof House>={home:House,overview:LayoutDashboard,runs:Play,archive:Archive,review:ScanLine,'review-policies':Settings2,'reply-history':MessageSquare,'auto-contact':Send,'pending-replies':ListChecks,matches:UsersRound,follow:BriefcaseBusiness,'all-leads':UsersRound,tasks:ListChecks,templates:MessageSquare,notices:Bell,accounts:ContactRound,settings:Settings2,platforms:ShieldCheck};
-const groups=[{label:'工作区',ids:['overview','runs']},{label:'数据与审核',ids:['archive','review']},{label:'回复管理',ids:['auto-contact','pending-replies','reply-history']},{label:'线索与跟进',ids:['matches','follow','all-leads','tasks']},{label:'配置管理',ids:['settings','review-policies','templates']},{label:'管理',ids:['accounts','notices','platforms']}];
+const icons:Record<string,typeof House>={home:House,overview:LayoutDashboard,runs:Play,archive:Archive,review:ScanLine,configuration:Settings2,'reply-history':MessageSquare,'auto-contact':Send,'pending-replies':ListChecks,matches:UsersRound,follow:BriefcaseBusiness,'all-leads':UsersRound,tasks:ListChecks,templates:MessageSquare,notices:Bell,accounts:ContactRound,settings:Settings2,platforms:ShieldCheck};
+const groups=[{label:'工作区',ids:['overview','runs']},{label:'数据与审核',ids:['archive','review']},{label:'回复管理',ids:['auto-contact','pending-replies','reply-history']},{label:'线索与跟进',ids:['matches','follow','all-leads','tasks']},{label:'管理',ids:['configuration','accounts','notices','platforms']}];
 type Props={admin:boolean;name:string;motion:ReturnType<typeof useWorkspaceMotion>;loggingOut:boolean;onLogout:()=>void};
 export function AppNavigation({admin,name,motion,loggingOut,onLogout}:Props){
  const n=useAppNavigation(admin),id=useId(),[mobile,setMobile]=useState(false),[preferences,setPreferences]=useState(false);

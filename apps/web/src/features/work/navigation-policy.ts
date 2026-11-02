@@ -1,6 +1,7 @@
 /** Settings/templates stay mounted within /work; lead forms belong to one path. */
 export function shouldProtectDrafts(kinds:readonly ('retained'|'lead')[],currentPath:string,nextPath:string) {
  if(!kinds.length)return false;
+ if(currentPath==='/configuration')return currentPath!==nextPath;
  if(!/^\/work(?:\/|$)/.test(nextPath))return true;
  return kinds.includes('lead')&&currentPath!==nextPath;
 }

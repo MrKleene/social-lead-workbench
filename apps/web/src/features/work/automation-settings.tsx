@@ -24,7 +24,7 @@ export function AutomationSettings({open,onClose,tab,onTab,collectionDirty,colle
  const busy=collectionBusy||matching.busy||reply.busy,dirty=collectionDirty||matching.dirty||reply.dirty;
  useDraftGuard(open&&dirty,'modal');useDraftGuard(open&&busy,'pending');
  const close=async()=>{if(busy)return false;if(dirty&&!await confirm('有选择未能应用。关闭会放弃尚未生效的选择，已保存配置保持不变。'))return false;onClose();return true;};
- const globalSettings=async(module:'settings'|'accounts'|'templates'|'review')=>{if(!await close())return;const next=new URLSearchParams(params);if(module==='review'){navigate('/review-policies');return;}next.set('module',module);next.delete('panel');next.delete('settingsTab');navigate('/work?'+next);};
+ const globalSettings=async(module:'settings'|'accounts'|'templates'|'review')=>{if(!await close())return;const next=new URLSearchParams(params);if(module==='settings'||module==='templates'){navigate('/configuration?tab='+(module==='settings'?'keywords':'templates'));return;}if(module==='review'){navigate('/configuration?tab=matching');return;}next.set('module',module);next.delete('panel');next.delete('settingsTab');navigate('/work?'+next);};
  useEffect(()=>{if(!open){setMatching({dirty:false,busy:false});setReply({dirty:false,busy:false});}},[open]);
  const p=(review.data?.policies.find(p=>p.id===preferences.data?.policyId)||review.data?.policies[0]),r=(contact.data?.rules.find(r=>r.enabled)||contact.data?.rules[0]);
  const labels={collect:collectionReady?'已配置':'未配置',review:review.isError?'读取失败':review.isPending?'读取中':!p?'未配置':!p.autoEnabled?'已关闭':review.data?.connection.state!=='READY'?'未就绪':'已开启',contact:contact.isError?'读取失败':contact.isPending?'读取中':!r?'未配置':!r.enabled?'已关闭':!r.content||!r.accountIds.length||r.pauseReason?'未就绪':'已开启'};

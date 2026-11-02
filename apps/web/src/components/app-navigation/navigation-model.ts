@@ -9,27 +9,25 @@ export const primaryNavigation:NavigationItem[]=[
 export const secondaryNavigation:NavigationItem[]=[
  {id:'archive',label:'采集信息',path:'/work?module=archive',module:'archive',adminOnly:true,group:'工作管理'},
  {id:'review',label:'评论审核',path:'/comment-review',adminOnly:true,group:'工作管理'},
- {id:'review-policies',label:'评论匹配方案配置',path:'/review-policies',adminOnly:true,group:'配置管理'},
+ {id:'configuration',label:'配置管理',path:'/configuration?tab=keywords',adminOnly:true,group:'管理'},
  {id:'pending-replies',label:'待处理回复',path:'/auto-contact?view=pending',adminOnly:true,group:'工作管理'},
  {id:'auto-contact',label:'自动回复与账号矩阵',path:'/auto-contact',adminOnly:true,group:'工作管理'},
  {id:'matches',label:'线索池',path:'/work?module=matches',module:'matches',group:'工作管理'},
  {id:'follow',label:'销售跟进',path:'/work?module=follow',module:'follow',group:'工作管理'},
  {id:'all-leads',label:'全部线索',path:'/leads',group:'工作管理'},
  {id:'tasks',label:'人工任务',path:'/tasks',group:'工作管理'},
- {id:'templates',label:'发送模板配置',path:'/work?module=templates',module:'templates',adminOnly:true,group:'配置管理'},
  {id:'notices',label:'提醒与异常',path:'/work?module=notices',module:'notices',group:'工作管理'},
- {id:'settings',label:'关键词配置',path:'/work?module=settings',module:'settings',adminOnly:true,group:'配置管理'},
  {id:'platforms',label:'平台能力',path:'/platforms',group:'设置'},
 ];
 export const isWorkPath=(path:string)=>/^\/work(?:\/|$)/.test(path);
 export function activeNavigation(path:string,search:string,admin:boolean){
  if(path==='/automation')return admin?'runs':null;
  if(path==='/home')return 'home';
- if(isWorkPath(path))return activeWorkModule(search,path.split('/')[2],admin)||'overview';
+ if(isWorkPath(path)){const module=activeWorkModule(search,path.split('/')[2],admin);return module==='settings'||module==='templates'?'configuration':module||'overview';}
  if(/^\/reply-history(?:\/|$)/.test(path))return admin?'reply-history':null;
  if(path==='/auto-contact')return admin?(new URLSearchParams(search).get('view')==='pending'?'pending-replies':'auto-contact'):null;
- if(path==='/review-policies')return admin?'review-policies':null;
- if(/^\/comment-review(?:\/|$)/.test(path))return admin?(new URLSearchParams(search).get('manage')==='1'?'review-policies':'review'):null;
+ if(path==='/review-policies'||path==='/configuration')return admin?'configuration':null;
+ if(/^\/comment-review(?:\/|$)/.test(path))return admin?(new URLSearchParams(search).get('manage')==='1'?'configuration':'review'):null;
  if(/^\/leads(?:\/|$)/.test(path))return 'all-leads';
  if(path==='/tasks')return 'tasks';
  if(path==='/platforms')return 'platforms';
