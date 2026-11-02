@@ -22,3 +22,15 @@ it('separates homepage and data workspace while retaining task deep links',()=>{
 
 import {automationPath} from './navigation-policy';
 it('canonical task links are distinct from project overview and preserve legacy identity',()=>{expect(automationPath('?module=runs&config=a&run=b&stage=review&view=new')).toBe('/automation?config=a&run=b&stage=review');expect(activeNavigation('/automation','?run=b',true)).toBe('runs');expect(navigationPath(primaryNavigation.find(x=>x.id==='runs')!,{pathname:'/work',search:''},{},'')).toBe('/automation');});
+
+
+it('distinguishes policy configuration from review results while preserving existing deep links',()=>{
+ expect(activeNavigation('/comment-review','?manage=1&policy=example',true)).toBe('review-policies');
+ expect(activeNavigation('/comment-review','?policy=example',true)).toBe('review');
+ expect(activeNavigation('/comment-review','?manage=1',false)).toBeNull();
+ expect(activeNavigation('/work','?module=settings&config=example',true)).toBe('settings');
+ expect(activeNavigation('/work','?module=templates',true)).toBe('templates');
+ const item=secondaryNavigation.find(i=>i.id==='review-policies')!;
+ expect(navigationPath(item,{pathname:'/comment-review',search:'?policy=old'},{},'')).toBe('/comment-review?manage=1');
+ expect(navigationPath(secondaryNavigation.find(i=>i.id==='review')!,{pathname:'/comment-review',search:'?manage=1'},{},'')).toBe('/comment-review');
+});
