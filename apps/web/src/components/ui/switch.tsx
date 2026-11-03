@@ -5,9 +5,13 @@ import { Switch as SwitchPrimitive } from "radix-ui"
 function Switch({
   className,
   size = "default",
+  pending = false,
+  onCheckedChange,
+  onClick,
   ...props
 }: React.ComponentProps<typeof SwitchPrimitive.Root> & {
   size?: "sm" | "default"
+  pending?: boolean
 }) {
   return (
     <SwitchPrimitive.Root
@@ -18,6 +22,14 @@ function Switch({
         className
       )}
       {...props}
+      data-pending={pending || undefined}
+      aria-busy={pending || props["aria-busy"]}
+      aria-disabled={pending || props.disabled || props["aria-disabled"]}
+      onCheckedChange={value => { if (!pending) onCheckedChange?.(value); }}
+      onClick={event => {
+        if (pending) { event.preventDefault(); return; }
+        onClick?.(event);
+      }}
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"

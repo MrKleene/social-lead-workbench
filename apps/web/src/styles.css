@@ -1588,7 +1588,7 @@ html[data-crm-reduced=true] [data-slot=alert-dialog-content],html[data-crm-reduc
 /* Keep loading centered in the visible settings area, independent of inner scrolling. */
 :root .automation-settings-stage{position:relative;display:flex;flex-direction:column;min-height:0;flex:1;isolation:isolate}
 :root .automation-settings-stage>[role=tabpanel]:not([hidden]){flex:1}
-:root .settings-loading-overlay{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;background:color-mix(in srgb,var(--background) 30%,transparent)}
+:root .settings-loading-overlay{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;background:transparent}
 :root .settings-loading-indicator{display:grid;place-items:center;width:76px;height:76px;border-radius:20px;color:var(--primary);background:color-mix(in srgb,var(--card) 96%,transparent);border:1px solid var(--border);box-shadow:0 10px 30px color-mix(in srgb,var(--foreground) 12%,transparent)}
 @media(prefers-reduced-motion:reduce){.settings-loading-indicator svg{animation:none}}
 

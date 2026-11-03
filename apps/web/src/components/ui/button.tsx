@@ -43,10 +43,14 @@ function Button({
   variant = "default",
   size = "default",
   asChild = false,
+  pending = false,
+  onClick,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
+    /** Temporarily block activation without treating a saved action as unavailable. */
+    pending?: boolean;
   }) {
   const Comp = asChild ? Slot.Root : "button";
 
@@ -57,6 +61,13 @@ function Button({
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
+      data-pending={pending || undefined}
+      aria-busy={pending || props["aria-busy"]}
+      aria-disabled={pending || props["aria-disabled"]}
+      onClick={event => {
+        if (pending) { event.preventDefault(); event.stopPropagation(); return; }
+        onClick?.(event);
+      }}
     />
   );
 }

@@ -380,7 +380,7 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
  :root .graphite-workspace .graphite-all-leads td:last-child{grid-column:2;text-align:right}
 }
 /* State rules outrank legacy theme variants without fading labels or switch thumbs. */
-:root[data-crm-theme] [data-slot=button]:disabled,:root[data-crm-theme] [data-slot=button][aria-disabled=true]{background:#f4f4f5!important;color:#8a8a93!important;border-color:#e4e4e7!important;opacity:1!important;box-shadow:none!important;transform:none!important;cursor:not-allowed}
+:root[data-crm-theme] [data-slot=button]:disabled,:root[data-crm-theme] [data-slot=button][aria-disabled=true]:not([data-pending=true]){background:#f4f4f5!important;color:#8a8a93!important;border-color:#e4e4e7!important;opacity:1!important;box-shadow:none!important;transform:none!important;cursor:not-allowed}
 :root[data-crm-theme] [data-slot=button][data-variant=default]:hover:not(:disabled){background:#303034;color:#fff;box-shadow:none}
 :root[data-crm-theme] :is(button,a,input,textarea,select,[role=combobox],[role=switch],summary,[tabindex]):focus-visible{outline:2px solid #52525b!important;outline-offset:3px;box-shadow:none}
 :root[data-crm-theme] [data-slot=button][data-variant=link]{color:var(--foreground);text-decoration:underline;text-underline-offset:3px}
@@ -575,3 +575,6 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
  :root .graphite-workspace .home-collection-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
  :root .graphite-workspace .home-intro-actions [data-slot=button]{min-width:0;width:100%}
 }
+
+/* A pending action remains visually stable; real unavailability retains disabled styling. */
+:root[data-crm-theme] [data-pending=true]{cursor:progress}
