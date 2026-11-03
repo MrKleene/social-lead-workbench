@@ -334,6 +334,8 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 	var ready CoverageReady
 	awaiting := ""
 	var actionDeadline time.Time
+	var hydrationDeadline time.Time
+	hydrationObservation := ""
 	chunkBytes := 0
 	for {
 		if ctx.Err() != nil {
@@ -366,6 +368,16 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 			}
 			awaiting = ""
 		}
+		// End markers can precede Vue comment/reply hydration. Observe only, within
+		// one fixed deadline; never infer absence or spend extra click/page budgets.
+		if hydrationObservation != "" && chunkObservation(records, raw, id, ready) == hydrationObservation && time.Now().Before(hydrationDeadline) {
+			if !chunkWait(ctx) {
+				report.Reason = boundedError(ctx, ctx.Err())
+				break
+			}
+			continue
+		}
+		hydrationObservation = ""
 		report.Final = inspectCoverage(raw, id, ready)
 		report.ChunkSummary = chunkCoverage(records, raw, id, ready)
 		if report.Initial.Status == "UNAVAILABLE" {
@@ -485,8 +497,19 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 				report.Reason = "DECLARED_TREE_EXHAUSTED"
 				report.ReplyStop = "DECLARED_REPLIES_LOADED"
 			} else {
+				if hydrationDeadline.IsZero() {
+					hydrationDeadline = time.Now().Add(2200 * time.Millisecond)
+				}
+				if time.Now().Before(hydrationDeadline) {
+					hydrationObservation = chunkObservation(records, raw, id, ready)
+					if !chunkWait(ctx) {
+						report.Reason = boundedError(ctx, ctx.Err())
+						break
+					}
+					continue
+				}
 				report.State = "UNKNOWN"
-				report.Reason = "BUTTON_NOT_FOUND"
+				report.Reason = "COVERAGE_INSUFFICIENT"
 			}
 			break
 		}

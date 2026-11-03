@@ -249,3 +249,42 @@ func TestChunkBrowserLargeAndRestart(t *testing.T) {
 		t.Fatalf("restart incomplete: %s, anchors=%d", last.BoundedRead.Reason, last.Chunk.RemainingAnchors)
 	}
 }
+
+func TestChunksBrowserDelayedParentReplies(t *testing.T) {
+	binary := os.Getenv("CRM_OFFLINE_CHROMIUM")
+	if binary == "" {
+		t.Skip("local Chromium required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!doctype html><meta charset="utf-8"><style>.note-scroller{height:180px;overflow:auto}.comment-item{height:28px}</style><div class="note-scroller"><div class="parent-comment"><div class="comment-item">synthetic parent</div></div><div class="end-container">THE END</div></div><script>
+ const leaf=id=>({id,content:'synthetic',userInfo:{userId:'u'},subCommentCount:'0',subComments:[]});const root={...leaf('parent'),subCommentCount:'1'};
+ window.__INITIAL_STATE__={note:{noteDetailMap:{'synthetic-post':{note:{noteId:'synthetic-post',title:'synthetic',interactInfo:{commentCount:'2'}},comments:{hasMore:false,list:[root]}}}}};window.readClicks=0;window.sendClicks=0;
+ setTimeout(()=>{const p=document.querySelector('.parent-comment');p.insertAdjacentHTML('beforeend','<button class="show-more">展开1条回复</button>');p.querySelector('button').onclick=()=>{window.readClicks++;setTimeout(()=>{root.subComments.push(leaf('reply'));p.querySelector('button').remove();p.insertAdjacentHTML('beforeend','<div class="comment-item">synthetic reply</div>')},200)}},650);
+ </script>`))
+	}))
+	defer server.Close()
+	launch := launcher.New().Bin(binary).UserDataDir(t.TempDir()).Headless(true).Leakless(false).Set("disable-background-networking").Set("disable-component-update").Set("no-first-run")
+	control, e := launch.Context(ctx).Launch()
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer launch.Cleanup()
+	b := rod.New().ControlURL(control).Context(ctx)
+	if e = b.Connect(); e != nil {
+		t.Fatal(e)
+	}
+	defer b.Close()
+	page := b.MustPage(server.URL)
+	page.MustWaitLoad()
+	s, _ := NewCommentChunkSession(nil)
+	result, e := s.ReadPage(ctx, page, "synthetic-post", chunkConfig())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if result.BoundedRead.State != "COMPLETE" || len(result.Chunk.Rows) != 2 || page.MustEval(`()=>window.readClicks`).Int() != 1 || page.MustEval(`()=>window.sendClicks`).Int() != 0 {
+		t.Fatalf("%+v", result.BoundedRead)
+	}
+}

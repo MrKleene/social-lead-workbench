@@ -58,3 +58,13 @@ it('projects a frozen DM sender nickname and never substitutes recipient or late
  expect(replyHistoryItem(saved,[])).toMatchObject({senderName:'发送时昵称',senderNameSource:'发送时昵称快照',recipientName:'原收件人',displayStatus:'CONFIRMED'});
  expect(replyHistoryItem({...attempt,channel:'DM'},[])).toMatchObject({senderName:null,senderId:sender,displayStatus:'CONFIRMED'});
 });
+
+// Recorded business rejection is diagnostic only; no guessed meaning for -9131.
+it('projects old refusal evidence without releasing unknown or inventing a platform reason',async()=>{
+ const {replyPlatformDiagnostic}=await import('../src/auto-contact/reply-platform-diagnostic');
+ const r={sequence:1,attemptId:'11111111-1111-4111-8111-111111111111',stage:'RECEIPT_CAPTURE' as const,at:'2026-11-03T08:43:00.000Z',receipt:{state:'RESPONSE_CAPTURED' as const,status:200,fields:[{path:'/success',type:'boolean' as const,boolean:false},{path:'/code',type:'number' as const,number:-9131}]}};
+ expect(replyPlatformDiagnostic([r])).toBe('平台返回业务拒绝（-9131），具体原因未确认；发送结果仍未知，请勿重发');
+ expect(replyPlatformDiagnostic([r,r])).toBeNull();
+ expect(replyPlatformDiagnostic([{...r,receipt:{...r.receipt,fields:[]}}])).toBeNull();
+ expect(replyPlatformDiagnostic([{...r,receipt:{...r.receipt,failure:{category:'BUSINESS_REJECTION',code:-9131,messageClass:'RATE_LIMITED'}}}])).toContain('平台提示操作频繁');
+});

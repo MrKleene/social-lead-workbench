@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 )
 
 type chunkFixture struct {
@@ -267,9 +268,62 @@ func TestChunksTimeoutKeepsReturnedChunkAndNoProgressStops(t *testing.T) {
 }
 
 func TestChunkReadyRetainsActualRootProgress(t *testing.T) {
- f:=&chunkFixture{roots:60,visible:10}
- s,_:=NewCommentChunkSession(nil)
- r,err:=s.Read(context.Background(),f,"note",chunkConfig())
- if err!=nil{t.Fatal(err)}
- if r.BoundedRead.Actions.RootScrolls==0||r.BoundedRead.RootStop=="NOT_RUN"{t.Fatal("successful root action falsely reported as not run")}
+	f := &chunkFixture{roots: 60, visible: 10}
+	s, _ := NewCommentChunkSession(nil)
+	r, err := s.Read(context.Background(), f, "note", chunkConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.BoundedRead.Actions.RootScrolls == 0 || r.BoundedRead.RootStop == "NOT_RUN" {
+		t.Fatal("successful root action falsely reported as not run")
+	}
+}
+
+// Synthetic delayed hydration, no platform or network access.
+type hydrationFixture struct {
+	chunkFixture
+	snapshots int
+	hydrateAt int
+}
+
+func (f *hydrationFixture) Snapshot(ctx context.Context) ([]byte, CoverageReady, error) {
+	f.snapshots++
+	if f.hydrateAt > 0 && f.snapshots >= f.hydrateAt {
+		f.visible = f.roots
+	}
+	b, r, e := f.chunkFixture.Snapshot(ctx)
+	var v map[string]any
+	_ = json.Unmarshal(b, &v)
+	v["note"].(map[string]any)["comments"].(map[string]any)["hasMore"] = false
+	b, _ = json.Marshal(v)
+	end := true
+	r.RootEndVisible = &end
+	return b, r, e
+}
+func TestChunksWaitForHydrationWithoutExtraActions(t *testing.T) {
+	f := &hydrationFixture{chunkFixture: chunkFixture{roots: 2, visible: 1, explicitEnd: true}, hydrateAt: 3}
+	s, _ := NewCommentChunkSession(nil)
+	r, e := s.Read(context.Background(), f, "note", chunkConfig())
+	if e != nil || r.BoundedRead.State != "COMPLETE" || len(r.Chunk.Rows) != 2 || f.scrolls != 0 || r.BoundedRead.Actions.ReplyClicks != 0 {
+		t.Fatalf("%+v %v", r, e)
+	}
+}
+func TestChunksUnresolvedCoverageStaysUnknown(t *testing.T) {
+	f := &hydrationFixture{chunkFixture: chunkFixture{roots: 6, visible: 1, explicitEnd: true}}
+	s, _ := NewCommentChunkSession(nil)
+	start := time.Now()
+	r, e := s.Read(context.Background(), f, "note", chunkConfig())
+	if e != nil || r.BoundedRead.State != "UNKNOWN" || r.BoundedRead.Reason != "COVERAGE_INSUFFICIENT" || len(r.Chunk.Rows) != 1 || f.scrolls != 0 || r.BoundedRead.ReplyActions > 2 || time.Since(start) > 4*time.Second {
+		t.Fatalf("%+v %v", r, e)
+	}
+}
+func TestChunksHydrationHonorsCancellation(t *testing.T) {
+	f := &hydrationFixture{chunkFixture: chunkFixture{roots: 6, visible: 1, explicitEnd: true}}
+	s, _ := NewCommentChunkSession(nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	r, e := s.Read(ctx, f, "note", chunkConfig())
+	if e != nil || r.BoundedRead.State == "COMPLETE" || r.BoundedRead.Reason != "TIMEOUT" || len(r.Chunk.Rows) != 1 {
+		t.Fatalf("%+v %v", r, e)
+	}
 }

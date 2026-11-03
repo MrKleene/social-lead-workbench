@@ -25,16 +25,60 @@ type ReceiptField struct {
 	Boolean *bool  `json:"boolean,omitempty"`
 	Number  *int64 `json:"number,omitempty"`
 }
+
+// Diagnostic only: never evidence of non-submission, delivery or retry safety.
+type ReceiptFailure struct {
+	Category     string `json:"category"`
+	Code         *int64 `json:"code,omitempty"`
+	MessageClass string `json:"messageClass"`
+}
+
+func ReceiptFailureProjection(body []byte) *ReceiptFailure {
+	v, e := decodeReceipt(body)
+	if e != nil {
+		return nil
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	success, ok := m["success"].(bool)
+	if !ok || success {
+		return nil
+	}
+	f := &ReceiptFailure{Category: "BUSINESS_REJECTION", MessageClass: "UNSPECIFIED"}
+	if n, ok := m["code"].(json.Number); ok {
+		if code, e := n.Int64(); e == nil && code >= -1000000 && code <= 1000000 {
+			f.Code = &code
+		}
+	}
+	// Exact allowlist only. Never persist free text, substrings, URLs or secrets.
+	classes := map[string]string{"操作频繁，请稍后再试": "RATE_LIMITED", "请先登录": "LOGIN_REQUIRED", "请完成验证": "VERIFICATION_REQUIRED", "发送失败": "GENERIC_REJECTION", "评论失败": "GENERIC_REJECTION"}
+	for _, key := range []string{"msg", "message"} {
+		if message, ok := m[key].(string); ok {
+			if class, allowed := classes[message]; allowed {
+				if f.MessageClass != "UNSPECIFIED" && f.MessageClass != class {
+					f.MessageClass = "UNSPECIFIED"
+					return f
+				}
+				f.MessageClass = class
+			}
+		}
+	}
+	return f
+}
+
 type ReceiptEvidence struct {
-	EndpointPath string         `json:"endpointPath,omitempty"`
-	EndpointHost string         `json:"endpointHost,omitempty"`
-	State        string         `json:"state"`
-	EndpointHash string         `json:"endpointSha256,omitempty"`
-	RequestHash  string         `json:"requestSha256,omitempty"`
-	ResponseHash string         `json:"responseSha256,omitempty"`
-	Status       int            `json:"status,omitempty"`
-	Fields       []ReceiptField `json:"fields,omitempty"`
-	Readback     string         `json:"readback,omitempty"`
+	Failure      *ReceiptFailure `json:"failure,omitempty"`
+	EndpointPath string          `json:"endpointPath,omitempty"`
+	EndpointHost string          `json:"endpointHost,omitempty"`
+	State        string          `json:"state"`
+	EndpointHash string          `json:"endpointSha256,omitempty"`
+	RequestHash  string          `json:"requestSha256,omitempty"`
+	ResponseHash string          `json:"responseSha256,omitempty"`
+	Status       int             `json:"status,omitempty"`
+	Fields       []ReceiptField  `json:"fields,omitempty"`
+	Readback     string          `json:"readback,omitempty"`
 }
 
 var safeField = regexp.MustCompile(`^(data|result|success|code|id|comment_id|commentId|note_id|noteId|target_comment_id|targetCommentId|parent_comment_id|parentCommentId|user_id|userId|content|comment|comments|user_info|userInfo|target_comment|targetComment|status|message|msg|reply_id|replyId)$`)

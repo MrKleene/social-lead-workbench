@@ -213,7 +213,7 @@ func (cap *exactReceiptCapture) onFinished(ctx context.Context, c exactreply.Com
 		return
 	}
 	cap.response = data
-	if exactreply.RecordReceipt(ctx, exactreply.ReceiptEvidence{State: "RESPONSE_CAPTURED", EndpointHash: exactreply.Hash(exactreply.ReceiptEndpoint(cap.endpoint)), RequestHash: exactreply.Hash(string(cap.request)), ResponseHash: exactreply.Hash(string(data)), Status: cap.status, Fields: fields}) != nil {
+	if exactreply.RecordReceipt(ctx, exactreply.ReceiptEvidence{State: "RESPONSE_CAPTURED", Failure: exactreply.ReceiptFailureProjection(data), EndpointHash: exactreply.Hash(exactreply.ReceiptEndpoint(cap.endpoint)), RequestHash: exactreply.Hash(string(cap.request)), ResponseHash: exactreply.Hash(string(data)), Status: cap.status, Fields: fields}) != nil {
 		cap.broken = true
 	}
 }

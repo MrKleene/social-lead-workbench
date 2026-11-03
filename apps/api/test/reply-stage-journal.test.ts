@@ -1,7 +1,7 @@
 import {expect,it,afterEach} from 'vitest';
 import {mkdtemp,writeFile,rm,symlink,chmod} from 'node:fs/promises';
 import {tmpdir} from 'node:os';import {join} from 'node:path';
-import {readReplyJournal,executionEventSchema} from '../src/auto-contact/reply-stage-journal';
+import {readReplyJournal,executionEventSchema,journalRecordSchema} from '../src/auto-contact/reply-stage-journal';
 import {prepareXhsReply,replyResultDiagnostic,verifyXhsReplyResult} from '../src/auto-contact/xhs-reply-protocol';
 const id='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';const roots:string[]=[];afterEach(async()=>{await Promise.all(roots.splice(0).map(p=>rm(p,{recursive:true,force:true})));});
 async function file(text:string){const dir=await mkdtemp(join(tmpdir(),'synthetic-stage-'));roots.push(dir);const path=join(dir,`reply-stage-${id}.jsonl`);await writeFile(path,text,{mode:0o600});return {dir,path};}
@@ -28,4 +28,10 @@ it('selection evidence is fixed enums, never raw state or replacement confirmati
  expect(selectionEvidenceSchema.safeParse(selection).success).toBe(true);
  for(const change of [{token:'secret'},{component:'private author'},{centerHit:{x:20}},{binding:'CONFIRMED'}])expect(selectionEvidenceSchema.safeParse({...selection,...change}).success).toBe(false);
  const f=await file(JSON.stringify({...row,stage:'SELECTION_STOPPED',selection})+'\n');expect((await readReplyJournal(f.dir,id)).records[0].selection).toEqual(selection);
+});
+
+it('keeps safe failure diagnostics and rejects arbitrary platform text',()=>{
+ const base={sequence:1,attemptId:'11111111-1111-4111-8111-111111111111',stage:'RECEIPT_CAPTURE',at:'2026-11-03T08:43:00.000Z',receipt:{state:'RESPONSE_CAPTURED',failure:{category:'BUSINESS_REJECTION',code:-9131,messageClass:'UNSPECIFIED'}}};
+ expect(journalRecordSchema.safeParse(base).success).toBe(true);
+ expect(journalRecordSchema.safeParse({...base,receipt:{...base.receipt,failure:{...base.receipt.failure,message:'secret'}}}).success).toBe(false);
 });

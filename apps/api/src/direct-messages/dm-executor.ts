@@ -9,7 +9,7 @@ import {sendExactDm} from './dm-transport';
 import {inspectExistingDm} from './dm-readback';
 export type DmReadbackProof={observations:Awaited<ReturnType<typeof inspectExistingDm>>[];stopped:true};
 // The first release remains unavailable to ordinary UI until the constrained real acceptance completes.
-export const DM_REVIEWED_BUILD='22022072f60e3296531d9a417ca06992cc352de758f811b446bfc860aa3e461b';
+export const DM_REVIEWED_BUILD='4da06fa2ecbeef644674a26474a4d6a2cec558d2d275a061d0f0e43a160f1b56';
 export const DM_PRODUCTION_ACCEPTED=true;
 export interface DmExecutor {verify?(actor:Actor,c:DmCommand,sessionKey:string,signal:AbortSignal):Promise<DmReadbackProof>;available():boolean;run(actor:Actor,c:DmCommand,sessionKey:string,beforeDispatch:()=>Promise<boolean>,signal:AbortSignal):Promise<DmExecution>}
 export const DM_EXECUTOR=Symbol('DM_EXECUTOR');

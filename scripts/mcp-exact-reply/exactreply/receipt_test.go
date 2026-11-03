@@ -135,3 +135,34 @@ func TestReceiptRouteProjectionCannotExposeQueryOrOpaquePath(t *testing.T) {
 		}
 	}
 }
+
+func TestReceiptFailureDiagnosticNeverChangesAcceptanceOrLeaks(t *testing.T) {
+	c := command()
+	ep, req, _, m := receiptFixture(c)
+	for _, message := range []string{"token=SECRET user@example.invalid", "操作频繁，请稍后再试 SECRET", "未知私密内容"} {
+		b, _ := json.Marshal(map[string]any{"success": false, "code": -9131, "msg": message, "data": nil})
+		f := ReceiptFailureProjection(b)
+		if f == nil || f.Code == nil || *f.Code != -9131 || f.MessageClass != "UNSPECIFIED" {
+			t.Fatal(f)
+		}
+		out, _ := json.Marshal(f)
+		if strings.Contains(string(out), message) || strings.Contains(string(out), "SECRET") {
+			t.Fatal("leak")
+		}
+		if o, a := ParseMappedReceipt(c, m, ep, 200, req, b); o != nil || a {
+			t.Fatal("rejection became acceptance")
+		}
+	}
+	for message, class := range map[string]string{"操作频繁，请稍后再试": "RATE_LIMITED", "请先登录": "LOGIN_REQUIRED", "请完成验证": "VERIFICATION_REQUIRED", "发送失败": "GENERIC_REJECTION"} {
+		b, _ := json.Marshal(map[string]any{"success": false, "msg": message})
+		f := ReceiptFailureProjection(b)
+		if f == nil || f.MessageClass != class {
+			t.Fatal(f)
+		}
+	}
+	for _, body := range []string{`{"success":true,"code":-9131}`, `{"code":-9131}`, `{"success":"false"}`, `{} {}`} {
+		if ReceiptFailureProjection([]byte(body)) != nil {
+			t.Fatal(body)
+		}
+	}
+}

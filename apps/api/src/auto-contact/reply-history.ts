@@ -1,4 +1,5 @@
 import type { ReplyHistoryItem } from '@crm/contracts';
+import {replyPlatformDiagnostic} from './reply-platform-diagnostic';
 import { executionEventSchema } from './reply-stage-journal';
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -35,7 +36,7 @@ export function replyHistoryItem(a: Attempt, audit: Audit[]): ReplyHistoryItem {
         postUrl: h.platform === 'XHS' && postId && /^[a-f0-9]{24}$/.test(postId) ? `https://www.xiaohongshu.com/explore/${postId}` : null,
         commentId, originalComment: publicId(comment.commentId) === commentId && commentId ? text(comment.comment, 10000) : null,
         content: a.content ?? '', createdAt: a.createdAt.toISOString(), attemptedAt: a.attemptedAt?.toISOString() ?? null,
-        confirmedAt: a.confirmedAt?.toISOString() ?? null, platformReceipt: a.platformReceipt, reason: a.resolutionNote,
+        confirmedAt: a.confirmedAt?.toISOString() ?? null, platformReceipt: a.platformReceipt, reason: a.outcome==='UNKNOWN' ? replyPlatformDiagnostic(records) ?? a.resolutionNote : a.resolutionNote,
         day: a.day, executionEvidence,
     };
 }
