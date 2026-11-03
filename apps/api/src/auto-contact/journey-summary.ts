@@ -1,3 +1,4 @@
+import {journeyLive} from './journey-live-query';
 import {historyDisplay} from '../common/db';
 import type {Db} from '../common/db';
 import {requireAdmin,type Actor} from '../auth/security';
@@ -6,7 +7,7 @@ import type {JourneySummary} from '@crm/contracts';
 export async function journeySummary(db:Db,actor:Actor,mode:string,runId:string,policyId?:string,policyRevision?:number):Promise<JourneySummary>{
  requireAdmin(actor);db=historyDisplay(db);
  const reviewWhere={runId,...(policyId?{policyId}:{}),...(policyRevision?{policyRevision}:{})};
- const [reviews,reviewJobs,contacts,matches,highRelevance,scopedAttempts]=await Promise.all([
+ const [reviews,reviewJobs,contacts,matches,highRelevance,scopedAttempts,live]=await Promise.all([
   db.semanticReview.groupBy({by:['state'],where:reviewWhere,_count:{_all:true}}),
   db.autoReviewJob.groupBy({by:['status'],where:{runId,...(policyId?{policyId}:{})},_count:{_all:true}}),
   db.autoContactJob.groupBy({by:['status'],where:{mode,review:{runId}},_count:{_all:true}}),
@@ -27,8 +28,9 @@ export async function journeySummary(db:Db,actor:Actor,mode:string,runId:string,
     AND a."accountIdSnapshot"=l.metadata->'scope'->>'accountId'
     AND NOT EXISTS (SELECT 1 FROM "AutoContactJob" j WHERE j."attemptId"=a.id)
    GROUP BY a.outcome`,
+  journeyLive(db,runId,mode,policyId),
  ]);
  const contactCounts=Object.fromEntries(contacts.map(r=>[r.status,r._count._all]));
  for(const row of scopedAttempts)contactCounts[row.outcome]=(contactCounts[row.outcome]||0)+row.count;
- return {reviews:Object.fromEntries(reviews.map(r=>[r.state,r._count._all])),reviewJobs:Object.fromEntries(reviewJobs.map(r=>[r.status,r._count._all])),contacts:contactCounts,matches,highRelevance};
+ return {...(live.current.length||live.recent.length?{live}:{}),reviews:Object.fromEntries(reviews.map(r=>[r.state,r._count._all])),reviewJobs:Object.fromEntries(reviewJobs.map(r=>[r.status,r._count._all])),contacts:contactCounts,matches,highRelevance};
 }

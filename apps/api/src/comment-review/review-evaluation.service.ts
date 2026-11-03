@@ -1,3 +1,4 @@
+import type {LiveReporter} from '../common/journey-live';
 import {archivedReviewIds} from '../history-archive/archive-guard';
 import {guardAcceptanceModel,claimAcceptanceModel} from '../auto-contact/normal-acceptance';
 import {estimateWholePostCost} from '../collection/model-cost-estimate';
@@ -31,7 +32,7 @@ export class ReviewEvaluationService {
   return {wholePost,policy,settings,rows,inputs,payload,hash:previewHash(payload,rows,policy.revision,`${id}:${manual?policy.revision:policy.version}:${settings.status.model}:${settings.configurationVersion}:${qwenModel(settings.status.model)?.priceVersion}`)};
  }
  async preview(actor:Actor,id:string,reviewIds:string[],manual=false,wholePost=manual){requireAdmin(actor);const b=await this.batch(this.db,id,reviewIds,manual,wholePost);return {hash:b.hash,reviewIds,count:b.rows.length,revision:b.policy.revision,payload:b.payload,costEstimate:estimateWholePostCost(b.payload,b.settings.status.model),...await this.policies.qwen.status(this.db,undefined,{enabled:true,version:b.policy.version})};}
- async evaluate(actor:Actor,id:string,input:SemanticEvaluateRequest,autoJobId?:string,manualJobId?:string){
+ async evaluate(actor:Actor,id:string,input:SemanticEvaluateRequest,autoJobId?:string,manualJobId?:string,live?:LiveReporter){
   requireAdmin(actor);input=semanticEvaluateRequestSchema.parse(input);if(!input.reviewIds?.length)throw new ConflictException('请先选择并预览评论');
   const reserved=await this.db.$transaction(async tx=>{await lockReview(tx);
    const previous=await tx.semanticModelCall.findUnique({where:{requestKey:input.requestKey}});if(previous){if(previous.policyId!==id||previous.actorId!==actor.id||previous.previewHash!==input.previewHash)throw new ConflictException('请求标识已使用');return {previous};}
@@ -57,11 +58,12 @@ export class ReviewEvaluationService {
     if(semanticHash(current.payload)!==semanticHash(b.payload))throw new QwenError('REVIEW_CHANGED');
     await guardAcceptanceModel(tx,{autoJobId,policyId:id,modelVersion:metadata.configurationVersion,model:metadata.status.model,rows:b.rows,payload:current.payload,callId:call.id});
     const settings=await this.policies.models.resolve(tx,true,semanticBatchConsent);
+    await live?.set('REVIEWING');
     flight=requestQwen(settings,b.payload,this.options?.transport,'comment-first').then(response=>({response}),error=>({error}));
    });
    const outcome=await flight!;if(outcome.error)throw outcome.error;usage=outcome.response!.usage;outputs=validateQwenEvidence(outcome.response!.result,b.payload,b.inputs,true);
   }catch(e){errorCode=e instanceof QwenError?e.code:'INVALID_RESPONSE';}
-  const status=errorCode?'FAILED':'COMPLETED';
+  const status=errorCode?'FAILED':'COMPLETED';await live?.set('SAVING_REVIEW');
   await this.db.$transaction(async tx=>{for(const row of b.rows){const output=outputs.find(o=>o.id===row.id);await tx.semanticReview.updateMany({where:{id:row.id,version:row.version+1,state:'PROCESSING'},data:{state:errorCode?'FAILED':'EVALUATED',score:errorCode?null:output!.score,reason:errorCode?(outputFailureReason(errorCode)||`评估失败（${errorCode}），原文保留，等待重新预览`):output!.reason,context:errorCode?'INSUFFICIENT':output!.context,result:errorCode?Prisma.DbNull:output as unknown as Prisma.InputJsonValue,evaluationInput:b.payload,provider:'QWEN',modelVersion:b.settings.status.model+(b.wholePost?':comment-first-whole-post-v3':':comment-first-original-v2'),leaseUntil:null,version:{increment:1}}});}
    await tx.semanticModelCall.update({where:{id:call.id},data:{status,errorCode,finishedAt:new Date(),...usage}});await tx.auditLog.create({data:{actorId:actor.id,action:'COMMENT_REVIEW_EVALUATED',entityId:id,metadata:{callId:call.id,revision:b.policy.revision,status}}});
   });return {callId:call.id,status,errorCode,processed:b.rows.length,outputFailure:modelOutputFailure(errorCode),canSend:false};

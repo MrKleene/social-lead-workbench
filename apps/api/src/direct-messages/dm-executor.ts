@@ -1,3 +1,4 @@
+import {contactReporter} from '../common/journey-live';
 import {Inject,Injectable} from '@nestjs/common';
 import {DeviceService,type ExecutionPermit} from '../devices/device.service';
 import {LoginRuntime,type SessionDriver} from '../accounts/login-runtime';
@@ -31,16 +32,18 @@ export class LocalDmExecutor implements DmExecutor {
  }
  async run(actor:Actor,c:DmCommand,sessionKey:string,beforeDispatch:()=>Promise<boolean>,signal:AbortSignal):Promise<DmExecution>{
   let permit:ExecutionPermit|undefined,driver:SessionDriver|undefined,stopped=true,dispatched=false;
+  const live=await contactReporter(this.db,c.requestKey);await live.set('PREPARING_SEND');
   let result:DmExecution={protocol:DM_SEND_PROTOCOL,attemptId:c.attemptId,requestKey:c.requestKey,kind:'NOT_SENT',reason:'RUNTIME_UNAVAILABLE',inputs:0,submissions:0,stopped:true};
   try{
    if(!this.available())return result;permit=await this.devices.acquire(actor,c.accountId);const combined=AbortSignal.any([signal,permit.signal,AbortSignal.timeout(70000)]);
    if(await this.runtime.inspect(c.accountId,sessionKey,this.runtime.deviceId(),'real',permit.root)!=='UNVERIFIED')throw Error('DM_SESSION_METADATA_MISMATCH');
    await this.db.$transaction(tx=>this.devices.assertPermit(tx,permit!));
    driver=await this.runtime.openSavedForDM(c.accountId,sessionKey,combined,permit.root,DM_REVIEWED_BUILD);stopped=false;if(!driver.replyEndpoint)throw Error('DM_ENDPOINT_MISSING');
-   result=await sendExactDm(driver.replyEndpoint(),DM_REVIEWED_BUILD,c,async()=>{await this.db.$transaction(tx=>this.devices.assertPermit(tx,permit!));if(dispatched||!await beforeDispatch())return false;dispatched=true;return true},combined);
+   await live.set('PREPARING_SEND');result=await sendExactDm(driver.replyEndpoint(),DM_REVIEWED_BUILD,c,async()=>{await this.db.$transaction(tx=>this.devices.assertPermit(tx,permit!));if(dispatched||!await beforeDispatch())return false;dispatched=true;return true},combined,live);
   }catch{
    result={...result,kind:dispatched?'UNKNOWN':'NOT_SENT',reason:dispatched?'TRANSPORT_OUTCOME_UNKNOWN':'PRE_DISPATCH_STOPPED',submissions:dispatched?1:0};
   }finally{
+   await live.close();
    if(driver?.replyEndpoint)stopped=await driver.replyEndpoint().stop().catch(()=>false);else if(driver){await driver.stop().catch(()=>{});stopped=false}
    if(permit&&stopped)await permit.release();result.stopped=stopped;if(!stopped){result.kind='UNKNOWN';result.reason='STOP_UNCONFIRMED'}
   }

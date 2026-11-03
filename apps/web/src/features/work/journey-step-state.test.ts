@@ -36,3 +36,14 @@ it('no run is idle and a cancelled collection never completes',()=>{
 });
 
 it('one completed post cannot imply all three posts completed',()=>{expect(journeyStepState({...base,summary:{...base.summary,reviewJobs:{COMPLETED:1},reviews:{EVALUATED:1}}}).steps[1].state).toBe('unknown');});
+it('live substep is precise while stale cache, unknown and network error cannot spin as sending',()=>{
+ const now=Date.now(),live={observedAt:new Date(now).toISOString(),recent:[],current:[{stage:'contact' as const,phase:'CONFIRMING',label:'正在确认发送结果',at:new Date(now).toISOString(),state:'running' as const,concurrent:1}]};
+ const input={...base,now,summary:{...base.summary,contacts:{ATTEMPTED:1},live}};
+ expect(journeyStepState(input).steps[2]).toMatchObject({state:'running',status:'正在确认发送结果'});
+ expect(journeyStepState({...input,now:now+16000}).steps[2].state).toBe('unavailable');
+ expect(journeyStepState({...input,error:true}).steps[2].state).toBe('unavailable');
+ expect(journeyStepState({...input,summary:{...input.summary,contacts:{UNKNOWN:1}}}).steps[2].state).toBe('unknown');
+ expect(journeyStepState({...base,summary:{...base.summary,contacts:{RESERVED:1}}}).steps[2]).toMatchObject({state:'queued',status:'已分配账号 · 等待执行'});
+});
+it('offline collection does not keep a cached running spinner',()=>{expect(journeyStepState({...base,error:true,run:{...run,status:'RUNNING'}}).steps[0].state).toBe('unavailable');});
+it('initial run request shows loading rather than pretending no task exists',()=>{const p=journeyStepState({...base,run:undefined,loading:true});expect(p.caption).toBe('正在读取任务');expect(p.steps.every(s=>s.state==='loading')).toBe(true);expect(journeyStepState({...base,run:undefined,loading:true,error:true}).caption).toBe('进度读取失败');});

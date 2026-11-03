@@ -2,7 +2,7 @@ import {journeyStepState} from './journey-step-state';
 import {useRunHistory,runSelection} from './use-run-history';
 import {runReviewStage} from '@/features/comment-review/run-review-model';
 import {useAutomationPreferences} from './settings-data';
-import {useEffect,useRef} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {followJourney,type JourneyObservation} from './journey-follow';
 import {journeyProgress} from './journey-progress';
 import {collectionTaskSession} from './collection-task-session';
@@ -41,7 +41,10 @@ export function useJourney(config: Config | undefined, visible: boolean) {
   const stage = journeyStage(params.get('stage'));
   useEffect(()=>{if(visible&&params.get('stage')==='handoff')setParams(old=>{const p=new URLSearchParams(old);p.set('stage','contact');return p;},{replace:true});},[visible,params,setParams]);
   const summaryParams=new URLSearchParams({runId:run?.id||''});
-  const summary=useQuery({queryKey:['journey-summary',run?.id],queryFn:()=>api<JourneySummary>(`/auto-contact/journey?${summaryParams}`),enabled:visible&&!!run&&!reviews.isPending&&!reviews.isError,refetchInterval:5000,retry:false});
+  const summary=useQuery({queryKey:['journey-summary',run?.id],queryFn:({signal})=>api<JourneySummary>(`/auto-contact/journey?${summaryParams}`,{signal}),enabled:visible&&!!run&&!reviews.isPending&&!reviews.isError,refetchInterval:2000,refetchIntervalInBackground:false,retry:false});
+  const [progressNow,setProgressNow]=useState(Date.now);
+  const hasLive=!!summary.data?.live?.current.length;
+  useEffect(()=>{if(!visible||!hasLive)return;setProgressNow(Date.now());const timer=setInterval(()=>setProgressNow(Date.now()),2000);return()=>clearInterval(timer);},[visible,hasLive,run?.id]);
   const changeStage = (next: JourneyStage) => setParams(old => {
     const p = new URLSearchParams(old); p.set('module', 'runs'); p.set('stage', next);
     if (config) p.set('config', config.id); if (run) p.set('run', run.id);
@@ -78,6 +81,6 @@ export function useJourney(config: Config | undefined, visible: boolean) {
 
   const selectedRule=contact.data?.rules.find(r=>r.platform===config?.platform);
   const pauseReason=history?null:selectedRule?.pauseReason;
-  const stepProgress=journeyStepState({run,summary:summary.data,error:unread||detail.isError,reviewEnabled:!!policy?.autoEnabled,sendEnabled:!!selectedRule?.enabled,history,pauseReason});
+  const stepProgress=journeyStepState({run,summary:summary.data,error:unread||detail.isError||historyQuery.isError,loading:!!config&&historyQuery.isPending,reviewEnabled:!!policy?.autoEnabled,sendEnabled:!!selectedRule?.enabled,history,pauseReason,now:progressNow});
   return {stepProgress,pauseReason,historyQuery,current,history,missing:selection.missing,returnCurrent:()=>{if(current)selectRun(current.id);},stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, contact, summary, statuses, notice};
 }

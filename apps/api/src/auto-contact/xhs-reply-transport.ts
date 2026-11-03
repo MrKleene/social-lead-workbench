@@ -1,3 +1,5 @@
+import {watchJournalProgress} from './live-journal-progress';
+import type {LiveReporter} from '../common/journey-live';
 import {replyJournalProtocol,type ExecutionRecorder,type ReplyJournal} from './reply-stage-journal';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -104,11 +106,12 @@ export class XhsExactReplyTransport {
         } finally { this.permittedCall = undefined; this.operation = undefined; }
     }
     /** One attempt per owned process. Timeout, disconnect and close never retry send. */
-    async send(request: SendRequest, binding: XhsReplyBinding, signal: AbortSignal, record?:ExecutionRecorder): Promise<SendResult> {
+    async send(request: SendRequest, binding: XhsReplyBinding, signal: AbortSignal, record?:ExecutionRecorder,live?:LiveReporter): Promise<SendResult> {
         if (!this.capability() || request.accountId !== this.owned.accountId) throw Error('SENDER_UNAVAILABLE');
         const command = {...prepareXhsReply(request, binding),...(this.approval.captureOnce?{receiptMode:'CAPTURE_ONCE' as const}:{})}; this.used = true;
         const combined = AbortSignal.any([signal, AbortSignal.timeout(45000)]);
         const cancel = () => { void this.stop(); }; combined.addEventListener('abort', cancel, { once: true });
+        const stopProgress=watchJournalProgress(this.owned,command.attemptId,live);
         let raw: unknown, result: SendResult = unknown(),intentRecorded=false;
         try {
             if (combined.aborted) throw Error('REPLY_CANCELLED');
@@ -125,7 +128,7 @@ export class XhsExactReplyTransport {
             if(record&&intentRecorded)try{await record({stage:'RPC_ERROR',protocolAttemptId:command.attemptId,code:combined.aborted?'TIMEOUT_OR_CANCELLED':error instanceof Error&&error.message==='REPLY_RATE_LIMITED'?'RATE_LIMITED':error instanceof Error&&error.message==='REPLY_PLATFORM_REFUSED'?'PLATFORM_REFUSED':'TRANSPORT_ERROR'});}catch{/* durable journal still retained; outcome remains unknown */}
             if (error instanceof Error && error.message === 'REPLY_RATE_LIMITED') result = { kind: 'RISK', reason: 'RATE_LIMITED' };
             if (error instanceof Error && error.message === 'REPLY_PLATFORM_REFUSED') result = { kind: 'RISK', reason: 'PLATFORM_REFUSED' };
-        } finally { combined.removeEventListener('abort', cancel); }
+        } finally { await stopProgress();combined.removeEventListener('abort', cancel); }
         if (this.risk) result = { kind: 'RISK', reason: this.risk };
         const stopped = await this.stop();
         if(record&&intentRecorded){

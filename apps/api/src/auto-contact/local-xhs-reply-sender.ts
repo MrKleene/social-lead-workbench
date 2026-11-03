@@ -1,3 +1,4 @@
+import {contactReporter} from '../common/journey-live';
 import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {manualAuthority} from './manual-reply-authority';
 import {acceptanceSendThreshold,acceptanceSendAllowed} from './normal-acceptance';
@@ -29,7 +30,7 @@ export class LocalXhsReplySender implements ContactSender {
     }
     private preparations=new Map<string,Promise<boolean>>();
     private nextCheck=new Map<string,number>();
-    async prepare(actor:Actor,accountId:string):Promise<boolean>{
+    async prepare(actor:Actor,accountId:string,_channel?:string,onChecking?:()=>Promise<void>):Promise<boolean>{
         if(!this.capability('XHS','COMMENT')||!this.devices.enabled()||!this.runtime.persistent()||this.runtime.mode()!=='real')return false;
         const pending=this.preparations.get(accountId);if(pending)return pending;
         const work=(async()=>{
@@ -39,7 +40,7 @@ export class LocalXhsReplySender implements ContactSender {
             const account=await this.db.platformAccount.findUnique({where:{id:accountId}});
             if(control?.pauseReason||control?.activeJobId||!account?.loginPlatformUserId||account.archivedAt||accountSystemBlock(account))return false;
             this.nextCheck.set(accountId,Date.now()+60000);
-            try{await inspectBoundedAccount(this.db,this.devices,this.runtime,actor,{workflowId:'auto-qualification:'+randomUUID(),accountId,senderId:account.loginPlatformUserId,binarySha256:this.deployment.reviewedSha256!},AbortSignal.timeout(60000));this.nextCheck.delete(accountId);return await this.healthy(accountId);}catch(error){await this.db.auditLog.create({data:{actorId:actor.id,entityId:accountId,action:'AUTO_CONTACT_QUALIFICATION_FAILED',metadata:{reason:error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'QUALIFICATION_UNAVAILABLE',submissions:0}}});return false;}
+            try{await onChecking?.();await inspectBoundedAccount(this.db,this.devices,this.runtime,actor,{workflowId:'auto-qualification:'+randomUUID(),accountId,senderId:account.loginPlatformUserId,binarySha256:this.deployment.reviewedSha256!},AbortSignal.timeout(60000));this.nextCheck.delete(accountId);return await this.healthy(accountId);}catch(error){await this.db.auditLog.create({data:{actorId:actor.id,entityId:accountId,action:'AUTO_CONTACT_QUALIFICATION_FAILED',metadata:{reason:error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'QUALIFICATION_UNAVAILABLE',submissions:0}}});return false;}
         })();this.preparations.set(accountId,work);try{return await work;}finally{this.preparations.delete(accountId);}
     }
     async healthy(accountId: string) {
@@ -95,6 +96,7 @@ export class LocalXhsReplySender implements ContactSender {
         const initial = await this.authorized(request); if (!initial) return notSent();
         let permit: ExecutionPermit | undefined, driver: SessionDriver | undefined, transport: XhsExactReplyTransport | undefined;
         let stopped = true, attempted = false;
+        const live=await contactReporter(this.db,request.requestKey);await live.set('PREPARING_SEND');
         try {
             permit = await this.devices.acquire(initial.actor, request.accountId);
             const combined = AbortSignal.any([signal, permit.signal, AbortSignal.timeout(50000)]);
@@ -103,17 +105,17 @@ export class LocalXhsReplySender implements ContactSender {
             if (!driver.replyEndpoint) return { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' };
             transport = new XhsExactReplyTransport(driver.replyEndpoint(), { enabled: true, reviewedSha256: this.deployment.reviewedSha256!, requireJournal: true, requireConfirmedMapping: true });
             if (!await transport.connect(combined)) { const failure = transport.connectionFailure(); stopped = await transport.stop(); return stopped || failure.kind === 'RISK' ? failure : { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' }; }
-            const login=await driver.status(combined);
+            await live.set('CHECKING_ACCOUNT');const login=await driver.status(combined);
             if(!login.loggedIn||login.userId!==initial.account.loginPlatformUserId){stopped=await transport.stop();return stopped?notSent():{kind:'BLOCKED',reason:'STOP_UNCONFIRMED'};}
             const current = await this.authorized(request);
             if (!current || current.account.version !== initial.account.version || current.account.loginPlatformUserId !== initial.account.loginPlatformUserId || current.account.sessionReference?.sessionKey !== initial.account.sessionReference?.sessionKey || combined.aborted) {
                 stopped = await transport.stop(); return stopped ? notSent() : { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' };
             }
             await this.db.$transaction(tx => this.devices.assertPermit(tx, permit!));
-            attempted = true;
+            await live.set('PREPARING_SEND');attempted = true;
             const result = await transport.send(request, { accountId: request.accountId, senderId: current.account.loginPlatformUserId!, postReference: current.reference }, combined, async (event: ExecutionEvent) => {
                 await this.db.$transaction(tx=>recordSendExecution(tx,current.actor.id,request.accountId,request.requestKey,'AUTO_CONTACT_EXECUTION_STAGE',event,current.account.loginPlatformUserId!));
-            });
+            },live);
             stopped = await transport.stop(); return !stopped && result.kind !== 'RISK' ? { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' } : result;
         } catch (error) {
             if (transport) stopped = await transport.stop();
@@ -122,6 +124,7 @@ export class LocalXhsReplySender implements ContactSender {
             if (!stopped || attempted) return { kind: 'BLOCKED', reason: 'STOP_UNCONFIRMED' };
             return notSent();
         } finally {
+            await live.close();
             if (transport) stopped = await transport.stop();
             else if (driver) { await driver.stop().catch(() => {}); stopped = false; }
             // On uncertain shutdown keep the device lease; platform workflow is also paused.

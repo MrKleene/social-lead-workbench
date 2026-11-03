@@ -1,3 +1,4 @@
+import {contactReporter} from '../common/journey-live';
 import {isReviewArchiveBlocked,archivedReviewIds} from '../history-archive/archive-guard';
 import {boundAccountNickname} from '../accounts/account-display';
 import {effectiveAccountLimit} from '../accounts/account-day-limit';
@@ -248,7 +249,7 @@ export class AutoContactService {
                 const usage=await this.db.accountDay.findUnique({where:{accountId_day:{accountId:id,day}}});
                 if(!account||accountModeBlocked(account,'REAL')||(usage?.occupied??0)>=limit(r,id,effectiveAccountLimit(account.dailyLimit,usage,day)))continue;
                 // Only qualify accounts when there is actual authorized work. No IO in a DB transaction.
-                if(await this.sender.prepare(actor,id,j.channel))return;
+                const live=await contactReporter(this.db,'auto-contact:'+j.id);try{if(await this.sender.prepare(actor,id,j.channel,()=>live.set('CHECKING_ACCOUNT')))return;}finally{await live.close();}
             }
         }
     }
@@ -284,7 +285,7 @@ export class AutoContactService {
     async reserveManual(){
         const candidate=await this.db.$transaction(async tx=>{await contactLock(tx);return this.manualCandidate(tx);});if(!candidate)return null;
         const {j,m}=candidate;let ready=false;
-        try{ready=await this.sender.healthy(m.accountId,j.channel);if(!ready&&this.sender.prepare){const actor=await this.db.user.findUnique({where:{id:m.actorId},select:{id:true,name:true,email:true,role:true,active:true}});if(actor?.active&&actor.role==='ADMIN')ready=await this.sender.prepare(actor,m.accountId,j.channel);}}catch{}
+        try{ready=await this.sender.healthy(m.accountId,j.channel);if(!ready&&this.sender.prepare){const actor=await this.db.user.findUnique({where:{id:m.actorId},select:{id:true,name:true,email:true,role:true,active:true}});if(actor?.active&&actor.role==='ADMIN'){const live=await contactReporter(this.db,'auto-contact:'+j.id);try{ready=await this.sender.prepare(actor,m.accountId,j.channel,()=>live.set('CHECKING_ACCOUNT'));}finally{await live.close();}}}}catch{}
         if(!ready){await this.db.$transaction(async tx=>{await contactLock(tx);const current=await tx.autoContactJob.findUnique({where:{id:j.id}});if(current?.status==='MANUAL_READY')await this.holdForAction(tx,current,'执行前账号核验未通过，请处理后重新预览');});return null;}
         return this.db.$transaction(async tx=>{await contactLock(tx);const v=await this.manualCandidate(tx,j.id);if(!v)return null;const {a,now}=v;
             await tx.$queryRaw`SELECT id FROM "PlatformAccount" WHERE id=${a.id} FOR UPDATE`;

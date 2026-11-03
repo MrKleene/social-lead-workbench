@@ -1,3 +1,4 @@
+import {liveReporter} from '../common/journey-live';
 import {wasHistoryArchived} from '../history-archive/archive-guard';
 import {coverageSkipped,bindAcceptancePost,activeAcceptance,normalAcceptanceScope,acceptanceReviewAllowed,liveAcceptance} from '../auto-contact/normal-acceptance';
 import {Inject,Injectable} from '@nestjs/common';
@@ -50,6 +51,7 @@ export class AutoReviewService {
    if(!status.usage.canCall){await tx.autoReviewJob.update({where:{id:next.id},data:{status:'PENDING',reason:'等待每日预算、在途请求或 30 秒调用间隔'}});return null;}
    return next;
   });if(!job)return;
+  const live=liveReporter(this.db,job.runId,'review',job.id);await live.set('PREPARING_REVIEW');
   try{
    const policy=await this.db.commentReviewPolicy.findUniqueOrThrow({where:{id:job.policyId}}),actor=await this.db.user.findUnique({where:{id:policy.autoActorId||''}});
    if(!actor||actor.role!=='ADMIN')throw Error('自动授权管理员已失效');
@@ -58,9 +60,9 @@ export class AutoReviewService {
    const rows=await this.db.semanticReview.findMany({where:{id:{in:prepared.reviewIds}},orderBy:{id:'asc'}});
    const count=rows.length;
    const preview=await this.evaluation.preview(actor,job.policyId,rows.map(r=>r.id),false,true);
-   const result=await this.evaluation.evaluate(actor,job.policyId,{requestKey:randomUUID(),previewHash:preview.hash,reviewIds:preview.reviewIds,priceVersion:preview.connection.priceVersion!,consent:semanticBatchConsent},job.id);
+   const result=await this.evaluation.evaluate(actor,job.policyId,{requestKey:randomUUID(),previewHash:preview.hash,reviewIds:preview.reviewIds,priceVersion:preview.connection.priceVersion!,consent:semanticBatchConsent},job.id,undefined,live);
    await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:result.status==='COMPLETED'?'COMPLETED':'FAILED',processed:{increment:result.status==='COMPLETED'?count:0},reason:result.status==='COMPLETED'?'本次整帖处理完成':(outputFailureReason('errorCode' in result?result.errorCode:null)||'模型请求失败，不自动重试')+` 本批 ${count} 条未采纳，剩余评论未继续送审。`}});
-  }catch{await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:'FAILED',reason:'授权、批次或输入安全检查未通过；请手动核查，不自动重试'}});}
+  }catch{await this.db.autoReviewJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{status:'FAILED',reason:'授权、批次或输入安全检查未通过；请手动核查，不自动重试'}});}finally{await live.close();}
  }
  /** Freeze every selected post's full payload and reserve the SUM of estimates
   * before the first payable call. Preparing/previewing reads no provider key. */

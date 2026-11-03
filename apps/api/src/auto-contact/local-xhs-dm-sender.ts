@@ -83,7 +83,7 @@ export class ChannelContactSender implements ContactSender {
  private select(channel?:string){return channel==='DM'?this.dm:this.comment}
  capability(platform:string,channel:string){return this.select(channel).capability(platform,channel)}
  healthy(accountId:string,channel='COMMENT'){return this.select(channel).healthy(accountId,channel)}
- async prepare(actor:Actor,accountId:string,channel='COMMENT'){const s=this.select(channel);return s.prepare?await s.prepare(actor,accountId,channel):await s.healthy(accountId,channel)}
+ async prepare(actor:Actor,accountId:string,channel='COMMENT',onChecking?:()=>Promise<void>){const s=this.select(channel);return s.prepare?await s.prepare(actor,accountId,channel,onChecking):await s.healthy(accountId,channel)}
  send(request:SendRequest,signal?:AbortSignal){return this.select(request.channel).send(request,signal)}
  async reconcile(request:SendRequest,receipt:string):Promise<SendResult>{const sender=this.select(request.channel);return sender.reconcile?sender.reconcile(request,receipt):{kind:"UNKNOWN",reason:"当前渠道没有可靠回执核查能力，请勿重发"}}
 }

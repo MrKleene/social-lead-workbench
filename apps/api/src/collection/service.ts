@@ -1,3 +1,4 @@
+import {liveReporter,type LivePhase} from '../common/journey-live';
 import {historyDisplay} from '../common/db';
 import {runHistory,runHistoryInput} from './run-history';
 import type {z} from 'zod';
@@ -188,6 +189,7 @@ export class CollectionService {
             return;
         const run = await this.db.collectionRun.findUniqueOrThrow({ where: { id } });
         const checkpoints=new Map<string,CheckpointLease>();
+        const live=liveReporter(this.db,id,'collect',id);await live.set('PREPARING_CAPTURE');
         let reader: ReadAdapter | undefined;
         let owned: Awaited<ReturnType<AccountReadService['open']>> | undefined;
         let diagnosticStage:CollectionDiagnostic['stage']='setup';
@@ -204,7 +206,7 @@ export class CollectionService {
             if (spec.mode === "MOCK") reader = adapter || new MockAdapter(spec.platform, run.scenario as Scenario);
             else if(accountReadMode()) {
                 if(adapter||!this.accountReads||spec.mode!==accountReadMode()||spec.batchLimit>3)throw new ReadFailure('REAL_DISABLED');
-                diagnosticStage='authorization';owned=await this.accountReads.open(run.execution,cancelled,run.id);reader=owned.reader;
+                diagnosticStage='authorization';await live.set('CHECKING_ACCOUNT');owned=await this.accountReads.open(run.execution,cancelled,run.id);reader=owned.reader;
             }
             else { if(run.execution)throw new ReadFailure('REAL_DISABLED'); const settings = requireMcp(spec.mode); reader = adapter || new XhsMcpAdapter(new XhsHttpTransport(settings.url, settings.mode), true, settings.mode); }
             // Fresh-only selection is server-owned and bounded to one post. It never
@@ -220,7 +222,7 @@ export class CollectionService {
                 if(!reader?.supportsChunks?.())return;
                 if(!owned)throw new ReadFailure('REAL_DISABLED');
                 const lease=await acquireCheckpoint(this.db,run,post.id,owned.commitGuard,plan?.restartCheckpoint===true);checkpoints.set(post.id,lease);reader.restoreCheckpoint?.(post,lease.checkpoint);
-            },async post=>{await this.autoReview?.postFinished(run,post).catch(()=>console.error('自动审核入队失败；原文保留，请手动测试'));},seenPosts?(post=>!seenPosts.has(post.id)):undefined);
+            },async post=>{await this.autoReview?.postFinished(run,post).catch(()=>console.error('自动审核入队失败；原文保留，请手动测试'));},seenPosts?(post=>!seenPosts.has(post.id)):undefined,async stage=>{const phase:LivePhase=stage==='prepare'?'CHECKING_ACCOUNT':stage==='search'?'SEARCHING':stage==='post'?'READING_POST':stage==='replies'?'READING_REPLIES':stage==='checkpoint'?'SAVING_CAPTURE':'READING_COMMENTS';await live.set(phase);});
             if(result.diagnostic)logCollectionDiagnostic(run.id,result.diagnostic);
             diagnosticStage='finish_archive';
             await finishCapture(this.db,run,result);
@@ -239,6 +241,6 @@ export class CollectionService {
             if(run.execution)await this.accountReads?.failure(run.execution,reason,run.id);
             await this.autoReview?.finished(run,{posts:[],requests:0,status:"FAILED",reason}).catch(()=>console.error('自动审核入队失败；原文保留，请手动测试'));
             return failed;
-        } finally { try{await releaseCheckpoints(this.db,checkpoints);}finally{if(owned)await owned.close();else await reader?.close?.();} }
+        } finally { await live.close();try{await releaseCheckpoints(this.db,checkpoints);}finally{if(owned)await owned.close();else await reader?.close?.();} }
     }
 }

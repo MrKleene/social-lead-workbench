@@ -126,4 +126,6 @@ export type ReplyHistoryItem = {
 export type ReplyHistoryPage = { items: ReplyHistoryItem[]; total: number; allTotal: number; confirmedTotal: number; offset: number; limit: number; mode: string };
 
 /** Whole-run counts; reviewJobs span historical versions, contacts span all rules in the current sender mode. */
-export type JourneySummary = {reviews:Record<string,number>;reviewJobs:Record<string,number>;contacts:Record<string,number>;matches:number;highRelevance?:number};
+export type JourneyLiveStep={stage:'collect'|'review'|'contact';phase:string;label:string;at:string;state:'running'|'stale'|'settling';concurrent:number};
+export type JourneyLiveProgress={observedAt:string;current:JourneyLiveStep[];recent:{stage:'collect'|'review'|'contact';label:string;at:string}[]};
+export type JourneySummary = {live?:JourneyLiveProgress;reviews:Record<string,number>;reviewJobs:Record<string,number>;contacts:Record<string,number>;matches:number;highRelevance?:number};

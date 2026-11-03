@@ -32,20 +32,21 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     comments: number;
     callMs: number;
     runMs: number;
-} = limits, progress?: (result:ReadResult)=>Promise<void>, selectedPost?:Post,beforePost?:(post:Post)=>Promise<void>,postFinished?:(post:PostRead)=>Promise<void>,selectPost?:(post:Post)=>boolean): Promise<ReadResult> {
+} = limits, progress?: (result:ReadResult)=>Promise<void>, selectedPost?:Post,beforePost?:(post:Post)=>Promise<void>,postFinished?:(post:PostRead)=>Promise<void>,selectPost?:(post:Post)=>boolean,observe?:(stage:CollectionDiagnostic['stage'])=>Promise<void>): Promise<ReadResult> {
     if (adapter.mode !== config.mode || adapter.platform !== config.platform)
         throw new ReadFailure("REAL_DISABLED");
     const result: ReadResult = { posts: [], requests: 0, status: "COMPLETE" };
     const started = Date.now();
     let comments = 0, postOrdinal=0,keywordOrdinal=0;
     let stage:CollectionDiagnostic['stage']='prepare';
-    const checkpoint=async()=>{const previous=stage;stage='checkpoint';await progress?.(result);stage=previous;};
+    const checkpoint=async()=>{const previous=stage;stage='checkpoint';await observe?.(stage);await progress?.(result);stage=previous;};
     const checkCancelled=async()=>{try{return await cancelled();}catch(error){throw new ReadFailure(error instanceof ReadFailure?error.code:'INVALID_DATA',error instanceof ReadFailure?error.retryAfterMs:undefined,diagnose(error,'authorization'));}};
     async function call<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
         if (await checkCancelled())
             throw new ReadFailure("PAUSED");
         if (result.requests >= budget.requests || Date.now() - started >= budget.runMs)
             throw new ReadFailure("BUDGET");
+        await observe?.(stage);
         result.requests++;
         const controller = new AbortController();
         let timer: ReturnType<typeof setTimeout>;

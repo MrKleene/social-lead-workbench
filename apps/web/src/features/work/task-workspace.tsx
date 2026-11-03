@@ -1,3 +1,4 @@
+import {JourneyLiveTrail} from './journey-live-trail';
 import {JourneyStepper} from './journey-stepper';
 import {pauseDescription} from '@/components/status-notice';
 import {returnRunLabel} from './use-run-history';
@@ -35,6 +36,7 @@ export function TaskWorkspace(props:Props) {
     <div className="journey-run-context" aria-label="查看轮次"><div><strong>{s.history?'历史任务 · 只读':s.historyQuery.data?.activePhase?'当前任务':'最近一轮'}</strong>{s.run?<time dateTime={s.run.createdAt}>{new Date(s.run.createdAt).toLocaleString()}</time>:<span>{s.historyQuery.isPending?'正在读取任务…':s.missing?'任务不存在':s.historyQuery.isError?'轮次读取失败':'尚未开始'}</span>}{s.history&&s.current&&<Button size="sm" variant="outline" onClick={s.returnCurrent}>{returnRunLabel(s.historyQuery.data?.activePhase)}</Button>}</div><RunHistoryDialog key={config?.id} configId={config?.id} selectedId={s.run?.id} onSelect={s.selectRun}/></div>
     <JourneyStepper {...s.stepProgress} selected={s.stage} onSelect={visit} details={[s.stage==='contact'&&['SUBMISSION_UNKNOWN','DM_SUBMISSION_UNKNOWN'].includes(s.pauseReason||'')?undefined:s.notice,s.pauseReason?pauseDescription(s.pauseReason):undefined].filter((x):x is string=>!!x)}/>
 
+    <JourneyLiveTrail live={s.summary.data?.live}/>
     <ErrorNotice error={s.historyQuery.error||s.detail.error||s.summary.error}/>
     {s.missing&&<Alert role="alert" className="journey-notice"><AlertDescription>未找到任务，请重新选择。</AlertDescription></Alert>}
     <div className="journey-stage" hidden={s.stage!=='collect'}><CollectionFlow {...props} view={{id:s.requested||s.run?.id||'',run:s.run,pending:s.historyQuery.isPending||!!s.requested&&!s.run&&!s.missing&&!s.historyQuery.isError,error:s.historyQuery.error}} actionsHost={actionsHost} workspaceVisible={props.visible} visible={props.visible&&s.stage==='collect'} onRunSelect={s.selectRun}/></div>
