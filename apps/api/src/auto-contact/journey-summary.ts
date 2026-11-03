@@ -1,9 +1,10 @@
+import {historyDisplay} from '../common/db';
 import type {Db} from '../common/db';
 import {requireAdmin,type Actor} from '../auth/security';
 import type {JourneySummary} from '@crm/contracts';
 /** Read-only aggregates over the entire run, never a paginated sample or global recent list. */
 export async function journeySummary(db:Db,actor:Actor,mode:string,runId:string,policyId?:string,policyRevision?:number):Promise<JourneySummary>{
- requireAdmin(actor);
+ requireAdmin(actor);db=historyDisplay(db);
  const reviewWhere={runId,...(policyId?{policyId}:{}),...(policyRevision?{policyRevision}:{})};
  const [reviews,reviewJobs,contacts,matches,highRelevance,scopedAttempts]=await Promise.all([
   db.semanticReview.groupBy({by:['state'],where:reviewWhere,_count:{_all:true}}),

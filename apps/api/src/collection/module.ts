@@ -1,3 +1,4 @@
+import {historyDisplay} from '../common/db';
 import {runHistoryInput} from './run-history';
 import {AutoContactModule} from '../auto-contact/auto-contact.module';
 import {ManualReviewService} from '../comment-review/manual-review.service';
@@ -135,7 +136,7 @@ class NoticesController {
     @Get()
     list(
     @Req()
-    r: AuthedRequest) { return this.db.collectionNotice.findMany({ where: { lead: scope(r.actor) }, include: { lead: { select: { id: true, identity: { select: { nickname: true } }, ownerId: true } }, reads: { where: { userId: r.actor.id }, select: { readAt: true } } }, take: 100, orderBy: { createdAt: "desc" } }); }
+    r: AuthedRequest) { return historyDisplay(this.db).collectionNotice.findMany({ where: { lead: scope(r.actor) }, include: { lead: { select: { id: true, identity: { select: { nickname: true } }, ownerId: true } }, reads: { where: { userId: r.actor.id }, select: { readAt: true } } }, take: 100, orderBy: { createdAt: "desc" } }); }
     @Post(":id/read")
     async read(
     @Req()

@@ -823,3 +823,24 @@ model ManualReplyRequest {
  createdAt DateTime @default(now())
  @@index([expiresAt])
 }
+
+// Recoverable display archive. Safety tombstones persist after restoring visibility.
+model HistoryArchiveBatch {
+ id String @id
+ actorId String
+ createdAt DateTime @default(now())
+ restoredAt DateTime?
+ restoredBy String?
+ backupSha256 String
+ counts Json @default("{}")
+ items HistoryArchiveItem[]
+}
+model HistoryArchiveItem {
+ batchId String
+ batch HistoryArchiveBatch @relation(fields:[batchId],references:[id],onDelete:Restrict)
+ entity String
+ recordId String
+ previousStatus String?
+ @@id([batchId,entity,recordId])
+ @@index([entity,recordId],map:"HistoryArchiveItem_lookup")
+}

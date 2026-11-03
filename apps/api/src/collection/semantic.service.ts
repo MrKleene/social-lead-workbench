@@ -1,3 +1,5 @@
+import {archivedReviewIds} from '../history-archive/archive-guard';
+import {historyDisplay} from '../common/db';
 import {displayReviewFailure} from '@crm/contracts';
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -14,9 +16,9 @@ export class SemanticService {
  async list(actor:Actor,configId:string,offset=0){
   requireAdmin(actor);
   const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config)throw new NotFoundException();
-  const [rows,total]=await Promise.all([this.db.semanticReview.findMany({where:{configId,policyId:null},orderBy:[{score:{sort:'desc',nulls:'last'}},{createdAt:'desc'},{id:'asc'}],skip:offset,take:50}),this.db.semanticReview.count({where:{configId,policyId:null}})]);
+  const [rows,total]=await Promise.all([historyDisplay(this.db).semanticReview.findMany({where:{configId,policyId:null},orderBy:[{score:{sort:'desc',nulls:'last'}},{createdAt:'desc'},{id:'asc'}],skip:offset,take:50}),historyDisplay(this.db).semanticReview.count({where:{configId,policyId:null}})]);
   const identities=await this.db.platformIdentity.findMany({where:{platform:config.platform,platformUserId:{in:rows.map(r=>r.platformUserId)}},include:{lead:true,contactLedger:true}});
-  const duplicates=await this.db.semanticReview.groupBy({by:['platformUserId'],where:{platform:config.platform,platformUserId:{in:rows.map(r=>r.platformUserId)}},_count:{_all:true}});
+  const duplicates=await historyDisplay(this.db).semanticReview.groupBy({by:['platformUserId'],where:{platform:config.platform,platformUserId:{in:rows.map(r=>r.platformUserId)}},_count:{_all:true}});
   const status=this.qwen?await this.qwen.status(this.db,configId):undefined;
   return {configured:status?.connection.state==='READY',provider:status?.connection.state==='READY'?'QWEN':'NONE',...status,total,offset,hasMore:offset+rows.length<total,items:rows.map(row=>{
    const identity=identities.find(i=>i.platformUserId===row.platformUserId),rules=semanticRulesSchema.parse(row.rules);
@@ -31,7 +33,8 @@ export class SemanticService {
   const config=await this.db.collectionConfig.findUnique({where:{id:configId}});
   if(!config?.semanticRules||!config.enabled||config.archivedAt)throw new ConflictException('语义审核未启用');
   const rules=semanticRulesSchema.parse(config.semanticRules);
-  const candidates=await this.db.semanticReview.findMany({where:{configId,policyId:null,revision:config.revision,isDemo:true,reviewStatus:'PENDING',OR:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:{createdAt:'asc'},take:10});
+  const archived=await archivedReviewIds(this.db);
+  const candidates=await this.db.semanticReview.findMany({where:{id:{notIn:archived},configId,policyId:null,revision:config.revision,isDemo:true,reviewStatus:'PENDING',OR:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:{createdAt:'asc'},take:10});
   const claimed=[];
   for(const row of candidates){const claim=await this.db.semanticReview.updateMany({where:{id:row.id,version:row.version,reviewStatus:'PENDING'},data:{state:'PROCESSING',leaseUntil:new Date(Date.now()+30000),version:{increment:1}}});if(claim.count)claimed.push(row);}
   if(!claimed.length)return {configured:false,processed:0};

@@ -28,7 +28,7 @@ describe("未认证 HTTP 边界", () => {
   it("ready 在数据库不可用时失败且不泄露细节", async()=>{databaseProbe.mockRejectedValueOnce(new Error("internal connection detail"));const r=await request(app.getHttpServer()).get("/api/health/ready");expect(r.status).toBe(503);expect(JSON.stringify(r.body)).not.toContain("internal connection detail")});
   for (const route of [
     "leads",
-    "auto-contact/attempts", "auto-contact/pending",
+    "history-archives", "auto-contact/attempts", "auto-contact/pending",
     "tasks",
     "users",
     "audit",
@@ -46,6 +46,7 @@ describe("未认证 HTTP 边界", () => {
       ).toBe(401);
     });
   it.each(['INITIAL_WINDOW','BOUNDED_REPLIES'])('单帖检查 %s 仍拒绝匿名请求',async mode=>{const r=await request(app.getHttpServer()).post('/api/collection/single-post-check').send({mode,accountId:'synthetic',requestKey:'00000000-0000-4000-8000-000000000001',url:'https://www.xiaohongshu.com/explore/0123456789abcdef01234567?xsec_token=SYNTHETIC&xsec_source=pc_feed',consent:mode==='BOUNDED_REPLIES'?'single-post-bounded-read-v1':'single-post-read-v1'});expect(r.status).toBe(401);});
+  it.each(['/api/history-archives','/api/history-archives/fixture/restore'])('匿名不能归档或恢复 %s',async path=>{expect((await request(app.getHttpServer()).post(path).send({})).status).toBe(401);});
   it("伪造会话不被信任", async () => {
     expect(
       (

@@ -1,3 +1,5 @@
+import {wasHistoryArchived,archivedReviewIds} from '../history-archive/archive-guard';
+import {historyDisplay} from '../common/db';
 import {prepareReviewOutbound,reviewObservations} from './review-observation';
 import {outputFailureReason,reviewObservationPolicy,semanticInputPolicy,wholePostRequestPolicy} from '@crm/contracts';
 import {ConflictException,Inject,Injectable,NotFoundException} from '@nestjs/common';
@@ -23,7 +25,7 @@ export class ManualReviewService {
  private async scope(db:ReviewDb,postId:string){return db.capturedComment.findMany({where:{postId},orderBy:{id:'asc'}});}
  private signature(observations:unknown,rows:Awaited<ReturnType<ManualReviewService['scope']>>,revision:number,modelVersion:number,postId:string,policyId:string){return semanticHash({observations,observationPolicy:reviewObservationPolicy,requestPolicy:wholePostRequestPolicy,inputPolicyVersion:semanticInputPolicy,policyId,postId,revision,modelVersion,rows:rows.map(c=>({id:c.id,hash:c.contentHash,snapshot:c.snapshot}))});}
  private async view(job:ManualReviewJob){const items=itemsOf(job),settings=await this.policies.models.resolve(),catalog=qwenModel(job.model),payload=job.preview as unknown as SemanticOutbound;return {id:job.id,postId:job.postId,title:job.title,coverage:job.coverage,policyRevision:job.policyRevision,model:job.model,modelVersion:job.modelVersion,priceVersion:job.priceVersion,scopeHash:job.scopeHash,status:job.status,reason:job.reason,total:items.length,pending:items.filter(i=>i.state==='PENDING').length,success:items.filter(i=>i.state==='SUCCESS').length,failed:items.filter(i=>i.state==='FAILED').length,skipped:items.filter(i=>i.state==='SKIPPED').length,maxCalls:items.some(i=>i.state==='PENDING')?1:0,retrying:items.filter(i=>i.state==='PENDING'&&i.previousAttempt).length,capacityError:payload.items.length&&!wholePostCapacity(payload,job.model).fits?wholePostCapacityMessage:null,target:payload.target,priceDescription:catalog?.priceDescription,dailyLimit:settings.status.dailyLimit,authorized:settings.status.authorized};}
- async list(actor:Actor,policyId:string){requireAdmin(actor);return Promise.all((await this.db.manualReviewJob.findMany({where:{policyId,actorId:actor.id,status:{not:'PREVIEW'}},orderBy:{createdAt:'desc'},take:20})).map(j=>this.view(j)));}
+ async list(actor:Actor,policyId:string){requireAdmin(actor);return Promise.all((await historyDisplay(this.db).manualReviewJob.findMany({where:{policyId,actorId:actor.id,status:{not:'PREVIEW'}},orderBy:{createdAt:'desc'},take:20})).map(j=>this.view(j)));}
  async get(actor:Actor,id:string){requireAdmin(actor);const j=await this.db.manualReviewJob.findFirst({where:{id,actorId:actor.id}});if(!j)throw new NotFoundException();return j;}
  async previewPage(actor:Actor,id:string,offset:number){const j=await this.get(actor,id),payload=j.preview as unknown as SemanticOutbound;return {items:payload.items.slice(offset,offset+20),hasMore:offset+20<payload.items.length};}
  async prepare(actor:Actor,policyId:string,input:z.infer<typeof manualPostPrepareSchema>){
@@ -39,11 +41,12 @@ export class ManualReviewService {
    const existing=await tx.manualReviewJob.findFirst({where:{scopeHash,actorId:actor.id,status:{in:['PREVIEW','PENDING','PROCESSING','COMPLETED']}},orderBy:{createdAt:'desc'}});
    if(existing&&existing.status!=='PREVIEW')return existing;
    if(existing&&Date.now()-existing.createdAt.getTime()<=900000){const current=await tx.semanticReview.findMany({where:{id:{in:itemsOf(existing).map(i=>i.reviewId)}}});if(itemsOf(existing).every(i=>{const row=current.find(r=>r.id===i.reviewId);return row&&row.version===i.reviewVersion;}))return existing;}
+   const archived=new Set(await archivedReviewIds(tx));
    const rules={version:1,target:policy.target,reviewThreshold:0},items:ManualItem[]=[],outbound:SemanticOutbound={observationPolicy:reviewObservationPolicy,requestPolicy:wholePostRequestPolicy,inputPolicyVersion:semanticInputPolicy,target:'',redactionVersion:'',items:[]},seen=new Set<string>();
    const reviews=await tx.semanticReview.findMany({where:{policyId,policyRevision:policy.revision,selectedModel:model.status.model,sourceContentHash:{in:captures.map(c=>c.contentHash)}}});
    for(const c of captures){
     const previous=reviews.find(r=>r.sourceContentHash===c.contentHash),duplicate=seen.has(c.contentHash);seen.add(c.contentHash);
-    if(duplicate||previous&&(!['UNANALYSED','UNCONFIGURED','FAILED'].includes(previous.state)||previous.reviewStatus!=='PENDING')){items.push({captureId:c.id,reviewId:previous?.id||'',reviewVersion:previous?.version,state:'SKIPPED'});continue;}
+    if(duplicate||previous&&(archived.has(previous.id)||!['UNANALYSED','UNCONFIGURED','FAILED'].includes(previous.state)||previous.reviewStatus!=='PENDING')){items.push({captureId:c.id,reviewId:previous?.id||'',reviewVersion:previous?.version,state:'SKIPPED'});continue;}
     const s=c.snapshot as unknown as SemanticSnapshot,hash=semanticHash({policyId,revision:policy.revision,content:c.contentHash,model:model.status.model});
     const row=previous??await tx.semanticReview.create({data:{policyId,policyRevision:policy.revision,sourceContentHash:c.contentHash,configId:c.configId,runId:c.runId,revision:policy.revision,captureId:c.id,analysisKey:hash,snapshotHash:hash,selectedModel:model.status.model,ruleHash:semanticHash(rules),contextVersion:c.contextVersion,platform:(await tx.collectionConfig.findUniqueOrThrow({where:{id:c.configId}})).platform,platformUserId:s.userId,snapshot:c.snapshot as Prisma.InputJsonValue,rules,isDemo:c.isDemo,state:'UNANALYSED',reason:'整帖手动测试 · 等待确认'}});
     // Validate comments and context before confirmation without rewriting the saved comment.
@@ -60,7 +63,7 @@ export class ManualReviewService {
  }
  async confirm(actor:Actor,id:string,input:z.infer<typeof manualPostConfirmSchema>){
   requireAdmin(actor);input=manualPostConfirmSchema.parse(input);
-  const job=await this.db.$transaction(async tx=>{await lockReview(tx);const job=await tx.manualReviewJob.findFirst({where:{id,actorId:actor.id}});if(!job)throw new NotFoundException();
+  const job=await this.db.$transaction(async tx=>{await lockReview(tx);if(await wasHistoryArchived(tx,'ManualReviewJob',id))throw new ConflictException('已归档任务不能重新执行');const job=await tx.manualReviewJob.findFirst({where:{id,actorId:actor.id}});if(!job)throw new NotFoundException();
    if((job.preview as unknown as SemanticOutbound).observationPolicy!==reviewObservationPolicy)throw new ConflictException('覆盖上下文策略已变化，请重新预览确认');
    if((job.preview as unknown as SemanticOutbound).inputPolicyVersion!==semanticInputPolicy)throw new ConflictException('输入策略已变化，请重新预览并确认评论原文外发');
    if((job.preview as unknown as SemanticOutbound).requestPolicy!==wholePostRequestPolicy)throw new ConflictException('整帖处理范围策略已变化，请重新选择帖子并确认');

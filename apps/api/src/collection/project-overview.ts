@@ -1,3 +1,4 @@
+import {historyDisplay} from '../common/db';
 import {accountSystemBlock,recordedAccountBlocks} from '../accounts/account-execution-policy';
 import {Prisma} from '@prisma/client';
 import type {Db} from '../common/db';
@@ -6,7 +7,7 @@ import {quotaBucket,shanghaiDay} from '../auto-contact/contact-policy';
 import type {ProjectOverview} from '@crm/contracts';
 /** Project-wide real-data summary. Never mutates jobs, probes accounts or calls a platform. */
 export async function projectOverview(db:Db,actor:Actor,now=new Date()):Promise<ProjectOverview>{
- requireAdmin(actor);
+ requireAdmin(actor);db=historyDisplay(db);
  return db.$transaction(async tx=>{
   const [archive,attempts,unattempted,accounts,usage,taskStates,reviewPending,blockedJobs,recentRuns,recentSends]=await Promise.all([
    tx.$queryRaw<ProjectOverview['archive'][]>`
@@ -22,7 +23,7 @@ export async function projectOverview(db:Db,actor:Actor,now=new Date()):Promise<
         AND c."contentHash"=l."contentHash" AND c."contextVersion"=l."contextVersion" AND r.state='EVALUATED' AND r."isDemo"=false) scored,
         EXISTS(SELECT 1 FROM "SemanticReview" r WHERE r."captureId"=l.id AND r.state='FAILED' AND r."isDemo"=false) failed FROM latest l
     ) SELECT (SELECT count(*)::int FROM (SELECT DISTINCT cfg.platform,p."platformPostId" FROM "CapturedPost" p
-      JOIN "CollectionConfig" cfg ON cfg.id=p."configId" JOIN "CollectionRun" r ON r.id=p."runId"
+      JOIN "CollectionConfig" cfg ON cfg.id=p."configId" JOIN public."CollectionRun" r ON r.id=p."runId"
       WHERE coalesce(r.snapshot->>'mode',cfg.mode)='XHS_MCP') p) posts,
       count(*)::int comments,count(*) FILTER(WHERE scored)::int scored,count(*) FILTER(WHERE NOT scored)::int unscored,
       count(*) FILTER(WHERE NOT scored AND failed)::int failed FROM coverage`,

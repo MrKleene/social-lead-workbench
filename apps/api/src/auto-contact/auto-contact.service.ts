@@ -1,3 +1,4 @@
+import {isReviewArchiveBlocked,archivedReviewIds} from '../history-archive/archive-guard';
 import {boundAccountNickname} from '../accounts/account-display';
 import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {manualAuthority,type ManualAuthority} from './manual-reply-authority';
@@ -36,6 +37,7 @@ export class AutoContactService {
         return p?.revision === r.policyRevision && m?.model === r.model && a?.active && a.role === 'ADMIN' && !c?.pauseReason;
     }
     private async reviewReady(tx: ContactDb, r: AutoContactRule, id: string, manual?:ManualAuthority) {
+        if(await isReviewArchiveBlocked(tx,id))return null;
         const row = await tx.semanticReview.findUnique({ where: { id }, include: { capture: { include: { post: true, config: { select: { platform: true } } } } } });
         if (!row || (!manual&&!await acceptanceSendAllowed(tx,r,id)) || row.policyId !== r.policyId || row.policyRevision !== r.policyRevision || row.selectedModel !== r.model || row.platform !== r.platform || !eligible(row, manual?r.threshold:await acceptanceSendThreshold(tx,r,id)) || row.isDemo !== (r.mode === 'SIMULATION') || row.capture?.config.platform !== row.platform)
             return null;
@@ -55,13 +57,14 @@ export class AutoContactService {
             // Multi-post acceptance selects only after all whole-post model jobs
             // finish; do not prematurely mark the first post's matches SKIPPED.
             if(scope&&scope.maxPosts>1&&(!envelope!.batchPlanned||!envelope!.runId||await blockingAcceptanceJobs(tx,envelope!,['PENDING','PROCESSING','FAILED','CANCELLED','SKIPPED'])))return 0;
+            const archivedIds=await archivedReviewIds(tx);
             const rules = await tx.autoContactRule.findMany({ where: { enabled: true, mode: this.sender.mode } });
             let added = 0;
             for (const r of rules) {
                 if (!await this.ruleReady(tx, r))
                     continue;
                 // Scan a bounded page of unprocessed *evaluations*, not a display page. Every later tick advances.
-                const rows = await tx.semanticReview.findMany({ where: { ...(scope?{id:{in:scope.replyOnly?[scope.replyOnly.reviewId]:envelope!.reviewIds},capture:{lastRunId:envelope!.runId??'not-bound',postId:{in:(await tx.normalAcceptancePost.findMany({where:{acceptanceId:envelope!.id},select:{postId:true}})).map(p=>p.postId)}}}:{}),policyId: r.policyId, policyRevision: r.policyRevision, selectedModel: r.model, platform: r.platform, state: 'EVALUATED', score: scope?.replyOnly?{equals:scope.replyOnly.score}:{gte:r.threshold}, context: 'SUFFICIENT', reviewStatus: { in: ['PENDING', 'APPROVED'] }, ...(scope?.replyOnly?{}:{updatedAt:{gte:r.authorizedAt!}}), contactJobs: { none: { ruleId: r.id, ruleVersion: r.version } } }, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], take: 100 });
+                const rows = await tx.semanticReview.findMany({ where: { AND:[{id:{notIn:archivedIds}}], ...(scope?{id:{in:scope.replyOnly?[scope.replyOnly.reviewId]:envelope!.reviewIds},capture:{lastRunId:envelope!.runId??'not-bound',postId:{in:(await tx.normalAcceptancePost.findMany({where:{acceptanceId:envelope!.id},select:{postId:true}})).map(p=>p.postId)}}}:{}),policyId: r.policyId, policyRevision: r.policyRevision, selectedModel: r.model, platform: r.platform, state: 'EVALUATED', score: scope?.replyOnly?{equals:scope.replyOnly.score}:{gte:r.threshold}, context: 'SUFFICIENT', reviewStatus: { in: ['PENDING', 'APPROVED'] }, ...(scope?.replyOnly?{}:{updatedAt:{gte:r.authorizedAt!}}), contactJobs: { none: { ruleId: r.id, ruleVersion: r.version } } }, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], take: 100 });
                 for (const row of rows) {
                     const valid = await this.reviewReady(tx, r, row.id), input = row.evaluationInput as Record<string, unknown> | null;
                     await tx.autoContactJob.create({ data: { ruleId: r.id, ruleVersion: r.version, reviewId: row.id, reviewVersion: row.version, mode: r.mode, platform: r.platform, recipientId: valid?.target.recipientId ?? '', postId: valid?.target.postId ?? '', commentId: valid?.target.commentId ?? '', channel: r.channel, content: r.content, eligibilityHash: eligibilityHash(row), availabilityVersion:valid?.availability?.version??0, sourceSnapshot:valid?json({post:publicPostSnapshot(valid.row.capture!.post.snapshot),comment:valid.row.snapshot,availability:valid.availability?{state:valid.availability.state,reason:valid.availability.reason,version:valid.availability.version,checkedAt:valid.availability.checkedAt.toISOString(),source:valid.availability.source,evidence:valid.availability.evidence}:{state:'UNKNOWN',version:0,checkedAt:null}}):Prisma.JsonNull, status: valid?.block ? 'BLOCKED_POST' : valid ? 'QUEUED' : 'SKIPPED', reason: valid?.block ?? (valid ? null : '评论作者、来源、充分性或勿联系条件未通过'), evidence: json({ score: row.score, modelVersion: row.modelVersion, target: (row.rules as {

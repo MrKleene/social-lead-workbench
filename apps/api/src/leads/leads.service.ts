@@ -1,6 +1,6 @@
 import { ConflictException, Inject, Injectable, NotFoundException, BadRequestException, } from "@nestjs/common";
 import { ContactStage, Prisma } from "@prisma/client";
-import { Db } from "../common/db";
+import { Db,historyDisplay } from "../common/db";
 import { Actor, requireAdmin, requireOwner, scope } from "../auth/security";
 const include = {
     identity: { include: { comments: { take: 8, orderBy: { observedAt: "desc" }, include: { post: true, matches: { select: { keywords: true, classification: true, isBaseline: true, assessment:true } } } } } },
@@ -12,7 +12,7 @@ export class LeadsService {
     @Inject(Db)
     private db: Db) { }
     async list(actor: Actor) {
-        return this.db.lead.findMany({
+        return historyDisplay(this.db).lead.findMany({
             where: scope(actor),
             include,
             orderBy: { createdAt: "desc" },
@@ -20,7 +20,7 @@ export class LeadsService {
         });
     }
     async detail(actor: Actor, id: string) {
-        const lead = await this.db.lead.findFirst({
+        const lead = await historyDisplay(this.db).lead.findFirst({
             where: { id, ...scope(actor) },
             include: {
                 ...include,

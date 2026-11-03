@@ -1,3 +1,4 @@
+import {archivedReviewIds} from '../history-archive/archive-guard';
 import {activeAcceptance,acceptanceConflict} from '../auto-contact/normal-acceptance';
 import {outputFailureReason,modelOutputFailure} from '@crm/contracts';
 import {semanticInputPolicy} from '@crm/contracts';
@@ -35,7 +36,8 @@ export class QwenMatchingService {
   if(reviewIds&&reviewIds.length>5)throw new ConflictException('旧批次入口最多选择 5 条；整帖请使用评论审核的手动测试');
   if(!config?.semanticRules||config.archivedAt)throw new ConflictException('语义审核未启用；不会自动改写配置');
   const rules=semanticRulesSchema.parse(config.semanticRules),settings=await this.settings(db);
-  const rows=await db.semanticReview.findMany({where:{configId,policyId:null,...(reviewIds?{id:{in:reviewIds}}:{}),AND:[{OR:[{selectedModel:null},{selectedModel:settings.status.model}]},{OR:[{ruleHash:semanticHash(rules)},{ruleHash:null,revision:config.revision}]}],reviewStatus:'PENDING',OR:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:[{createdAt:'asc'},{id:'asc'}],take:5});
+  const archived=await archivedReviewIds(db);
+  const rows=await db.semanticReview.findMany({where:{configId,policyId:null,...(reviewIds?{id:{in:reviewIds}}:{}),AND:[{id:{notIn:archived}},{OR:[{selectedModel:null},{selectedModel:settings.status.model}]},{OR:[{ruleHash:semanticHash(rules)},{ruleHash:null,revision:config.revision}]}],reviewStatus:'PENDING',OR:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:[{createdAt:'asc'},{id:'asc'}],take:5});
   const inputs=rows.map(r=>({id:r.id,snapshot:r.snapshot as unknown as SemanticSnapshot,rules}));
   let payload;try{payload=prepareOutbound(inputs);if(Buffer.byteLength(JSON.stringify(payload))>48000)throw new QwenError('PAYLOAD_LIMIT');}catch{throw new ConflictException('评论为空、输入超限或上下文安全检查未通过，已阻止外发');}
   return {config,rows,inputs,payload,settingsVersion:settings.configurationVersion,model:settings.status.model,hash:previewHash(payload,rows,config.revision,settings.status.model+':'+settings.configurationVersion+':'+qwenModel(settings.status.model)?.priceVersion)};

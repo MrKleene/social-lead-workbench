@@ -1,3 +1,4 @@
+import {historyDisplay} from '../common/db';
 import {runHistory,runHistoryInput} from './run-history';
 import type {z} from 'zod';
 import {acceptanceCollectionStart,acceptanceRunAllowed} from '../auto-contact/normal-acceptance';
@@ -73,9 +74,9 @@ export class CollectionService {
     async overview(actor:Actor){return projectOverview(this.db,actor);}
     async history(actor:Actor,id:string,input:z.infer<typeof runHistoryInput>){return runHistory(this.db,actor,id,input);}
     async dashboard(actor:Actor){requireAdmin(actor);return collectionDashboard(this.db);}
-    async list(actor: Actor) { requireAdmin(actor); const configs=await this.db.collectionConfig.findMany({ where: { archivedAt: null }, include: { runs: { take: 1, orderBy: { createdAt: "desc" } } }, orderBy: { createdAt: "desc" }, take: 100 }); return withCoveragePostLabels(this.db,configs); }
-    async detail(actor: Actor, id: string) { requireAdmin(actor); const config = await this.db.collectionConfig.findUnique({ where: { id }, include: { runs: { orderBy: { createdAt: "desc" }, take: 20 }, matches: { orderBy: { createdAt: "desc" }, take: 50, include: { comment: { include: { post: true, identity: { include: { lead: { select: { id: true } } } } } } } }, monitors: { take: 10, orderBy: { id: "desc" }, include: { observations: { take: 100, orderBy: { lastSeenAt: "desc" } } } } } }); if (!config)
-        throw new NotFoundException(); return (await withCoveragePostLabels(this.db,[config]))[0]; }
+    async list(actor: Actor) { requireAdmin(actor); const configs=await historyDisplay(this.db).collectionConfig.findMany({ where: { archivedAt: null }, include: { runs: { take: 1, orderBy: { createdAt: "desc" } } }, orderBy: { createdAt: "desc" }, take: 100 }); return withCoveragePostLabels(historyDisplay(this.db),configs); }
+    async detail(actor: Actor, id: string) { requireAdmin(actor); const config = await historyDisplay(this.db).collectionConfig.findUnique({ where: { id }, include: { runs: { orderBy: { createdAt: "desc" }, take: 20 }, matches: { orderBy: { createdAt: "desc" }, take: 50, include: { comment: { include: { post: true, identity: { include: { lead: { select: { id: true } } } } } } } }, monitors: { take: 10, orderBy: { id: "desc" }, include: { observations: { take: 100, orderBy: { lastSeenAt: "desc" } } } } } }); if (!config)
+        throw new NotFoundException(); return (await withCoveragePostLabels(historyDisplay(this.db),[config]))[0]; }
     private async validateDefaultAccount(tx:Prisma.TransactionClient,actor:Actor,platform:string,mode:string,accountId?:string|null){
         if(!accountId)return;
         const user=await tx.user.findUnique({where:{id:actor.id}});if(!user?.active||user.role!=='ADMIN')throw new ForbiddenException('无权配置执行账号');

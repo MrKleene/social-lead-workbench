@@ -1,3 +1,4 @@
+import {isReviewArchiveBlocked} from '../history-archive/archive-guard';
 import {boundAccountNickname} from '../accounts/account-display';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {ConflictException,Inject,Injectable,NotFoundException} from '@nestjs/common';
@@ -26,6 +27,7 @@ export class DmSendService {
  constructor(@Inject(Db) private db:Db,@Inject(DM_EXECUTOR) private executor:DmExecutor){}
  private async validate(tx:Prisma.TransactionClient,actor:Actor,input:z.infer<typeof dmPreviewInput>,ownKey?:string){
   const now=await contactNow(tx);if(await activeAcceptance(tx))fail('限定执行正在进行，暂不能提交私信');
+  if(await isReviewArchiveBlocked(tx,input.reviewId))throw new ConflictException('该历史审核已归档，不能沿用旧记录发送');
   const [user,account,review,template]=await Promise.all([tx.user.findUnique({where:{id:actor.id}}),tx.platformAccount.findUnique({where:{id:input.accountId},include:{sessionReference:true}}),tx.semanticReview.findUnique({where:{id:input.reviewId},include:{capture:{include:{post:true,config:{select:{platform:true}}}}}}),tx.replyTemplate.findUnique({where:{id:input.templateId}})]);
   if(!user?.active||user.role!=='ADMIN')fail('管理员权限已变化');
   if(!account||account.archivedAt||account.isDemo||account.platform!=='XHS'||account.version!==input.accountVersion||accountSystemBlock(account)||(await recordedAccountBlocks(tx,[account.id])).has(account.id))fail('账号状态或限制已变化');

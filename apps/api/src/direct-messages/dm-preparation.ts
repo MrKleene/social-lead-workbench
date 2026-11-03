@@ -1,3 +1,4 @@
+import {isReviewArchiveBlocked} from '../history-archive/archive-guard';
 import {DM_PRODUCTION_ACCEPTED} from './dm-executor';
 import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {BadRequestException, ConflictException, Injectable, Inject, NotFoundException} from '@nestjs/common';
@@ -56,6 +57,7 @@ export class DmPreparationService {
    const ledger=identity?await tx.contactLedger.findUnique({where:{identityId_mode:{identityId:identity.id,mode:'REAL'}},include:{attempts:{select:{outcome:true}}}}):null;
    const capability=dmCapability(review.platform),issues:{code:string;message:string}[]=[];
    const add=(code:string,message:string)=>issues.push({code,message});
+   if(await isReviewArchiveBlocked(tx,review.id))add('HISTORY_ARCHIVED','该历史审核已归档，不能沿用旧记录发送');
    if(identity?.lead?.doNotContact)add('DO_NOT_CONTACT','该用户已标记勿联系');
    if(identity?.lead&&(identity.lead.contactedAt||['CONTACTED','INTERESTED'].includes(identity.lead.contactStage)))add('ALREADY_CONTACTED','该用户已有联系记录');
    const attempts=ledger?.attempts.filter(a=>a.outcome!=='CANCELLED')??[];

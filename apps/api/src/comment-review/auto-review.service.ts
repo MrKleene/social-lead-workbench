@@ -1,3 +1,4 @@
+import {wasHistoryArchived} from '../history-archive/archive-guard';
 import {coverageSkipped,bindAcceptancePost,activeAcceptance,normalAcceptanceScope,acceptanceReviewAllowed,liveAcceptance} from '../auto-contact/normal-acceptance';
 import {Inject,Injectable} from '@nestjs/common';
 import {randomUUID} from 'node:crypto';
@@ -15,6 +16,7 @@ export class AutoReviewService {
  constructor(@Inject(Db) private db:Db,@Inject(ReviewPolicyService) private policies:ReviewPolicyService,@Inject(ReviewEvaluationService) private evaluation:ReviewEvaluationService){}
  async postFinished(run:CollectionRun,entry:PostRead){
   await this.db.$transaction(async tx=>{await lockReview(tx);
+   if(await wasHistoryArchived(tx,'CollectionRun',run.id))return;
    const policies=await tx.commentReviewPolicy.findMany({where:{autoEnabled:true}});
    const posts=await tx.capturedPost.findMany({where:{configId:run.configId,lastRunId:run.id,platformPostId:entry.post.id}});
    for(const policy of policies)for(const post of posts){

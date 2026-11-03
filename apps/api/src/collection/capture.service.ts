@@ -1,3 +1,4 @@
+import {historyDisplay} from '../common/db';
 import {readPostEvidence} from './post-read-evidence';
 import {readAvailability,markAvailability,postAvailabilityMap} from './post-availability';
 import {unknownPostAvailability} from '@crm/contracts';
@@ -18,17 +19,17 @@ export class CaptureService {
  availability(actor:Actor,id:string,runId=''){return readAvailability(this.db,actor,id,runId);}
  markAvailability(actor:Actor,id:string,input:unknown){return markAvailability(this.db,actor,id,input);}
  async source(actor:Actor,id:string){
-  requireAdmin(actor);const p=await this.db.capturedPost.findUnique({where:{id},include:{config:{select:{platform:true}}}});
+  requireAdmin(actor);const p=await historyDisplay(this.db).capturedPost.findUnique({where:{id},include:{config:{select:{platform:true}}}});
   const ref=p?.config.platform==='XHS'?savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId):undefined;
   if(!ref)throw new NotFoundException('未保存有效原文链接');return postReferenceUrl(ref);
  }
- async runPosts(actor:Actor,configId:string,runId:string){requireAdmin(actor);return readRunPostFeed(this.db,configId,runId);}
- async commentStream(actor:Actor,configId:string,input:unknown){requireAdmin(actor);if(!await this.db.collectionConfig.findUnique({where:{id:configId}}))throw new NotFoundException();return readSavedCommentStream(this.db,configId,commentStreamInput.parse(input));}
+ async runPosts(actor:Actor,configId:string,runId:string){requireAdmin(actor);return readRunPostFeed(historyDisplay(this.db),configId,runId);}
+ async commentStream(actor:Actor,configId:string,input:unknown){requireAdmin(actor);if(!await historyDisplay(this.db).collectionConfig.findUnique({where:{id:configId}}))throw new NotFoundException();return readSavedCommentStream(historyDisplay(this.db),configId,commentStreamInput.parse(input));}
  async posts(actor:Actor,configId:string,input:unknown){
-  requireAdmin(actor);const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config)throw new NotFoundException();
+  requireAdmin(actor);const config=await historyDisplay(this.db).collectionConfig.findUnique({where:{id:configId}});if(!config)throw new NotFoundException();
   const [page,total,postVersions,missing,control,model]=await Promise.all([
-   readSavedPostPage(this.db,configId,config.platform,savedPostPageInput.parse(input)),this.db.capturedComment.count({where:{configId}}),this.db.capturedPost.count({where:{configId}}),
-   this.db.$queryRaw<{count:bigint}[]>`SELECT COUNT(DISTINCT o."platformCommentId") AS count FROM "CommentObservation" o JOIN "MonitorPost" p ON p.id=o."monitorId" WHERE p."configId"=${configId} AND NOT EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."configId"=p."configId" AND c."platformCommentId"=o."platformCommentId")`,this.control(actor,configId),selectedSemanticModel(this.db)
+   readSavedPostPage(historyDisplay(this.db),configId,config.platform,savedPostPageInput.parse(input)),historyDisplay(this.db).capturedComment.count({where:{configId}}),historyDisplay(this.db).capturedPost.count({where:{configId}}),
+   historyDisplay(this.db).$queryRaw<{count:bigint}[]>`SELECT COUNT(DISTINCT o."platformCommentId") AS count FROM "CommentObservation" o JOIN "MonitorPost" p ON p.id=o."monitorId" WHERE p."configId"=${configId} AND NOT EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."configId"=p."configId" AND c."platformCommentId"=o."platformCommentId")`,this.control(actor,configId),selectedSemanticModel(historyDisplay(this.db))
   ]);return {...page,total,postVersions,items:[],legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model,hasRules:!!config.semanticRules};
  }
  async control(actor:Actor,configId:string){requireAdmin(actor);if(!await this.db.collectionConfig.findUnique({where:{id:configId}}))throw new NotFoundException();return await this.db.semanticControl.findUnique({where:{configId}})||{configId,enabled:false,version:0};}
@@ -42,14 +43,14 @@ export class CaptureService {
   });
  }
  async list(actor:Actor,configId:string,offset=0,postId?:string,runId=''){
-  requireAdmin(actor);const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config)throw new NotFoundException();
+  requireAdmin(actor);const config=await historyDisplay(this.db).collectionConfig.findUnique({where:{id:configId}});if(!config)throw new NotFoundException();
   const commentWhere={configId,...(postId?{post:{platformPostId:postId}}:{})},postWhere={configId,...(postId?{platformPostId:postId}:{})};
   const [items,total,posts,postTotal,missing,control,savedCounts]=await Promise.all([
-   this.db.capturedComment.findMany({where:commentWhere,orderBy:[{lastSeenAt:'desc'},{id:'asc'}],skip:offset,take:50,include:{post:{select:{coverage:true,stopReason:true}},reviews:{orderBy:{createdAt:'desc'},take:20,select:{id:true,state:true,score:true,reason:true,selectedModel:true,revision:true,result:true}}}}),
-   this.db.capturedComment.count({where:commentWhere}),this.db.capturedPost.findMany({where:postWhere,orderBy:{lastSeenAt:'desc'},take:20}),this.db.capturedPost.count({where:{configId}}),
-   this.db.$queryRaw<{count:bigint}[]>`SELECT COUNT(DISTINCT o."platformCommentId") AS count FROM "CommentObservation" o JOIN "MonitorPost" p ON p.id=o."monitorId" WHERE p."configId"=${configId} AND NOT EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."configId"=p."configId" AND c."platformCommentId"=o."platformCommentId")`,this.control(actor,configId),
-   this.db.$queryRaw<{platformPostId:string;count:bigint}[]>`SELECT p."platformPostId",COUNT(DISTINCT c."platformCommentId") AS count FROM "CapturedPost" p LEFT JOIN "CapturedComment" c ON c."postId"=p.id AND c."configId"=p."configId" WHERE p."configId"=${configId} GROUP BY p."platformPostId"`
-  ]);const availability=await postAvailabilityMap(this.db,config.platform,posts.map(p=>p.platformPostId));const counts=new Map(savedCounts.map(p=>[p.platformPostId,Number(p.count)]));return {items,total,offset,hasMore:offset+items.length<total,commentScope:postId?{postId}:null,posts:await Promise.all(posts.map(async p=>({...p,readEvidence:await readPostEvidence(this.db,p,runId),availability:availability.get(p.platformPostId)??unknownPostAvailability,savedComments:counts.get(p.platformPostId)??0,snapshot:publicPostSnapshot(p.snapshot),sourceAvailable:config.platform==='XHS'&&!!savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId)}))),postTotal,legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model:await selectedSemanticModel(this.db),hasRules:!!config.semanticRules};
+   historyDisplay(this.db).capturedComment.findMany({where:commentWhere,orderBy:[{lastSeenAt:'desc'},{id:'asc'}],skip:offset,take:50,include:{post:{select:{coverage:true,stopReason:true}},reviews:{orderBy:{createdAt:'desc'},take:20,select:{id:true,state:true,score:true,reason:true,selectedModel:true,revision:true,result:true}}}}),
+   historyDisplay(this.db).capturedComment.count({where:commentWhere}),historyDisplay(this.db).capturedPost.findMany({where:postWhere,orderBy:{lastSeenAt:'desc'},take:20}),historyDisplay(this.db).capturedPost.count({where:{configId}}),
+   historyDisplay(this.db).$queryRaw<{count:bigint}[]>`SELECT COUNT(DISTINCT o."platformCommentId") AS count FROM "CommentObservation" o JOIN "MonitorPost" p ON p.id=o."monitorId" WHERE p."configId"=${configId} AND NOT EXISTS(SELECT 1 FROM "CapturedComment" c WHERE c."configId"=p."configId" AND c."platformCommentId"=o."platformCommentId")`,this.control(actor,configId),
+   historyDisplay(this.db).$queryRaw<{platformPostId:string;count:bigint}[]>`SELECT p."platformPostId",COUNT(DISTINCT c."platformCommentId") AS count FROM "CapturedPost" p LEFT JOIN "CapturedComment" c ON c."postId"=p.id AND c."configId"=p."configId" WHERE p."configId"=${configId} GROUP BY p."platformPostId"`
+  ]);const availability=await postAvailabilityMap(historyDisplay(this.db),config.platform,posts.map(p=>p.platformPostId));const counts=new Map(savedCounts.map(p=>[p.platformPostId,Number(p.count)]));return {items,total,offset,hasMore:offset+items.length<total,commentScope:postId?{postId}:null,posts:await Promise.all(posts.map(async p=>({...p,readEvidence:await readPostEvidence(historyDisplay(this.db),p,runId),availability:availability.get(p.platformPostId)??unknownPostAvailability,savedComments:counts.get(p.platformPostId)??0,snapshot:publicPostSnapshot(p.snapshot),sourceAvailable:config.platform==='XHS'&&!!savedPostReference((p.snapshot as Record<string,unknown>).sourceReference,p.platformPostId)}))),postTotal,legacyWithoutSnapshot:Number(missing[0]?.count||0),control,model:await selectedSemanticModel(historyDisplay(this.db)),hasRules:!!config.semanticRules};
  }
  async preview(actor:Actor,configId:string,ids:string[]){
   requireAdmin(actor);const config=await this.db.collectionConfig.findUnique({where:{id:configId}});if(!config?.semanticRules)throw new ConflictException('请先保存自然语言目标');

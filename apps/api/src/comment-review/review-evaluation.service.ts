@@ -1,3 +1,4 @@
+import {archivedReviewIds} from '../history-archive/archive-guard';
 import {guardAcceptanceModel,claimAcceptanceModel} from '../auto-contact/normal-acceptance';
 import {estimateWholePostCost} from '../collection/model-cost-estimate';
 import {prepareReviewOutbound} from './review-observation';
@@ -20,6 +21,7 @@ export const REVIEW_HTTP=Symbol('REVIEW_HTTP');
 export class ReviewEvaluationService {
  constructor(@Inject(Db) private db:Db,@Inject(ReviewPolicyService) private policies:ReviewPolicyService,@Optional() @Inject(REVIEW_HTTP) private options?:{transport:QwenTransport}){}
  private async batch(db:ReviewDb,id:string,reviewIds:string[],manual=false,wholePost=manual){
+  const archived=new Set(await archivedReviewIds(db));if(reviewIds.some(id=>archived.has(id)))throw new ConflictException('已归档审核只能恢复显示，不能重放原调用');
   const policy=await db.commentReviewPolicy.findUnique({where:{id}});if(!policy)throw new NotFoundException();
   const settings=await this.policies.models.resolve(db);
   const rows=await db.semanticReview.findMany({where:{id:{in:reviewIds},policyId:id,policyRevision:policy.revision,selectedModel:settings.status.model,reviewStatus:'PENDING',OR:[{state:{in:['UNANALYSED','UNCONFIGURED','FAILED']}},{state:'PROCESSING',leaseUntil:{lt:new Date()}}]},orderBy:{id:'asc'}});

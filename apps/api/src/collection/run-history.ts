@@ -1,3 +1,4 @@
+import {historyDisplay} from '../common/db';
 import {NotFoundException} from '@nestjs/common';
 import {Prisma} from '@prisma/client';
 import {z} from 'zod';
@@ -8,7 +9,7 @@ export const runHistoryInput=z.object({runId:z.string().min(1).max(200).optional
 const projection={id:true,configId:true,scenario:true,status:true,reason:true,requests:true,observed:true,matched:true,added:true,notices:true,createdAt:true,finishedAt:true,capturedPosts:true,capturedCommentsCount:true,readPlan:true,metrics:true,snapshot:true} as const;
 /** Metadata only. Keyset history and current execution are independent of the selected record. */
 export async function runHistory(db:Db,actor:Actor,configId:string,input:z.infer<typeof runHistoryInput>){
- requireAdmin(actor);
+ requireAdmin(actor);db=historyDisplay(db);
  if(!await db.collectionConfig.findUnique({where:{id:configId},select:{id:true}}))throw new NotFoundException('关键词组不存在');
  const cursor=input.before?await db.collectionRun.findFirst({where:{id:input.before,configId},select:{id:true,createdAt:true}}):null;
  if(input.before&&!cursor)throw new NotFoundException('历史分页位置已失效');
