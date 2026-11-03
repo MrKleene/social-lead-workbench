@@ -136,3 +136,41 @@
 @media(max-width:767px){body:has(.comment-review-page){min-width:0}}
 
 .review-actions-menu{z-index:70;min-width:128px;border:1px solid var(--border);background:var(--popover);color:var(--popover-foreground);border-radius:6px;padding:4px;box-shadow:0 4px 14px #00000012}.review-actions-item{font-size:13px;padding:8px 12px;border-radius:4px;cursor:pointer;outline:none}.review-actions-item[data-highlighted]{background:var(--accent);color:var(--accent-foreground)}:root .review-manual-dialog[data-slot=sheet-content]{max-width:520px!important}.review-manual-comment{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto}.review-manual-dialog .task-settings-body{display:grid;gap:16px}.graphite-review-table .info-saved-text p{display:block;white-space:pre-wrap;overflow-wrap:anywhere}.graphite-review-table .info-text-action{font-size:12px;margin-top:4px}.graphite-review-table .graphite-review-action{text-align:right}@media(max-width:767px){.review-actions-item{min-height:44px;display:flex;align-items:center}}
+
+/* Results toolbar: compact search/facets; secondary filters in a centered dialog. */
+.graphite-review-results .review-filter-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:12px 18px;}
+.review-filter-toolbar>[data-slot=field]{gap:0;min-width:0;width:auto;}
+.review-filter-toolbar .review-toolbar-search{flex:0 1 280px;}
+.review-filter-toolbar .review-toolbar-state{flex:0 0 140px;}
+.review-filter-toolbar .review-toolbar-sort{margin-left:auto;flex:0 0 192px;}
+.review-filter-toolbar>[data-slot=button]{flex-shrink:0;}
+.review-filter-toolbar [data-slot=badge]{padding:0 5px;}
+.graphite-review-results .review-active-filters{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 12px;}
+.review-active-filters [data-slot=button]{max-width:100%;min-width:0;}
+.review-active-filters [data-slot=button] span{min-width:0;}
+.task-settings-sheet.review-filter-dialog{width:min(540px,calc(100vw - 24px));max-width:540px;padding:0;gap:0;}
+.review-filter-dialog [data-slot=sheet-header]{padding:18px 22px;border-bottom:1px solid var(--border);}
+.review-filter-dialog .task-settings-body{display:grid;gap:16px;padding:20px 22px;overflow-y:auto;min-height:0;}
+.review-filter-dialog .review-filter-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;}
+.review-filter-dialog [data-slot=field]{gap:6px;min-width:0;}
+.review-filter-dialog [data-slot=field-label]{font-size:13px;}
+.review-filter-dialog .review-filter-source{grid-column:1/-1;}
+.review-filter-source-control{display:flex;align-items:center;gap:8px;min-width:0;}
+.review-filter-source-control>span{flex:1;min-width:0;overflow-wrap:anywhere;font-size:13px;}
+.review-filter-timezone{font-size:12px;color:var(--muted-foreground);}
+.review-filter-dialog-actions{display:flex;justify-content:flex-end;gap:8px;}
+@media(max-width:767px){
+ .review-filter-toolbar .review-toolbar-search{flex:1 1 100%;}
+ .review-filter-toolbar .review-toolbar-sort{margin-left:0;flex:1 1 192px;}
+}
+@media(max-width:560px){
+ .graphite-review-results .review-filter-toolbar{padding:12px;}
+ .graphite-review-results .review-active-filters{padding:0 12px 12px;}
+ .review-filter-toolbar .review-toolbar-state{flex:1 1 120px;}
+ .review-filter-toolbar .review-toolbar-sort{flex-basis:100%;}
+ .review-filter-toolbar [data-slot=input],.review-filter-toolbar [data-slot=select-trigger],.review-filter-toolbar>[data-slot=button]{min-height:40px;}
+ .review-filter-dialog [data-slot=sheet-header],.review-filter-dialog .task-settings-body{padding:16px;}
+ .review-filter-dialog .review-filter-fields{grid-template-columns:minmax(0,1fr);}
+ .review-filter-source-control{flex-wrap:wrap;}
+ .review-filter-source-control>span{flex-basis:100%;}
+}
