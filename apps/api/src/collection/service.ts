@@ -144,6 +144,9 @@ export class CollectionService {
             if(accountReadMode() && mode !== 'MOCK' && snapshot.batchLimit>3)throw new BadRequestException('本轮最多3篇帖子');
             if(readPlan)snapshot.batchLimit=readPlan.postsPerRound;
             if(readPlan?.savedPostId){
+                snapshot.legacyMatchingEnabled=false;
+                if(!this.autoReview)throw new ConflictException('单帖审核服务不可用，尚未开始读取');
+                await this.autoReview.assertRereadReady(tx);
                 if(mode!=='MOCK'&&(!accountReadMode()||!this.accountReads))throw new ForbiddenException('定向读取必须使用本机已授权账号');
                 await savedReadTarget(tx,id,readPlan.savedPostId,mode);
             }

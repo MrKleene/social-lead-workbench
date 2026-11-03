@@ -30,3 +30,8 @@ describe('conditional automation prerequisites',()=>{
 });
 
 it('manual pending remains visible without pretending the worker will automatically send it',()=>{const result=journeyProgress({reviews:{EVALUATED:8},reviewJobs:{COMPLETED:1},contacts:{CONFIRMED:1,PENDING_ACTION:7},matches:8},true,true);expect(result.settled).toBe(false);expect(result.contactNotice).toContain('选择账号并确认');});
+
+it('review-only reread does not suggest sending or hide historical unknown attempts',()=>{
+ expect(journeyProgress(summary(),true,true,true).contact).toBe('本次不自动回复或私信');
+ expect(journeyProgress(summary({UNKNOWN:1}),true,true,true).contactNotice).toContain('勿重发');
+});

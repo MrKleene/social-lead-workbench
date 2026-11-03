@@ -51,3 +51,9 @@ it('initial run request shows loading rather than pretending no task exists',()=
 it('stream disconnection stops active spinner but never erases UNKNOWN or completion',()=>{const live={observedAt:new Date().toISOString(),recent:[],current:[{stage:'contact' as const,phase:'SUBMITTING',label:'正在提交发送',at:new Date().toISOString(),state:'running' as const,concurrent:1}]};expect(journeyStepState({...base,disconnected:true,summary:{...base.summary,contacts:{ATTEMPTED:1},live}}).steps[2]).toMatchObject({state:'unavailable',status:'连接中断，正在重连'});expect(journeyStepState({...base,disconnected:true,summary:{...base.summary,contacts:{UNKNOWN:1},live}}).steps[2].state).toBe('unknown');expect(journeyStepState({...base,disconnected:true}).steps[2].state).toBe('complete');expect(journeyStepState({...base,run:undefined,loading:true,disconnected:true}).caption).toBe('连接中断，正在重连');});
 
 it('offline refresh failure cannot erase an already observed UNKNOWN warning',()=>{expect(journeyStepState({...base,error:true,disconnected:true,summary:{...base.summary,contacts:{UNKNOWN:1}}}).steps[2].state).toBe('unknown');});
+
+it('reread ends after matching without a send-next step, but retains real historical UNKNOWN',()=>{
+ const reread={...base,run:{...run,readPlan:{rounds:1,postsPerRound:1,commentPages:1,savedPostId:'synthetic'}},pauseReason:'SUBMISSION_UNKNOWN'};
+ expect(journeyStepState({...reread,summary:{...base.summary,contacts:{}}}).steps[2]).toMatchObject({state:'skipped',status:'本次不自动回复或私信'});
+ expect(journeyStepState({...reread,summary:{...base.summary,contacts:{UNKNOWN:1}}}).steps[2].state).toBe('unknown');
+});

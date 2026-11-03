@@ -1,13 +1,13 @@
 import {liveReporter} from '../common/journey-live';
 import {wasHistoryArchived} from '../history-archive/archive-guard';
 import {coverageSkipped,bindAcceptancePost,activeAcceptance,normalAcceptanceScope,acceptanceReviewAllowed,liveAcceptance} from '../auto-contact/normal-acceptance';
-import {Inject,Injectable} from '@nestjs/common';
+import {ConflictException,Inject,Injectable} from '@nestjs/common';
 import {randomUUID} from 'node:crypto';
 import {outputFailureReason,semanticBatchConsent,autoReviewInputPolicy} from '@crm/contracts';
 import type {CollectionRun} from '@prisma/client';
 import {Db} from '../common/db';
 import type {PostRead,ReadResult} from '../collection/collector';
-import {ReviewPolicyService,lockReview} from './review-policy.service';
+import {ReviewPolicyService,lockReview,type ReviewDb} from './review-policy.service';
 import {ReviewEvaluationService} from './review-evaluation.service';
 import {assertAutoReview} from './auto-review.guard';
 import {WHOLE_POST_STALE} from '../collection/whole-post-capacity';
@@ -15,6 +15,12 @@ import {semanticHash} from '../collection/capture-archive';
 @Injectable()
 export class AutoReviewService {
  constructor(@Inject(Db) private db:Db,@Inject(ReviewPolicyService) private policies:ReviewPolicyService,@Inject(ReviewEvaluationService) private evaluation:ReviewEvaluationService){}
+ async assertRereadReady(tx:ReviewDb){
+  const model=await this.policies.models.resolve(tx);
+  if(model.status.state!=='READY'||!model.status.authorized)throw new ConflictException('请先在采集设置中配置并授权评论匹配，尚未开始读取');
+  const policies=await tx.commentReviewPolicy.findMany({where:{autoEnabled:true}});
+  if(!policies.length||policies.some(p=>p.autoModelVersion!==model.configurationVersion))throw new ConflictException('请先在采集设置中开启有效的评论匹配，尚未开始读取');
+ }
  async postFinished(run:CollectionRun,entry:PostRead){
   await this.db.$transaction(async tx=>{await lockReview(tx);
    if(await wasHistoryArchived(tx,'CollectionRun',run.id))return;

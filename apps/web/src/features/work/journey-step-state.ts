@@ -47,6 +47,7 @@ export function journeyStepState(input:{run?:Run;summary?:JourneySummary;error?:
   else if(c.CANCELLED||c.SKIPPED)set(2,'partial','已结束 · 有未发送');
   else if(c.SIMULATED_SUCCESS)set(2,'skipped','模拟处理结束');
   else if(total(c)&&c.CONFIRMED)set(2,'complete',`已确认 ${c.CONFIRMED} 条`);
+  else if(run.readPlan?.savedPostId)set(2,'skipped','本次不自动回复或私信');
   else if(steps[1].state==='complete'&&s.matches===0)set(2,'skipped','无匹配对象');
   else if(pauseReason&&!history)set(2,'paused','发送已暂停');
   else if(!sendEnabled&&!history)set(2,'skipped','自动回复未启用');

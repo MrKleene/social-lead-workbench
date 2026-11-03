@@ -1,3 +1,4 @@
+import {eligibilityHash,eligible} from '../src/auto-contact/contact-policy';
 import type {Prisma} from '@prisma/client';
 import {autoReviewScope} from '../src/comment-review/auto-review-scope';
 import {ContactSettingsService} from '../src/auto-contact/contact-settings.service';
@@ -62,7 +63,7 @@ describe('independent comment review: disposable database and mocked provider on
    const account=await db.platformAccount.create({data:{platform:'XHS',label:'Synthetic whole workflow',version:1,isDemo:true,dailyLimit:3}});accountId=account.id;
    const post=(url:string,body:object)=>request(http.getHttpServer()).post('/api'+url).set('Cookie',auth.admin.cookie).set('Origin',origin).set('x-csrf-token',auth.admin.csrf).send(body);
    const saved=await request(http.getHttpServer()).put('/api/auto-contact/rules/normal').set('Cookie',auth.admin.cookie).set('Origin',origin).set('x-csrf-token',auth.admin.csrf).send({version:0,platform:'XHS',policyId:'workspace',policyRevision:1,threshold:90,channel:'COMMENT',content:'Synthetic reply only',accounts:[{id:account.id,version:account.version,dailyLimit:3}]});expect(saved.status).toBe(200);
-   const overview=await request(http.getHttpServer()).get('/api/auto-contact').set('Cookie',auth.admin.cookie),rule=overview.body.rules[0];
+   const overview=await request(http.getHttpServer()).get('/api/auto-contact').set('Cookie',auth.admin.cookie),rule=overview.body.rules.find((r:any)=>r.id==='normal');
    expect((await post('/auto-contact/rules/normal/enabled',{version:rule.version,enabled:true,hash:rule.hash,consent:autoContactConsent})).status).toBe(201);
    const c=await collection.create(actor,{name:'Normal workflow synthetic',platform:'XHS',mode:'MOCK',keywords:['synthetic'],excludeWords:[],batchLimit:1,enabled:true});
    const adapter=new MockAdapter('XHS','BASELINE');adapter.search=async()=>({items:[{id:'demo-collect-normal-flow-post',title:'Synthetic'}],complete:true});adapter.post=async p=>p;adapter.comments=async()=>({items:Array.from({length:6},(_,i)=>({id:'demo-collect-normal-comment-'+i,userId:'demo-collect-normal-user-'+i,nickname:'Synthetic',text:'护理学',hasReplies:false})),complete:true});
@@ -72,6 +73,51 @@ describe('independent comment review: disposable database and mocked provider on
    const history=await request(http.getHttpServer()).get('/api/auto-contact/attempts').set('Cookie',auth.admin.cookie);expect(history.status).toBe(200);expect(history.body.items).toHaveLength(3);expect(history.body.items.every((a:any)=>a.outcome==='SIMULATED_SUCCESS')).toBe(true);
    const journey=await request(http.getHttpServer()).get('/api/auto-contact/journey?runId='+run.id).set('Cookie',auth.admin.cookie);expect(journey.status).toBe(200);
   }finally{await db.autoContactJob.deleteMany();await db.contactAttempt.deleteMany();await db.contactLedger.deleteMany();await db.accountDay.deleteMany();await db.autoContactRule.deleteMany();await db.autoContactControl.deleteMany();if(accountId)await db.platformAccount.delete({where:{id:accountId}});await http.close();}
+ });
+ it.each(['COMMENT','DM'] as const)('saved-post reread evaluates all comments but never queues %s, even after restart; ordinary collection remains eligible',async channel=>{
+  await autoEnabled();const send=vi.fn(async()=>({kind:'CONFIRMED',receipt:'synthetic-only'})),sender:any={mode:'SIMULATION',capability:()=>true,healthy:async()=>true,send};
+  const settings=new ContactSettingsService(db,sender),contacts=new AutoContactService(db,sender);
+  const account=await db.platformAccount.create({data:{platform:'XHS',label:'Synthetic reread',version:1,isDemo:true,dailyLimit:3}});
+  try{
+   const rule=await settings.save(actor,'reread-test',{version:0,platform:'XHS',policyId:'workspace',policyRevision:1,threshold:90,channel,content:'Synthetic reply only',accounts:[{id:account.id,version:account.version,dailyLimit:3}]});
+   const current=(await settings.overview(actor)).rules[0];await settings.toggle(actor,rule.id,{version:current.version,enabled:true,hash:current.hash,consent:autoContactConsent});
+   const c=await collection.create(actor,{name:'Reread synthetic',platform:'XHS',mode:'MOCK',keywords:['synthetic'],excludeWords:[],batchLimit:1,enabled:true});
+   const seed=await db.collectionRun.create({data:{configId:c.id,revision:1,snapshot:{},requestKey:randomUUID(),scenario:'BASELINE',status:'COMPLETE'}});
+   const archive=await db.capturedPost.create({data:{configId:c.id,runId:seed.id,lastRunId:seed.id,platformPostId:'demo-collect-reread-post',contentHash:'synthetic-before',snapshot:{title:'Before',body:'Old body'},coverage:'PARTIAL'}});
+   const adapter=new MockAdapter('XHS','BASELINE');adapter.search=vi.fn(async()=>{throw Error('reread must not search');});adapter.post=async p=>({...p,title:'Updated synthetic title',body:'Updated synthetic body'});adapter.comments=async()=>({items:Array.from({length:33},(_,i)=>({id:'demo-collect-reread-comment-'+i,userId:'demo-collect-reread-user-'+i,nickname:'Synthetic',text:'护理学 '+i,hasReplies:false})),complete:true});
+   const key=randomUUID(),plan={rounds:1 as const,postsPerRound:1,commentPages:1,savedPostId:archive.id};
+   const run=await collection.start(actor,c.id,'BASELINE',key,'MOCK',undefined,undefined,plan);
+   expect((await collection.start(actor,c.id,'BASELINE',key,'MOCK',undefined,undefined,plan)).id).toBe(run.id);
+   await collection.execute(run.id,adapter);await collection.execute(run.id,adapter);expect(adapter.search).not.toHaveBeenCalled();
+   expect(await db.capturedPost.findFirst({where:{lastRunId:run.id}})).toMatchObject({snapshot:{title:'Updated synthetic title',body:'Updated synthetic body'}});
+   await Promise.all([automatic.tick(),automatic.tick()]);expect(transport).toHaveBeenCalledTimes(1);
+   const reviews=await db.semanticReview.findMany();expect(reviews).toHaveLength(33);expect(reviews.every(x=>x.state==='EVALUATED'&&x.score===90&&!x.automaticContactAllowed&&x.runId===run.id)).toBe(true);
+   for(let i=0;i<3;i++)await new AutoContactService(db,sender).tick();
+   expect(send).not.toHaveBeenCalled();expect(await db.autoContactJob.count()).toBe(0);expect(await db.contactAttempt.count()).toBe(0);expect(await db.accountDay.count()).toBe(0);
+   // A stale/forged pre-existing queue item is rejected again before reservation.
+   const row=reviews[0];expect(eligible(row,90)).toBe(true);await db.autoContactJob.create({data:{ruleId:rule.id,ruleVersion:current.version+1,reviewId:row.id,reviewVersion:row.version,mode:'SIMULATION',platform:'XHS',recipientId:row.platformUserId,postId:'demo-collect-reread-post',commentId:(row.snapshot as any).commentId,channel,content:'Synthetic only',eligibilityHash:eligibilityHash(row),evidence:{synthetic:true},status:'QUEUED'}});
+   await contacts.tick();expect(send).not.toHaveBeenCalled();expect(await db.contactAttempt.count()).toBe(0);expect(await db.autoContactJob.findFirst()).toMatchObject({status:'CANCELLED',reason:'审核结果或来源已变化'});await db.autoContactJob.deleteMany();
+   // Same captures in an explicit ordinary run retain the normal automatic contact contract.
+   const normalAdapter=new MockAdapter('XHS','BASELINE');normalAdapter.search=async()=>({items:[{id:'demo-collect-reread-post',title:'Synthetic'}],complete:true});normalAdapter.post=adapter.post;normalAdapter.comments=adapter.comments;
+   const normal=await collection.start(actor,c.id,'BASELINE',randomUUID());await collection.execute(normal.id,normalAdapter);
+   const prepared=await policies.prepare(actor,'workspace',{version:(await db.commentReviewPolicy.findUniqueOrThrow({where:{id:'workspace'}})).version,scope:{kind:'POSTS',postIds:[(await db.capturedPost.findFirstOrThrow({where:{lastRunId:normal.id}})).id]}},true,normal.id);
+   expect(prepared.count).toBe(33);expect((await db.semanticReview.findMany({where:{id:{in:prepared.reviewIds}}})).every(x=>x.automaticContactAllowed)).toBe(true);
+   expect((await db.semanticReview.findMany({where:{id:{in:reviews.map(x=>x.id)}}})).every(x=>!x.automaticContactAllowed)).toBe(true);
+  }finally{await db.autoContactJob.deleteMany();await db.contactAttempt.deleteMany();await db.contactLedger.deleteMany();await db.accountDay.deleteMany();await db.autoContactRule.deleteMany();await db.autoContactControl.deleteMany();await db.platformAccount.delete({where:{id:account.id}});}
+ });
+ it.each(['incomplete','failed','model-failed'] as const)('reread %s never contacts and does not retry uncertain model calls',async outcome=>{
+  await autoEnabled();const s=await resumedObservation();await db.collectionRun.update({where:{id:s.run.id},data:{readPlan:{rounds:1,postsPerRound:1,commentPages:1,savedPostId:s.p.id}}});
+  if(outcome==='model-failed')transport.mockImplementationOnce(async()=>new Response('rate limit',{status:429}));
+  const run=await db.collectionRun.findUniqueOrThrow({where:{id:s.run.id}});await automatic.postFinished(run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:outcome!=='incomplete',windowRead:true});
+  if(outcome==='failed')await automatic.finished(run,{status:'FAILED',reason:'READ_FAILED',posts:[]} as any);
+  await automatic.tick();await automatic.tick();
+  expect(transport.mock.calls.length).toBe(outcome==='model-failed'?1:0);expect(await db.autoReviewJob.findFirst()).toMatchObject({status:outcome==='incomplete'?'SKIPPED':outcome==='failed'?'CANCELLED':'FAILED'});
+  expect((await db.semanticReview.findMany()).every(x=>!x.automaticContactAllowed)).toBe(true);expect(await db.autoContactJob.count()).toBe(0);
+ });
+ it('reread fails closed before collection when matching is off and does not enable it',async()=>{
+  const p=await saved(),s=await source();const before=await db.collectionRun.count();
+  await expect(collection.start(actor,s.c.id,'BASELINE',randomUUID(),'MOCK',undefined,undefined,{rounds:1,postsPerRound:1,commentPages:1,savedPostId:s.p.id})).rejects.toThrow('评论匹配');
+  expect(await db.collectionRun.count()).toBe(before);expect(await db.commentReviewPolicy.findUnique({where:{id:p.id}})).toMatchObject({autoEnabled:false});expect(transport).not.toHaveBeenCalled();
  });
  it('pure capture defaults to no rules, no keyword fallback, no leads and no review work even if old control is enabled',async()=>{
   const c=await collection.create(actor,{name:'合成纯采集',platform:'XHS',mode:'MOCK',keywords:['奇异搜索甲'],excludeWords:['护理'],commentRules:thesisRulePreset,semanticRules:{version:1,target,reviewThreshold:70},batchLimit:1,enabled:true});await db.semanticControl.create({data:{configId:c.id,enabled:true}});expect(c.legacyMatchingEnabled).toBe(false);

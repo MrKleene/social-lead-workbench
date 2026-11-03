@@ -13,6 +13,6 @@ export function useWorkDashboard(){
  const review=useReviewOverview(true);
  const contact=useQuery({queryKey:['auto-contact'],queryFn:()=>api<AutoContactOverview>('/auto-contact'),refetchInterval:poll,refetchIntervalInBackground:false});
  const summary=useQuery({queryKey:['journey-summary',run?.id],queryFn:()=>api<JourneySummary>('/auto-contact/journey?'+new URLSearchParams({runId:run!.id})),enabled:!!run,retry:false,refetchInterval:poll,refetchIntervalInBackground:false});
- const progress=summary.data&&review.data&&contact.data&&!summary.isError&&!review.isError&&!contact.isError?journeyProgress(summary.data,!!review.data?.policies.some(p=>p.autoEnabled),!!contact.data?.rules.some(r=>r.enabled)):undefined;
+ const progress=summary.data&&review.data&&contact.data&&!summary.isError&&!review.isError&&!contact.isError?journeyProgress(summary.data,!!review.data?.policies.some(p=>p.autoEnabled),!!contact.data?.rules.some(r=>r.enabled),!!run?.readPlan?.savedPostId):undefined;
  return {history,runs,run,summary,review,contact,progress,counts:summary.data&&!summary.isError?dashboardCounts(summary.data):undefined,activeCount:runs.filter(collecting).length};
 }

@@ -56,7 +56,7 @@ export function useJourney(config: Config | undefined, visible: boolean) {
     const p = new URLSearchParams(old); if(id){p.set('run', id);p.delete('fresh');}else{p.delete('run');p.set('fresh','1');}
     if (config) p.set('config', config.id);p.delete('reviewVersion'); return p;
   });};
-  const progress=summary.data?journeyProgress(summary.data,!!reviews.data?.policies.some(p=>p.autoEnabled),!!contact.data?.rules.some(r=>r.enabled)):undefined;
+  const progress=summary.data?journeyProgress(summary.data,!!reviews.data?.policies.some(p=>p.autoEnabled),!!contact.data?.rules.some(r=>r.enabled),!!run?.readPlan?.savedPostId):undefined;
   const reviewStage=summary.data?runReviewStage(summary.data.reviewJobs,!!run?.capturedCommentsCount,!!policy?.autoEnabled):undefined;
   const unread=summary.isError||reviews.isError||contact.isError;
   const statuses=[detail.isError?'状态读取失败':run?collectionOutcome(run).label:'尚未开始',
@@ -82,7 +82,7 @@ export function useJourney(config: Config | undefined, visible: boolean) {
   },[history,visible,run?.id,run?.status,config?.id,detail.isError,outcome?.warning,reviewReady,stage,setParams]);
 
   const selectedRule=contact.data?.rules.find(r=>r.platform===config?.platform);
-  const pauseReason=history?null:selectedRule?.pauseReason;
+  const pauseReason=history||run?.readPlan?.savedPostId&&!Object.values(summary.data?.contacts||{}).some(n=>n>0)?null:selectedRule?.pauseReason;
   const stepProgress=journeyStepState({run,summary:summary.data,error:unread||detail.isError||historyQuery.isError,loading:!!config&&historyQuery.isPending,reviewEnabled:!!policy?.autoEnabled,sendEnabled:!!selectedRule?.enabled,history,pauseReason,now:progressNow,disconnected:connection==='reconnecting'||connection==='degraded'});
   return {stepProgress,pauseReason,historyQuery,current,history,missing:selection.missing,returnCurrent:()=>{if(current)selectRun(current.id);},stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, contact, summary, statuses, notice};
 }

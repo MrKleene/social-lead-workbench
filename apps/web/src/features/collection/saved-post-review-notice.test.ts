@@ -1,6 +1,6 @@
 import {it,expect} from 'vitest';
 import {savedPostReviewNotice} from './saved-post-review-notice';
 const overview=(autoEnabled=false)=>({policies:[{id:'p',version:1,autoEnabled}],connection:{model:'synthetic-model'},modelVersion:2}) as any;
-it('shows OFF only after state is known, ON includes exact model and costs',()=>{expect(savedPostReviewNotice(overview(),false,false).text).toContain('本次仅采集');const on=savedPostReviewNotice(overview(true),false,false);expect(on.text).toContain('synthetic-model');expect(on.text).toContain('覆盖检查通过');expect(on.text).toContain('费用');});
+it('shows OFF only after state is known, ON includes exact model and costs',()=>{expect(savedPostReviewNotice(overview(),false,false).ready).toBe(false);const on=savedPostReviewNotice(overview(true),false,false);expect(on.text).toContain('synthetic-model');expect(on.text).toContain('覆盖检查通过');expect(on.text).toContain('费用');});
 it('fails closed while checking, failed or malformed; never assumes OFF',()=>{for(const n of [savedPostReviewNotice(undefined,true,false),savedPostReviewNotice(overview(),true,false),savedPostReviewNotice(overview(),false,true),savedPostReviewNotice([] as any,false,false)]){expect(n.ready).toBe(false);expect(n.text).not.toContain('不调用模型');}});
 it('changes consent binding on automatic policy/model version change',()=>{const a=overview(),before=savedPostReviewNotice(a,false,false).key;a.policies[0].version++;expect(savedPostReviewNotice(a,false,false).key).not.toBe(before);a.modelVersion++;expect(savedPostReviewNotice(a,false,false).key).not.toBe(before);});

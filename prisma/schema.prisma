@@ -459,6 +459,7 @@ model DeviceExecutionLease {
 
 // Opt-in, bounded context snapshots. No model credentials or outbound messages.
 model SemanticReview {
+  automaticContactAllowed Boolean @default(true)
  contactJobs AutoContactJob[]
   policyId String?
   policyRevision Int?
