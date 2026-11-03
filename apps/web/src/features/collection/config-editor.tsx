@@ -37,7 +37,7 @@ export function ConfigEditor({config, defaults, onClose, onSaved, onDirty, onBus
         const draft=keywordDraft(name,keywords,config,defaults);
         mutation.mutate({path:config?`/collection/configs/${config.id}`:'/collection/configs',method:config?'PATCH':'POST',body:config?{config:draft,revision:config.revision}:draft},{onSuccess:onSaved});
     };
-    return <section className="space-inline-editor"><header><h2>{config?'编辑关键词配置':'新增关键词配置'}</h2></header><form className="config-form detail-scroll" onSubmit={submit}><FieldGroup className="form-fields">
+    return <section className="configuration-editor"><header><h2>{config?'编辑关键词配置':'新增关键词配置'}</h2></header><form className="config-form" onSubmit={submit}><FieldGroup className="form-fields">
         <ErrorNotice error={validation||mutation.error}/>
         <FormField>描述<Input autoFocus aria-label="描述" value={name} onChange={e=>setName(e.target.value)} maxLength={80} required disabled={mutation.isPending} placeholder="例如：企业部署需求"/></FormField>
         <FormField>关键词内容<Textarea aria-label="关键词内容" value={keywords} onChange={e=>setKeywords(e.target.value)} required maxLength={328} disabled={mutation.isPending} placeholder="每行一个，最多 8 个，每个 40 字" rows={6}/></FormField>
