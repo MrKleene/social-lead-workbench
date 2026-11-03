@@ -1,3 +1,4 @@
+import {journeyStepState} from './journey-step-state';
 import {useRunHistory,runSelection} from './use-run-history';
 import {runReviewStage} from '@/features/comment-review/run-review-model';
 import {useAutomationPreferences} from './settings-data';
@@ -75,5 +76,8 @@ export function useJourney(config: Config | undefined, visible: boolean) {
     },{replace:true});
   },[history,visible,run?.id,run?.status,config?.id,detail.isError,outcome?.warning,reviewReady,stage,setParams]);
 
-  return {historyQuery,current,history,missing:selection.missing,returnCurrent:()=>{if(current)selectRun(current.id);},stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, contact, summary, statuses, notice};
+  const selectedRule=contact.data?.rules.find(r=>r.platform===config?.platform);
+  const pauseReason=history?null:selectedRule?.pauseReason;
+  const stepProgress=journeyStepState({run,summary:summary.data,error:unread||detail.isError,reviewEnabled:!!policy?.autoEnabled,sendEnabled:!!selectedRule?.enabled,history,pauseReason});
+  return {stepProgress,pauseReason,historyQuery,current,history,missing:selection.missing,returnCurrent:()=>{if(current)selectRun(current.id);},stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, contact, summary, statuses, notice};
 }
