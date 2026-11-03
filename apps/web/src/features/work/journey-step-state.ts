@@ -6,10 +6,11 @@ export type StepState='idle'|'next'|'running'|'queued'|'complete'|'paused'|'fail
 export type JourneyStep={id:JourneyStage;label:string;state:StepState;status:string};
 const count=(m:Record<string,number>,keys:string[])=>keys.reduce((n,k)=>n+(m[k]||0),0);
 const total=(m:Record<string,number>)=>Object.values(m).reduce((n,x)=>n+x,0);
-export function journeyStepState(input:{run?:Run;summary?:JourneySummary;error?:boolean;reviewEnabled:boolean;sendEnabled:boolean;history?:boolean;pauseReason?:string|null;now?:number;loading?:boolean}) {
+export function journeyStepState(input:{run?:Run;summary?:JourneySummary;error?:boolean;reviewEnabled:boolean;sendEnabled:boolean;history?:boolean;pauseReason?:string|null;now?:number;loading?:boolean;disconnected?:boolean}) {
  const {run,summary:s,reviewEnabled,sendEnabled,history,pauseReason}=input;
  const steps:JourneyStep[]=journeyStages.map(x=>({id:x.id,label:x.label,state:'idle',status:'待开始'}));
  const set=(i:number,state:StepState,status:string)=>Object.assign(steps[i],{state,status});
+ if(!run&&input.disconnected)return {steps,current:null,caption:'连接中断，正在重连',attention:true};
  if(!run){if(input.loading&&!input.error)steps.forEach(s=>Object.assign(s,{state:'loading',status:'读取任务'}));return {steps,current:null,caption:input.error?'进度读取失败':input.loading?'正在读取任务':'尚未开始',attention:!!input.error};}
  const outcome=collectionOutcome(run);
  if(run.status==='RUNNING')set(0,'running','采集中');
@@ -19,7 +20,7 @@ export function journeyStepState(input:{run?:Run;summary?:JourneySummary;error?:
  else if(run.status==='CANCELLED')set(0,'paused','已取消');
  else if(['COMPLETE','PARTIAL'].includes(run.status))set(0,outcome.warning?'partial':'complete',outcome.warning?'已结束 · 有异常':'采集已结束');
  else set(0,'unknown','状态待确认');
- if(input.error){if(['running','queued'].includes(steps[0].state))set(0,'unavailable','状态读取失败');set(1,'unavailable','状态读取失败');set(2,'unavailable','状态读取失败');}
+ if(input.error){if(['running','queued'].includes(steps[0].state))set(0,'unavailable','状态读取失败');set(1,'unavailable','状态读取失败');set(2,'unavailable','状态读取失败');if(s?.contacts.UNKNOWN)set(2,'unknown',`${s.contacts.UNKNOWN} 条结果未知`);}
  else if(!s){set(1,'loading','读取进度');set(2,'loading','读取进度');}
  else {
   const j=s.reviewJobs,r=s.reviews,c=s.contacts;
@@ -58,6 +59,7 @@ export function journeyStepState(input:{run?:Run;summary?:JourneySummary;error?:
   const age=(input.now??Date.now())-new Date(live.at).getTime();const stale=live.state==='stale'||!Number.isFinite(age)||age>15000||age< -5000;
   step.state=stale?'unavailable':'running';step.status=(stale?'进度更新中断，请核查任务':live.label)+(live.concurrent>1?` · ${live.concurrent} 项并行`:'');
  }
+ if(input.disconnected)for(const step of steps)if(['running','loading','unavailable'].includes(step.state)){step.state='unavailable';step.status='连接中断，正在重连';}
  const attention=steps.some(x=>['unknown','failed','paused','partial','unavailable'].includes(x.state));
  const active=steps.filter(x=>['running','queued'].includes(x.state));
  const issue=[...steps].reverse().find(x=>['unknown','failed','paused','partial','unavailable'].includes(x.state));

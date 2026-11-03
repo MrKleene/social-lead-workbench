@@ -2,7 +2,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {RunReviewPanel} from './run-review-panel';
 const state=vi.hoisted(()=>({data:{} as any,error:false,pending:false}));
-vi.mock('@tanstack/react-query',()=>({useQuery:()=>({data:state.data,isError:state.error,isPending:state.pending,isFetching:false,error:state.error?Error('虚构读取失败'):null,refetch:vi.fn()})}));
+vi.mock('@tanstack/react-query',async importOriginal=>({...await importOriginal<object>(),useQuery:()=>({data:state.data,isError:state.error,isPending:state.pending,isFetching:false,error:state.error?Error('虚构读取失败'):null,refetch:vi.fn()})}));
 vi.mock('@/features/work/use-run-post-feed',()=>({useRunPostFeed:()=>({data:{runId:'run-a',configId:'config-a',availability:'SUPERSEDED',items:[]}})}));
 const render=()=>renderToStaticMarkup(<RunReviewPanel runId="run-a" configId="config-a" policyId="policy-a"/>);
 beforeEach(()=>{state.error=false;state.pending=false;state.data={runId:'run-a',posts:[{id:'post-a',title:'虚构帖子',expectedComments:33,jobs:[{status:'PROCESSING',processed:0}]}],selectedPostId:'post-a',postTotal:1,expectedPosts:1,expectedComments:33,knownComments:33,pageSize:30,offset:0,scope:'EXACT',comments:[{id:'comment-a',nickname:'虚构用户',text:'评论原文',versions:1,membership:'CAPTURE',reviews:[{id:'review-a',state:'EVALUATED',score:0,decision:'NO_MATCH',reason:'判定理由',policyRevision:1,origin:'BOUND',createdAt:'2026-11-02T00:00:00Z'}]}],hasMore:true};});

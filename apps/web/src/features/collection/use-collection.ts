@@ -1,14 +1,15 @@
+import {useJourneyPolling} from '@/lib/use-events';
 import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, send } from '@/lib/api';
 import { shouldRefreshRun } from './mode';
 import type { Config, ConfigDetail, Notice, McpReadiness } from './types';
 export function useMcpReadiness(enabled = true) { return useQuery({ queryKey: ['mcp-readiness'], queryFn: () => api<McpReadiness>('/collection/mcp/readiness'), enabled, retry: false, refetchInterval: enabled ? 10000 : false, refetchIntervalInBackground:false }); }
-export function useConfigs(enabled: boolean) {
+export function useConfigs(enabled: boolean) {const poll=useJourneyPolling();
     const client = useQueryClient(), completed = useRef(new Set<string>());
     const query = useQuery({ queryKey: ['collection'], queryFn: () => api<Config[]>('/collection/configs'), enabled,
         // Only local job status: never schedules or repeats platform collection. Stop after three minutes.
-        refetchInterval: q => q.state.data?.some(c => shouldRefreshRun(c, Date.now())) ? 1500 : false,
+        refetchInterval: q => q.state.data?.some(c => shouldRefreshRun(c, Date.now())) ? poll : false,
         refetchIntervalInBackground: false });
     useEffect(() => {
         const fresh = (query.data || []).flatMap(c => c.runs).filter(r => !['QUEUED','RUNNING'].includes(r.status) && !completed.current.has(r.id));

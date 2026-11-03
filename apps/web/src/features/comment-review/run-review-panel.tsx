@@ -1,3 +1,4 @@
+import {useJourneyPolling} from '@/lib/use-events';
 import {useEffect,useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {safePostCoverUrl,type RunReviewPage,type RunCommentReview} from '@crm/contracts';
@@ -19,10 +20,10 @@ function ReviewEvidence({review:r}:{review:RunCommentReview}){
  return <small className="run-review-evidence-line">{r.origin==='BOUND'?'本轮关联':'已有审核'} · {readingTime(r.createdAt)}（北京）</small>;
 }
 type Props={runId:string;configId:string;policyId?:string;policyRevision?:number;history?:boolean};
-export function RunReviewPanel({runId,configId,policyId,policyRevision,history=false}:Props){
+export function RunReviewPanel({runId,configId,policyId,policyRevision,history=false}:Props){const poll=useJourneyPolling();
  const [postId,setPostId]=useState(''),[offset,setOffset]=useState(0),[postOffset,setPostOffset]=useState(0);
  const params=new URLSearchParams({offset:String(offset),postOffset:String(postOffset),...(postId?{postId}:{}),...(policyId?{policyId}:{}),...(policyRevision?{policyRevision:String(policyRevision)}:{})});
- const q=useQuery({queryKey:['run-review',runId,params.toString()],queryFn:({signal})=>api<RunReviewPage>(`/comment-review/runs/${encodeURIComponent(runId)}/review?${params}`,{signal}),retry:false,refetchInterval:5000,refetchIntervalInBackground:false});
+ const q=useQuery({queryKey:['run-review',runId,params.toString()],queryFn:({signal})=>api<RunReviewPage>(`/comment-review/runs/${encodeURIComponent(runId)}/review?${params}`,{signal}),retry:false,refetchInterval:poll,refetchIntervalInBackground:false});
  const covers=useRunPostFeed(configId,{id:runId,status:q.data?.runStatus||'QUEUED'},!!configId);
  const coverItems=covers.data?.runId===runId&&covers.data?.configId===configId&&covers.data.availability==='AVAILABLE'?covers.data.items:[];
  const d=q.data,post=d?.posts.find(p=>p.id===d.selectedPostId),jobs=post?.jobs||[];

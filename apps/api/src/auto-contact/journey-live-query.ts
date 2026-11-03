@@ -12,7 +12,7 @@ export function projectLive(rows:ProgressRow[],now=new Date()):JourneyLiveProgre
   const group=[...latest.values()].filter(x=>x.stage===stage&&active[stage].includes(x.status));if(!group.length)continue;
   const running=group.filter(x=>x.phase!=='IDLE'),row=running[0]??group[0];
   const age=now.getTime()-new Date(row.at).getTime(),stale=age>15000||age< -5000;
-  current.push({stage,phase:row.phase,label:stale?'进度更新中断，请核查任务':row.phase==='IDLE'?'正在更新任务结果':liveLabels[row.phase],at:new Date(row.at).toISOString(),state:stale?'stale':row.phase==='IDLE'?'settling':'running',concurrent:running.length||group.length});
+  current.push({executionId:row.executionId,session:row.session,stage,phase:row.phase,label:stale?'进度更新中断，请核查任务':row.phase==='IDLE'?'正在更新任务结果':liveLabels[row.phase],at:new Date(row.at).toISOString(),state:stale?'stale':row.phase==='IDLE'?'settling':'running',concurrent:running.length||group.length});
  }
  // Retain short, genuinely recorded transitions even when polling missed them. Never pretend history is live.
  const recent:JourneyLiveProgress['recent']=[];const seen=new Set<string>();

@@ -1,0 +1,17 @@
+import 'reflect-metadata';
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
+import {Subject} from 'rxjs';
+import {EventsController,eventSessionValid} from '../src/common/events';
+describe('authenticated progress SSE',()=>{
+ let session:any,db:any,hub:any,c:EventsController,received:any[],subscription:any;
+ beforeEach(()=>{vi.useFakeTimers();session={expiresAt:new Date(Date.now()+120000),user:{active:true,role:'ADMIN'},refreshGrantId:null};db={session:{findUnique:vi.fn(async()=>session)}};hub={available:true,signals:new Subject()};c=new EventsController(db,hub);received=[];subscription=c.stream({sessionId:'s'} as any).subscribe({next:e=>received.push(e)});});
+ afterEach(()=>{subscription.unsubscribe();c.onModuleDestroy();vi.useRealTimers();});
+ const flush=()=>vi.advanceTimersByTimeAsync(0);
+ it('ready snapshot precedes committed changes and heartbeat/sync are low frequency',async()=>{await flush();expect(received[0]).toMatchObject({type:'ready',data:{available:true}});hub.signals.next({type:'journey',data:{id:'event',runId:'r'}});await flush();expect(received[1]).toMatchObject({type:'journey',id:'event'});await vi.advanceTimersByTimeAsync(60000);expect(received.filter(x=>x.type==='heartbeat')).toHaveLength(4);expect(received.filter(x=>x.type==='sync')).toHaveLength(1);});
+ it('never sends administrator run IDs to a sales user',async()=>{subscription.unsubscribe();received=[];session.user.role='SALES';subscription=c.stream({sessionId:'s'} as any).subscribe(x=>received.push(x));await flush();hub.signals.next({type:'journey',data:{id:'secret-id',runId:'r'}});await flush();expect(received).toEqual([{type:'ready',data:{available:false},id:undefined}]);});
+ it.each(['expired','inactive','revoked','role'])('checks live authorization for each event (%s)',async mode=>{await flush();if(mode==='expired')session.expiresAt=new Date(0);if(mode==='inactive')session.user.active=false;if(mode==='revoked'){session.refreshGrantId='grant';session.refreshGrant={revokedAt:new Date(),expiresAt:new Date(Date.now()+1000)};}if(mode==='role')session.user.role='SALES';hub.signals.next({type:'journey',data:{id:'blocked'}});await flush();expect(received).toHaveLength(1);if(mode!=='role')expect(subscription.closed).toBe(true);});
+ it('listener failure degrades the client, recovery asks for a new snapshot',async()=>{await flush();hub.available=false;hub.signals.next({type:'connection',available:false});await flush();hub.available=true;hub.signals.next({type:'connection',available:true});await flush();expect(received.map(x=>x.data.available)).toEqual([true,false,true]);});
+ it('disconnect and shutdown unsubscribe timers and queued emission',async()=>{await flush();subscription.unsubscribe();const calls=db.session.findUnique.mock.calls.length;hub.signals.next({type:'journey',data:{id:'late'}});await vi.advanceTimersByTimeAsync(60000);expect(db.session.findUnique).toHaveBeenCalledTimes(calls);});
+ it('supports multiple pages while closing just one connection',async()=>{const other:any[]=[];const second=c.stream({sessionId:'s'} as any).subscribe(x=>other.push(x));await flush();subscription.unsubscribe();hub.signals.next({type:'journey',data:{id:'second'}});await flush();expect(other.at(-1).id).toBe('second');c.onModuleDestroy();expect(second.closed).toBe(true);});
+});
+it('expired refresh grant cannot keep SSE alive',()=>{expect(eventSessionValid({expiresAt:new Date(Date.now()+1000),user:{active:true},refreshGrantId:'r',refreshGrant:{expiresAt:new Date(0)}})).toBe(false);});

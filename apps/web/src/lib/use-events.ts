@@ -1,19 +1,7 @@
-import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-export function useEvents(enabled: boolean) {
-  const client = useQueryClient();
-  useEffect(() => {
-    if (!enabled) return;
-    const source = new EventSource("/api/events");
-    source.addEventListener("refresh", () => {
-      void client.invalidateQueries({ queryKey: ["accounts"] });
-      void client.invalidateQueries({ queryKey: ["account-contact"] });
-      void client.invalidateQueries({ queryKey: ["leads"] });
-      void client.invalidateQueries({ queryKey: ["collection"] });
-      void client.invalidateQueries({ queryKey: ["notices"] });
-      void client.invalidateQueries({ queryKey: ["tasks"] });
-      void client.invalidateQueries({ queryKey: ["lead"] });
-    });
-    return () => source.close();
-  }, [client, enabled]);
-}
+import {useEffect} from 'react';
+import {useQueryClient,useQuery,skipToken} from '@tanstack/react-query';
+import {connectJourneyEvents,journeyConnectionKey,type JourneyConnection} from './journey-event-sync';
+export function useEvents(enabled:boolean){const client=useQueryClient();useEffect(()=>enabled?connectJourneyEvents(client):undefined,[client,enabled]);}
+export function useJourneyConnection(){return useQuery<JourneyConnection>({queryKey:journeyConnectionKey,queryFn:skipToken,enabled:false,initialData:'connecting'}).data;}
+/** Only a degraded/missing stream polls; the healthy stream is event driven. */
+export function useJourneyPolling(){return useJourneyConnection()==='connected'?false:30000;}

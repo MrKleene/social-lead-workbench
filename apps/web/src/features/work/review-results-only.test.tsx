@@ -4,7 +4,7 @@ import {expect,it,vi} from 'vitest';
 import {TaskWorkspace} from './task-workspace';
 import type {Config} from '@/features/collection/types';
 const state=vi.hoisted(()=>({historical:false,reviewProps:{} as Record<string,unknown>}));
-vi.mock('@tanstack/react-query',()=>({useQuery:()=>({data:undefined,isPending:false,isError:false})}));
+vi.mock('@tanstack/react-query',async importOriginal=>({...await importOriginal<object>(),useQuery:()=>({data:undefined,isPending:false,isError:false})}));
 vi.mock('./settings-data',()=>({useAutomationPreferences:()=>({data:{policyId:'policy-a'}})}));
 vi.mock('@/features/collection/use-collection',()=>({useConfig:()=>({data:undefined,isPending:false})}));
 vi.mock('@/features/comment-review/use-comment-review',()=>({useReviewOverview:()=>({data:{policies:[{id:'policy-a',revision:3,autoEnabled:true}]},isPending:false})}));

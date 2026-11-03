@@ -1,9 +1,10 @@
+import {useJourneyPolling} from '@/lib/use-events';
 import {useState} from 'react';
 import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';
 import {reviewAutoConsent,type ReviewPolicy,type ReviewOverview,type ReviewResults} from '@crm/contracts';
 import {api,send} from '@/lib/api';
 import {useDraftGuard} from '@/features/work/draft-guard';
-export function useReviewOverview(enabled:boolean){return useQuery({queryKey:['comment-review'],queryFn:()=>api<ReviewOverview>('/comment-review'),enabled,retry:false,refetchInterval:5000});}
+export function useReviewOverview(enabled:boolean){const poll=useJourneyPolling();return useQuery({queryKey:['comment-review'],queryFn:()=>api<ReviewOverview>('/comment-review'),enabled,retry:false,refetchInterval:poll});}
 export function useReviewWorkspace(policy:ReviewPolicy|undefined,overview:ReviewOverview){
  const client=useQueryClient(),id=policy?.id||'workspace',base=`/comment-review/policies/${id}`;
  const [draft,setDraft]=useState<{target:string;version:number}|null>(null),[authorization,setAuthorization]=useState(false);

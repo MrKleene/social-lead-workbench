@@ -1,3 +1,4 @@
+import {useJourneyConnection} from '@/lib/use-events';
 import {journeyStepState} from './journey-step-state';
 import {useRunHistory,runSelection} from './use-run-history';
 import {runReviewStage} from '@/features/comment-review/run-review-model';
@@ -18,6 +19,7 @@ import type {Config} from '@/features/collection/types';
 import {journeyStage, type JourneyStage} from './journey-model';
 
 export function useJourney(config: Config | undefined, visible: boolean) {
+  const connection=useJourneyConnection(),poll=connection==='connected'?false:30000;
   const preferences=useAutomationPreferences(visible);
   const [params, setParams] = useSearchParams(),location=useLocation();
   const detail = useConfig(config?.id), reviews = useReviewOverview(visible);
@@ -37,11 +39,11 @@ export function useJourney(config: Config | undefined, visible: boolean) {
   // Retired display filter: old links must not silently hide task results.
   useEffect(()=>{if(visible&&params.has('reviewVersion'))setParams(old=>{const p=new URLSearchParams(old);p.delete('reviewVersion');return p;},{replace:true});},[visible,params,setParams]);
   const contact = useQuery({queryKey: ['auto-contact'], queryFn: () => api<AutoContactOverview>('/auto-contact'),
-    enabled: visible, refetchInterval: 5000});
+    enabled: visible, refetchInterval: poll});
   const stage = journeyStage(params.get('stage'));
   useEffect(()=>{if(visible&&params.get('stage')==='handoff')setParams(old=>{const p=new URLSearchParams(old);p.set('stage','contact');return p;},{replace:true});},[visible,params,setParams]);
   const summaryParams=new URLSearchParams({runId:run?.id||''});
-  const summary=useQuery({queryKey:['journey-summary',run?.id],queryFn:({signal})=>api<JourneySummary>(`/auto-contact/journey?${summaryParams}`,{signal}),enabled:visible&&!!run&&!reviews.isPending&&!reviews.isError,refetchInterval:2000,refetchIntervalInBackground:false,retry:false});
+  const summary=useQuery({queryKey:['journey-summary',run?.id],queryFn:({signal})=>api<JourneySummary>(`/auto-contact/journey?${summaryParams}`,{signal}),enabled:visible&&!!run&&!reviews.isPending&&!reviews.isError,refetchInterval:poll,refetchIntervalInBackground:false,retry:false});
   const [progressNow,setProgressNow]=useState(Date.now);
   const hasLive=!!summary.data?.live?.current.length;
   useEffect(()=>{if(!visible||!hasLive)return;setProgressNow(Date.now());const timer=setInterval(()=>setProgressNow(Date.now()),2000);return()=>clearInterval(timer);},[visible,hasLive,run?.id]);
@@ -81,6 +83,6 @@ export function useJourney(config: Config | undefined, visible: boolean) {
 
   const selectedRule=contact.data?.rules.find(r=>r.platform===config?.platform);
   const pauseReason=history?null:selectedRule?.pauseReason;
-  const stepProgress=journeyStepState({run,summary:summary.data,error:unread||detail.isError||historyQuery.isError,loading:!!config&&historyQuery.isPending,reviewEnabled:!!policy?.autoEnabled,sendEnabled:!!selectedRule?.enabled,history,pauseReason,now:progressNow});
+  const stepProgress=journeyStepState({run,summary:summary.data,error:unread||detail.isError||historyQuery.isError,loading:!!config&&historyQuery.isPending,reviewEnabled:!!policy?.autoEnabled,sendEnabled:!!selectedRule?.enabled,history,pauseReason,now:progressNow,disconnected:connection==='reconnecting'||connection==='degraded'});
   return {stepProgress,pauseReason,historyQuery,current,history,missing:selection.missing,returnCurrent:()=>{if(current)selectRun(current.id);},stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, contact, summary, statuses, notice};
 }
