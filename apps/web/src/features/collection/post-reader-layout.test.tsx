@@ -14,7 +14,8 @@ describe('post reader action and evidence hierarchy',()=>{
  it('keeps post actions together outside original content and retains readonly unknown evidence',()=>{
   const html=renderToStaticMarkup(wrap(<CollectionPostDetail configId="fixture" id="000000000000000000000001" post={post} platform="XHS" readAction={<Button disabled>重新读取此帖</Button>} onBack={()=>{}} onRefresh={()=>{}}/>));
   const toolbar=html.slice(html.indexOf('aria-label="帖子操作"'),html.indexOf('class="info-detail-grid"'));
-  for(const label of ['状态与证据','来源与证据','刷新','重新读取此帖','查看原文'])expect(toolbar).toContain(label);
+  for(const label of ['刷新','重新读取此帖','查看原文'])expect(toolbar).toContain(label);
+  for(const label of ['状态与证据','来源与证据'])expect(toolbar).not.toContain(label);
   const story=html.slice(html.indexOf('<aside'),html.indexOf('</aside>'));
   expect(story).toContain('虚构原帖');expect(story).toContain('访问状态未知');expect(story).toContain('覆盖待确认');
   for(const label of ['状态与证据','重新读取此帖','查看原文'])expect(story).not.toContain(label);
