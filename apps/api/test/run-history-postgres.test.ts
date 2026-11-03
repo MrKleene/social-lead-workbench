@@ -34,3 +34,17 @@ it('rejects sales and foreign cursor, reports nonexistent selection without fall
  await expect(runHistory(db,{...admin,role:'SALES'},id,{})).rejects.toThrow();await expect(runHistory(db,admin,id,{before:'foreign'})).rejects.toThrow();
  expect(await runHistory(db,admin,id,{runId:'foreign'})).toMatchObject({selected:null,selectedMissing:true});expect(runHistoryInput.safeParse({before:'x',unexpected:true}).success).toBe(false);
 });
+
+it('identifies archived selection only in its own configuration and clears the flag after restore',async()=>{
+ const batch=randomUUID(),foreign=id+'-foreign';
+ await db.collectionConfig.create({data:{id:foreign,platform:'XHS',mode:'MOCK',name:'虚构其他配置',keywords:['测试'],excludeWords:[]}});
+ await db.historyArchiveBatch.create({data:{id:batch,actorId:id,backupSha256:'test-only',items:{create:{entity:'CollectionRun',recordId:runs[0]}}}});
+ try{
+  expect(await runHistory(db,admin,id,{runId:runs[0]})).toMatchObject({selected:null,selectedMissing:true,selectedArchived:true});
+  expect(await runHistory(db,admin,id,{runId:'never-existed'})).toMatchObject({selected:null,selectedMissing:true,selectedArchived:false});
+  expect(await runHistory(db,admin,foreign,{runId:runs[0]})).toMatchObject({selected:null,selectedMissing:true,selectedArchived:false});
+  await expect(runHistory(db,{...admin,role:'SALES'},id,{runId:runs[0]})).rejects.toThrow();
+  await db.historyArchiveBatch.update({where:{id:batch},data:{restoredAt:new Date()}});
+  expect(await runHistory(db,admin,id,{runId:runs[0]})).toMatchObject({selected:{id:runs[0]},selectedMissing:false,selectedArchived:false});
+ }finally{await db.historyArchiveItem.deleteMany({where:{batchId:batch}});await db.historyArchiveBatch.delete({where:{id:batch}});await db.collectionConfig.delete({where:{id:foreign}});}
+});

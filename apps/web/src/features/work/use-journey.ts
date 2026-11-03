@@ -6,7 +6,8 @@ import {followJourney,type JourneyObservation} from './journey-follow';
 import {journeyProgress} from './journey-progress';
 import {collectionTaskSession} from './collection-task-session';
 import {useQuery} from '@tanstack/react-query';
-import {useSearchParams} from 'react-router-dom';
+import {useLocation,useSearchParams} from 'react-router-dom';
+import {clearArchivedRunUrl} from '@/components/app-navigation/archived-run-location';
 import type {AutoContactOverview, JourneySummary} from '@crm/contracts';
 import {api} from '@/lib/api';
 import {useConfig} from '@/features/collection/use-collection';
@@ -17,13 +18,20 @@ import {journeyStage, type JourneyStage} from './journey-model';
 
 export function useJourney(config: Config | undefined, visible: boolean) {
   const preferences=useAutomationPreferences(visible);
-  const [params, setParams] = useSearchParams();
+  const [params, setParams] = useSearchParams(),location=useLocation();
   const detail = useConfig(config?.id), reviews = useReviewOverview(visible);
   const runs = collectionTaskSession(config, detail.data?.id === config?.id ? detail.data?.runs : []).runs;
   const requested = params.get('run') || '';
   const historyQuery=useRunHistory(config?.id,requested,'',visible);
   const selection=runSelection(historyQuery.data,requested,params.get('fresh')==='1');
   const {run,current,history}=selection;
+ useEffect(()=>{
+  if(!visible||!selection.archived||!requested)return;
+  setParams(old=>{
+   if(old.get('run')!==requested)return old;
+   return new URLSearchParams(clearArchivedRunUrl('/automation?'+old,requested).split('?')[1]||'');
+  },{replace:true,state:{...(location.state&&typeof location.state==='object'?location.state:{}),archivedRunId:requested}});
+ },[visible,selection.archived,requested,setParams,location.state]);
   const policy = reviews.data?.policies.find(p => p.id === params.get('policy')) ?? (reviews.data?.policies.find(p=>p.id===preferences.data?.policyId)||reviews.data?.policies[0]);
   // Retired display filter: old links must not silently hide task results.
   useEffect(()=>{if(visible&&params.has('reviewVersion'))setParams(old=>{const p=new URLSearchParams(old);p.delete('reviewVersion');return p;},{replace:true});},[visible,params,setParams]);
