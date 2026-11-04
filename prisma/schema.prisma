@@ -679,6 +679,7 @@ model ManualReviewJob {
 
 // Independent opt-in sending rules. No migration of review consent into sending consent.
 model AutoContactRule {
+ channelPlans Json @default("[]")
  channels ReplyChannel[] @default([])
  templateId String?
  templateVersion Int?
@@ -738,7 +739,7 @@ model AutoContactJob {
  leaseUntil DateTime?
  createdAt DateTime @default(now())
  updatedAt DateTime @updatedAt
- @@unique([ruleId,ruleVersion,reviewId])
+ @@unique([ruleId,ruleVersion,reviewId,channel])
  @@index([status,createdAt])
  @@index([platform,recipientId,mode])
 }

@@ -1,3 +1,4 @@
+import {rulePlans,jobMatchesPlan,attemptBlocksChannel,pairedRunBound} from './channel-plan';
 import {automaticReplyBarrier,type StageBarrier} from '../collection/stage-barrier';
 import {recipientRecoveryBlocked} from './user-reviewed-recovery';
 import {contactReporter} from '../common/journey-live';
@@ -33,15 +34,15 @@ export class AutoContactService {
     now(tx: ContactDb) { return contactNow(tx); }
     private async ruleReady(tx: ContactDb, r: AutoContactRule) {
         if(!await acceptanceRuleAllowed(tx,r))return false;
-        if (!r.enabled || r.mode !== this.sender.mode || r.authorizedHash !== ruleHash(r) || !r.authorizedAt || !r.authorizedBy || !r.content.trim() || !r.accountIds.length || !this.sender.capability(r.platform, r.channel))
+        if (!r.enabled || r.mode !== this.sender.mode || r.authorizedHash !== ruleHash(r) || !r.authorizedAt || !r.authorizedBy || !r.content.trim() || !r.accountIds.length || !rulePlans(r).length||rulePlans(r).some(p=>!p.content.trim()||!this.sender.capability(r.platform,p.channel)))
             return false;
-        if(r.mode==='REAL') for(const id of r.accountIds){const o=await channelSendObservation(tx,id,await this.now(tx),r.channel);const a=await tx.platformAccount.findUnique({where:{id}});if(!a||accountModeBlocked(a,'REAL')||o.state!=='UNKNOWN'||o.evidenceInvalid)return false;}
+        if(r.mode==='REAL') for(const id of r.accountIds)for(const plan of rulePlans(r)){const o=await channelSendObservation(tx,id,await this.now(tx),plan.channel);const a=await tx.platformAccount.findUnique({where:{id}});if(!a||accountModeBlocked(a,'REAL')||o.state!=='UNKNOWN'||o.evidenceInvalid)return false;}
         const [p, m, a, c] = await Promise.all([tx.commentReviewPolicy.findUnique({ where: { id: r.policyId } }), tx.modelSettings.findFirst({ select: { model: true } }), tx.user.findUnique({ where: { id: r.authorizedBy }, select: { active: true, role: true } }), tx.autoContactControl.findUnique({ where: { platform_mode: { platform: r.platform, mode: r.mode } } })]);
         return p?.revision === r.policyRevision && m?.model === r.model && a?.active && a.role === 'ADMIN' && !c?.pauseReason;
     }
     private async reviewReady(tx: ContactDb, r: AutoContactRule, id: string, manual?:ManualAuthority,stages?:Map<string,StageBarrier>) {
         if(await isReviewArchiveBlocked(tx,id))return null;
-        if(!manual&&!(await automaticReplyBarrier(tx,id,stages)).ready)return null;
+        if(!manual&&(!(await automaticReplyBarrier(tx,id,stages)).ready||!await pairedRunBound(tx,id,r)))return null;
         const row = await tx.semanticReview.findUnique({ where: { id }, include: { capture: { include: { post: true, config: { select: { platform: true } } } } } });
         if (!row || !row.automaticContactAllowed || (!manual&&!await acceptanceSendAllowed(tx,r,id)) || row.policyId !== r.policyId || row.policyRevision !== r.policyRevision || row.selectedModel !== r.model || row.platform !== r.platform || !eligible(row, manual?r.threshold:await acceptanceSendThreshold(tx,r,id)) || row.isDemo !== (r.mode === 'SIMULATION') || row.capture?.config.platform !== row.platform)
             return null;
@@ -71,14 +72,14 @@ export class AutoContactService {
                 let scanCursor:{id:string;updatedAt:Date}|undefined;for(;;){
                 const rows = await tx.semanticReview.findMany({ where: { automaticContactAllowed:true, AND:[{id:{notIn:archivedIds}},...(scanCursor?[{OR:[{updatedAt:{gt:scanCursor.updatedAt}},{updatedAt:scanCursor.updatedAt,id:{gt:scanCursor.id}}]}]:[])], ...(scope?{id:{in:scope.replyOnly?[scope.replyOnly.reviewId]:envelope!.reviewIds},capture:{lastRunId:envelope!.runId??'not-bound',postId:{in:(await tx.normalAcceptancePost.findMany({where:{acceptanceId:envelope!.id},select:{postId:true}})).map(p=>p.postId)}}}:{}),policyId: r.policyId, policyRevision: r.policyRevision, selectedModel: r.model, platform: r.platform, state: 'EVALUATED', score: scope?.replyOnly?{equals:scope.replyOnly.score}:{gte:r.threshold}, context: 'SUFFICIENT', reviewStatus: { in: ['PENDING', 'APPROVED'] }, ...(scope?.replyOnly?{}:{updatedAt:{gte:r.authorizedAt!}}), contactJobs: { none: { ruleId: r.id, ruleVersion: r.version } } }, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], take: 100 });
                 for (const row of rows) {
-                    if(!(await automaticReplyBarrier(tx,row.id,stages)).ready)continue;
+                    if(!(await automaticReplyBarrier(tx,row.id,stages)).ready||!await pairedRunBound(tx,row.id,r))continue;
                     const valid = await this.reviewReady(tx, r, row.id,undefined,stages), input = row.evaluationInput as Record<string, unknown> | null;
-                    await tx.autoContactJob.create({ data: { ruleId: r.id, ruleVersion: r.version, reviewId: row.id, reviewVersion: row.version, mode: r.mode, platform: r.platform, recipientId: valid?.target.recipientId ?? '', postId: valid?.target.postId ?? '', commentId: valid?.target.commentId ?? '', channel: r.channel, content: r.content, eligibilityHash: eligibilityHash(row), availabilityVersion:valid?.availability?.version??0, sourceSnapshot:valid?json({post:publicPostSnapshot(valid.row.capture!.post.snapshot),comment:valid.row.snapshot,availability:valid.availability?{state:valid.availability.state,reason:valid.availability.reason,version:valid.availability.version,checkedAt:valid.availability.checkedAt.toISOString(),source:valid.availability.source,evidence:valid.availability.evidence}:{state:'UNKNOWN',version:0,checkedAt:null}}):Prisma.JsonNull, status: valid?.block ? 'BLOCKED_POST' : valid ? 'QUEUED' : 'SKIPPED', reason: valid?.block ?? (valid ? null : '评论作者、来源、充分性或勿联系条件未通过'), evidence: json({ score: row.score, modelVersion: row.modelVersion, target: (row.rules as {
+                    for(const plan of rulePlans(r)){await tx.autoContactJob.create({ data: { ruleId: r.id, ruleVersion: r.version, reviewId: row.id, reviewVersion: row.version, mode: r.mode, platform: r.platform, recipientId: valid?.target.recipientId ?? '', postId: valid?.target.postId ?? '', commentId: valid?.target.commentId ?? '', channel: plan.channel, content: plan.content, eligibilityHash: eligibilityHash(row), availabilityVersion:valid?.availability?.version??0, sourceSnapshot:valid?json({post:publicPostSnapshot(valid.row.capture!.post.snapshot),comment:valid.row.snapshot,availability:valid.availability?{state:valid.availability.state,reason:valid.availability.reason,version:valid.availability.version,checkedAt:valid.availability.checkedAt.toISOString(),source:valid.availability.source,evidence:valid.availability.evidence}:{state:'UNKNOWN',version:0,checkedAt:null}}):Prisma.JsonNull, status: valid?.block ? 'BLOCKED_POST' : valid ? 'QUEUED' : 'SKIPPED', reason: valid?.block ?? (valid ? null : '评论作者、来源、充分性或勿联系条件未通过'), evidence: json({ score: row.score, modelVersion: row.modelVersion, target: (row.rules as {
                                     target?: string;
                                 }).target ?? '', policyRevision: row.policyRevision, quotes: (row.result as {
                                     evidence?: unknown;
                                 })?.evidence ?? [], inputPolicy: input?.inputPolicyVersion ?? null, observationPolicy: input?.observationPolicy ?? null, ruleHash: r.authorizedHash, sourceCaptureId: row.captureId }) } });
-                    added++;
+                    added++;}
                 }
                 if(rows.length<100)break;scanCursor=rows.at(-1)!;
                 }
@@ -115,6 +116,7 @@ export class AutoContactService {
                 if (control?.activeJobId)
                     continue;
                 const stage=await automaticReplyBarrier(tx,j.reviewId,stages);if(!stage.ready){if(['该审核不允许自动回复','单帖重读不自动回复或私信'].includes(stage.reason))await cancelReserved(tx,j,'审核结果或来源已变化');continue;}
+                if(!jobMatchesPlan(r,j)){await cancelReserved(tx,j,'渠道或发送内容已变化，未发送');continue;}
                 const valid = await this.reviewReady(tx, r, j.reviewId,undefined,stages);
                 const postBlock = valid ? postSendBlock(valid.availability,r.authorizedAt,valid.row.updatedAt,j.availabilityVersion) : null;
                 if(postBlock){await cancelReserved(tx,j,postBlock);await tx.autoContactJob.update({where:{id:j.id},data:{status:'BLOCKED_POST'}});continue;}
@@ -124,8 +126,8 @@ export class AutoContactService {
                 }
                 const identity = await tx.platformIdentity.upsert({ where: { platform_platformUserId: { platform: j.platform, platformUserId: j.recipientId } }, create: { platform: j.platform, platformUserId: j.recipientId, nickname: '', isDemo: j.mode === 'SIMULATION' }, update: {} });
                 const ledger = await tx.contactLedger.findUnique({ where: { identityId_mode: { identityId: identity.id, mode: j.mode } }, include: { attempts: true } });
-                if (ledger?.attempts.some(a => a.outcome !== 'CANCELLED')) {
-                    await tx.autoContactJob.update({ where: { id: j.id }, data: { status: 'SKIPPED', reason: '此用户已有联系尝试或成功记录；跨账号与渠道不重复' } });
+                if (ledger?.attempts.some(a => attemptBlocksChannel(a,j.channel))) {
+                    await tx.autoContactJob.update({ where: { id: j.id }, data: { status: 'SKIPPED', reason: '此渠道已有联系记录或存在未知结果；不可换账号重复' } });
                     continue;
                 }
                 let selected: string | undefined, healthyCount = 0, quotaFull = 0;
@@ -183,7 +185,7 @@ export class AutoContactService {
             const postBlock = valid ? postSendBlock(valid.availability,manual?.authorizedAt??j.rule.authorizedAt,valid.row.updatedAt,j.availabilityVersion) : null;
             if(postBlock){await cancelReserved(tx,j,postBlock);await tx.autoContactJob.update({where:{id:j.id},data:{status:'BLOCKED_POST'}});return null;}
             const attempt = await tx.contactAttempt.findUniqueOrThrow({ where: { id: j.attemptId! } }), usage = await tx.accountDay.findUnique({ where: { accountId_day: { accountId: j.accountId!, day: attempt.day } } });
-            if (!healthy || !a || a.archivedAt || accountModeBlocked(a,j.mode) || !j.rule.accountIds.includes(a.id) || (j.manualRequestId?(!manual||manual.accountId!==a.id||!await this.manualRuleReady(tx,j.rule,manual)):j.ruleVersion !== j.rule.version || !await this.ruleReady(tx, j.rule)) || !valid || eligibilityHash(valid.row) !== j.eligibilityHash || !j.leaseUntil || j.leaseUntil < now || attempt.day !== quotaBucket(j.mode, now) || (usage?.occupied ?? 0) > limit(j.rule, a.id, effectiveAccountLimit(a.dailyLimit,usage,quotaBucket(j.mode,now))) || (j.mode === 'REAL' ? (a.isDemo || a.sessionReference?.state !== 'VERIFIED') : (!a.isDemo || !!a.loginSessionKey))) {
+            if (!healthy || !jobMatchesPlan(j.rule,j,!!manual) || !a || a.archivedAt || accountModeBlocked(a,j.mode) || !j.rule.accountIds.includes(a.id) || (j.manualRequestId?(!manual||manual.accountId!==a.id||!await this.manualRuleReady(tx,j.rule,manual,j.channel)):j.ruleVersion !== j.rule.version || !await this.ruleReady(tx, j.rule)) || !valid || eligibilityHash(valid.row) !== j.eligibilityHash || !j.leaseUntil || j.leaseUntil < now || attempt.day !== quotaBucket(j.mode, now) || (usage?.occupied ?? 0) > limit(j.rule, a.id, effectiveAccountLimit(a.dailyLimit,usage,quotaBucket(j.mode,now))) || (j.mode === 'REAL' ? (a.isDemo || a.sessionReference?.state !== 'VERIFIED') : (!a.isDemo || !!a.loginSessionKey))) {
                 await cancelReserved(tx, j, '发送前健康、授权、额度日期或证据已变化；未发送');
                 return null;
             }
@@ -254,7 +256,7 @@ export class AutoContactService {
             const r=j.rule;if(!(await automaticReplyBarrier(this.db,j.reviewId)).ready)continue;if(j.ruleVersion!==r.version||!await this.ruleReady(this.db,r))continue;
             const actor=await this.db.user.findUnique({where:{id:r.authorizedBy!},select:{id:true,name:true,email:true,role:true,active:true}});if(!actor?.active||actor.role!=='ADMIN')continue;
             for(const id of r.accountIds){
-                if(checked.has(id))continue;checked.add(id);
+                if(checked.has(id+':'+j.channel))continue;checked.add(id+':'+j.channel);
                 const control=await this.db.autoContactControl.findUnique({where:{platform_mode:{platform:j.platform,mode:'REAL'}}});if(control?.pauseReason||control?.activeJobId)return;
                 const account=await this.db.platformAccount.findUnique({where:{id}}),day=quotaBucket('REAL',await this.now(this.db));
                 const usage=await this.db.accountDay.findUnique({where:{accountId_day:{accountId:id,day}}});
@@ -269,15 +271,15 @@ export class AutoContactService {
         const result=await tx.autoContactJob.updateMany({where:{id:j.id,status:j.status,attemptId:null},data:{status:'PENDING_ACTION',reason,manualRequestId:null}});
         if(result.count)await tx.auditLog.create({data:{action:'REPLY_HELD_FOR_MANUAL_ACTION',entityId:j.id,metadata:{from:j.status,reason,attempted:false}}});
     }
-    private async manualRuleReady(tx:ContactDb,r:AutoContactRule,m:ManualAuthority){
+    private async manualRuleReady(tx:ContactDb,r:AutoContactRule,m:ManualAuthority,channel=r.channel){
         const [p,model,control]=await Promise.all([tx.commentReviewPolicy.findUnique({where:{id:r.policyId}}),tx.modelSettings.findFirst({select:{model:true}}),tx.autoContactControl.findUnique({where:{platform_mode:{platform:r.platform,mode:r.mode}}})]);
-        return r.mode===this.sender.mode&&this.sender.capability(r.platform,r.channel)&&r.accountIds.includes(m.accountId)&&p?.revision===r.policyRevision&&model?.model===r.model&&!control?.pauseReason;
+        return r.mode===this.sender.mode&&this.sender.capability(r.platform,channel)&&r.accountIds.includes(m.accountId)&&p?.revision===r.policyRevision&&model?.model===r.model&&!control?.pauseReason;
     }
     private async manualCandidate(tx:ContactDb,id?:string){
         const j=id?await tx.autoContactJob.findUnique({where:{id},include:{rule:true}}):await tx.autoContactJob.findFirst({where:{mode:this.sender.mode,status:'MANUAL_READY'},include:{rule:true},orderBy:[{createdAt:'asc'},{id:'asc'}]});
         if(!j||j.status!=='MANUAL_READY'||j.attemptId)return null;
         const now=await this.now(tx),m=await manualAuthority(tx,j,now);
-        if(!m||!await this.manualRuleReady(tx,j.rule,m)){await this.holdForAction(tx,j,'本次确认已过期或规则已变化，请重新预览');return null;}
+        if(!m||!await this.manualRuleReady(tx,j.rule,m,j.channel)){await this.holdForAction(tx,j,'本次确认已过期或规则已变化，请重新预览');return null;}
         const control=await tx.autoContactControl.findUnique({where:{platform_mode:{platform:j.platform,mode:j.mode}}});if(control?.activeJobId)return null;
         const a=await tx.platformAccount.findUnique({where:{id:m.accountId},include:{sessionReference:true}}),valid=await this.reviewReady(tx,j.rule,j.reviewId,m);
         if(!a||a.archivedAt||accountModeBlocked(a,j.mode)||!valid||eligibilityHash(valid.row)!==j.eligibilityHash||postSendBlock(valid.availability,m.authorizedAt,valid.row.updatedAt,j.availabilityVersion)){
@@ -290,7 +292,7 @@ export class AutoContactService {
         const identity=await tx.platformIdentity.findUnique({where:{platform_platformUserId:{platform:j.platform,platformUserId:j.recipientId}},include:{lead:true}});
         if(identity?.lead&&(identity.lead.doNotContact||(!identity.lead.isDemo&&(identity.lead.contactedAt||['CONTACTED','INTERESTED'].includes(identity.lead.contactStage))))){await this.holdForAction(tx,j,'收件人已联系或标记勿联系');return null;}
         const ledger=identity?await tx.contactLedger.findUnique({where:{identityId_mode:{identityId:identity.id,mode:j.mode}},include:{attempts:true}}):null;
-        if(ledger?.attempts.some(a=>a.outcome!=='CANCELLED')){await this.holdForAction(tx,j,'已有发送尝试，不能重复或换号补发');return null;}
+        if(ledger?.attempts.some(a=>attemptBlocksChannel(a,j.channel))){await this.holdForAction(tx,j,'已有发送尝试，不能重复或换号补发');return null;}
         return {j,m,a,now,identity,ledger};
     }
     async reserveManual(){

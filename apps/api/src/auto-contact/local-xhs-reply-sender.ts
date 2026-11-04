@@ -1,3 +1,4 @@
+import {jobMatchesPlan} from './channel-plan';
 import {recipientRecoveryBlocked} from './user-reviewed-recovery';
 import {contactReporter} from '../common/journey-live';
 import {effectiveAccountLimit} from '../accounts/account-day-limit';
@@ -63,7 +64,7 @@ export class LocalXhsReplySender implements ContactSender {
         if (!j || (j.manualRequestId&&!manual) || j.mode !== 'REAL' || j.status !== 'ATTEMPTED' || !j.leaseUntil || j.leaseUntil < new Date() ||
             j.accountId !== request.accountId || j.platform !== 'XHS' || j.channel !== 'COMMENT' || j.content !== request.content ||
             j.postId !== request.postId || j.commentId !== request.commentId || j.recipientId !== request.recipientId ||
-            (!manual&&(!j.rule.enabled||!j.rule.authorizedAt||j.rule.content!==request.content||j.ruleVersion!==j.rule.version||j.rule.authorizedHash!==ruleHash(j.rule)||!j.rule.authorizedBy)) || j.rule.mode!=='REAL'||j.rule.platform!=='XHS'||j.rule.channel!=='COMMENT'||(manual&&manual.accountId!==request.accountId)||
+            (!manual&&(!j.rule.enabled||!j.rule.authorizedAt||!jobMatchesPlan(j.rule,j)||j.ruleVersion!==j.rule.version||j.rule.authorizedHash!==ruleHash(j.rule)||!j.rule.authorizedBy)) || j.rule.mode!=='REAL'||j.rule.platform!=='XHS'||!jobMatchesPlan(j.rule,j,!!manual)||(manual&&manual.accountId!==request.accountId)||
             !j.rule.accountIds.includes(request.accountId) || eligibilityHash(j.review) !== j.eligibilityHash || !eligible(j.review, manual?j.rule.threshold:await acceptanceSendThreshold(this.db,j.rule,j.reviewId))) return null;
         if(!manual&&!await acceptanceSendAllowed(this.db,j.rule,j.reviewId,j.id))return null;
         if (j.review.isDemo || j.review.platform !== 'XHS' || j.review.capture?.config.platform !== 'XHS' || j.review.policyId !== j.rule.policyId || j.review.policyRevision !== j.rule.policyRevision || j.review.selectedModel !== j.rule.model) return null;

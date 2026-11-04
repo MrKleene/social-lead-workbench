@@ -1,3 +1,4 @@
+import {rulePlans} from './channel-plan';
 import {historyDisplay} from '../common/db';
 import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {activeAcceptance,normalAcceptanceScope,liveAcceptance,acceptanceConflict} from './normal-acceptance';
@@ -88,8 +89,13 @@ export class ContactSettingsService {
                 throw new ConflictException('设置已变化，请刷新');
             const channels=input.channels??[input.channel];
             const channel=channels.includes('COMMENT')?'COMMENT':channels.includes('DM')?'DM':input.channel;
-            if(channel==='DM'&&/\{\{|\}\}/.test(input.content))throw new ConflictException('自动私信请使用固定正文；含变量模板可在私信预览中逐条核对发送');
-            if(input.templateId){await tx.$queryRaw`SELECT id FROM "ReplyTemplate" WHERE id=${input.templateId} FOR UPDATE`;const template=await tx.replyTemplate.findUnique({where:{id:input.templateId}});if(!template||template.channel!==channel||template.version!==input.templateVersion||template.body!==input.content)throw new ConflictException('发送模板已变化，请重新选择并保存');}
+            const plans=input.channelPlans??[];
+            if(plans.length&&(plans.length!==channels.length||plans.some(p=>!channels.includes(p.channel))))throw new ConflictException('渠道与模板范围不一致');
+            for(const p of plans.length?plans:[{channel,content:input.content,templateId:input.templateId,templateVersion:input.templateVersion}]){
+             if(p.channel==='DM'&&/\{\{|\}\}/.test(p.content))throw new ConflictException('自动私信请使用固定正文；含变量模板可在私信预览中逐条核对发送');
+             if(p.templateId){await tx.$queryRaw`SELECT id FROM "ReplyTemplate" WHERE id=${p.templateId} FOR UPDATE`;const t=await tx.replyTemplate.findUnique({where:{id:p.templateId}});if(!t||t.channel!==p.channel||t.version!==p.templateVersion||t.body!==p.content)throw new ConflictException('发送模板已变化，请重新选择并保存');}
+            }
+            const primary=plans.find(p=>p.channel===channel);
             const policy = await tx.commentReviewPolicy.findUnique({ where: { id: input.policyId } });
             if (!policy || policy.revision !== input.policyRevision)
                 throw new ConflictException('审核目标已变化');
@@ -107,7 +113,7 @@ export class ContactSettingsService {
                 for (const j of pending)
                     await cancelReserved(tx, j, '规则已修改，需重新授权');
             }
-            const model = await tx.modelSettings.findFirst({ select: { model: true } }), data = { accountLimits: input.accounts.map(({ id, dailyLimit }) => ({ id, dailyLimit:input.preserveAccountLimits?accounts.find(a=>a.id===id)!.dailyLimit:dailyLimit })), platform: input.platform, model: model?.model ?? '', policyId: input.policyId, policyRevision: input.policyRevision, threshold: input.threshold, channel, channels, templateId:input.templateId??null,templateVersion:input.templateId?input.templateVersion:null, content: input.content, accountIds: input.accounts.map(a => a.id), enabled: false, authorizedBy: null, authorizedAt: null, authorizedHash: null, version: (old?.version ?? 0) + 1, mode: this.sender.mode };
+            const model = await tx.modelSettings.findFirst({ select: { model: true } }), data = { accountLimits: input.accounts.map(({ id, dailyLimit }) => ({ id, dailyLimit:input.preserveAccountLimits?accounts.find(a=>a.id===id)!.dailyLimit:dailyLimit })), platform: input.platform, model: model?.model ?? '', policyId: input.policyId, policyRevision: input.policyRevision, threshold: input.threshold, channel, channels, channelPlans:plans, templateId:primary?.templateId??input.templateId??null,templateVersion:primary?primary.templateVersion:input.templateId?input.templateVersion:null, content: primary?.content??input.content, accountIds: input.accounts.map(a => a.id), enabled: false, authorizedBy: null, authorizedAt: null, authorizedHash: null, version: (old?.version ?? 0) + 1, mode: this.sender.mode };
             const rule = await tx.autoContactRule.upsert({ where: { id }, create: { id, ...data }, update: data });
             await tx.auditLog.create({ data: { actorId: actor.id, action: 'AUTO_CONTACT_RULE_SAVED_OFF', entityId: id, metadata: { version: rule.version, accountIds: rule.accountIds, threshold: rule.threshold, channel: rule.channel } } });
             return rule;
@@ -131,6 +137,7 @@ export class ContactSettingsService {
                 const envelope=await activeAcceptance(tx);if(envelope){const scope=normalAcceptanceScope.parse(envelope.scope);if(!liveAcceptance(envelope)||envelope.actorId!==actor.id||scope.ruleId!==id||scope.ruleVersion!==r.version+1||scope.ruleHash!==ruleHash({...r,version:r.version+1}))acceptanceConflict();}
                 if (!r.channels.length || !r.channels.includes(r.channel) || r.channels.some(channel=>!this.sender.capability(r.platform,channel)))
                     throw new ConflictException(senderUnavailable);
+                if(rulePlans(r).length!==r.channels.length||rulePlans(r).some(p=>!p.content.trim()))throw new ConflictException('请分别选择评论和私信的发送内容');
                 if (!r.content.trim() || !r.accountIds.length || !r.model)
                     throw new ConflictException('请先设置内容、账号池和审核模型');
                 if (input.consent !== autoContactConsent || input.hash !== ruleHash(r))
@@ -142,8 +149,8 @@ export class ContactSettingsService {
                     throw new ConflictException('目标、模型或权限已变化');
                 if (accounts.length !== r.accountIds.length || !accounts.every(a => !accountModeBlocked(a,r.mode) && (r.mode === 'SIMULATION' ? a.isDemo && !a.loginSessionKey : !a.isDemo && !!a.loginSessionKey && a.sessionReference?.sessionKey===a.loginSessionKey && (a.sessionReference?.state === 'VERIFIED'||!!this.sender.prepare&&['UNVERIFIED','CONNECTION_ERROR'].includes(a.sessionReference?.state??'')))))
                     throw new ConflictException('账号池存在未授权或不健康账号');
-                if(r.mode==='REAL') for(const account of accounts){
-                    const observation=await channelSendObservation(tx,account.id,await contactNow(tx),r.channel);
+                if(r.mode==='REAL') for(const account of accounts)for(const plan of rulePlans(r)){
+                    const observation=await channelSendObservation(tx,account.id,await contactNow(tx),plan.channel);
                     if(observation.state!=='UNKNOWN'||observation.evidenceInvalid||(!this.sender.prepare&&!observation.canSend))
                         throw new ConflictException('账号受限或发送资格待核验，不能开启自动联系');
                 }
