@@ -1,3 +1,4 @@
+import {recipientRecoveryBlocked} from './user-reviewed-recovery';
 import {contactReporter} from '../common/journey-live';
 import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {manualAuthority} from './manual-reply-authority';
@@ -55,6 +56,7 @@ export class LocalXhsReplySender implements ContactSender {
     }
     private async authorized(request: SendRequest) {
         if (!this.capability(request.platform, request.channel) || !request.requestKey.startsWith('auto-contact:') || !await this.healthy(request.accountId)) return null;
+        if(await recipientRecoveryBlocked(this.db,request.platform,request.recipientId))return null;
         const id = request.requestKey.slice('auto-contact:'.length);
         const j = await this.db.autoContactJob.findUnique({ where: { id }, include: { rule: true, review: { include: { capture: { include: { post: true, config: { select: { platform: true } } } } } } } });
         const manual=j?.manualRequestId?await manualAuthority(this.db,j,new Date()):null;

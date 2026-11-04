@@ -1,3 +1,4 @@
+import {recipientRecoveryBlocked} from '../auto-contact/user-reviewed-recovery';
 import {contactReporter} from '../common/journey-live';
 import {Inject,Injectable} from '@nestjs/common';
 import {DeviceService,type ExecutionPermit} from '../devices/device.service';
@@ -35,7 +36,7 @@ export class LocalDmExecutor implements DmExecutor {
   const live=await contactReporter(this.db,c.requestKey);await live.set('PREPARING_SEND');
   let result:DmExecution={protocol:DM_SEND_PROTOCOL,attemptId:c.attemptId,requestKey:c.requestKey,kind:'NOT_SENT',reason:'RUNTIME_UNAVAILABLE',inputs:0,submissions:0,stopped:true};
   try{
-   if(!this.available())return result;permit=await this.devices.acquire(actor,c.accountId);const combined=AbortSignal.any([signal,permit.signal,AbortSignal.timeout(70000)]);
+   if(!this.available()||await recipientRecoveryBlocked(this.db,'XHS',c.recipientId))return result;permit=await this.devices.acquire(actor,c.accountId);const combined=AbortSignal.any([signal,permit.signal,AbortSignal.timeout(70000)]);
    if(await this.runtime.inspect(c.accountId,sessionKey,this.runtime.deviceId(),'real',permit.root)!=='UNVERIFIED')throw Error('DM_SESSION_METADATA_MISMATCH');
    await this.db.$transaction(tx=>this.devices.assertPermit(tx,permit!));
    driver=await this.runtime.openSavedForDM(c.accountId,sessionKey,combined,permit.root,DM_REVIEWED_BUILD);stopped=false;if(!driver.replyEndpoint)throw Error('DM_ENDPOINT_MISSING');

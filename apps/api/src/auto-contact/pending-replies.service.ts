@@ -1,3 +1,4 @@
+import {recipientRecoveryBlocked} from './user-reviewed-recovery';
 import {historyDisplay} from '../common/db';
 import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {randomBytes,randomUUID,createHash,timingSafeEqual} from 'node:crypto';
@@ -45,6 +46,7 @@ export class PendingRepliesService {
    const r=j.review,rule=j.rule,policy=await tx.commentReviewPolicy.findUnique({where:{id:rule.policyId}}),model=await tx.modelSettings.findFirst({select:{model:true}});
    if(rule.mode!==this.sender.mode||rule.platform!==j.platform||rule.channel!==j.channel||policy?.revision!==rule.policyRevision||model?.model!==rule.model||r.policyId!==rule.policyId||r.policyRevision!==rule.policyRevision||r.selectedModel!==rule.model||!eligible(r,rule.threshold)||eligibilityHash(r)!==j.eligibilityHash||r.isDemo!==(this.sender.mode==='SIMULATION')||r.capture?.config.platform!==j.platform)fail('评分、来源、模型或规则已变化，不能沿用旧任务');
    const target=contactTarget(r,r.capture,r.capture?.post??null);if(!target||target.recipientId!==j.recipientId||target.postId!==j.postId||target.commentId!==j.commentId)fail('原评论关联已变化');
+   if(await recipientRecoveryBlocked(tx,j.platform,j.recipientId))fail('该用户已隔离，禁止再次联系');
    const block=postSendBlock(await postAvailability(tx,j.platform,j.postId),now,r.updatedAt,j.availabilityVersion);if(block)fail(block);
    const identity=await tx.platformIdentity.findUnique({where:{platform_platformUserId:{platform:j.platform,platformUserId:j.recipientId}},include:{lead:true}});
    if(identity?.lead&&(identity.lead.doNotContact||(!identity.lead.isDemo&&(identity.lead.contactedAt||['CONTACTED','INTERESTED'].includes(identity.lead.contactStage)))))fail('收件人已联系或标记勿联系');

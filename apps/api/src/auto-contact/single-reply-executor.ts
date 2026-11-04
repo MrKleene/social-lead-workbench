@@ -1,3 +1,4 @@
+import {recipientRecoveryBlocked} from './user-reviewed-recovery';
 import {accountSendObservation,recordSendExecution} from './send-observation';
 import {type ExecutionEvent} from './reply-stage-journal';
 import type { DeviceService, ExecutionPermit } from '../devices/device.service';
@@ -15,6 +16,7 @@ export class LocalSingleReplyExecutor implements SingleReplyExecutor {
   let result:SingleReplyResult['result']={kind:'FAILED',reason:'单次提交前核验未通过'};
   try{
    if(!this.capable(c.scope))throw Error('UNAVAILABLE');
+   if(await recipientRecoveryBlocked(this.db,c.request.platform,c.request.recipientId))throw Error('RECIPIENT_QUARANTINED');
    const restriction=await accountSendObservation(this.db,c.request.accountId,new Date());
    const capture=c.scope.purpose==='CAPTURE_EXACT_COMMENT_RECEIPT_ONCE';
    if(restriction.state!=='UNKNOWN'||restriction.evidenceInvalid||(!capture&&!restriction.canSend))throw Error('ACCOUNT_SEND_PERMISSION_UNVERIFIED');

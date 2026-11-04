@@ -1,3 +1,4 @@
+import {recipientRecoveryBlocked} from '../auto-contact/user-reviewed-recovery';
 import {isReviewArchiveBlocked} from '../history-archive/archive-guard';
 import {boundAccountNickname} from '../accounts/account-display';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
@@ -34,7 +35,7 @@ export class DmSendService {
   const session=account.sessionReference;
   if(!account.loginSessionKey||!account.loginPlatformUserId||session?.sessionKey!==account.loginSessionKey||session.provider!=='real'||session.state!=='VERIFIED')fail('账号登录身份未核实');
   if(!review||review.isDemo||review.platform!=='XHS'||review.version!==input.reviewVersion||review.capture?.config.platform!=='XHS'||!eligible(review,95))fail('评论评分或资格已变化');
-  const target=contactTarget(review,review.capture,review.capture?.post??null);if(!target||target.recipientId===account.loginPlatformUserId)fail('收件人或原评论关联无效');
+  const target=contactTarget(review,review.capture,review.capture?.post??null);if(!target||target.recipientId===account.loginPlatformUserId||await recipientRecoveryBlocked(tx,'XHS',target.recipientId))fail('收件人或原评论关联无效');
   if(!template||template.channel!=='DM'||template.version!==input.templateVersion)fail('私信模板已变化');
   const snapshot=review.snapshot as Record<string,unknown>,display=captureDisplay(snapshot);
   const rendered=previewReply(template.body,{昵称:display.authorNickname||undefined,帖子标题:typeof snapshot.title==='string'?snapshot.title:undefined,平台:'小红书'});

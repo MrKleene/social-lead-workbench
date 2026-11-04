@@ -1,3 +1,4 @@
+import {recipientRecoveryBlocked} from './user-reviewed-recovery';
 import {contactReporter} from '../common/journey-live';
 import {isReviewArchiveBlocked,archivedReviewIds} from '../history-archive/archive-guard';
 import {boundAccountNickname} from '../accounts/account-display';
@@ -43,7 +44,7 @@ export class AutoContactService {
         if (!row || !row.automaticContactAllowed || (!manual&&!await acceptanceSendAllowed(tx,r,id)) || row.policyId !== r.policyId || row.policyRevision !== r.policyRevision || row.selectedModel !== r.model || row.platform !== r.platform || !eligible(row, manual?r.threshold:await acceptanceSendThreshold(tx,r,id)) || row.isDemo !== (r.mode === 'SIMULATION') || row.capture?.config.platform !== row.platform)
             return null;
         const target = contactTarget(row, row.capture, row.capture?.post ?? null);
-        if (!target)
+        if (!target || await recipientRecoveryBlocked(tx,r.platform,target.recipientId))
             return null;
         const identity = await tx.platformIdentity.findUnique({ where: { platform_platformUserId: { platform: r.platform, platformUserId: target.recipientId } }, include: { lead: true } });
         if (identity?.lead && (identity.lead.doNotContact || (!identity.lead.isDemo && (identity.lead.contactedAt || ['CONTACTED', 'INTERESTED'].includes(identity.lead.contactStage)))))

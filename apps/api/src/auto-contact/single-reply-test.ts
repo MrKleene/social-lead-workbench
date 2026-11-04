@@ -1,3 +1,4 @@
+import {recipientRecoveryBlocked} from './user-reviewed-recovery';
 import {effectiveAccountLimit} from '../accounts/account-day-limit';
 import {accountSystemBlock} from '../accounts/account-execution-policy';
 import {verifyCaptureRecoveryChain} from './capture-recovery-chain';
@@ -40,6 +41,7 @@ export class SingleReplyTestService {
   if(!t||t.body!==s.content||t.channel!=='COMMENT'||t._count.configs!==0)refuse();
   const target=contactTarget(r!,r!.capture,r!.capture?.post??null),snapshot=r!.snapshot as Record<string,unknown>;
   if(!target||target.postId!==s.postId||target.commentId!==s.commentId||target.recipientId!==s.recipientId||snapshot.comment!==s.comment)refuse();
+  if(await recipientRecoveryBlocked(tx,'XHS',s.recipientId))refuse();
   const availability=await postAvailability(tx,'XHS',s.postId);if(postSendBlock(availability,now,r!.updatedAt,s.availabilityVersion))refuse();
   const ref=savedPostReference((r!.capture!.post.snapshot as Record<string,unknown>).sourceReference,s.postId);if(!ref)refuse();
   const identity=await tx.platformIdentity.findUnique({where:{platform_platformUserId:{platform:'XHS',platformUserId:s.recipientId}},include:{lead:true}});

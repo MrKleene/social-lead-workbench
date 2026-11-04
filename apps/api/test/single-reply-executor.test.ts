@@ -14,7 +14,7 @@ function fixture(){
  const release=vi.fn(async()=>{}),permit={signal:new AbortController().signal,root:'/synthetic',release};
  const driver={status:vi.fn(async()=>({loggedIn:true,userId:'a'.repeat(24)})),replyEndpoint:()=>({}),stop:vi.fn(async()=>{})};
  const devices:any={enabled:()=>true,acquire:vi.fn(async()=>permit),assertPermit:vi.fn(async()=>{})},runtime:any={mode:()=> 'real',persistent:()=>true,deviceId:()=> 'synthetic',inspect:vi.fn(async()=> 'UNVERIFIED'),openSavedForReply:vi.fn(async()=>driver)};
- const db:any={$transaction:vi.fn(async(fn:any)=>fn({}))},executor=new LocalSingleReplyExecutor(db,devices,runtime);vi.spyOn(executor,'capable').mockReturnValue(true);
+ const db:any={auditLog:{findFirst:vi.fn(async()=>null)},$transaction:vi.fn(async(fn:any)=>fn({}))},executor=new LocalSingleReplyExecutor(db,devices,runtime);vi.spyOn(executor,'capable').mockReturnValue(true);
  const c:any={actor:{id:'admin',active:true,role:'ADMIN'},request:{accountId:'account1'},binding:{senderId:'a'.repeat(24)},scope:{senderId:'a'.repeat(24),binarySha256:singleReplyBuildHashes[0],scopeVersion:singleReplyScopeVersion,purpose:singleReplyPurpose,protocol:XHS_REPLY_PROTOCOL},sessionKey:'synthetic'};const before=vi.fn(async()=>true);
  return {executor,c,before,devices,runtime,driver,release};
 }
@@ -45,7 +45,7 @@ it('new scope requires explicit submission purpose and protocol, no default migr
 
 it('persists only validated fixed execution evidence under the same authorization key',async()=>{
  const f=fixture(),events:any[]=[];
- const db:any={$executeRaw:vi.fn(),platformAccount:{findUnique:vi.fn(async()=>({platform:'XHS',isDemo:false,loginPlatformUserId:'a'.repeat(24)}))},auditLog:{create:vi.fn(async(e:any)=>{events.push(e);})},$transaction:vi.fn(async(fn:any)=>fn(db))};
+ const db:any={$executeRaw:vi.fn(),platformAccount:{findUnique:vi.fn(async()=>({platform:'XHS',isDemo:false,loginPlatformUserId:'a'.repeat(24)}))},auditLog:{findFirst:vi.fn(async()=>null),create:vi.fn(async(e:any)=>{events.push(e);})},$transaction:vi.fn(async(fn:any)=>fn(db))};
  const executor=new LocalSingleReplyExecutor(db,f.devices,f.runtime);vi.spyOn(executor,'capable').mockReturnValue(true);
  f.c.request.requestKey='single-reply:synthetic';
  wire.send.mockImplementation(async(_r:any,_b:any,_s:any,record:any)=>{await record({stage:'RPC_RETURNED',kind:'UNKNOWN',envelopeValid:true,protocolAttemptId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'});await expect(record({stage:'RPC_INTENT',protocolAttemptId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',token:'secret'})).rejects.toThrow();return {kind:'UNKNOWN',reason:'synthetic'};});

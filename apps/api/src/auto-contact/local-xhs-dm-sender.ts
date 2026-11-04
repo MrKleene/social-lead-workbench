@@ -1,3 +1,4 @@
+import {recipientRecoveryBlocked} from './user-reviewed-recovery';
 import {randomUUID} from 'node:crypto';
 import type {Db} from '../common/db';import type {LoginRuntime} from '../accounts/login-runtime';import type {Actor} from '../auth/security';
 import {accountSystemBlock} from '../accounts/account-execution-policy';import {effectiveAccountLimit} from '../accounts/account-day-limit';
@@ -13,6 +14,7 @@ export class LocalXhsDmSender implements ContactSender {
  async prepare(_actor:Actor,accountId:string){return this.healthy(accountId)}
     private async authorized(request: SendRequest) {
         if (!this.capability(request.platform, request.channel) || !request.requestKey.startsWith('auto-contact:') || !await this.healthy(request.accountId)) return null;
+        if(await recipientRecoveryBlocked(this.db,request.platform,request.recipientId))return null;
         const id = request.requestKey.slice('auto-contact:'.length);
         const j = await this.db.autoContactJob.findUnique({ where: { id }, include: { rule: true, review: { include: { capture: { include: { post: true, config: { select: { platform: true } } } } } } } });
         const manual=j?.manualRequestId?await manualAuthority(this.db,j,new Date()):null;
