@@ -6,3 +6,5 @@
 @media(max-width:600px){.pending-replies td{padding:4px 8px!important}}
 
 .pending-account-status,.pending-submitted{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px}.pending-account-status span{color:var(--muted-foreground)}.pending-replies tr[data-selected=true]{background:var(--muted)}.pending-tools>.form-field{max-width:100%;min-width:0}.pending-tools [role=combobox]{max-width:100%}
+
+.pending-replies td:last-child>strong{display:block;margin-bottom:4px}

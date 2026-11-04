@@ -1,8 +1,9 @@
 import {activeAcceptance} from './normal-acceptance';
+import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import type {Prisma} from '@prisma/client';
 import {eligibilityHash,quotaBucket} from './contact-policy';
-export const pendingJobScope=z.object({channel:z.enum(['COMMENT','DM']).optional(),id:z.string(),version:z.string(),ruleId:z.string(),ruleVersion:z.number(),reviewHash:z.string(),content:z.string(),recipientId:z.string(),postId:z.string(),commentId:z.string(),availabilityVersion:z.number()}).strict();
+export const pendingJobScope=z.object({template:z.object({id:z.string(),version:z.number().int(),bodyHash:z.string(),name:z.string()}).strict().optional(),channel:z.enum(['COMMENT','DM']).optional(),id:z.string(),version:z.string(),ruleId:z.string(),ruleVersion:z.number(),reviewHash:z.string(),originalContent:z.string().optional(),content:z.string(),recipientId:z.string(),postId:z.string(),commentId:z.string(),availabilityVersion:z.number()}).strict();
 export const manualReplyScope=z.object({day:z.string(),jobs:z.array(pendingJobScope).min(1).max(20)}).strict();
 export type ManualAuthority={actorId:string;accountId:string;accountVersion:number;authorizedAt:Date;requestId:string};
 /** Called again at reservation, dispatch and final RPC. Request fields never confer authority. */
@@ -14,5 +15,6 @@ export async function manualAuthority(tx:Prisma.TransactionClient,j:{channel?:st
  const s=scope.data.jobs.find(s=>s.id===j.id);if(!s||(s.channel&&s.channel!==j.channel)||s.ruleId!==j.ruleId||s.content!==j.content||s.recipientId!==j.recipientId||s.postId!==j.postId||s.commentId!==j.commentId||s.availabilityVersion!==j.availabilityVersion)return null;
  const [rule,review,account,actor]=await Promise.all([tx.autoContactRule.findUnique({where:{id:j.ruleId}}),tx.semanticReview.findUnique({where:{id:j.reviewId}}),tx.platformAccount.findUnique({where:{id:r.accountId},select:{version:true}}),tx.user.findUnique({where:{id:r.actorId},select:{active:true,role:true}})]);
  if(!rule||rule.version!==s.ruleVersion||!rule.accountIds.includes(r.accountId)||!review||eligibilityHash(review)!==s.reviewHash||s.reviewHash!==j.eligibilityHash||account?.version!==r.accountVersion||!actor?.active||actor.role!=='ADMIN')return null;
+ if(s.template){const t=await tx.replyTemplate.findUnique({where:{id:s.template.id}});if(!t||t.version!==s.template.version||t.channel!==j.channel||createHash('sha256').update(t.body).digest('hex')!==s.template.bodyHash)return null;}
  return {actorId:r.actorId,accountId:r.accountId,accountVersion:r.accountVersion,authorizedAt:r.confirmedAt,requestId:r.id};
 }
