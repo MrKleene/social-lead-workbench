@@ -1,3 +1,4 @@
+import {automaticReplyBarrier,type StageBarrier} from '../collection/stage-barrier';
 import {recipientRecoveryBlocked} from './user-reviewed-recovery';
 import {contactReporter} from '../common/journey-live';
 import {isReviewArchiveBlocked,archivedReviewIds} from '../history-archive/archive-guard';
@@ -38,8 +39,9 @@ export class AutoContactService {
         const [p, m, a, c] = await Promise.all([tx.commentReviewPolicy.findUnique({ where: { id: r.policyId } }), tx.modelSettings.findFirst({ select: { model: true } }), tx.user.findUnique({ where: { id: r.authorizedBy }, select: { active: true, role: true } }), tx.autoContactControl.findUnique({ where: { platform_mode: { platform: r.platform, mode: r.mode } } })]);
         return p?.revision === r.policyRevision && m?.model === r.model && a?.active && a.role === 'ADMIN' && !c?.pauseReason;
     }
-    private async reviewReady(tx: ContactDb, r: AutoContactRule, id: string, manual?:ManualAuthority) {
+    private async reviewReady(tx: ContactDb, r: AutoContactRule, id: string, manual?:ManualAuthority,stages?:Map<string,StageBarrier>) {
         if(await isReviewArchiveBlocked(tx,id))return null;
+        if(!manual&&!(await automaticReplyBarrier(tx,id,stages)).ready)return null;
         const row = await tx.semanticReview.findUnique({ where: { id }, include: { capture: { include: { post: true, config: { select: { platform: true } } } } } });
         if (!row || !row.automaticContactAllowed || (!manual&&!await acceptanceSendAllowed(tx,r,id)) || row.policyId !== r.policyId || row.policyRevision !== r.policyRevision || row.selectedModel !== r.model || row.platform !== r.platform || !eligible(row, manual?r.threshold:await acceptanceSendThreshold(tx,r,id)) || row.isDemo !== (r.mode === 'SIMULATION') || row.capture?.config.platform !== row.platform)
             return null;
@@ -61,20 +63,24 @@ export class AutoContactService {
             if(scope&&scope.maxPosts>1&&(!envelope!.batchPlanned||!envelope!.runId||await blockingAcceptanceJobs(tx,envelope!,['PENDING','PROCESSING','FAILED','CANCELLED','SKIPPED'])))return 0;
             const archivedIds=await archivedReviewIds(tx);
             const rules = await tx.autoContactRule.findMany({ where: { enabled: true, mode: this.sender.mode } });
-            let added = 0;
+            let added = 0;const stages=new Map<string,StageBarrier>();
             for (const r of rules) {
                 if (!await this.ruleReady(tx, r))
                     continue;
                 // Scan a bounded page of unprocessed *evaluations*, not a display page. Every later tick advances.
-                const rows = await tx.semanticReview.findMany({ where: { automaticContactAllowed:true, AND:[{id:{notIn:archivedIds}}], ...(scope?{id:{in:scope.replyOnly?[scope.replyOnly.reviewId]:envelope!.reviewIds},capture:{lastRunId:envelope!.runId??'not-bound',postId:{in:(await tx.normalAcceptancePost.findMany({where:{acceptanceId:envelope!.id},select:{postId:true}})).map(p=>p.postId)}}}:{}),policyId: r.policyId, policyRevision: r.policyRevision, selectedModel: r.model, platform: r.platform, state: 'EVALUATED', score: scope?.replyOnly?{equals:scope.replyOnly.score}:{gte:r.threshold}, context: 'SUFFICIENT', reviewStatus: { in: ['PENDING', 'APPROVED'] }, ...(scope?.replyOnly?{}:{updatedAt:{gte:r.authorizedAt!}}), contactJobs: { none: { ruleId: r.id, ruleVersion: r.version } } }, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], take: 100 });
+                let scanCursor:{id:string;updatedAt:Date}|undefined;for(;;){
+                const rows = await tx.semanticReview.findMany({ where: { automaticContactAllowed:true, AND:[{id:{notIn:archivedIds}},...(scanCursor?[{OR:[{updatedAt:{gt:scanCursor.updatedAt}},{updatedAt:scanCursor.updatedAt,id:{gt:scanCursor.id}}]}]:[])], ...(scope?{id:{in:scope.replyOnly?[scope.replyOnly.reviewId]:envelope!.reviewIds},capture:{lastRunId:envelope!.runId??'not-bound',postId:{in:(await tx.normalAcceptancePost.findMany({where:{acceptanceId:envelope!.id},select:{postId:true}})).map(p=>p.postId)}}}:{}),policyId: r.policyId, policyRevision: r.policyRevision, selectedModel: r.model, platform: r.platform, state: 'EVALUATED', score: scope?.replyOnly?{equals:scope.replyOnly.score}:{gte:r.threshold}, context: 'SUFFICIENT', reviewStatus: { in: ['PENDING', 'APPROVED'] }, ...(scope?.replyOnly?{}:{updatedAt:{gte:r.authorizedAt!}}), contactJobs: { none: { ruleId: r.id, ruleVersion: r.version } } }, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], take: 100 });
                 for (const row of rows) {
-                    const valid = await this.reviewReady(tx, r, row.id), input = row.evaluationInput as Record<string, unknown> | null;
+                    if(!(await automaticReplyBarrier(tx,row.id,stages)).ready)continue;
+                    const valid = await this.reviewReady(tx, r, row.id,undefined,stages), input = row.evaluationInput as Record<string, unknown> | null;
                     await tx.autoContactJob.create({ data: { ruleId: r.id, ruleVersion: r.version, reviewId: row.id, reviewVersion: row.version, mode: r.mode, platform: r.platform, recipientId: valid?.target.recipientId ?? '', postId: valid?.target.postId ?? '', commentId: valid?.target.commentId ?? '', channel: r.channel, content: r.content, eligibilityHash: eligibilityHash(row), availabilityVersion:valid?.availability?.version??0, sourceSnapshot:valid?json({post:publicPostSnapshot(valid.row.capture!.post.snapshot),comment:valid.row.snapshot,availability:valid.availability?{state:valid.availability.state,reason:valid.availability.reason,version:valid.availability.version,checkedAt:valid.availability.checkedAt.toISOString(),source:valid.availability.source,evidence:valid.availability.evidence}:{state:'UNKNOWN',version:0,checkedAt:null}}):Prisma.JsonNull, status: valid?.block ? 'BLOCKED_POST' : valid ? 'QUEUED' : 'SKIPPED', reason: valid?.block ?? (valid ? null : '评论作者、来源、充分性或勿联系条件未通过'), evidence: json({ score: row.score, modelVersion: row.modelVersion, target: (row.rules as {
                                     target?: string;
                                 }).target ?? '', policyRevision: row.policyRevision, quotes: (row.result as {
                                     evidence?: unknown;
                                 })?.evidence ?? [], inputPolicy: input?.inputPolicyVersion ?? null, observationPolicy: input?.observationPolicy ?? null, ruleHash: r.authorizedHash, sourceCaptureId: row.captureId }) } });
                     added++;
+                }
+                if(rows.length<100)break;scanCursor=rows.at(-1)!;
                 }
             }
             return added;
@@ -97,7 +103,8 @@ export class AutoContactService {
                 }
             }
             const envelope=await activeAcceptance(tx),scope=envelope?normalAcceptanceScope.parse(envelope.scope):null;
-            const jobs = await tx.autoContactJob.findMany({ where: { mode: this.sender.mode, status: { in: waiting }, ...(scope?{ruleId:scope.ruleId,ruleVersion:scope.ruleVersion,reviewId:{in:envelope!.reviewIds}}:{}) }, include: { rule: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 100 });
+            const stages=new Map<string,StageBarrier>();let cursor:{id:string;createdAt:Date}|undefined;for(;;){
+            const jobs = await tx.autoContactJob.findMany({ where: { mode: this.sender.mode, status: { in: waiting }, ...(cursor?{OR:[{createdAt:{gt:cursor.createdAt}},{createdAt:cursor.createdAt,id:{gt:cursor.id}}]}:{}), ...(scope?{ruleId:scope.ruleId,ruleVersion:scope.ruleVersion,reviewId:{in:envelope!.reviewIds}}:{}) }, include: { rule: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 100 });
             for (const j of jobs) {
                 const r = j.rule;
                 if (j.ruleVersion !== r.version || !await this.ruleReady(tx, r)) {
@@ -107,7 +114,8 @@ export class AutoContactService {
                 const control = await tx.autoContactControl.findUnique({ where: { platform_mode: { platform: j.platform, mode: j.mode } } });
                 if (control?.activeJobId)
                     continue;
-                const valid = await this.reviewReady(tx, r, j.reviewId);
+                const stage=await automaticReplyBarrier(tx,j.reviewId,stages);if(!stage.ready){if(['该审核不允许自动回复','单帖重读不自动回复或私信'].includes(stage.reason))await cancelReserved(tx,j,'审核结果或来源已变化');continue;}
+                const valid = await this.reviewReady(tx, r, j.reviewId,undefined,stages);
                 const postBlock = valid ? postSendBlock(valid.availability,r.authorizedAt,valid.row.updatedAt,j.availabilityVersion) : null;
                 if(postBlock){await cancelReserved(tx,j,postBlock);await tx.autoContactJob.update({where:{id:j.id},data:{status:'BLOCKED_POST'}});continue;}
                 if (!valid || eligibilityHash(valid.row) !== j.eligibilityHash) {
@@ -147,6 +155,8 @@ export class AutoContactService {
                 const attempt = await tx.contactAttempt.create({ data: { ledgerId: l.id, requestKey: 'auto-contact:' + j.id, jobId: j.id, mode: j.mode, kind: 'FIRST', channel: j.channel, content: j.content, outcome: 'RESERVED', day, actorId: r.authorizedBy!, accountIdSnapshot:selected, historySnapshot:json({platform:j.platform,recipientId:j.recipientId,postId:j.postId,commentId:j.commentId,accountId:selected,accountLabel:sendingAccount.label,senderNickname:boundAccountNickname(sendingAccount),senderPlatformId:sendingAccount.loginPlatformUserId,source:j.sourceSnapshot,evidence:j.evidence}) } }), leaseUntil = new Date(now.getTime() + 120000);
                 await tx.autoContactControl.upsert({ where: { platform_mode: { platform: j.platform, mode: j.mode } }, create: { platform: j.platform, mode: j.mode, activeJobId: j.id, leaseUntil }, update: { activeJobId: j.id, leaseUntil } });
                 return tx.autoContactJob.update({ where: { id: j.id }, data: { status: 'RESERVED', accountId: selected, attemptId: attempt.id, leaseUntil, reason: null } });
+            }
+            if(jobs.length<100)break;cursor=jobs.at(-1)!;
             }
             return null;
         });
@@ -241,7 +251,7 @@ export class AutoContactService {
         const jobs=await this.db.autoContactJob.findMany({where:{mode:'REAL',status:'WAITING_ACCOUNT'},include:{rule:true},orderBy:[{createdAt:'asc'},{id:'asc'}],take:100});
         const checked=new Set<string>();
         for(const j of jobs){
-            const r=j.rule;if(j.ruleVersion!==r.version||!await this.ruleReady(this.db,r))continue;
+            const r=j.rule;if(!(await automaticReplyBarrier(this.db,j.reviewId)).ready)continue;if(j.ruleVersion!==r.version||!await this.ruleReady(this.db,r))continue;
             const actor=await this.db.user.findUnique({where:{id:r.authorizedBy!},select:{id:true,name:true,email:true,role:true,active:true}});if(!actor?.active||actor.role!=='ADMIN')continue;
             for(const id of r.accountIds){
                 if(checked.has(id))continue;checked.add(id);

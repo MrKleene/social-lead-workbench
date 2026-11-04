@@ -128,7 +128,7 @@ export type ReplyHistoryPage = { items: ReplyHistoryItem[]; total: number; allTo
 /** Whole-run counts; reviewJobs span historical versions, contacts span all rules in the current sender mode. */
 export type JourneyLiveStep={executionId?:string;session?:string;stage:'collect'|'review'|'contact';phase:string;label:string;at:string;state:'running'|'stale'|'settling';concurrent:number};
 export type JourneyLiveProgress={observedAt:string;current:JourneyLiveStep[];recent:{stage:'collect'|'review'|'contact';label:string;at:string}[]};
-export type JourneySummary = {live?:JourneyLiveProgress;reviews:Record<string,number>;reviewJobs:Record<string,number>;contacts:Record<string,number>;matches:number;highRelevance?:number};
+export type JourneySummary = {stages?:{collection:{ready:boolean;reason:string};review:{ready:boolean;reason:string}};live?:JourneyLiveProgress;reviews:Record<string,number>;reviewJobs:Record<string,number>;contacts:Record<string,number>;matches:number;highRelevance?:number};
 
 /** Cache invalidation, never business state or permission. */
 export const journeyPushSchema=z.object({v:z.literal(1),kind:z.enum(['change','heartbeat','reset']),id:z.string().min(1).max(240),runId:z.string().min(1).max(200).nullable(),configId:z.string().min(1).max(200).nullable(),at:z.string().max(60).optional(),executionId:z.string().max(200).optional(),session:z.string().max(100).optional(),phase:z.string().max(60).optional()}).strict();

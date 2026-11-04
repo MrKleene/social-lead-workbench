@@ -1,3 +1,4 @@
+import {runConfigSnapshot} from './contract';
 import {commitCheckpoint,checkpointParents,type CheckpointLease} from './comment-checkpoint';
 import { createHash } from 'node:crypto';
 import { CapturedComment, CollectionConfig, CollectionRun, Prisma } from '@prisma/client';
@@ -24,7 +25,7 @@ export async function enqueueCaptured(tx:Prisma.TransactionClient,c:CapturedComm
 }
 export async function checkpointCapture(db:Db,run:CollectionRun,result:ReadResult,guard?:(tx:Prisma.TransactionClient)=>Promise<void>,leases?:Map<string,CheckpointLease>){
  if(!result.posts.length)return;
- const spec=configInput.parse(run.snapshot),isDemo=spec.mode!=='XHS_MCP';
+ const spec=configInput.parse(runConfigSnapshot(run.snapshot)),isDemo=spec.mode!=='XHS_MCP';
  await db.$transaction(async tx=>{
   if(guard)await guard(tx);
   const [config]=await tx.$queryRaw<CollectionConfig[]>`SELECT * FROM "CollectionConfig" WHERE id=${run.configId} FOR UPDATE`;

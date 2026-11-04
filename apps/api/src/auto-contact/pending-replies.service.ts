@@ -1,3 +1,4 @@
+import {wasHistoryArchived} from '../history-archive/archive-guard';
 import {recipientRecoveryBlocked} from './user-reviewed-recovery';
 import {historyDisplay} from '../common/db';
 import {effectiveAccountLimit} from '../accounts/account-day-limit';
@@ -27,6 +28,28 @@ function fail(s:string):never{throw new ConflictException(s);}
 export class PendingRepliesService {
  constructor(@Inject(Db) private db:Db,@Inject(CONTACT_SENDER) private sender:ContactSender){}
  async list(actor:Actor,offset=0,runId?:string){requireAdmin(actor);const where={mode:this.sender.mode,status:'PENDING_ACTION',...(runId?{review:{runId}}:{})};const [items,total]=await Promise.all([historyDisplay(this.db).autoContactJob.findMany({where,orderBy:[{createdAt:'asc'},{id:'asc'}],skip:offset,take:20,include:{review:{select:{runId:true,snapshot:true,score:true}}}}),historyDisplay(this.db).autoContactJob.count({where})]);return {total,items:items.map(j=>{const frozen=j.sourceSnapshot as {post?:{title?:string};comment?:{comment?:string}}|null,s=j.review.snapshot as CaptureDisplay & {comment?:string;title?:string};return {id:j.id,version:j.updatedAt.toISOString(),runId:j.review.runId,platform:j.platform,channel:j.channel,postTitle:frozen?.post?.title||s.title||'',comment:frozen?.comment?.comment||s.comment||'',...captureDisplay((frozen?.comment||s) as CaptureDisplay),score:(j.evidence as {score?:number})?.score??j.review.score,content:j.content,reason:j.reason,createdAt:j.createdAt.toISOString()};})};}
+ async options(actor:Actor,id:string){
+  requireAdmin(actor);
+  return this.db.$transaction(async tx=>{
+   const j=await tx.autoContactJob.findFirst({where:{id,mode:this.sender.mode},include:{rule:true}});
+   if(!j||await wasHistoryArchived(tx,'AutoContactJob',id))throw new NotFoundException('未找到待处理回复');
+   const now=await contactNow(tx),day=quotaBucket(this.sender.mode,now);
+   const accounts=await tx.platformAccount.findMany({where:{id:{in:j.rule.accountIds},platform:j.platform,archivedAt:null},orderBy:{id:'asc'}});
+   const options=[];
+   for(const a of accounts){
+    const usage=await tx.accountDay.findUnique({where:{accountId_day:{accountId:a.id,day}}});
+    const limit=Math.min(effectiveAccountLimit(a.dailyLimit,usage,day),(j.rule.accountLimits as {id:string;dailyLimit:number}[]).find(v=>v.id===a.id)?.dailyLimit??0);
+    let reason:string|null=null;
+    try{await this.validate(tx,actor,a.id,[{id:j.id,version:j.updatedAt.toISOString()}],now);}catch(e){if(!(e instanceof ConflictException))throw e;reason=e.message;}
+    options.push({id:a.id,label:a.loginNickname||a.label,limit,occupied:usage?.occupied??0,remaining:Math.max(0,limit-(usage?.occupied??0)),available:!reason,reason});
+   }
+   return {jobId:j.id,version:j.updatedAt.toISOString(),status:j.status,reason:j.reason,channel:j.channel,accounts:options};
+  },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
+ }
+ async result(actor:Actor,id:string){
+  requireAdmin(actor);const j=await historyDisplay(this.db).autoContactJob.findFirst({where:{id,mode:this.sender.mode},select:{id:true,status:true,reason:true,channel:true,accountId:true,updatedAt:true}});
+  if(!j)throw new NotFoundException('未找到回复任务');return j;
+ }
  private async validate(tx:Prisma.TransactionClient,actor:Actor,accountId:string,jobs:{id:string;version:string}[],now:Date){
   if(await activeAcceptance(tx))fail('限定执行正在生效，不能额外提交待处理回复');
   const currentActor=await tx.user.findUnique({where:{id:actor.id},select:{active:true,role:true}});if(!currentActor?.active||currentActor.role!=='ADMIN')fail('管理员权限已变化');

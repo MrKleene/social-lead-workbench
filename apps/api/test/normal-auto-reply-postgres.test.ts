@@ -71,7 +71,11 @@ async function normalFixture(){
  const enabled=await settings.toggle(actor,r.id,{version:r.version,enabled:true,consent:autoContactConsent,hash:ruleHash(r)});
  // Synthetic normal runs begin after enable; old source runs never qualify.
  const review=await db.semanticReview.findUniqueOrThrow({where:{id:f.scope.reviewId}});
- await db.collectionRun.update({where:{id:review.runId},data:{createdAt:new Date()}});
+ await db.commentReviewPolicy.update({where:{id:'workspace'},data:{autoEnabled:true}});
+ const capture=await db.capturedComment.findUniqueOrThrow({where:{id:review.captureId!}});
+ await db.collectionRun.update({where:{id:review.runId},data:{createdAt:new Date(),finishedAt:new Date(),capturedPosts:1,capturedCommentsCount:1,snapshot:{mode:'MOCK',strictStages:{version:1,policies:[{id:'workspace',version:1,revision:1,modelVersion:null}]}}}});
+ await db.semanticReview.update({where:{id:review.id},data:{sourceContentHash:capture.contentHash}});
+ await db.autoReviewJob.create({data:{runId:review.runId,postId:capture.postId,policyId:'workspace',policyVersion:1,status:'COMPLETED',processed:1}});
  await db.semanticReview.update({where:{id:f.scope.reviewId},data:{updatedAt:new Date()}});
  return {...f,local,settings,service,r:enabled,inspection,send,devices,runtime,release};
 }

@@ -4,3 +4,5 @@
 .pending-replies td{white-space:normal!important;vertical-align:top!important}@media(max-width:600px){.pending-replies td{border:0!important;padding:4px 8px!important}.pending-replies tr{padding:12px 0!important}.pending-replies .pending-tools{margin-bottom:4px}}
 .pending-tools>.form-field{display:flex!important}.pending-replies{gap:12px!important}.pending-replies .pending-tools{margin:4px 0 12px}.pending-replies .pending-note{margin:0}.pending-replies td{padding:10px 12px!important}.pending-replies td [data-slot="button"]{min-height:28px}
 @media(max-width:600px){.pending-replies td{padding:4px 8px!important}}
+
+.pending-account-status,.pending-submitted{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px}.pending-account-status span{color:var(--muted-foreground)}.pending-replies tr[data-selected=true]{background:var(--muted)}.pending-tools>.form-field{max-width:100%;min-width:0}.pending-tools [role=combobox]{max-width:100%}

@@ -26,6 +26,8 @@ class AutoContactController {
     @Inject(AutoContactService)
     private service: AutoContactService, @Inject(NormalAcceptanceService) private acceptance:NormalAcceptanceService, @Inject(Db) private db: Db, @Inject(CONTACT_SENDER) private sender: import('./contact-sender').ContactSender) { }
     @Get('pending') @Header('Cache-Control','no-store, private') pendingList(@Req() r:AuthedRequest,@Query() q:unknown){const b=parse(z.object({offset:z.coerce.number().int().min(0).max(1000000).default(0),runId:z.string().min(1).max(200).optional()}).strict(),q);return this.pending.list(r.actor,b.offset,b.runId);}
+    @Get('pending/:id/accounts') @Header('Cache-Control','no-store, private') pendingAccounts(@Req() r:AuthedRequest,@Param('id') id:string){return this.pending.options(r.actor,parse(z.string().min(1).max(200),id));}
+    @Get('pending/:id/result') @Header('Cache-Control','no-store, private') pendingResult(@Req() r:AuthedRequest,@Param('id') id:string){return this.pending.result(r.actor,parse(z.string().min(1).max(200),id));}
     @Post('pending/preview') previewPending(@Req() r:AuthedRequest){return this.pending.preview(r.actor,r.body);}
     @Post('pending/confirm') confirmPending(@Req() r:AuthedRequest){return this.pending.confirm(r.actor,r.body);}
     @Get('acceptance') acceptanceStatus(@Req() r:AuthedRequest){return this.acceptance.status(r.actor);}

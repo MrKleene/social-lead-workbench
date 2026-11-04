@@ -26,7 +26,7 @@ export async function autoReviewScope(db:ReviewDb,postId:string,runId?:string){
   if(s.postId!==post.platformPostId||s.commentId!==c.platformCommentId)throw new ConflictException('本轮评论身份不一致，未送审');
   if(!unique.has(c.platformCommentId))unique.set(c.platformCommentId,c);
  }
- if(!expected||unique.size!==expected)throw new ConflictException('本轮已确认评论缺失或覆盖证据不一致，未送审');
+ if(unique.size!==expected)throw new ConflictException('本轮已确认评论缺失或覆盖证据不一致，未送审');
  return [...unique.values()];
 }
 export function assertAutoReviewTargets(captures:Awaited<ReturnType<typeof autoReviewScope>>,rows:{captureId:string|null;snapshot:unknown;state:string}[]){

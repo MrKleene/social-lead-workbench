@@ -53,8 +53,15 @@ export function journeyStepState(input:{run?:Run;summary?:JourneySummary;error?:
   else if(!sendEnabled&&!history)set(2,'skipped','自动回复未启用');
   else set(2,steps[1].state==='complete'?'next':'idle',history?'暂无回复记录':steps[1].state==='complete'?'下一步 · 自动回复':'等待匹配');
  }
+ // Durable phase gates distinguish queued work from running model/sender IO.
+ if(s?.stages&&!input.error){
+  const c=s.stages.collection,r=s.stages.review;
+  if(!c.ready&&!['running','complete','failed','partial'].includes(steps[1].state))set(1,['RUNNING','QUEUED'].includes(run.status)?'queued':'paused',c.reason);
+  if(!r.ready&&!(total(s.contacts)>0)&&steps[2].state!=='skipped')set(2,['RUNNING','QUEUED'].includes(run.status)||steps[1].state==='running'||steps[1].state==='queued'?'queued':'paused',!c.ready?'等待整轮采集与审核结束':r.reason);
+ }
  for(const live of input.error?[]:s?.live?.current??[]){
   const step=steps.find(x=>x.id===live.stage);if(!step)continue;
+  const gated=s?.stages&&(live.stage==='review'&&!s.stages.collection.ready||live.stage==='contact'&&!s.stages.review.ready)&&!total(s?.contacts??{});if(gated)continue;
   const eligible=live.stage==='collect'?['running','queued'].includes(step.state):live.stage==='review'?['running','queued'].includes(step.state):!['unknown','failed','partial','complete','skipped'].includes(step.state)&&!pauseReason;
   if(!eligible)continue;
   const age=(input.now??Date.now())-new Date(live.at).getTime();const stale=live.state==='stale'||!Number.isFinite(age)||age>15000||age< -5000;
@@ -65,7 +72,7 @@ export function journeyStepState(input:{run?:Run;summary?:JourneySummary;error?:
  const active=steps.filter(x=>['running','queued'].includes(x.state));
  const issue=[...steps].reverse().find(x=>['unknown','failed','paused','partial','unavailable'].includes(x.state));
  const next=steps.find(x=>x.state==='next');
- const current=active.at(-1)?.id??issue?.id??next?.id??null;
+ const current=(s?.stages?(active.find(x=>x.state==='running')??active[0]):active.at(-1))?.id??issue?.id??next?.id??null;
  const ended=steps.every(x=>['complete','skipped'].includes(x.state));
  const caption=active.length?active.map(x=>`${x.label} · ${x.status}`).join(' / ')+(issue?.id==='contact'&&issue.state==='unknown'?' · 发送结果未知，勿重发':''):issue?`${issue.label} · ${issue.status}${issue.id==='contact'&&issue.state==='unknown'?' · 勿重发':''}`:ended?(steps.every(x=>x.state==='complete')?'本轮已完成':'本轮已结束'):next?`${next.status}`:'正在读取进度';
  return {steps,current,caption,attention};

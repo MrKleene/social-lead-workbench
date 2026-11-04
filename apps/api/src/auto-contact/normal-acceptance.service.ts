@@ -1,3 +1,4 @@
+import {runConfigSnapshot} from '../collection/contract';
 import {configInput} from '../collection/contract';
 import {semanticHash} from '../collection/capture-archive';
 import {ConflictException,Inject,Injectable,NotFoundException} from '@nestjs/common';
@@ -53,7 +54,7 @@ export class NormalAcceptanceService {
    if(await tx.collectionRun.count({where:{status:{in:['QUEUED','RUNNING']}}})||await tx.autoReviewJob.count({where:{status:{in:['PENDING','PROCESSING']}}})||await tx.manualReviewJob.count({where:{status:{in:['PENDING','PROCESSING']}}})||await tx.semanticModelCall.count({where:{OR:[{status:'RESERVED'},{createdAt:{gte:a.createdAt}}]}})||await tx.autoContactJob.count({where:{status:{in:['QUEUED','WAITING_ACCOUNT','WAITING_QUOTA','RESERVED','ATTEMPTED']}}})||await tx.deviceExecutionLease.count()||await tx.autoContactRule.count({where:{enabled:true}})||await tx.commentReviewPolicy.count({where:{autoEnabled:true}}))acceptanceConflict();
    const config=await tx.collectionConfig.findUniqueOrThrow({where:{id:s.configId}}),user=await tx.user.findUnique({where:{id:actor.id}});
    const currentSnapshot=configInput.parse({name:config.name,platform:config.platform,mode:config.mode,legacyMatchingEnabled:config.legacyMatchingEnabled,...(config.legacyMatchingEnabled?{semanticRules:config.semanticRules,commentRules:config.commentRules}:{}),keywords:config.keywords,excludeWords:config.excludeWords,batchLimit:config.batchLimit,enabled:config.enabled});
-   if(!user?.active||user.role!=='ADMIN'||config.archivedAt||!config.enabled||semanticHash({...currentSnapshot,batchLimit:1})!==semanticHash({...configInput.parse(run.snapshot),batchLimit:1}))acceptanceConflict();
+   if(!user?.active||user.role!=='ADMIN'||config.archivedAt||!config.enabled||semanticHash({...currentSnapshot,batchLimit:1})!==semanticHash({...configInput.parse(runConfigSnapshot(run.snapshot)),batchLimit:1}))acceptanceConflict();
    const eligible:string[]=[];let excluded=0;
    for(const job of jobs){
     if(job.policyId!==s.policyId||!posts.some(p=>p.postId===job.postId))acceptanceConflict();

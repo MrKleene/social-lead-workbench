@@ -1,3 +1,4 @@
+import {runConfigSnapshot} from './contract';
 import {checkpointParents} from './comment-checkpoint';
 import {runCoverage} from './run-coverage';
 import { RunMetrics,safeRunCoverage,safeCollectionDiagnostic,safeSearchAttempts } from '@crm/contracts';
@@ -21,7 +22,7 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                     await tx.collectionConfig.update({ where: { id: config.id }, data: { activeRunId: null } });
                     return tx.collectionRun.update({ where: { id: run.id }, data: { status: "PAUSED", reason: "PAUSED", finishedAt: new Date() } });
                 }
-                const parsed = configInput.safeParse(run.snapshot);
+                const parsed = configInput.safeParse(runConfigSnapshot(run.snapshot));
                 if (!parsed.success && result.posts.length) throw new ReadFailure("INVALID_DATA");
                 const spec = parsed.success ? parsed.data : { mode: "MOCK" as const, platform: "XHS" as const, keywords: [], excludeWords: [], commentRules: null, semanticRules:null,legacyMatchingEnabled:false };
                 if (spec.mode !== "MOCK" && result.posts.length) {

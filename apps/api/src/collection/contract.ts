@@ -18,6 +18,9 @@ export const configInput = z.object({
     .refine(v => new Set(v.keywords.map(normalize)).size === v.keywords.length, "关键词不能重复")
     .refine(v => !v.legacyMatchingEnabled || !!v.semanticRules || !!v.commentRules || !v.keywords.some(k => v.excludeWords.some(e => normalize(k).includes(normalize(e)))), "排除词不能覆盖搜索关键词");
 export type ConfigInput = z.infer<typeof configInput>;
+/** Private run metadata is not a public collection configuration field. */
+export function runConfigSnapshot(value:unknown){if(!value||typeof value!=='object'||Array.isArray(value))return value;const {strictStages:_,...config}=value as Record<string,unknown>;return config;}
+
 export const scenarioSchema = z.enum(["BASELINE", "NEW", "PARTIAL", "TIMEOUT", "LOGIN_EXPIRED", "RESTRICTED", "MISSING", "DELETED", "READ_WINDOW"]);
 export type Scenario = z.infer<typeof scenarioSchema>;
 export type Failure = "TIMEOUT" | "LOGIN_EXPIRED" | "RESTRICTED" | "INVALID_DATA" | "BUDGET" | "PAUSED" | "REAL_DISABLED" | "UNSUPPORTED" | "RATE_LIMITED" | "ENDPOINT_INVALID" | "PROFILE_MISMATCH" | "MCP_PROTOCOL" | "MCP_TOOLS_MISSING" | "MCP_SESSION_EXPIRED" | "SOURCE_UNAVAILABLE" | "DEVICE_UNAVAILABLE" | "ACCOUNT_CHANGED" | "IDENTITY_MISMATCH" | "AUTHORIZATION_ENDED";

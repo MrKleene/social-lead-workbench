@@ -73,7 +73,7 @@ function harness(bad:boolean){
   auditLog:{findFirst:async()=>({metadata:{requestPolicy:wholePostRequestPolicy}}),create:vi.fn(async()=>({}))},user:{findUnique:async()=>({role:'ADMIN'})},
   autoReviewJob:{findUnique:async()=>({id:'auto',policyId:'workspace',policyVersion:1,status:'PROCESSING',inputPolicyVersion:autoReviewInputPolicy,postId:'post',runId:'run'})},
   capturedComment:{findMany:async()=>rows.map(r=>({id:r.captureId,configId:'config',postId:'post',lastRunId:'run',snapshot:r.snapshot,post:{id:'post',configId:'config',lastRunId:'run',snapshot:{}}}))},commentReadCheckpoint:{findMany:async()=>[]},
-  collectionRun:{findMany:async()=>[],findUnique:async()=>({id:'run',configId:'config',status:'COMPLETE',revision:1,config,cancelRequested:false,snapshot:{mode:'MOCK'}})},
+  collectionRun:{findMany:async()=>[],findUnique:async()=>({id:'run',configId:'config',status:'COMPLETE',revision:1,config,cancelRequested:false,finishedAt:new Date(),snapshot:{mode:'MOCK',strictStages:{version:1,policies:[{id:'workspace',version:1,revision:1,modelVersion:1}]}}})},
   capturedPost:{findUnique:async()=>({id:'post',configId:'config',coverage:'COMPLETE',lastRunId:'run',snapshot:{}})},
   manualReviewJob:{findUnique:async()=>({id:'manual',status:'PROCESSING',policy,policyRevision:1,modelVersion:1,actorId:'admin',batchIds:rows.map(r=>r.id),items:rows.map(r=>({reviewId:r.id,reviewVersion:r.version})),preview:{...payload,requestPolicy:wholePostRequestPolicy,items:payload.items.map((item,i)=>({...item,id:rows[i].id}))}})},
  };

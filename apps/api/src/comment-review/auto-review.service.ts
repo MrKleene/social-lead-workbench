@@ -1,3 +1,4 @@
+import {collectionBarrier,stagePlan} from '../collection/stage-barrier';
 import {liveReporter} from '../common/journey-live';
 import {wasHistoryArchived} from '../history-archive/archive-guard';
 import {coverageSkipped,bindAcceptancePost,activeAcceptance,normalAcceptanceScope,acceptanceReviewAllowed,liveAcceptance} from '../auto-contact/normal-acceptance';
@@ -24,9 +25,11 @@ export class AutoReviewService {
  async postFinished(run:CollectionRun,entry:PostRead){
   await this.db.$transaction(async tx=>{await lockReview(tx);
    if(await wasHistoryArchived(tx,'CollectionRun',run.id))return;
-   const policies=await tx.commentReviewPolicy.findMany({where:{autoEnabled:true}});
+   const plan=stagePlan(run);if(!plan.success)return;
+   const policies=await tx.commentReviewPolicy.findMany({where:{autoEnabled:true,id:{in:plan.data.policies.map(p=>p.id)}}});
    const posts=await tx.capturedPost.findMany({where:{configId:run.configId,lastRunId:run.id,platformPostId:entry.post.id}});
    for(const policy of policies)for(const post of posts){
+    if(!plan.data.policies.some(p=>p.id===policy.id&&p.version===policy.version))continue;
     if(!await bindAcceptancePost(tx,run.id,post.id))continue;
     if(!await acceptanceReviewAllowed(tx,{id:"pending",runId:run.id,postId:post.id,policyId:policy.id,policyVersion:policy.version}))continue;
     const complete=entry.windowRead&&entry.complete&&post.coverage==='COMPLETE';
@@ -48,7 +51,8 @@ export class AutoReviewService {
    const envelope=await activeAcceptance(tx),scope=envelope?normalAcceptanceScope.parse(envelope.scope):null;if(envelope&&(!liveAcceptance(envelope)||!envelope.runId||!envelope.capturedPostId))return null;
    if(envelope&&await tx.autoReviewJob.count({where:{runId:envelope.runId!,status:'PROCESSING'}}))return null;
    const pendingPosts=envelope?await tx.normalAcceptancePost.findMany({where:{acceptanceId:envelope.id,modelCallId:null}}):[];
-   const next=await tx.autoReviewJob.findFirst({where:{status:'PENDING',...(scope?{policyId:scope.policyId,runId:envelope!.runId!,postId:{in:pendingPosts.map(p=>p.postId)}}:{})},orderBy:{createdAt:'asc'}});if(!next)return null;
+   let next:null|Awaited<ReturnType<typeof tx.autoReviewJob.findFirst>>=null,cursor:{id:string;createdAt:Date}|undefined;
+   while(!next){const candidates=await tx.autoReviewJob.findMany({where:{status:'PENDING',...(cursor?{OR:[{createdAt:{gt:cursor.createdAt}},{createdAt:cursor.createdAt,id:{gt:cursor.id}}]}:{}),...(scope?{policyId:scope.policyId,runId:envelope!.runId!,postId:{in:pendingPosts.map(p=>p.postId)}}:{})},orderBy:[{createdAt:'asc'},{id:'asc'}],take:100});if(!candidates.length)break;for(const candidate of candidates){const run=await tx.collectionRun.findUnique({where:{id:candidate.runId}});if(run&&collectionBarrier(run).ready){next=candidate;break;}if(!run||!['RUNNING','QUEUED'].includes(run.status))await tx.autoReviewJob.updateMany({where:{id:candidate.id,status:'PENDING'},data:{status:'CANCELLED',reason:run?collectionBarrier(run).reason:'采集任务不存在'}});}if(candidates.length<100)break;cursor=candidates.at(-1)!;}if(!next)return null;
    const model=await this.policies.models.resolve(tx);
    await tx.autoReviewJob.update({where:{id:next.id},data:{status:'PROCESSING'}});
    try{await assertAutoReview(tx,next.id,model.configurationVersion);}catch(e){await tx.autoReviewJob.update({where:{id:next.id},data:{status:'CANCELLED',reason:e instanceof Error?e.message:'自动授权已失效'}});return null;}

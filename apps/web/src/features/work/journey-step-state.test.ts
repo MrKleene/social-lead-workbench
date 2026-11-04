@@ -57,3 +57,16 @@ it('reread ends after matching without a send-next step, but retains real histor
  expect(journeyStepState({...reread,summary:{...base.summary,contacts:{}}}).steps[2]).toMatchObject({state:'skipped',status:'本次不自动回复或私信'});
  expect(journeyStepState({...reread,summary:{...base.summary,contacts:{UNKNOWN:1}}}).steps[2].state).toBe('unknown');
 });
+
+it('whole-run phase gates keep collection current and reject stale downstream live labels',()=>{
+ const s={reviewJobs:{PENDING:3},reviews:{},contacts:{},matches:0,stages:{collection:{ready:false,reason:'等待整轮采集结束'},review:{ready:false,reason:'等待整轮采集结束'}},live:{observedAt:new Date().toISOString(),recent:[],current:[{stage:'review' as const,phase:'MODEL',label:'评论匹配中',at:new Date().toISOString(),state:'running' as const,concurrent:1}]}};
+ const p=journeyStepState({...base,run:{...run,status:'RUNNING'},summary:s});expect(p.current).toBe('collect');expect(p.steps[1]).toMatchObject({state:'queued',status:'等待整轮采集结束'});
+ const matching=journeyStepState({...base,summary:{...s,live:undefined,reviewJobs:{PROCESSING:1},stages:{collection:{ready:true,reason:'整轮采集已结束'},review:{ready:false,reason:'等待整轮评论审核结束'}}}});expect(matching.current).toBe('review');expect(matching.steps[2].status).toBe('等待整轮评论审核结束');
+});
+it('phase failure never claims completion or suppresses historical UNKNOWN and reread scope',()=>{
+ const stages={collection:{ready:false,reason:'本轮采集不完整'},review:{ready:false,reason:'本轮采集不完整'}};
+ const s={...base.summary,contacts:{},reviewJobs:{},reviews:{},stages};
+ expect(journeyStepState({...base,run:{...run,status:'FAILED'},summary:s}).steps[2].state).toBe('paused');
+ expect(journeyStepState({...base,summary:{...s,contacts:{UNKNOWN:1}}}).steps[2].state).toBe('unknown');
+ expect(journeyStepState({...base,run:{...run,readPlan:{rounds:1,postsPerRound:1,commentPages:1,savedPostId:'saved'}},summary:s}).steps[2].state).toBe('skipped');
+});

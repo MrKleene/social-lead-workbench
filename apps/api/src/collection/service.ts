@@ -1,3 +1,4 @@
+import {runConfigSnapshot} from './contract';
 import {liveReporter,type LivePhase} from '../common/journey-live';
 import {historyDisplay} from '../common/db';
 import {runHistory,runHistoryInput} from './run-history';
@@ -151,7 +152,7 @@ export class CollectionService {
                 await savedReadTarget(tx,id,readPlan.savedPostId,mode);
             }
             const execution=accountReadMode() && mode !== 'MOCK' ? await this.accountReads!.authorize(tx,actor,mode,executionAccountId,consent) : undefined;
-            const created = await tx.collectionRun.create({ data: { configId: id, revision: config.revision, snapshot, scenario, requestKey, readPlan:readPlan||{rounds:1,postsPerRound:snapshot.batchLimit,commentPages:mode==="MOCK"?4:1}, ...(execution?{execution}:{}) } });
+            const created = await tx.collectionRun.create({ data: { configId: id, revision: config.revision, snapshot:{...snapshot,strictStages:{version:1,policies:(await tx.commentReviewPolicy.findMany({where:{autoEnabled:true},select:{id:true,version:true,revision:true,autoModelVersion:true}})).map(p=>({id:p.id,version:p.version,revision:p.revision,modelVersion:p.autoModelVersion}))}}, scenario, requestKey, readPlan:readPlan||{rounds:1,postsPerRound:snapshot.batchLimit,commentPages:mode==="MOCK"?4:1}, ...(execution?{execution}:{}) } });
             if(acceptance){const bound=await tx.normalAutomationAcceptance.updateMany({where:{id:acceptance.id,state:'ACTIVE',runId:null},data:{runId:created.id}});if(bound.count!==1)throw new ConflictException('本次验收采集次数已使用');}
             await tx.collectionConfig.update({ where: { id }, data: { activeRunId: created.id } });
             await tx.auditLog.create({ data: { actorId: actor.id, action: config.mode === "MOCK" ? "COLLECTION_REQUESTED_MOCK" : "COLLECTION_REQUESTED_MCP", entityId: created.id, metadata: { configId: id, scenario, mode: config.mode } } });
@@ -199,7 +200,7 @@ export class CollectionService {
         const cancelled=async()=>{const config=await this.db.collectionConfig.findUniqueOrThrow({where:{id:run.configId}}),fresh=await this.db.collectionRun.findUniqueOrThrow({where:{id}});return !await acceptanceRunAllowed(this.db,id)||!config.enabled||!!config.archivedAt||config.revision!==run.revision||fresh.cancelRequested||fresh.status!=='RUNNING';};
         try {
             if(!await acceptanceRunAllowed(this.db,id))throw new ReadFailure('AUTHORIZATION_ENDED');
-            const spec = configInput.parse(run.snapshot);
+            const spec = configInput.parse(runConfigSnapshot(run.snapshot));
             const plan=run.readPlan?readPlanSchema.parse(run.readPlan):undefined;
             const selectedPost=plan?.savedPostId?await savedReadTarget(this.db,run.configId,plan.savedPostId,spec.mode):undefined;
             if(selectedPost&&spec.batchLimit!==1)throw new ReadFailure('INVALID_DATA');
