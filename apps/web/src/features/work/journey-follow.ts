@@ -12,3 +12,12 @@ export function followJourney(previous:JourneyObservation|undefined, next:Snapsh
  if(next.reviewReady===undefined)return {observation:previous,follow:false};
  return {observation:{...previous,consumed:true},follow:previous.active&&next.reviewReady&&next.stage==='collect'};
 }
+
+export type ReviewJourneyObservation={key:string;armed:boolean;consumed:boolean};
+/** Follow a witnessed review transition once; refreshing a finished run is not a transition. */
+export function followReviewJourney(previous:ReviewJourneyObservation|undefined,next:{key:string;active:boolean;ready:boolean|undefined;stage:JourneyStage;canContinue:boolean}){
+ if(!previous||previous.key!==next.key)return {observation:{key:next.key,armed:next.active,consumed:next.ready===true},follow:false};
+ if(previous.consumed)return {observation:previous,follow:false};
+ if(next.ready!==true)return {observation:{...previous,armed:previous.armed||next.active},follow:false};
+ return {observation:{...previous,consumed:true},follow:previous.armed&&next.canContinue&&next.stage==='review'};
+}

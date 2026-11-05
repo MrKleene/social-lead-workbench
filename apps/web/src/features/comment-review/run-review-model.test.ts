@@ -13,6 +13,8 @@ it('labels run progress from its jobs, not historical first-capture score totals
  expect(runReviewStage({COMPLETED:1},true,true).label).toBe('匹配作业已结束');
  expect(runReviewStage({SKIPPED:1},true,true).label).toBe('存在未送审帖子');
  expect(runReviewStage({FAILED:1},true,true).notice).toContain('对应帖子');
- expect(runReviewStage({PROCESSING:1,FAILED:1},true,true).label).toBe('评论匹配中');
+ expect(runReviewStage({PROCESSING:1,FAILED:1},true,true).label).toBe('评论匹配中 · 已完成 0/2 批');
  expect(runReviewStage({},true,false).label).toBe('匹配未启用');
 });
+
+it('shows remaining batches without calling partial scores a completed round',()=>{expect(runReviewStage({COMPLETED:1,PROCESSING:1,PENDING:1},true,true).label).toBe('评论匹配中 · 已完成 1/3 批 · 1 批等待');expect(runReviewStage({COMPLETED:2,PENDING:1},true,true).label).toBe('等待评论匹配 · 已完成 2/3 批 · 1 批等待');});

@@ -4,7 +4,7 @@ import {useRunHistory,runSelection} from './use-run-history';
 import {runReviewStage} from '@/features/comment-review/run-review-model';
 import {useAutomationPreferences} from './settings-data';
 import {useEffect,useRef,useState} from 'react';
-import {followJourney,type JourneyObservation} from './journey-follow';
+import {followJourney,followReviewJourney,type JourneyObservation,type ReviewJourneyObservation} from './journey-follow';
 import {journeyProgress} from './journey-progress';
 import {collectionTaskSession} from './collection-task-session';
 import {useQuery} from '@tanstack/react-query';
@@ -65,23 +65,31 @@ export function useJourney(config: Config | undefined, visible: boolean) {
   const outcome=run?collectionOutcome(run):undefined;
   const notice=stage==='collect'?(outcome?.warning?outcome.issue||outcome.label:undefined):unread?'进度读取失败，请重试。':stage==='review'?reviewStage?.notice:progress?.contactNotice;
   const observed=useRef<JourneyObservation|undefined>(undefined);
+  const reviewObserved=useRef<ReviewJourneyObservation|undefined>(undefined);
+  const selectedRule=contact.data?.rules.find(r=>r.platform===config?.platform);
+  const reviewActive=!!run&&(['QUEUED','RUNNING'].includes(run.status)||['PENDING','PROCESSING','RUNNING'].some(k=>(summary.data?.reviewJobs[k]||0)>0));
+  const reviewComplete=unread?undefined:summary.data?.stages?.review.ready;
+  const replyAvailable=!run?.readPlan?.savedPostId&&(!!selectedRule?.enabled||Object.values(summary.data?.contacts||{}).some(n=>n>0));
   const reviewReady=!summary.data||reviews.isPending||unread?undefined:
     Object.values(summary.data.reviews).some(n=>n>0)||Object.values(summary.data.reviewJobs).some(n=>n>0)||
     (!!run?.capturedCommentsCount&&!!reviews.data?.policies.some(p=>p.autoEnabled));
   useEffect(()=>{
-    if(!visible||!run||detail.isError||history)return;
+    if(!visible||history){observed.current=undefined;reviewObserved.current=undefined;return;}
+    if(!run||detail.isError)return;
     const next=followJourney(observed.current,{key:`${config?.id}:${run.id}`,status:run.status,
       safeEnd:['COMPLETE','PARTIAL'].includes(run.status)&&!outcome?.warning,reviewReady,stage});
     observed.current=next.observation;
-    if(next.follow)setParams(old=>{
+    const reviewNext=followReviewJourney(reviewObserved.current,{key:`${config?.id}:${run.id}`,active:reviewActive,ready:reviewComplete,stage:next.follow?'review':stage,canContinue:replyAvailable});
+    reviewObserved.current=reviewNext.observation;
+    const target=reviewNext.follow?'contact':next.follow?'review':null;
+    if(target)setParams(old=>{
       const p=new URLSearchParams(old);
-      if(journeyStage(p.get('stage'))!=='collect')return old;
-      p.set('stage','review');p.set('run',run.id);if(config)p.set('config',config.id);
+      if(journeyStage(p.get('stage'))!==stage)return old;
+      p.set('stage',target);p.set('run',run.id);if(config)p.set('config',config.id);
       return p;
     },{replace:true});
-  },[history,visible,run?.id,run?.status,config?.id,detail.isError,outcome?.warning,reviewReady,stage,setParams]);
+  },[history,visible,run?.id,run?.status,config?.id,detail.isError,outcome?.warning,reviewReady,reviewActive,reviewComplete,replyAvailable,stage,setParams]);
 
-  const selectedRule=contact.data?.rules.find(r=>r.platform===config?.platform);
   const pauseReason=history||run?.readPlan?.savedPostId&&!Object.values(summary.data?.contacts||{}).some(n=>n>0)?null:selectedRule?.pauseReason;
   const stepProgress=journeyStepState({run,summary:summary.data,error:unread||detail.isError||historyQuery.isError,loading:!!config&&historyQuery.isPending,reviewEnabled:!!policy?.autoEnabled,sendEnabled:!!selectedRule?.enabled,history,pauseReason,now:progressNow,disconnected:connection==='reconnecting'||connection==='degraded'});
   return {stepProgress,pauseReason,historyQuery,current,history,missing:selection.missing,returnCurrent:()=>{if(current)selectRun(current.id);},stage, changeStage, run, runs, requested, selectRun, detail, reviews, policy, contact, summary, statuses, notice};

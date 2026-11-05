@@ -1,3 +1,4 @@
+import {reviewBatchProgress} from '@/features/comment-review/run-review-model';
 import type {JourneySummary} from '@crm/contracts';
 import type {Run} from '@/features/collection/types';
 import {collectionOutcome} from '@/features/collection/collection-outcome';
@@ -67,6 +68,8 @@ export function journeyStepState(input:{run?:Run;summary?:JourneySummary;error?:
   const age=(input.now??Date.now())-new Date(live.at).getTime();const stale=live.state==='stale'||!Number.isFinite(age)||age>15000||age< -5000;
   step.state=stale?'unavailable':'running';step.status=(stale?'进度更新中断，请核查任务':live.label)+(live.concurrent>1?` · ${live.concurrent} 项并行`:'');
  }
+ const batchProgress=reviewBatchProgress(s?.reviewJobs??{});
+ if(batchProgress&&['running','queued'].includes(steps[1].state))steps[1].status+=` · ${batchProgress}`;
  if(input.disconnected)for(const step of steps)if(['running','loading','unavailable'].includes(step.state)){step.state='unavailable';step.status='连接中断，正在重连';}
  const attention=steps.some(x=>['unknown','failed','paused','partial','unavailable'].includes(x.state));
  const active=steps.filter(x=>['running','queued'].includes(x.state));
