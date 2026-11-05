@@ -1,6 +1,7 @@
+import {AutoReviewService} from '../src/comment-review/auto-review.service';
 import {avatarDiagnosticUrlReasons} from './fixtures/avatar-diagnostic-v2';
 import 'reflect-metadata';
-import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
+import { beforeAll, afterAll, afterEach, describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -104,11 +105,9 @@ describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
         expect((await write('delete', `/reply-templates/${id}`, { version: 1 })).status).toBe(409);
         expect((await write('post', '/collection/configs', spec('坏话术', { defaultReplyTemplateId: 'missing' }))).status).toBe(400);
         await run(c.id);
-        const m = await db.sourceMatch.findFirstOrThrow({ where: { configId: c.id }, include: { comment: { include: { identity: { include: { lead: true } } } } } });
-        const leadId = m.comment.identity.lead!.id;
-        const preview = await write('post', '/reply-templates/preview', { body: draft.body, leadId });
-        expect(preview.body.text).toContain('话术关联'); expect(preview.body.missing).toContain('专业'); expect(preview.body.sent).toBe(false);
-        expect((await read(`/reply-templates/for-lead/${leadId}`)).body[0].sent).toBe(false);
+        const preview = await write('post', '/reply-templates/preview', {body:draft.body});
+        expect(preview.body.missing).toEqual(['昵称','帖子标题','关键词','专业']);expect(preview.body.sent).toBe(false);
+        expect((await write('post','/reply-templates/preview',{body:draft.body,leadId:'retired'})).status).toBe(400);
         const empty = await write('post', '/reply-templates/preview', { body: '{{未知}} {{专业}}' });
         expect(empty.body.unknown).toEqual(['未知']); expect(empty.body.missing).toEqual(['专业']);
         expect((await write('delete', `/collection/configs/${c.id}`, { revision: 1 })).status).toBe(200);
@@ -124,50 +123,11 @@ describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
         for (const [method,path,body] of [['post','/reply-templates',draft],['patch',`/reply-templates/${id}`,{draft,version:0}],['delete',`/reply-templates/${id}`,{version:0}],['post','/reply-templates/preview',{body:draft.body}]] as const)
             expect((await write(method,path,body,a)).status).toBe(403);
         expect((await api().post('/api/reply-templates').set('Cookie',admin.cookie).set('Origin',origin).send(draft)).status).toBe(403);
-        const c = await config('话术销售权限', { defaultReplyTemplateId: id }); await run(c.id);
-        const m = await db.sourceMatch.findFirstOrThrow({ where: { configId: c.id }, include: { comment: { include: { identity: { include: { lead: true } } } } } });
-        const leadId = m.comment.identity.lead!.id;
-        expect((await read(`/reply-templates/for-lead/${leadId}`,a)).status).toBe(404);
-        await write('patch',`/leads/${leadId}/owner`,{ownerId:aId,version:0});
-        expect((await read(`/reply-templates/for-lead/${leadId}`,a)).status).toBe(200);
-        expect((await read(`/reply-templates/for-lead/${leadId}`,b)).status).toBe(404);
+        expect((await read('/reply-templates/for-lead/retired',admin)).status).toBe(404);
         expect((await write('post',`/reply-templates/${id}/send`,{})).status).toBe(404);
     });
-    it('联系阶段独立保留旧销售状态，需人工确认，支持忽略恢复和版本冲突审计', async () => {
-        const c = await config('人工联系状态'); await run(c.id);
-        const source = await db.sourceMatch.findFirstOrThrow({ where: { configId: c.id }, include: { comment: { include: { identity: { include: { lead: true } } } } } });
-        const lead = source.comment.identity.lead!;
-        expect(lead.contactStage).toBe('MATCHED');
-        const path = `/leads/${lead.id}/contact`;
-        expect((await write('patch', path, { stage: 'INTERESTED', note: '虚构实际回复依据', confirmed: true, version: 0 })).status).toBe(400);
-        expect((await write('patch', path, { stage: 'TO_CONTACT', version: 0 })).body.contactStage).toBe('TO_CONTACT');
-        expect((await write('patch', path, { stage: 'CONTACTED', note: '虚构联系情况记录', version: 1 })).status).toBe(400);
-        expect((await write('patch', path, { stage: 'CONTACTED', note: '短', confirmed: true, version: 1 })).status).toBe(400);
-        expect((await write('patch', path, { stage: 'CONTACTED', note: '测试者已自行在平台联系', confirmed: true, version: 1 })).body.contactStage).toBe('CONTACTED');
-        expect((await write('patch', path, { stage: 'INTERESTED', note: '对方实际回复愿意进一步了解', confirmed: true, version: 1 })).status).toBe(409);
-        expect((await write('patch', path, { stage: 'INTERESTED', note: '对方实际回复愿意进一步了解', confirmed: true, version: 2 })).body.contactStage).toBe('INTERESTED');
-        const saved = await db.lead.findUniqueOrThrow({ where: { id: lead.id } });
-        expect(saved.status).toBe(lead.status); expect(saved.reviewedAt).toBeNull(); expect(saved.contactedAt).not.toBeNull();
-        const audit = await db.auditLog.findFirstOrThrow({ where: { entityId: lead.id, action: 'LEAD_CONTACT_STAGE_RECORDED' }, orderBy: { createdAt: 'desc' } });
-        expect(audit.metadata).toMatchObject({ to: 'INTERESTED', selfReportedContact: true, platformMessageSent: false });
-        expect((await write('patch', path, { stage: 'IGNORED', version: 3 })).body.contactStage).toBe('IGNORED');
-        expect((await write('patch', path, { stage: 'MATCHED', version: 4 })).body.contactStage).toBe('MATCHED');
-    });
-    it('联系状态沿用负责人权限与CSRF，转交后原销售不能更改；重新采集不重置人工处理', async () => {
-        const c = await config('联系权限'); await run(c.id);
-        const source = await db.sourceMatch.findFirstOrThrow({ where: { configId: c.id }, include: { comment: { include: { identity: { include: { lead: true } } } } } });
-        const id = source.comment.identity.lead!.id, path = `/leads/${id}/contact`;
-        expect((await write('patch', path, { stage: 'TO_CONTACT', version: 0 }, a)).status).toBe(403);
-        expect((await write('patch', `/leads/${id}/owner`, { ownerId: aId, version: 0 })).status).toBe(200);
-        expect((await api().patch('/api' + path).set('Cookie', a.cookie).set('Origin', origin).send({ stage: 'TO_CONTACT', version: 1 })).status).toBe(403);
-        expect((await write('patch', path, { stage: 'IGNORED', version: 1 }, a)).status).toBe(200);
-        await run(c.id, 'NEW');
-        expect((await db.lead.findUniqueOrThrow({ where: { id } })).contactStage).toBe('IGNORED');
-        const version = (await db.lead.findUniqueOrThrow({ where: { id } })).version;
-        expect((await write('patch', `/leads/${id}/owner`, { ownerId: bId, version })).status).toBe(200);
-        expect((await write('patch', path, { stage: 'MATCHED', version: version + 1 }, a)).status).toBe(403);
-        expect((await write('patch', path, { stage: 'MATCHED', version: version + 1 }, b)).status).toBe(200);
-    });
+
+
     it('管理员新增编辑启停归档多组配置，审计和版本冲突生效', async () => {
         const r = await write('post', '/collection/configs', spec('可配置关键词'));
         expect(r.status).toBe(201);
@@ -200,7 +160,7 @@ describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
     it('基线读取包含分页楼中楼：多评论一个身份，排除广告，无首次提醒', async () => {
         const c = await config('基线语料');
         const r = await run(c.id);
-        expect(r).toMatchObject({ status: 'COMPLETE', observed: 4, matched: 3, added: 2, notices: 0, requests: 6 });
+        expect(r).toMatchObject({ status: 'COMPLETE', observed: 4, matched: 3, added: 0, notices: 0, requests: 6 });
         const matches = await db.sourceMatch.findMany({ where: { configId: c.id }, include: { comment: true } });
         expect(matches).toHaveLength(3);
         expect(matches.every(m => m.isBaseline)).toBe(true);
@@ -209,11 +169,11 @@ describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
         expect(matches.some(m => m.classification === 'RELATED_ONLY')).toBe(true);
         expect(matches.every(m => !m.comment.originalText.includes('广告'))).toBe(true);
     });
-    it('后续新增只提醒一次，重复运行与请求重放均幂等', async () => {
+    it('后续新增不再创建线索提醒，重复运行与请求重放均幂等', async () => {
         const c = await config('新增语料');
         await run(c.id);
         const n = await run(c.id, 'NEW');
-        expect(n).toMatchObject({ added: 1, notices: 1 });
+        expect(n).toMatchObject({ added: 0, notices: 0 });
         expect(await run(c.id, 'NEW')).toMatchObject({ added: 0, notices: 0 });
         const before = enqueue.mock.calls.length;
         expect((await service.start(actor, c.id, 'NEW', n.requestKey)).id).toBe(n.id);
@@ -227,16 +187,16 @@ describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
         const posts = await db.sourcePost.findMany({ where: { title: '【模拟】并发语料讨论' } });
         expect(posts).toHaveLength(1);
         expect(await db.sourceComment.count({ where: { postId: posts[0].id } })).toBe(4);
-        expect(await db.collectionNotice.count({ where: { comment: { postId: posts[0].id } } })).toBe(1);
+        expect(await db.collectionNotice.count({ where: { comment: { postId: posts[0].id } } })).toBe(0);
     });
-    it('同一用户的后续新评论只追加来源与提醒，不新增线索', async () => {
+    it('同一用户的后续新评论只追加来源，不创建线索或提醒', async () => {
         const c = await config('同用户新增');
         await run(c.id);
         const r = await service.start(actor, c.id, 'NEW', randomUUID());
         const mock = new MockAdapter('XHS', 'NEW'), original = mock.comments.bind(mock);
         mock.comments = async (p, cursor) => { const page = await original(p, cursor); return { ...page, items: page.items.map(item => item.id.endsWith('-c3') ? { ...item, userId: `${p.id}-u1`, nickname: '模拟用户1' } : item) }; };
         await service.execute(r.id, mock);
-        expect(await db.collectionRun.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ added: 0, notices: 1 });
+        expect(await db.collectionRun.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ added: 0, notices: 0 });
     });
     it('来源稳定ID内容冲突时回滚整轮，保留旧原文', async () => {
         const c = await config('冲突保护');
@@ -255,7 +215,7 @@ describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
         const posts = await db.sourcePost.findMany({ where: { title: '【模拟】跨平台讨论' } });
         expect(posts).toHaveLength(2);
         expect(posts[0].platformPostId).toBe(posts[1].platformPostId);
-        expect(await db.lead.count({ where: { identity: { comments: { some: { postId: { in: posts.map(p => p.id) } } } } } })).toBe(4);
+        expect(await db.lead.count({ where: { identity: { comments: { some: { postId: { in: posts.map(p => p.id) } } } } } })).toBe(0);
     });
     it('首次局部读取不立基线；恢复完整后不补发历史提醒', async () => {
         const c = await config('局部恢复');
@@ -321,89 +281,9 @@ describe('关键词采集：PostgreSQL 与 HTTP 权限闭环', () => {
         expect((await db.collectionRun.findUniqueOrThrow({ where: { id: r.id } })).status).toBe('PAUSED');
         expect(await db.sourceMatch.count({ where: { configId: c.id } })).toBe(0);
     });
-    it('批量分配仅管理员可操作，版本冲突整批回滚，每项审计', async () => {
-        const c = await config('批量分配');
-        await run(c.id);
-        const matches = await db.sourceMatch.findMany({ where: { configId: c.id }, include: { comment: { include: { identity: { include: { lead: true } } } } } });
-        const leads = [...new Map(matches.map(m => [m.comment.identity.lead!.id, m.comment.identity.lead!])).values()];
-        const items = leads.map(l => ({ id: l.id, version: l.version }));
-        expect((await write('patch', '/leads/batch-owner', { items, ownerId: aId }, a)).status).toBe(403);
-        expect((await write('patch', '/leads/batch-owner', { items: [...items, items[0]], ownerId: aId })).status).toBe(400);
-        expect((await write('patch', '/leads/batch-owner', { items, ownerId: actor.id })).status).toBe(400);
-        expect((await write('patch', '/leads/batch-owner', { items: items.map((i, n) => ({ ...i, version: n ? 99 : i.version })), ownerId: aId })).status).toBe(409);
-        expect(await db.lead.count({ where: { id: { in: items.map(i => i.id) }, ownerId: null } })).toBe(2);
-        expect((await write('patch', '/leads/batch-owner', { items, ownerId: aId })).body.updated).toBe(2);
-        expect(await db.auditLog.count({ where: { action: 'LEAD_BATCH_ASSIGNED', entityId: { in: items.map(i => i.id) } } })).toBe(2);
-        await db.lead.updateMany({ where: { id: { in: items.map(i => i.id) } }, data: { ownerId: null } });
-    });
-    it('提醒按负责人隔离、已读按用户隔离、转交后立即撤权', async () => {
-        const c = await config('提醒权限');
-        await run(c.id);
-        await run(c.id, 'NEW');
-        const notice = await db.collectionNotice.findFirstOrThrow({ where: { comment: { matches: { some: { configId: c.id } } } } });
-        await db.lead.update({ where: { id: notice.leadId }, data: { ownerId: aId } });
-        expect((await read('/notices', a)).body.map((n: {
-            id: string;
-        }) => n.id)).toEqual([notice.id]);
-        expect((await read('/notices', b)).body).toEqual([]);
-        expect((await write('post', `/notices/${notice.id}/read`, {}, b)).status).toBe(404);
-        expect((await write('post', `/notices/${notice.id}/read`, {}, a)).status).toBe(201);
-        expect((await read('/notices', admin)).body.find((n: {
-            id: string;
-        }) => n.id === notice.id).reads).toEqual([]);
-        const detail = await read(`/leads/${notice.leadId}`, a);
-        expect(detail.body.identity.comments[0].matches[0].keywords).toEqual(['提醒权限']);
-        expect(detail.body.reviewedAt).toBeNull();
-        expect((await write('patch', `/leads/${notice.leadId}/owner`, { ownerId: bId, version: 0 })).status).toBe(200);
-        expect((await read('/notices', a)).body).toEqual([]);
-        expect((await write('post', `/notices/${notice.id}/read`, {}, a)).status).toBe(404);
-        expect((await read('/notices', b)).body[0].reads).toEqual([]);
-    });
-    it('模拟采集提醒到人工核验、联系阶段、销售交接和重新读取均持久化', async () => {
-        expect(process.env.XHS_MCP_ENABLED).not.toBe('1');
-        expect((await read('/collection/mcp/readiness')).body).toMatchObject({ enabled: false, reason: 'REAL_DISABLED' });
-        const c = await config('【验收】模拟闭环持久化');
-        expect(await run(c.id)).toMatchObject({ added: 2, notices: 0 });
-        expect(await run(c.id, 'NEW')).toMatchObject({ added: 1, notices: 1 });
-        expect(await run(c.id, 'NEW')).toMatchObject({ added: 0, notices: 0 });
-        const notices = await read('/notices');
-        expect(notices.status).toBe(200);
-        const storedNotice = await db.collectionNotice.findFirstOrThrow({ where: { comment: { matches: { some: { configId: c.id } } } } });
-        const notice = notices.body.find((n: { id: string }) => n.id === storedNotice.id);
-        expect(notice).toBeDefined();
-        const id = notice.leadId;
-        const initial = await read(`/leads/${id}`);
-        expect(initial.status).toBe(200);
-        expect(initial.body.isDemo).toBe(true);
-        expect(initial.body.identity.comments.some((v: { matches: { keywords: string[] }[] }) =>
-            v.matches.some(m => m.keywords.includes('【验收】模拟闭环持久化')))).toBe(true);
-        const note = '【验收虚构】已核对模拟原文，仅为潜在需求，未联系且未取得同意';
-        expect((await write('patch', `/leads/${id}/review`, { note, version: 0 })).status).toBe(200);
-        expect((await write('patch', `/leads/${id}/contact`, { stage: 'TO_CONTACT', note, version: 1 })).status).toBe(200);
-        expect((await write('patch', `/leads/${id}/owner`, { ownerId: aId, version: 2 })).status).toBe(200);
-        expect((await read(`/leads/${id}`, a)).status).toBe(200);
-        expect((await read(`/leads/${id}`, b)).status).toBe(404);
-        expect((await write('post', `/notices/${notice.id}/read`, {}, a)).status).toBe(201);
-        const content = '【验收虚构】销售甲接收并核查来源；尚未联系平台用户';
-        expect((await write('post', `/leads/${id}/followups`, { content, nextFollowUpAt: null, status: 'FOLLOWING', version: 3 }, a)).status).toBe(201);
-        const saved = await read(`/leads/${id}`, a);
-        expect(saved.body).toMatchObject({ ownerId: aId, status: 'FOLLOWING', contactStage: 'TO_CONTACT', reviewNote: note, version: 4 });
-        expect(saved.body.followups).toHaveLength(1);
-        expect(saved.body.followups[0].content).toBe(content);
-        expect(await run(c.id, 'NEW')).toMatchObject({ added: 0, notices: 0 });
-        const refreshed = await read(`/leads/${id}`, a);
-        expect(refreshed.body).toEqual(saved.body);
-        expect((await write('patch', `/leads/${id}/owner`, { ownerId: bId, version: 4 })).status).toBe(200);
-        expect((await read(`/leads/${id}`, a)).status).toBe(404);
-        const handedOff = await read(`/leads/${id}`, b);
-        expect(handedOff.status).toBe(200);
-        expect(handedOff.body).toMatchObject({ ownerId: bId, contactStage: 'TO_CONTACT', status: 'FOLLOWING', version: 5 });
-        expect(handedOff.body.followups[0].content).toBe(content);
-        const persisted = await db.lead.findUniqueOrThrow({ where: { id }, include: { followups: true } });
-        expect(persisted.ownerId).toBe(bId); expect(persisted.followups).toHaveLength(1);
-        expect(await db.auditLog.count({ where: { entityId: id, action: 'FOLLOWUP_CREATED' } })).toBe(1);
-        expect(await db.collectionNotice.count({ where: { leadId: id } })).toBe(1);
-    });
+
+
+
 });
 
 describe.skipIf(process.env.CRM_MOCK_ONLY === '1')('MCP默认关闭、只读就绪检查与离线真实传输入库', () => {
@@ -443,20 +323,17 @@ describe.skipIf(process.env.CRM_MOCK_ONLY === '1')('MCP默认关闭、只读就�
     });
     it('首次窗口无提醒；嵌套来源、重复幂等、新观察提醒与人工处理保留',async()=>{
         const c=await create(); const first=await execute(c.id);
-        expect(first).toMatchObject({status:'PARTIAL',reason:'MCP_WINDOW_ONLY',observed:5,matched:3,added:3,notices:0});
+        expect(first).toMatchObject({status:'PARTIAL',reason:'MCP_WINDOW_ONLY',observed:5,matched:3,added: 0,notices:0});
         const archive=await read(`/collection/configs/${c.id}/captures`);expect(archive.body.items).toHaveLength(5);for(const row of archive.body.items)expect(row.snapshot).toMatchObject({authorNickname:expect.stringContaining('离线样例'),authorAvatarUrl:'https://sns-avatar-qc.xhscdn.com/avatar/fictional.jpg',publishedAt:'2026-10-21T16:10:00.000Z'});
         expect(await db.monitorPost.findFirst({where:{configId:c.id}})).toMatchObject({baselineAt:null,coverage:'PARTIAL',lastRunId:first.id});
         const source=await db.sourceComment.findUniqueOrThrow({where:{platform_platformCommentId:{platform:'XHS',platformCommentId:'fixture-xhs-deep'}},include:{identity:{include:{lead:true}}}});
         expect(source).toMatchObject({isDemo:true,parentPlatformCommentId:'fixture-xhs-reply'});
-        const lead=source.identity.lead!; expect(lead.summary).toContain('离线MCP夹具');
-        expect((await write('patch',`/leads/${lead.id}/contact`,{stage:'TO_CONTACT',version:lead.version})).status).toBe(200);
+        expect(source.identity.lead).toBeNull();
         expect((await execute(c.id)).added).toBe(0);
         fixture.state.scenario='NEW';
-        expect(await execute(c.id)).toMatchObject({added:1,notices:1});
         expect(await execute(c.id)).toMatchObject({added:0,notices:0});
-        expect((await db.lead.findUniqueOrThrow({where:{id:lead.id}})).contactStage).toBe('TO_CONTACT');
-        const notice=await db.collectionNotice.findFirstOrThrow({where:{comment:{platformCommentId:'fixture-xhs-later'}}});
-        expect(notice.title).toContain('新观察到'); expect(notice.title).toContain('未验证发布时间');
+        expect(await execute(c.id)).toMatchObject({added:0,notices:0});
+        expect(await db.collectionNotice.count({where:{comment:{platformCommentId:'fixture-xhs-later'}}})).toBe(0);
         const detail=await read(`/collection/configs/${c.id}`);
         expect(JSON.stringify(detail.body)).not.toContain('fictional-reference');
         expect(JSON.stringify(await db.auditLog.findMany())).not.toContain('fictional-reference');
@@ -532,7 +409,7 @@ describe('独立专业评论规则与历史兼容',()=>{
   adapter.comments=async()=>({complete:true,items:[['a','u1','护理',undefined],['b','u1','幼教',undefined],['c','u2','会计','demo-collect-absent'],['d','u3','护理代写包过',undefined],['e','u4','天气不错',undefined],['f','u5','护理，不需要选题了',undefined]].map(([id,u,text,parentId])=>({id:'demo-collect-rules-'+id,userId:'demo-collect-rules-'+u,nickname:'虚构',text:text!,parentId,hasReplies:false}))});
   const first=await service.start(actor,id,'BASELINE',randomUUID());await service.execute(first.id,adapter);
   const result=await db.collectionRun.findUniqueOrThrow({where:{id:first.id}});
-  expect(result).toMatchObject({observed:6,matched:3,added:2,notices:0});
+  expect(result).toMatchObject({observed:6,matched:3,added: 0,notices:0});
   expect(result.metrics).toMatchObject({postsRead:1,rootComments:5,replies:1,highRelevant:2,needsReview:1,unmatched:3,filterReasons:{PROVIDER:1,NO_SIGNAL:1,NEGATED:1}});
   const details=await read(`/collection/configs/${id}`);expect(details.body.matches).toHaveLength(3);expect(details.body.matches.every((m:any)=>m.isBaseline&&m.assessment.evidence.length>0)).toBe(true);
   const second=await service.start(actor,id,'BASELINE',randomUUID());await service.execute(second.id,adapter);expect(await db.collectionRun.findUnique({where:{id:second.id}})).toMatchObject({matched:3,added:0,notices:0});
@@ -657,6 +534,7 @@ describe('Qwen manual integration: isolated database and fictional HTTP only',()
 });
 
 
+afterEach(()=>vi.restoreAllMocks());
 describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HTTP',()=>{
  const rules={version:1 as const,target:'寻找明确请求毕业论文选题帮助的学生',reviewThreshold:70};
  const sample:import('../src/collection/contract').ReadAdapter={mode:'MOCK',platform:'XHS',search:async()=>({items:[{id:'demo-collect-archive-post',title:'虚构毕业论文讨论'}],complete:true}),post:async p=>({...p,body:'讨论各专业选题'}),comments:async()=>({items:[{id:'demo-collect-archive-root',userId:'demo-collect-archive-a',nickname:'虚构甲',text:'护理专业如何选题',hasReplies:true}],complete:true}),replies:async()=>({items:[{id:'demo-collect-archive-reply',userId:'demo-collect-archive-b',nickname:'虚构乙',text:'同问',hasReplies:false,parentId:'demo-collect-archive-root'}],complete:true})};
@@ -697,6 +575,7 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
   expect(await db.capturedPost.count({where:{configId:c.id}})).toBe(26);expect(await db.semanticModelCall.count({where:{configId:c.id}})).toBe(0);
  });
  it('仅重新读取已存帖：权限、CSRF、归属、幂等与新增/复用保存均沿正常任务',async()=>{
+  vi.spyOn(AutoReviewService.prototype,'assertRereadReady').mockResolvedValue(undefined);
   const c=await archive(),p=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}}),path=`/collection/configs/${c.id}/runs`;
   const plan={rounds:1 as const,postsPerRound:1,commentPages:1,savedPostId:p.id},body={scenario:'BASELINE',mode:'MOCK',requestKey:randomUUID(),readPlan:plan};
   const count=await db.collectionRun.count();
@@ -720,6 +599,7 @@ describe('独立存档与语义开关闭环：隔离库、虚构原文、mock HT
   expect((await db.collectionConfig.findUniqueOrThrow({where:{id:c.id}})).activeRunId).toBeNull();
  });
  it('指定帖中途失败仍保留已存旧评论和本次增量，不执行搜索回退',async()=>{
+  vi.spyOn(AutoReviewService.prototype,'assertRereadReady').mockResolvedValue(undefined);
   const {ReadFailure}=await import('../src/collection/contract');
   const c=await archive(),p=await db.capturedPost.findFirstOrThrow({where:{configId:c.id}});
   const r=await service.start(actor,c.id,'BASELINE',randomUUID(),'MOCK',undefined,undefined,{rounds:1,postsPerRound:1,commentPages:1,savedPostId:p.id});

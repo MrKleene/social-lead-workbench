@@ -39,7 +39,7 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 .ui-workspace :is(.page-heading,.dashboard-heading,.review-workspace-heading,.contact-heading){gap:24px;align-items:center;margin-bottom:28px;}.ui-workspace :is(.page-heading,.dashboard-heading,.review-workspace-heading,.contact-heading) h1{font-size:32px;line-height:1.3;letter-spacing:-.8px;font-weight:650;margin:0 0 10px;}.ui-workspace :is(.page-heading,.dashboard-heading,.review-workspace-heading,.contact-heading) p{color:var(--ui-muted);font-size:14px;line-height:1.8;max-width:75ch;}.ui-workspace :is(.eyebrow,.page-code,.heading-pill,.list-scope){display:none;}
 .ui-workspace :is(.table-panel,.task-panel,.contact-panel,.capability-card,.config-card,.dashboard-metric,.project-health,.project-activity){background:#fff;border:1px solid var(--ui-border);border-radius:var(--ui-radius);box-shadow:none;}
 .ui-workspace :is(.table-panel,.task-panel,.contact-panel,.capability-card){padding:24px;margin-bottom:24px;}.ui-workspace :is(.table-toolbar,.list-controls,.task-filter){gap:16px;}.ui-workspace :is(.task-row,.account-row){padding:20px 0;gap:18px;border-bottom:1px solid var(--ui-border);}.ui-workspace :is(.task-main,.account-row>div){min-width:0;overflow-wrap:anywhere;}.ui-workspace :is(.task-row,.account-row):last-child{border-bottom:0;}
-.ui-workspace :is(.collection-layout,.lead-layout){gap:24px;}.ui-workspace .config-card{padding:20px;}.ui-workspace .config-list{min-width:0;}.ui-workspace .collection-body{max-width:none;}.ui-workspace :is(.comment-review-page,.auto-contact-page,.project-dashboard){max-width:none;padding:0;}.ui-workspace .review-overview{background:#fff;border:1px solid var(--ui-border);border-radius:12px;padding:20px 24px;gap:32px;}.ui-workspace .review-overview strong{font-size:24px;}
+.ui-workspace :is(.collection-layout){gap:24px;}.ui-workspace .config-card{padding:20px;}.ui-workspace .config-list{min-width:0;}.ui-workspace .collection-body{max-width:none;}.ui-workspace :is(.comment-review-page,.auto-contact-page,.project-dashboard){max-width:none;padding:0;}.ui-workspace .review-overview{background:#fff;border:1px solid var(--ui-border);border-radius:12px;padding:20px 24px;gap:32px;}.ui-workspace .review-overview strong{font-size:24px;}
 .ui-workspace .project-metrics{gap:20px;}.ui-workspace .dashboard-metric{padding:24px;}.ui-workspace .dashboard-stat strong{font-size:36px;font-weight:600;}.ui-workspace .project-lower{gap:24px;margin-top:24px;}.ui-workspace .project-health,.ui-workspace .project-activity{padding:24px;}.ui-workspace .project-scope{display:flex;justify-content:space-between;gap:12px;color:var(--ui-muted);font-size:13px;margin-bottom:20px;}
 .ui-workspace .simple-home-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,.9fr);gap:48px;align-items:start;}.ui-workspace .simple-hero{padding:32px 0;background:transparent;min-height:0;}.ui-workspace .simple-hero h2{font-size:44px;line-height:1.3;font-weight:650;letter-spacing:-1.5px;max-width:12em;}.ui-workspace .simple-hero-content>p{font-size:15px;line-height:1.9;max-width:42ch;margin:24px 0;}.ui-workspace .simple-hero-content>small{display:block;font-size:12px;color:var(--ui-muted);margin-top:14px;}.ui-workspace .core-start{min-height:48px;padding:12px 24px;}.ui-workspace .simple-readiness{padding:28px;background:#fff;border:1px solid var(--ui-border);border-radius:12px;box-shadow:none;}.ui-workspace .simple-readiness h2{font-size:20px;}.ui-workspace .simple-home-stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-top:48px;border-top:1px solid var(--ui-border);padding-top:28px;}.ui-workspace .simple-home-stages article{background:transparent;border:0;box-shadow:none;padding:0;}.ui-workspace .simple-home-stages h3{font-size:18px;margin:10px 0;}.ui-workspace .simple-stage-number{font-size:13px;color:var(--ui-muted);}
 :root [data-slot=sheet-content]{background:#fff!important;border:1px solid var(--ui-border);border-radius:16px;box-shadow:0 16px 64px #20212420;max-width:calc(100vw - 32px);max-height:calc(100dvh - 40px);gap:0;}.simple-dialog [data-slot=sheet-header]{padding:24px 64px 24px 28px;border-bottom:1px solid var(--ui-border);}.simple-dialog [data-slot=sheet-title]{font-size:23px;font-weight:650;line-height:1.4;}.simple-dialog [data-slot=sheet-description]{color:var(--ui-muted);line-height:1.8;}.simple-dialog [data-slot=sheet-footer]{padding:20px 28px;border-top:1px solid var(--ui-border);background:#fff;}.simple-dialog>button.absolute{opacity:1;width:40px;height:40px;color:var(--ui-muted);}.simple-dialog :is(.form-fields,.preset-form){gap:22px;}.simple-dialog [data-slot=field-label]{font-weight:550;}
@@ -52,10 +52,7 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 .ui-workspace .space-expanded-workspace{position:relative;inset:auto;width:100%;height:auto;min-height:0;overflow:visible;transform:none!important;border:0;box-shadow:none;background:transparent;padding:0;}
 .ui-workspace .space-expanded-workspace[data-open=false]{display:none;}
 .ui-workspace .space-admin-panel{padding:0;background:transparent;border:0;box-shadow:none;height:auto;max-height:none;overflow:visible;}
-.ui-workspace .space-panel[data-panel=leads]{display:grid;grid-template-columns:minmax(300px,.9fr) minmax(0,1.2fr);gap:24px;}
-.ui-workspace .space-panel[data-panel=leads][data-active=false]{display:none;}
 .ui-workspace .simple-home-stages{background:transparent;border-right:0;border-left:0;border-bottom:0;border-radius:0;}
-@media(max-width:760px){.ui-workspace .space-panel[data-panel=leads]{grid-template-columns:minmax(0,1fr);}}
 :root [data-slot=button]{font-size:14px;}
 :root body:has(.candidate-preview) [data-slot=sheet-content].automation-settings-sheet{height:min(850px,calc(100dvh - 48px))!important;}
 :root .candidate-automation .journey-steps>button{justify-content:flex-start;}
@@ -122,7 +119,7 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 :root .graphite-workspace table{font-size:13px;border-collapse:collapse;width:100%}:root .graphite-workspace th{padding:10px 12px;background:#fafafa;font-size:12px;color:var(--muted-foreground);font-weight:500;white-space:nowrap;text-align:left;border-bottom:1px solid var(--border)}
 :root .graphite-workspace td{padding:12px;border-bottom:1px solid var(--border);line-height:1.6;vertical-align:middle}:root .graphite-workspace tr:last-child td{border-bottom:0}
 :root .graphite-workspace :is(.task-row,.account-row){padding:12px 0;gap:12px}
-:root .graphite-workspace :is(.collection-layout,.lead-layout){gap:20px}
+:root .graphite-workspace :is(.collection-layout){gap:20px}
 :root .graphite-workspace .review-overview{padding:12px 16px;gap:24px;border-radius:6px;background:#fafafa}
 :root .graphite-workspace .review-overview strong{font-size:22px}
 :root .graphite-workspace .project-metrics{gap:12px}:root .graphite-workspace .dashboard-metric{padding:16px;border-radius:8px}:root .graphite-workspace .dashboard-stat strong{font-size:28px}:root .graphite-workspace .project-lower{gap:16px;margin-top:16px}
@@ -228,7 +225,6 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 }
 /* Shared full-width lists and centered, scrollable detail surfaces. */
 :root .graphite-workspace :is(.spatial-work,.space-expanded-workspace,.space-panel[data-active=true],.space-admin-panel){max-width:none;min-width:0;width:100%;height:auto;min-height:0;background:transparent;border:0;border-radius:0;box-shadow:none;padding:0;overflow:visible}
-:root .graphite-workspace .space-panel[data-panel=leads][data-active=true]{display:block}
 :root .graphite-workspace .space-results{padding:0;width:100%;max-width:none;border:0;background:transparent;min-height:0;border-radius:0;box-shadow:none}
 :root .graphite-workspace .space-results-heading{margin:0 0 20px;padding:0;display:flex;align-items:center;justify-content:space-between}
 :root .graphite-workspace .space-results-heading h1{font-size:24px;font-weight:650;letter-spacing:-.5px}
@@ -237,24 +233,9 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 :root .graphite-workspace .space-search-small{max-width:440px;flex:1;background:var(--card);border:1px solid var(--input);border-radius:6px;min-height:36px;padding:0 10px}
 :root .graphite-workspace .space-search-small input{border:0!important;background:transparent!important;box-shadow:none;padding:0 6px;min-width:0}
 :root .graphite-workspace .space-result-list{display:block;overflow:visible;max-height:none;margin:0}
-:root .graphite-workspace .graphite-lead-table{table-layout:fixed;border:1px solid var(--border)}
-:root .graphite-workspace .graphite-lead-table th:first-child{width:19%}
-:root .graphite-workspace .graphite-lead-table th:nth-child(2){width:28%}
-:root .graphite-workspace .graphite-lead-table th:last-child{width:76px}
-:root .graphite-workspace .graphite-lead-table td{white-space:normal;overflow-wrap:anywhere}
-:root .graphite-workspace .graphite-lead-identity>span:last-child{display:inline-grid;gap:3px;vertical-align:middle;max-width:calc(100% - 42px)}
 :root .graphite-workspace .result-avatar{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:6px;margin-right:8px;background:#f4f4f5;color:#52525b;font-size:13px}
-:root .graphite-workspace .graphite-lead-identity small{font-size:11px;color:var(--muted-foreground)}
-:root .graphite-workspace .graphite-lead-evidence{line-height:1.7}
-:root .graphite-workspace .graphite-lead-table .selected{background:#fafafa}
 :root .graphite-workspace .space-pagination{justify-content:flex-end;margin:16px 0;color:var(--muted-foreground);gap:8px}
 :root .graphite-workspace .space-all{margin:16px 0;color:var(--foreground);font-size:13px}
-:root .graphite-lead-dialog{width:880px!important;padding:0!important;overflow:hidden!important;display:flex!important;flex-direction:column}
-:root .graphite-lead-dialog .space-detail{height:auto;min-height:0;max-height:100%;display:flex;flex-direction:column;border:0;background:var(--card);border-radius:0;overflow:hidden;box-shadow:none}
-:root .graphite-lead-dialog .space-detail-header{padding:12px 20px;gap:10px;border-bottom:1px solid var(--border);background:var(--muted);color:var(--muted-foreground)}
-:root .graphite-lead-dialog .space-detail-scroll{padding:20px;overflow:auto;color:var(--foreground);max-height:70vh}
-:root .graphite-lead-dialog :is(.source-original,.source-match,.space-source-summary){color:var(--foreground);background:transparent;border-color:var(--border)}
-:root .graphite-lead-dialog .space-detail-scroll h2{font-size:19px;line-height:1.5;margin:0 0 12px}
 :root .graphite-workspace .collection-layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:20px;align-items:start}
 :root .graphite-workspace .config-list{display:grid;gap:8px;padding:0;min-width:0}
 :root .graphite-workspace .config-card{padding:14px;margin:0;border:1px solid var(--border);border-radius:6px;color:var(--foreground)}
@@ -286,16 +267,9 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
  :root .graphite-workspace .config-list{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
  :root .graphite-workspace .space-filters{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
  :root .graphite-workspace .space-filters>*{width:100%;max-width:none}
- :root .graphite-workspace .graphite-lead-table,:root .graphite-workspace .graphite-lead-table tbody{display:block;border:0}
- :root .graphite-workspace .graphite-lead-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
- :root .graphite-workspace .graphite-lead-table tr{position:relative;display:block;border:1px solid var(--border);padding:14px;border-radius:6px;margin-bottom:10px}
- :root .graphite-workspace .graphite-lead-table td{display:block;padding:4px 0;border:0}
- :root .graphite-workspace .graphite-lead-table td[data-label]::before{content:attr(data-label)'：';font-size:12px;color:var(--muted-foreground)}
- :root .graphite-workspace .graphite-lead-action{text-align:right}
  :root .graphite-workspace .space-inline-editor .config-form,:root .graphite-workspace .config-summary{padding:16px}
  :root .graphite-workspace .config-summary dl{grid-template-columns:1fr;gap:6px}
  :root .graphite-workspace .config-summary dd{margin-bottom:12px}
- :root .graphite-lead-dialog .space-detail-scroll{padding:16px}
 }
 
 :root .graphite-workspace .configuration-actions .information-entry{padding:0;border:0;background:transparent;margin:0;width:auto;border-radius:0;box-shadow:none}
@@ -354,8 +328,7 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
 :root .simple-dialog .model-current{color:var(--foreground)}
 :root .simple-dialog .model-configured-dot{background:var(--foreground)}
 :root .simple-dialog .task-settings-body{font-size:13px}
-:root [data-slot=sheet-content].graphite-lead-dialog{width:min(880px,calc(100vw - 32px))!important;max-width:880px!important}
-@media(max-width:767px){:root [data-slot=sheet-content].graphite-lead-dialog{width:calc(100vw - 24px)!important;max-width:calc(100vw - 24px)!important}:root .graphite-workspace .review-overview{gap:12px 20px}:root .graphite-workspace .review-activity{flex-wrap:wrap}:root .review-filter-fields{grid-template-columns:1fr}:root .review-filter-fields label:last-child{grid-column:auto}}
+@media(max-width:767px){:root .graphite-workspace .review-overview{gap:12px 20px}:root .graphite-workspace .review-activity{flex-wrap:wrap}:root .review-filter-fields{grid-template-columns:1fr}:root .review-filter-fields label:last-child{grid-column:auto}}
 
 @media(max-width:767px){
  :root .graphite-workspace :is(.contact-account-table,.contact-job-table),:root .graphite-workspace :is(.contact-account-table,.contact-job-table) tbody{display:block;min-width:0}
@@ -365,19 +338,6 @@ body{background:var(--ui-canvas);color:var(--ui-ink);font-family:Inter,-apple-sy
  :root .graphite-workspace :is(.contact-account-table,.contact-job-table) td[data-label]::before{content:attr(data-label);display:block;color:var(--muted-foreground);font-size:11px;margin-bottom:3px}
  :root .graphite-workspace .contact-account-table td:first-child,:root .graphite-workspace .contact-account-table td:nth-child(2),:root .graphite-workspace .contact-job-copy{grid-column:1/-1}
  :root .graphite-workspace .contact-job-table td:last-child{grid-column:2;justify-self:end}
-}
-
-:root .graphite-workspace .graphite-all-leads td{white-space:normal;overflow-wrap:anywhere}
-:root .graphite-workspace .graphite-all-leads .lead-identity p{font-size:12px;line-height:1.6;max-width:32ch}
-:root .graphite-workspace .graphite-all-leads .evidence-cell{max-width:320px;line-height:1.7}
-@media(max-width:767px){
- :root .graphite-workspace .graphite-all-leads,:root .graphite-workspace .graphite-all-leads tbody{display:block;min-width:0}
- :root .graphite-workspace .graphite-all-leads thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
- :root .graphite-workspace .graphite-all-leads tr{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:14px 0;border-bottom:1px solid var(--border)}
- :root .graphite-workspace .graphite-all-leads td{display:block;padding:0;border:0;font-size:12px;min-width:0;max-width:none}
- :root .graphite-workspace .graphite-all-leads td[data-label]::before{content:attr(data-label)'：';color:var(--muted-foreground);font-size:11px}
- :root .graphite-workspace .graphite-all-leads .all-lead-identity,:root .graphite-workspace .graphite-all-leads .evidence-cell{grid-column:1/-1}
- :root .graphite-workspace .graphite-all-leads td:last-child{grid-column:2;text-align:right}
 }
 /* State rules outrank legacy theme variants without fading labels or switch thumbs. */
 :root[data-crm-theme] [data-slot=button]:disabled,:root[data-crm-theme] [data-slot=button][aria-disabled=true]:not([data-pending=true]){background:#f4f4f5!important;color:#8a8a93!important;border-color:#e4e4e7!important;opacity:1!important;box-shadow:none!important;transform:none!important;cursor:not-allowed}

@@ -28,9 +28,7 @@ describe("未认证 HTTP 边界", () => {
   it("ready 在数据库不可用时失败且不泄露细节", async()=>{databaseProbe.mockRejectedValueOnce(new Error("internal connection detail"));const r=await request(app.getHttpServer()).get("/api/health/ready");expect(r.status).toBe(503);expect(JSON.stringify(r.body)).not.toContain("internal connection detail")});
   for (const route of [
     "inbox/accounts", "inbox/receivers", "inbox/messages", "inbox/unread", "inbox/events",
-    "leads",
     "history-archives", "auto-contact/attempts", "auto-contact/pending",
-    "tasks",
     "users",
     "audit",
     "platforms",
@@ -39,7 +37,6 @@ describe("未认证 HTTP 边界", () => {
     "collection/configs",
     "collection/configs/fixture/comment-stream?postId=fixture",
     "collection/configs/fixture/posts?offset=0",
-    "notices",
   ])
     it(`匿名无法读取 ${route}`, async () => {
       expect(
@@ -53,7 +50,7 @@ describe("未认证 HTTP 边界", () => {
     expect(
       (
         await request(app.getHttpServer())
-          .get("/api/leads")
+          .get("/api/auth/me")
           .set("Cookie", `crm_session=${"a".repeat(64)}`)
       ).status,
     ).toBe(401);

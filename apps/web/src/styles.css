@@ -419,36 +419,10 @@ h3 {
   font-size: 12px;
   max-width: 100%;
 }
-.lead-row {
-  height: 76px;
-
-}
-.lead-row:hover {
-  background: #f3f6fd !important;
-}
-.lead-identity {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.lead-name {
-  font-weight: 600;
-  font-size: 13px;
-  color: #20364e;
-}
 .text-link:hover {
   color: #4c67c5;
   text-decoration: underline;
   text-underline-offset: 4px;
-}
-.lead-identity p {
-  font-size: 11px;
-  color: #8491a1;
-  margin-top: 3px;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .evidence-cell {
   max-width: 250px;
@@ -968,9 +942,6 @@ th {
   .login-story h1 {
     font-size: 28px;
   }
-  .lead-identity p {
-    max-width: 170px;
-  }
 }
 @media (max-width: 800px) {
   .app-shell {
@@ -1237,10 +1208,6 @@ body { background: radial-gradient(ellipse at 78% 0%, #e3eafa 0, transparent 45%
 thead { background: #f8fafd; }
 th { color: var(--muted-foreground); font-size: 12px; height: 40px; }
 td, th { padding: 10px 12px; }
-.lead-row { height: 75px; transition: background-color .18s; }
-.lead-identity .avatar { width: 34px; height: 34px; border-radius: 11px; font-size: 12px; }
-.lead-name { font-size: 13px; font-weight: 550; }
-.lead-identity p { font-size: 10px; margin-top: 4px; }
 .evidence-cell { max-width: 220px; font-size: 12px; color: #65758d; }
 .date-cell { font-size: 11px; color: #6f7f96; }
 .table-footer { color: #8896ac; font-size: 10px; padding: 14px 22px; }
@@ -1397,7 +1364,7 @@ button:active:not(:disabled) { transform: scale(.98) !important; }
 .collection-body { padding:0 24px 24px; display:grid; gap:16px; }
 .collection-body h3 { font-size:13px; font-weight:600; margin-top:12px; }
 .collection-runbar { display:flex; align-items:end; gap:10px; flex-wrap:wrap; }
-.collection-runbar label,.config-form label,.quick-followup label { display:flex; flex-direction:column; gap:7px; font-size:12px; color:#66758e; }
+.collection-runbar label,.config-form label { display:flex; flex-direction:column; gap:7px; font-size:12px; color:#66758e; }
 .collection-runbar :is(select, [data-slot=select-trigger]) { min-width:200px; }
 .config-form { display:flex; flex-direction:column; gap:20px; }
 .config-form .check-label { flex-direction:row; align-items:center; }
@@ -1417,19 +1384,10 @@ button:active:not(:disabled) { transform: scale(.98) !important; }
 .work-controls { padding:0 22px 18px; display:flex; flex-direction:column; gap:14px; }
 .work-controls input { max-width:340px; }
 .batch-toolbar { padding:12px 20px; background:#f7f9fd; display:flex; gap:10px; flex-wrap:wrap; align-items:center; border-block:1px solid #e8edf6; font-size:11px; color:#8390a7; }
-.work-row { border-bottom:1px solid #edf0f6; transition:background .18s ease; }
-.work-row:hover { background:#fbfcff; }
-.work-row-main { padding:22px; display:flex; gap:13px; align-items:flex-start; }
-.work-row-main > input { margin-top:11px; accent-color:#6d83c7; }
-.work-row-content { flex:1; min-width:0; }
-.work-row-content > p { font-size:12px; color:#7c89a0; margin:7px 0; }
-.work-row-content blockquote { font-size:12px; line-height:1.7; color:#66758d; margin:0; padding:0; background:transparent; border:0; overflow-wrap:anywhere; }
 .work-next { display:flex; flex-direction:column; gap:8px; min-width:175px; }
 .work-next strong { color:#7485aa; font-size:11px; font-weight:500; }
 .work-next > span { font-size:11px; color:#8995a8; }
 .work-next .action-row { margin-top:5px; }
-.quick-followup { padding:0 22px 20px 70px; }
-.quick-followup form { padding:16px; border:1px solid #e2e9f5; background:#f8fafe; border-radius:12px; }
 .quick-fields { margin:12px 0; display:flex; gap:10px; align-items:end; flex-wrap:wrap; }
 .notice-panel { padding:22px; }
 .notice-panel h2 { display:flex; gap:8px; align-items:center; font-size:13px; }
@@ -1445,9 +1403,7 @@ button:active:not(:disabled) { transform: scale(.98) !important; }
 .exception-list small { color:#8c98ab; }
 .work-panel > .success-note,.work-panel > [role=alert] { margin:12px 22px; }
 @media(max-width:1250px){.work-layout{grid-template-columns:minmax(0,1fr)}.work-aside{display:grid;grid-template-columns:1fr 1fr;gap:20px}.collection-layout{grid-template-columns:250px minmax(0,1fr)}}
-@media(max-width:850px){.collection-layout{grid-template-columns:1fr}.config-list{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}.work-row-main{flex-wrap:wrap}.work-next{margin-left:45px;min-width:0}.quick-followup{padding-left:20px}.work-aside{grid-template-columns:1fr}.workflow-strip small{margin-left:0}.collection-body{padding:0 16px 16px}.connection-banner{flex-wrap:wrap}.connection-banner>button{margin-left:0}}
-
-.quick-task{display:flex;align-items:center;gap:12px;padding:0 22px 15px 70px;font-size:12px;color:#75839a;flex-wrap:wrap}
+@media(max-width:850px){.collection-layout{grid-template-columns:1fr}.config-list{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}.work-next{margin-left:45px;min-width:0}.work-aside{grid-template-columns:1fr}.workflow-strip small{margin-left:0}.collection-body{padding:0 16px 16px}.connection-banner{flex-wrap:wrap}.connection-banner>button{margin-left:0}}
 
 /* Finding leads first; collaboration remains available as a secondary action. */
 .collection-launcher { margin: 20px 0; }
@@ -1457,10 +1413,8 @@ button:active:not(:disabled) { transform: scale(.98) !important; }
 .secondary-actions, .first-use-guide { margin-top: 14px; padding: 12px 0; }
 .secondary-actions summary, .first-use-guide summary, .collection-launcher summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
 .work-controls [role="group"] { flex-wrap: wrap; }
-.work-row-content blockquote { overflow-wrap: anywhere; }
-.work-row-content blockquote strong { display: block; font-size: 12px; }
 .collection-launcher .collection-body { min-width: 0; }
-@media (max-width: 640px) { .collection-runbar { align-items: stretch; } .collection-runbar > label { min-width: 0; width: 100%; } .collection-runbar :is(select, [data-slot=select-trigger]) { width: 100%; } .work-row-content .action-row { flex-wrap: wrap; } }
+@media (max-width: 640px) { .collection-runbar { align-items: stretch; } .collection-runbar > label { min-width: 0; width: 100%; } .collection-runbar :is(select, [data-slot=select-trigger]) { width: 100%; } }
 
 .reply-preview { padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
 .reply-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }

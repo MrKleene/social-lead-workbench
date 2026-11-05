@@ -154,6 +154,7 @@ model SourceComment {
   notice CollectionNotice?
   @@unique([platform, platformCommentId])
 }
+// Retired CRM storage: kept only for historical foreign keys and contact safety. No management API.
 model Lead {
   id String @id @default(cuid())
   identityId String @unique
@@ -179,6 +180,7 @@ model Lead {
   notices CollectionNotice[]
   @@index([ownerId,status,nextFollowUpAt])
 }
+// Retired storage, no active follow-up feature.
 model FollowUp {
   id String @id @default(cuid())
   leadId String
@@ -190,6 +192,7 @@ model FollowUp {
   createdAt DateTime @default(now())
   @@index([leadId,createdAt])
 }
+// Retired human CRM task storage, not automation jobs.
 model Task {
   id String @id @default(cuid())
   leadId String

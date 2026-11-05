@@ -19,10 +19,6 @@ export function requireAdmin(actor: Actor) {
   if (actor.role !== "ADMIN")
     throw new ForbiddenException("仅管理员可执行此操作");
 }
-export function requireOwner(actor: Actor, lead: { ownerId: string | null }) {
-  if (actor.role !== "ADMIN" && lead.ownerId !== actor.id)
-    throw new ForbiddenException("无权访问此线索");
-}
 export const scope = (actor: Actor) =>
   actor.role === "ADMIN" ? {} : { ownerId: actor.id };
 export function assertSession(valid: boolean): asserts valid {

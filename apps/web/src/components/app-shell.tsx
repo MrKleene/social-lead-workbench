@@ -16,7 +16,7 @@ function ShellContent(){
  const previousLocation=useRef(location.key);
  useEffect(()=>{if(previousLocation.current===location.key)return;previousLocation.current=location.key;const frame=requestAnimationFrame(()=>{if(document.activeElement===document.body)document.getElementById('workspace-main')?.focus({preventScroll:true});});return()=>cancelAnimationFrame(frame);},[location.key]);
  const spatial=isWorkPath(location.pathname)||location.pathname==='/home'||location.pathname==='/automation',module=new URLSearchParams(location.search).get('module');
- const phase=module==='follow'?'handoff':module||location.pathname!=='/work'?'review':'overview';
+ const phase=module||location.pathname!=='/work'?'review':'overview';
  return <AuroraMotionContext.Provider value={motion.reduced}><div className="space-shell ui-workspace graphite-workspace" data-phase={phase}>
  <InboxIndicator enabled={user?.role==='ADMIN'}/><a className="aurora-skip" href="#workspace-main">跳到工作内容</a>
  <AppNavigation admin={user?.role==='ADMIN'} name={user?.name||''} motion={motion} loggingOut={logout.isPending} onLogout={async()=>{if(await confirmLeave())logout.mutate();}}/>

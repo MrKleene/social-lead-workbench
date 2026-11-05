@@ -8,7 +8,7 @@ export function useReviewOverview(enabled:boolean){const poll=useJourneyPolling(
 export function useReviewWorkspace(policy:ReviewPolicy|undefined,overview:ReviewOverview){
  const client=useQueryClient(),id=policy?.id||'workspace',base=`/comment-review/policies/${id}`;
  const [draft,setDraft]=useState<{target:string;version:number}|null>(null),[authorization,setAuthorization]=useState(false);
- const target=draft?.target??policy?.target??'',dirty=target!==(policy?.target??'');useDraftGuard(dirty,'lead');
+ const target=draft?.target??policy?.target??'',dirty=target!==(policy?.target??'');useDraftGuard(dirty,'modal');
  const refresh=()=>Promise.all([client.invalidateQueries({queryKey:['comment-review']}),client.invalidateQueries({queryKey:['auto-contact']})]);
  const save=useMutation({mutationFn:()=>send<ReviewPolicy>(base,'PUT',{version:draft?.version??policy?.version??0,target}),retry:false,onSuccess:async()=>{setDraft(null);await refresh();}});
  const toggle=useMutation({mutationFn:({enabled,consent=false}:{enabled:boolean;consent?:boolean})=>send(base+'/automatic','PATCH',{version:policy?.version,enabled,...(consent?{consent:reviewAutoConsent,modelVersion:overview.modelVersion,priceVersion:overview.connection.priceVersion}:{})}),retry:false,onSuccess:async()=>{setAuthorization(false);await refresh();}});

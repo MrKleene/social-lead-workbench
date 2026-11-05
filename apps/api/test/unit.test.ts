@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   requireAdmin,
-  requireOwner,
   scope,
   hashPassword,
   verifyPassword,
@@ -18,16 +17,10 @@ const sales: Actor = {
 };
 const admin: Actor = { ...sales, id: "admin", role: "ADMIN" };
 describe("服务端权限与安全原语", () => {
-  it("销售仅拥有自己的线索查询条件", () =>
+  it("非管理员仅拥有自己的账号查询条件", () =>
     expect(scope(sales)).toEqual({ ownerId: sales.id }));
   it("管理员全量范围", () => expect(scope(admin)).toEqual({}));
-  it("销售无法访问未分配和他人线索", () => {
-    expect(() => requireOwner(sales, { ownerId: null })).toThrow();
-    expect(() => requireOwner(sales, { ownerId: "other" })).toThrow();
-  });
-  it("销售可访问自己的线索", () =>
-    expect(() => requireOwner(sales, { ownerId: sales.id })).not.toThrow());
-  it("只有管理员可分配", () => {
+  it("管理操作仅管理员", () => {
     expect(() => requireAdmin(sales)).toThrow();
     expect(() => requireAdmin(admin)).not.toThrow();
   });

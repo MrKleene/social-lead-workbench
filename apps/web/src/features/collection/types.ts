@@ -56,9 +56,6 @@ export type ConfigDetail = Config & {
             };
             identity: {
                 nickname: string;
-                lead: {
-                    id: string;
-                } | null;
             };
         };
     }[];
@@ -72,20 +69,6 @@ export type ConfigDetail = Config & {
             state: string;
         }[];
     }[];
-};
-export type Notice = {
-    id: string;
-    title: string;
-    createdAt: string;
-    reads: {
-        readAt: string;
-    }[];
-    lead: {
-        id: string;
-        identity: {
-            nickname: string;
-        };
-    };
 };
 export const scenarios: Record<string, string> = { READ_WINDOW: '读取有限窗口', BASELINE: '初始评论快照', NEW: '增加一条求助评论', PARTIAL: '分页不完整', TIMEOUT: '读取超时', LOGIN_EXPIRED: '登录失效', RESTRICTED: '账号受限', MISSING: '评论暂时缺失', DELETED: '明确删除信号' };
 export const runLabels: Record<string, string> = { QUEUED: '排队中', RUNNING: '读取中', COMPLETE: '采集已结束', PARTIAL: '采集已结束', FAILED: '失败', PAUSED: '已暂停' };

@@ -69,71 +69,9 @@ class AccountLoginController {
   @Post(':id/login/cancel') @Header('Cache-Control','no-store, private') cancel(@Req() r:AuthedRequest,@Param('id') id:string){const b=parse(z.object({requestKey:z.string().uuid()}).strict(),r.body);return this.login.cancel(r.actor,id,b.requestKey);}
   @Post(':id/login/offline') @Header('Cache-Control','no-store, private') offline(@Req() r:AuthedRequest,@Param('id') id:string){const b=parse(z.object({requestKey:z.string().uuid(),scenario:z.enum(['SUCCESS','MISSING_ID','ERROR','EXPIRED'])}).strict(),r.body);return this.login.simulate(r.actor,id,b.requestKey,b.scenario);}
 }
-@Controller("leads/:id/account-contact")
-@UseGuards(SessionGuard)
-class AccountContactController {
-  constructor(@Inject(AccountsService) private service: AccountsService) {}
-  @Get() state(@Req() r: AuthedRequest, @Param("id") id: string) {
-    return this.service.contactState(r.actor, id);
-  }
-  @Patch("block") block(@Req() r: AuthedRequest, @Param("id") id: string) {
-    const b = parse(
-      z
-        .object({
-          blocked: z.boolean(),
-          note: z.string().trim().min(5).max(500),
-          version,
-        })
-        .strict(),
-      r.body,
-    );
-    return this.service.block(r.actor, id, b.blocked, b.note, b.version);
-  }
-  @Post() reserve(@Req() r: AuthedRequest, @Param("id") id: string) {
-    const b = parse(
-      z
-        .object({
-          accountId: z.string().min(1),
-          requestKey: z.string().uuid(),
-          kind: z.enum(["FIRST", "FOLLOWUP"]),
-        })
-        .strict(),
-      r.body,
-    );
-    return this.service.reserve(r.actor, id, b.accountId, b.requestKey, b.kind);
-  }
-  @Patch(":attemptId") resolve(
-    @Req() r: AuthedRequest,
-    @Param("id") id: string,
-    @Param("attemptId") attemptId: string,
-  ) {
-    const b = parse(
-      z
-        .object({
-          outcome: z.enum(["UNKNOWN", "FAILED", "SIMULATED_SUCCESS"]),
-          note: z.string().trim().min(5).max(500),
-          version,
-          pauseReason: z
-            .enum(["RATE_LIMITED", "VERIFICATION", "BANNED"])
-            .optional(),
-        })
-        .strict(),
-      r.body,
-    );
-    return this.service.resolve(
-      r.actor,
-      id,
-      attemptId,
-      b.outcome,
-      b.note,
-      b.version,
-      b.pauseReason,
-    );
-  }
-}
 @Module({
   imports: [AuthModule, DevicesModule],
-  controllers: [AccountLoginController, AccountsController, AccountContactController],
+  controllers: [AccountLoginController, AccountsController],
   providers: [AccountsService, AccountLoginService, LoginRuntime],
   exports:[AccountLoginService],
 })

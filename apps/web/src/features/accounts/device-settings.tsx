@@ -12,7 +12,7 @@ function Enrollment({state,pending,submit}:{state:DeviceState;pending:boolean;su
   return <div className="device-form">
     <h3>专用电脑用途</h3>
     <p>绑定的是运行工作台执行程序的电脑，不一定是打开浏览器的电脑。系统由执行程序自动检测。</p>
-    <dl><dt>实际执行电脑</dt><dd>{state.binding?.executionHost||'等待后端更新'} · {state.capability.os}</dd><dt>绑定后的权限</dt><dd>只在这台执行机保管各账号的独立登录态并执行获准的只读任务。管理员才能扫码管理账号、启动和停止采集；销售继续处理已分配客户。评论、私信发送和自动持续采集不开放。</dd><dt>设备密钥</dt><dd>{state.provider==='offline'?'虚构离线测试密钥，不连接平台。':state.capability.os==='Windows'?'新绑定的认证私钥使用 Windows 当前用户 DPAPI 加密；换系统用户或解密失败时停止，不回退明文。':'新绑定的认证私钥由本机当前用户的 macOS 钥匙串保护；钥匙串锁定或不可访问时停止执行，不回退明文。'}</dd></dl>
+    <dl><dt>实际执行电脑</dt><dd>{state.binding?.executionHost||'等待后端更新'} · {state.capability.os}</dd><dt>绑定后的权限</dt><dd>在这台执行机保管各账号的独立登录态。账号管理、采集、消息接收和发送仍分别受角色、配置与授权检查；设备绑定不会自动开始业务。</dd><dt>设备密钥</dt><dd>{state.provider==='offline'?'虚构离线测试密钥，不连接平台。':state.capability.os==='Windows'?'新绑定的认证私钥使用 Windows 当前用户 DPAPI 加密；换系统用户或解密失败时停止，不回退明文。':'新绑定的认证私钥由本机当前用户的 macOS 钥匙串保护；钥匙串锁定或不可访问时停止执行，不回退明文。'}</dd></dl>
     <p>点击下方按钮即批准这台执行电脑保存设备认证密钥并使用默认私有目录。平台账号仍需另行本人扫码，点击开始采集授权本轮读取；绑定不会自动扫码或采集。</p>
     {state.device&&!state.device.enabled&&<p>旧授权已撤销。再次绑定将建立新设备密钥；不会搬运或删除旧文件。</p>}
     {!state.binding&&<p role="status">一键绑定需要加载新版后端。请按升级说明在原终端重启同一持久实例，保留原数据库和端口。</p>}

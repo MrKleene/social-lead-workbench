@@ -15,8 +15,6 @@ import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useParams
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/features/auth/use-auth";
 import { LoginPage } from "@/features/auth/login-page";
-import { LeadsPage } from "@/features/leads/leads-page";
-import { TasksPage } from "@/features/tasks/tasks-page";
 import { PlatformsPage } from "@/features/platforms/platforms-page";
 import { legacyWorkspacePath } from "@/features/work/navigation-policy";
 import { WorkPage } from "@/features/work/work-page";
@@ -63,8 +61,6 @@ function App() {
         <Route path="/configuration" element={<ConfigurationPage />} />
         <Route path="/review-policies" element={<LegacyConfiguration tab="matching" />} />
         <Route path="/comment-review" element={<CommentReviewPage />} />
-        <Route path="/leads/:id?" element={<LeadsPage />} />
-        <Route path="/tasks" element={<TasksPage />} />
         <Route path="/platforms" element={<PlatformsPage />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Route>

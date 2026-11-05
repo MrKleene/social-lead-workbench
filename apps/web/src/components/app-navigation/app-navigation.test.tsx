@@ -10,7 +10,7 @@ const render=(admin:boolean,path='/home')=>renderToStaticMarkup(<QueryClientProv
 describe('graphite navigation preserves authorized destinations',()=>{
  it('keeps all administrator modules reachable and marks the current route',()=>{
   const html=render(true,'/automation?config=example&run=example-run');
-  for(const name of ['工作台','自动化任务','采集信息','评论审核','自动回复','待处理回复','回复记录','线索池','销售跟进','全部线索','人工任务','账号中心','提醒与异常','配置管理','平台能力'])expect(html).toContain(name);
+  for(const name of ['工作台','自动化任务','采集信息','评论审核','自动回复','待处理回复','回复记录','账号中心','运行异常','配置管理','平台能力'])expect(html).toContain(name);
   expect(html).toContain('href="/automation?config=example&amp;run=example-run"');
   expect(html).toContain('aria-current="page"');
   expect(html).toContain('aria-label="打开导航"');
@@ -18,7 +18,7 @@ describe('graphite navigation preserves authorized destinations',()=>{
  it('does not expose administrator execution or settings links to sales',()=>{
   const html=render(false,'/work?module=follow&view=follow');
   for(const route of ['/automation','/comment-review','/configuration','/auto-contact','/reply-history','module=settings','module=templates','module=archive'])expect(html).not.toContain(`href="${route}`);
-  for(const label of ['销售跟进','全部线索','人工任务','提醒与异常'])expect(html).toContain(label);
+  for(const label of ['销售跟进','全部线索','人工任务','运行异常'])expect(html).not.toContain(label);
   expect(html).toContain('aria-current="page"');
  });
 });

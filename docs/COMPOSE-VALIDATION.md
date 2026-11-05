@@ -54,7 +54,6 @@ services:
 |`compose … up -d --wait --wait-timeout 120`|退出码 0|
 |`compose … ps -a`|postgres、redis、api、worker、web 均 healthy；migrate Exited (0)|
 |`compose … logs migrate`|成功应用 202610180001_initial|
-|`compose … exec -T api npm run db:seed`|写入 6 条虚构线索/来源评论及人工任务，未创建登录用户|
 |容器内 Prisma 核验|已完成迁移 1、users=0、demoLeads=6、demoComments=6|
 |容器内 BullMQ 核验|worker 注册存在；HEALTHCHECK 完成且 platformCallsEnabled=false；COMMENT 被协议拒绝，状态 failed|
 |nginx 入口 HTTP|网页 200；JS/CSS 两项资源 200；代理数据库就绪接口 200|

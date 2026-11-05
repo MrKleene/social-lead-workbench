@@ -53,13 +53,13 @@
 
 | 类别 | 保留入口 | 使用范围 |
 | --- | --- | --- |
-| 日常工作台 | `start`、`stop`、`restart`、`status`、`dev` | 同一持久实例；首次建CRM管理员，以后网页登录；平台扫码由UI另行确认 |
-| 离线人工检查 | `dev:persistent:offline`、`dev:mock:isolated`、`dev:mcp:offline` | 分别为持久虚构演示、临时CRM、临时协议夹具 |
+| 日常工作台 | `start`、`stop`、`restart`、`status`、`dev` | 同一持久实例；首次建工作台管理员，以后网页登录；平台扫码由UI另行确认 |
+| 离线人工检查 | `dev:persistent:offline`、`dev:mock:isolated`、`dev:mcp:offline` | 分别为持久虚构演示、临时工作台、临时协议夹具 |
 | 构建/类型/单元 | `build`、`typecheck`、`test`、`test:workbench` | `pretest` / `pretypecheck` 自动构建共享契约，仍需保留 |
 | 数据库/队列 | `test:integration`、`test:queue`、`test:mcp`、`test:mock:isolated`、`test:worker` | 依各自数据库安全门槛执行，优先自建隔离资源的入口 |
 | 登录/设备/持久化回归 | `test:real:preflight`、`test:real:offline`、`test:xhs:login:browser`、`test:persistent` | 均保留；`real` 是历史协议名称，测试使用虚构资源，不是真实平台验收 |
 | 旧 Compose 开发 | `dev:legacy`、`dev:collector`、`local:env` | 手动Compose开发路径；不用于现有持久实例 |
-| 数据库与用户管理 | `db:generate`、`db:migrate`、`db:seed`、`admin:init`、`user:create` | 保留迁移与初始化工具；不能对未知库播种或初始化 |
+| 数据库与用户管理 | `db:generate`、`db:migrate`、`admin:init`、`user:create` | 保留迁移与初始化工具；不能对未知库播种或初始化 |
 | 协议预留检查 | `agent:check` | 保留远程协议自检，不代表远程平台执行已开放 |
 
 前轮已清理6个过时入口（非本轮新增删除）：重复别名 `dev:mcp:isolated`；旧分阶段 `xhs:real:prepare`、`xhs:real:login`、`dev:xhs:real`；临时扫码 `dev:xhs:login`、`dev:xhs:login:offline`。删除无人引用的旧 `scripts/xhs-real.mjs`。`real-mcp/core.mjs` 被持久启动器和安全预检测试使用，必须保留；`xhs-login-workbench.mjs` 被浏览器回归使用，仅保留显式 `--offline` 模式。工作区命令和Docker构建引用仍保留；仓库当前没有CI配置。
@@ -83,7 +83,7 @@ npm run test:persistent
 
 `test:mock:isolated`/`test:mcp`使用自有临时PostgreSQL、Redis；`test:persistent`使用自有离线持久测试实例并清理。后者依赖已安装的Playwright及测试浏览器，路径按本机设置，不把私人路径当仓库标准。旧`test:integration`会清空指定`crm_test`中的项目表，不应对未知数据库运行。
 
-### 普通CRM开发路径（与持久账号实例分开）
+### 普通工作台开发路径（与持久账号实例分开）
 
 需要Node.js 22+、npm、Docker。新开发环境可采用下列原有路径；它不是专用电脑真实登录的推荐入口，不要与已有持久实例混用：
 
@@ -93,7 +93,6 @@ npm run local:env       # 仅新开发环境；已有.env不覆盖
 npm run db:generate
 docker compose up -d postgres redis
 npm run db:migrate
-npm run db:seed         # 仅虚构数据，不创建默认用户
 npm run admin:init      # 交互初始化，已有管理员不重建
 npm run user:create    # 按需创建销售
 npm run dev:legacy

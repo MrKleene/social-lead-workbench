@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Controller, Delete, Get, Inject
 import { z } from 'zod';
 import { previewReply, replyDraft } from '@crm/contracts';
 import { AuthModule, AuthedRequest, SessionGuard } from '../auth/auth';
-import { requireAdmin, scope } from '../auth/security';
+import { requireAdmin } from '../auth/security';
 import { Db } from '../common/db';
 import { parse } from '../common/validation';
 @Controller('reply-templates')
@@ -42,17 +42,8 @@ class RepliesController {
   }
   @Post('preview') async preview(@Req() req: AuthedRequest) {
     requireAdmin(req.actor);
-    const b = parse(z.object({ body: z.string().max(2000), leadId: z.string().optional() }).strict(), req.body);
-    if (!b.leadId) return { ...previewReply(b.body, {}), source: '未选择来源，缺失字段不推断', sent: false };
-    const lead = await this.db.lead.findFirst({ where: { id: b.leadId, ...scope(req.actor) }, include: { identity: { include: { comments: { orderBy: { observedAt: 'desc' }, take: 1, include: { post: true, matches: true } } } } } });
-    if (!lead) throw new NotFoundException('线索不存在或无权访问');
-    const comment = lead.identity.comments[0];
-    return { ...previewReply(b.body, { 昵称: lead.identity.nickname, 平台: lead.identity.platform === 'XHS' ? '小红书' : '抖音', 帖子标题: comment?.post.title, 关键词: comment?.matches.flatMap(m => m.keywords).join('、') }), source: '所选用户最近一条来源评论；专业未采集', sent: false };
-  }
-  @Get('for-lead/:id') async forLead(@Req() req: AuthedRequest, @Param('id') id: string) {
-    const lead = await this.db.lead.findFirst({ where: { id, ...scope(req.actor) }, include: { identity: { include: { comments: { orderBy: { observedAt: 'desc' }, take: 8, include: { post: true, matches: { include: { config: { include: { defaultReplyTemplate: true } } } } } } } } } });
-    if (!lead) throw new NotFoundException('线索不存在或无权访问');
-    return lead.identity.comments.flatMap(c => c.matches.flatMap(m => { const t = m.config.defaultReplyTemplate; return t ? [{ templateId: t.id, name: t.name, channel: t.channel, post: c.post.title, ...previewReply(t.body, { 昵称: lead.identity.nickname, 平台: lead.identity.platform === 'XHS' ? '小红书' : '抖音', 帖子标题: c.post.title, 关键词: m.keywords.join('、') }), sent: false }] : []; }));
+    const b = parse(z.object({ body: z.string().max(2000) }).strict(), req.body);
+    return { ...previewReply(b.body, {}), source: '缺失字段不推断', sent: false };
   }
 }
 @Module({ imports: [AuthModule], controllers: [RepliesController] })

@@ -39,9 +39,9 @@ restart 在控制通道消失、端口关闭后继续等待对应系统运行锁
 | --- | --- | --- |
 | 日常 | start / stop / restart / status / dev | 新推荐，采用原 main、原端口和可靠监督机制 |
 | 旧长入口 | dev:persistent、dev:persistent:background、dev:persistent:backend、dev:persistent:web | 日常推荐已废弃，兼容仍保留；首次管理员交互初始化、恢复参数、历史操作说明及测试仍使用底层脚本 |
-| 独立离线 | dev:persistent:offline、dev:mock:isolated、dev:mcp:offline | 分别保留持久虚构库、临时CRM、离线MCP协议夹具，不能相互替代 |
+| 独立离线 | dev:persistent:offline、dev:mock:isolated、dev:mcp:offline | 分别保留持久虚构库、临时工作台、离线MCP协议夹具，不能相互替代 |
 | 手动 Compose | dev:legacy、dev:collector、local:env | 保留独立开发职责；compose.yaml直接引用 local:env，旧原始采集worker需独立启动 |
-| DB/用户 | db:generate、db:migrate、db:seed、admin:init、user:create | Dockerfile/Compose/初始化流程仍引用，播种只供虚构数据 |
+| DB/用户 | db:generate、db:migrate、admin:init、user:create | Dockerfile/Compose/初始化流程仍引用，播种只供虚构数据 |
 | 验收/构建 | build、typecheck、test、test:*、agent:check、pretest、pretypecheck | 覆盖DB、队列、平台拒绝、权限、设备、锁、UI等；不是给日常用户逐个运行的清单 |
 | 主密钥初始化 | model:vault:init | 仅首次明确批准初始化，不是日常启动步骤，不能随意重复 |
 

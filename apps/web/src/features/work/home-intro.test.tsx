@@ -12,7 +12,7 @@ describe('project introduction homepage',()=>{
   expect(html).not.toContain('href="/automation"'); // Controls are supplied separately, not embedded in introduction content.
   expect(html).toContain('按需开启 AI 语义匹配');
   expect(html).toContain('授权与额度允许');
-  expect(html).toContain('销售跟进');
+  expect(html).toContain('接收消息与平台会话');expect(html).not.toContain('销售跟进');
   expect(html).not.toMatch(/最近任务|三步配置|<input|<button|role="switch"/);
  });
  it('does not offer admin automation to sales users',()=>{

@@ -30,13 +30,13 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                     else {if(accountReadMode())throw new ReadFailure("REAL_DISABLED");requireMcp(spec.mode);}
                 }
                 const isDemo = spec.mode !== "XHS_MCP";
-                const prefix = spec.mode === "MOCK" ? "【模拟】" : spec.mode === "XHS_FIXTURE" ? "【离线MCP夹具】" : "【小红书只读】";
                 const diagnostic=safeCollectionDiagnostic(result.diagnostic);
                 const searchAttempts=safeSearchAttempts(result.searchAttempts);
                 const priorCoverage=safeRunCoverage((current.metrics as {coverage?:unknown}|null)?.coverage);
                 const coverage=result.posts.length?runCoverage(result):priorCoverage||runCoverage(result);
                 const metrics:RunMetrics={...(coverage?{coverage}:{}),...(searchAttempts?{searchAttempts}:{}),...(diagnostic?{diagnostic}:{}),version:1,discarded:!!result.discarded||(!result.posts.length&&!!priorCoverage?.posts.length),policy:!spec.legacyMatchingEnabled?'CAPTURE_ONLY':spec.commentRules?'INDEPENDENT_V1':'LEGACY',postsRead:result.posts.length,rootComments:0,replies:0,highRelevant:0,needsReview:0,unmatched:0,legacyMatches:0,filterReasons:{}};
-                let observed = 0, matched = 0, added = 0, notices = 0;
+                let observed = 0, matched = 0;
+                const added = 0, notices = 0; // Historical counters retained in stored run contracts.
                 for (const entry of result.posts) {
                     const monitor = await tx.monitorPost.upsert({ where: { configId_revision_platformPostId: { configId: config.id, revision: run.revision, platformPostId: entry.post.id } }, create: { configId: config.id, revision: run.revision, platformPostId: entry.post.id }, update: {} });
                     const seen = new Set<string>(entry.chunk?.checkpoint.marks.map(m=>m.id)||[]);
@@ -49,7 +49,6 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                         observed++;
                         if(c.parentId)metrics.replies++;else metrics.rootComments++;
                         seen.add(c.id);
-                        const prior = await tx.commentObservation.findUnique({ where: { monitorId_platformCommentId: { monitorId: monitor.id, platformCommentId: c.id } } });
                         await tx.commentObservation.upsert({ where: { monitorId_platformCommentId: { monitorId: monitor.id, platformCommentId: c.id } }, create: { monitorId: monitor.id, platformCommentId: c.id, lastRunId: run.id }, update: { state: "PRESENT", lastRunId: run.id, lastSeenAt: new Date() } });
                         // Pure capture never falls back to search-word matching or creates leads.
                         if(!spec.legacyMatchingEnabled)continue;
@@ -62,21 +61,10 @@ export async function commitRead(db: Db, run: CollectionRun, result: ReadResult,
                         const post = await tx.sourcePost.upsert({ where: { platform_platformPostId: { platform: spec.platform, platformPostId: entry.post.id } }, create: { platform: spec.platform, platformPostId: entry.post.id, title: entry.post.title, isDemo }, update: {} });
                         if (identity.isDemo !== isDemo || post.isDemo !== isDemo)
                             throw new ReadFailure("INVALID_DATA");
-                        const existing = await tx.sourceComment.findUnique({ where: { platform_platformCommentId: { platform: spec.platform, platformCommentId: c.id } } });
                         const source = await tx.sourceComment.upsert({ where: { platform_platformCommentId: { platform: spec.platform, platformCommentId: c.id } }, create: { platform: spec.platform, platformCommentId: c.id, identityId: identity.id, postId: post.id, originalText: c.text, parentPlatformCommentId: c.parentId, isDemo }, update: {} });
                         if (source.isDemo !== isDemo || source.identityId !== identity.id || source.postId !== post.id || source.originalText !== c.text || source.parentPlatformCommentId !== (c.parentId || null))
                             throw new ReadFailure("INVALID_DATA");
-                        const priorLead = await tx.lead.findUnique({ where: { identityId: identity.id } });
-                        if (priorLead && priorLead.isDemo !== isDemo)
-                            throw new ReadFailure("INVALID_DATA");
-                        const lead = await tx.lead.upsert({ where: { identityId: identity.id }, create: { identityId: identity.id, summary: `${prefix}${hit.keywords.join("、")} · ${assessment ? `${assessment.classification==='HIGH_RELEVANT'?'规则高相关':'待核查'}，需人工核验，未同意营销` : hit.classification === "POSSIBLE_HELP" ? "可能求助，待人工核验，未同意营销" : "仅专业相关"}`, evidence: c.text, isDemo }, update: {} });
-                        if (!priorLead)
-                            added++;
                         await tx.sourceMatch.upsert({ where: { configId_revision_commentId: { configId: config.id, revision: run.revision, commentId: source.id } }, create: { configId: config.id, revision: run.revision, runId: run.id, commentId: source.id, keywords: hit.keywords, classification: hit.classification, ...(assessment?{assessment:assessment as unknown as Prisma.InputJsonValue}:{}), isBaseline: !established }, update: {} });
-                        if (established && windowSucceeded && !prior && !existing) {
-                            const created = await tx.collectionNotice.createMany({ data: [{ commentId: source.id, leadId: lead.id, title: spec.mode === "MOCK" ? "【模拟】发现新的相关评论 · 待人工核验" : `${prefix}新观察到相关评论 · 仅已读窗口，未验证发布时间` }], skipDuplicates: true });
-                            notices += created.count;
-                        }
                     }
                     // Missing from a complete read is still NOT a deletion assertion.
                     if (entry.complete)

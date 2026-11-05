@@ -9,10 +9,10 @@ import {collectionTaskSession} from './collection-task-session';
 export function useCollectionTaskSession(config:Config|undefined,visible:boolean,external?:{id:string;run?:Run;pending:boolean;error:unknown}){
  const [params,setParams]=useSearchParams();
  const requested=params.get('run')||'';
- const client=useQueryClient(),detail=useConfig(config?.id),refetchDetail=detail.refetch;
+ const client=useQueryClient(),detail=useConfig(config?.id);
  const [started,setStarted]=useState(''),[checking,setChecking]=useState(visible);
  const scope=useRef({id:config?.id,visible});
- const refresh=useCallback(async()=>{await Promise.all([client.refetchQueries({queryKey:['collection'],exact:true,type:'active'}),client.refetchQueries({queryKey:['mcp-readiness'],exact:true,type:'active'}),...(config?.id?[refetchDetail()]:[])]);},[client,config?.id,refetchDetail]);
+ const refresh=useCallback(async()=>{await Promise.all([client.refetchQueries({queryKey:['collection'],exact:true,type:'active'}),client.refetchQueries({queryKey:['mcp-readiness'],exact:true,type:'active'}),...(config?.id?[client.refetchQueries({queryKey:['collection',config.id],exact:true,type:'active'})]:[])]);},[client,config?.id]);
  useLayoutEffect(()=>{
   const visit={id:config?.id,visible};scope.current=visit;setStarted('');setChecking(visible);
   if(visible)void refresh().finally(()=>{if(scope.current===visit)setChecking(false);});

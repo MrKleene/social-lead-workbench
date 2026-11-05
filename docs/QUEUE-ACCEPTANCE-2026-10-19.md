@@ -40,4 +40,4 @@
 
 浏览器闭环、真实平台、真实平台一分钟规模、Redis断网/重启恢复、数据库断网、worker非正常崩溃与stalled任务恢复，以及多worker压力测试。本步不把配置中的`maxStalledCount: 1`视为已经验证过的崩溃恢复能力。
 
-新增测试相关文件及package脚本随最终模拟验收统一提交；最终浏览器结果见 MOCK-FINAL-ACCEPTANCE-2026-10-19.md。
+新增测试相关文件及package脚本随最终模拟验收统一提交；最终浏览器结果见 ACCEPTANCE.md。

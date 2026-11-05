@@ -8,10 +8,6 @@ import { Controller, Get, Module, Inject, ServiceUnavailableException } from "@n
 import { DatabaseModule, Db } from "./common/db";
 import { AuthModule } from "./auth/auth";
 import { UsersModule } from "./users/users";
-import { LeadsModule } from "./leads/leads";
-import { FollowupsModule } from "./followups/followups";
-import { SourcesModule } from "./sources/sources";
-import { TasksModule } from "./tasks/tasks";
 import { AuditModule } from "./audit/audit";
 import { PlatformsModule } from "./platforms/platforms";
 import { AgentsModule } from "./agents/agents";
@@ -29,7 +25,7 @@ class HealthController {
     }
   }
   @Get() get() {
-    return { ok: true, milestone: 1, platformCallsEnabled: false, accountCenter: true, contactWorkflow: true, replyTemplates: true };
+    return { ok: true, milestone: 1, platformCallsEnabled: false, accountCenter: true, contactWorkflow: false, replyTemplates: true };
   }
 }
 @Module({
@@ -42,10 +38,6 @@ class HealthController {
     DirectMessagesModule,
     AuthModule,
     UsersModule,
-    LeadsModule,
-    FollowupsModule,
-    SourcesModule,
-    TasksModule,
     AuditModule,
     PlatformsModule,
     AgentsModule,

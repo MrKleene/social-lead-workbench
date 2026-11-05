@@ -1,5 +1,5 @@
 import type {ReactNode} from 'react';
-import {Search,ScanLine,Send,UsersRound} from 'lucide-react';
+import {Search,ScanLine,Send,MessageSquare} from 'lucide-react';
 import './home-intro.css';
 
 const stages=[
@@ -14,7 +14,7 @@ export function OrbitOverview({actions}:{admin:boolean;actions?:ReactNode}) {
 
    <span className="home-product-label">SOCIAL LEAD · 项目介绍</span>
    <h1 id="home-title">AI 辅助获客工作台</h1>
-   <p>把发现帖子、采集评论、匹配需求与规则回复连成一条工作流，让线索来源和后续跟进都有据可查。</p>
+   <p>把发现帖子、采集评论、匹配需求与规则回复连成一条工作流，集中查看原文、处理结果与平台消息。</p>
 
    {actions&&<div className="home-intro-actions">{actions}</div>}
   </header>
@@ -25,6 +25,6 @@ export function OrbitOverview({actions}:{admin:boolean;actions?:ReactNode}) {
     <h3>{title}</h3><p>{description}</p>
    </article>)}</div>
   </section>
-  <footer className="home-intro-follow"><UsersRound size={20} aria-hidden="true"/><div><h2>销售跟进</h2><p>把匹配线索交给销售跟进，记录联系结果与下一步安排；历史任务、原文和回复结果可追溯。</p></div></footer>
+  <footer className="home-intro-follow"><MessageSquare size={20} aria-hidden="true"/><div><h2>接收消息与平台会话</h2><p>按账号查看接收状态与消息，平台聊天能力以实际接入状态为准。</p></div></footer>
  </section>;
 }

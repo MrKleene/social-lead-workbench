@@ -1,4 +1,3 @@
-import {historyDisplay} from '../common/db';
 import {runHistoryInput} from './run-history';
 import {AutoContactModule} from '../auto-contact/auto-contact.module';
 import {ManualReviewService} from '../comment-review/manual-review.service';
@@ -15,11 +14,8 @@ import {AccountsModule} from '../accounts/accounts';
 import {SinglePostService,singlePostInput} from './single-post.service';
 import { z } from "zod";
 import { AuthModule, AuthedRequest, SessionGuard } from "../auth/auth";
-import { scope } from "../auth/security";
 import { Db } from "../common/db";
 import { parse } from "../common/validation";
-import { LeadsModule } from "../leads/leads";
-import { LeadsService } from "../leads/leads.service";
 import { DevicesModule } from "../devices/devices";
 import { LoginRuntime } from "../accounts/login-runtime";
 import { AccountReadService } from "./account-read.service";
@@ -125,26 +121,6 @@ class CollectionController {
     @Param("id")
     id: string) { parse(z.object({}).strict(), r.body); return this.service.pauseRun(r.actor, id); }
 }
-@Controller("notices")
-@UseGuards(SessionGuard)
-class NoticesController {
-    constructor(
-    @Inject(Db)
-    private db: Db, 
-    @Inject(LeadsService)
-    private leads: LeadsService) { }
-    @Get()
-    list(
-    @Req()
-    r: AuthedRequest) { return historyDisplay(this.db).collectionNotice.findMany({ where: { lead: scope(r.actor) }, include: { lead: { select: { id: true, identity: { select: { nickname: true } }, ownerId: true } }, reads: { where: { userId: r.actor.id }, select: { readAt: true } } }, take: 100, orderBy: { createdAt: "desc" } }); }
-    @Post(":id/read")
-    async read(
-    @Req()
-    r: AuthedRequest, 
-    @Param("id")
-    id: string) { parse(z.object({}).strict(), r.body); const notice = await this.db.collectionNotice.findFirst({ where: { id, lead: scope(r.actor) } }); if (!notice)
-        throw new NotFoundException(); return this.leads.locked(r.actor, notice.leadId, tx => tx.noticeRead.upsert({ where: { noticeId_userId: { noticeId: id, userId: r.actor.id } }, create: { noticeId: id, userId: r.actor.id }, update: {} })); }
-}
-@Module({ imports: [AutoContactModule,AuthModule, LeadsModule, DevicesModule,ModelSettingsModule,AccountsModule], controllers: [CommentReviewController, CollectionController, NoticesController], providers: [ManualReviewService,AutoReviewService,ReviewPolicyService,ReviewEvaluationService,SinglePostService,CaptureService, QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [AutoContactModule,CollectionService,AutoReviewService,ManualReviewService] })
+@Module({ imports: [AutoContactModule,AuthModule, DevicesModule,ModelSettingsModule,AccountsModule], controllers: [CommentReviewController, CollectionController], providers: [ManualReviewService,AutoReviewService,ReviewPolicyService,ReviewEvaluationService,SinglePostService,CaptureService, QwenMatchingService, SemanticService, CollectionService, CollectionQueue, LoginRuntime, AccountReadService], exports: [AutoContactModule,CollectionService,AutoReviewService,ManualReviewService] })
 export class CollectionModule {
 }

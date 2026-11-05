@@ -47,10 +47,6 @@ html[data-crm-theme=mist] :is(.space-search-small, .info-comment-search) input:f
   box-shadow: none;
 }
 /* Restore contrast/spacing for the standalone routes as well as workspace panels. */
-:root :is(.helper-text, .muted, .table-footer, .evidence-note, .date-cell,
-  .lead-identity p, .task-main p, .timeline time, .timeline small, .capability-head p,
-  .capability-card > p, .account-row p, .empty-state, .page-code, .list-scope,
-  .metric p, .metric small, .next-actions p, .heading-pill) { color: var(--muted-foreground); }
 :root :is(.task-panel, .capability-card, .metric, .next-actions, .detail-panel) {
   background: var(--card);
   border-color: var(--border);

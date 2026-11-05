@@ -63,7 +63,7 @@ export function connectJourneyEvents(client:QueryClient,makeSource:()=>Source=()
    }else schedule(e.kind==='reset'?null:e.runId,e.configId);
   });
   // Existing unrelated lists keep their low-frequency refresh. Journey data has its own scope.
-  listen('refresh',()=>{for(const key of ['accounts','account-contact','leads','notices','tasks','lead'])void client.invalidateQueries({queryKey:[key]});});
+  listen('refresh',()=>{for(const key of ['accounts'])void client.invalidateQueries({queryKey:[key]});});
   current.addEventListener('error',()=>{if(!stopped&&source===current&&connection('reconnecting'))schedule();});
  };
  const offline=()=>{connection('reconnecting');source?.close();source=undefined;schedule();};
