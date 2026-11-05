@@ -1,4 +1,4 @@
-import {journeyPushSchema,type JourneyPush,type JourneySummary} from '@crm/contracts';
+import {journeyPushSchema,type JourneyPush,type JourneySummary,type AutoContactJobView} from '@crm/contracts';
 import type {QueryClient,QueryKey} from '@tanstack/react-query';
 export type JourneyConnection='connecting'|'connected'|'reconnecting'|'degraded';
 export const journeyConnectionKey=['journey-connection'] as const;
@@ -24,6 +24,16 @@ export function heartbeatSnapshot(old:JourneySummary|undefined,e:JourneyPush,now
  if(at<=new Date(live.at).getTime())return old;
  return {...old,live:{...old.live,current:old.live.current.map(x=>x===live?{...x,at:new Date(at).toISOString()}:x)}};
 }
+export function heartbeatJobs(old:{items:AutoContactJobView[];total:number}|undefined,e:JourneyPush,now=Date.now()){
+ if(!old)return;
+ let changed=false;
+ const items=old.items.map(job=>{
+  if(!job.live||!['WAITING_ACCOUNT','MANUAL_READY','RESERVED','ATTEMPTED'].includes(job.status))return job;
+  const snapshot:JourneySummary={reviews:{},reviewJobs:{},contacts:{},matches:0,live:{observedAt:e.at??'',recent:[],current:[job.live]}};
+  const next=heartbeatSnapshot(snapshot,e,now);if(!next||next===snapshot)return job;
+  changed=true;return {...job,live:next.live!.current[0]};
+ });return changed?{...old,items}:old;
+}
 type Source={addEventListener:(name:string,fn:(e:any)=>void)=>void;close:()=>void};
 /** One source per app/tab. Events invalidate permission-checked snapshots, never patch outcomes. */
 export function connectJourneyEvents(client:QueryClient,makeSource:()=>Source=()=>new EventSource('/api/events'),now=Date.now){
@@ -42,6 +52,12 @@ export function connectJourneyEvents(client:QueryClient,makeSource:()=>Source=()
   listen('journey',raw=>{
    const parsed=journeyPushSchema.safeParse(raw);if(!parsed.success)return;const e=parsed.data;if(seen.has(e.id))return;seen.add(e.id);if(seen.size>512)seen.delete(seen.values().next().value!);
    if(e.kind==='heartbeat'){
+    for(const q of client.getQueryCache().findAll({queryKey:['auto-contact-jobs']})){
+     if(!journeyQuery(q.queryKey,e.runId,e.configId))continue;
+     const old=client.getQueryData<{items:AutoContactJobView[];total:number}>(q.queryKey),job=old?.items.find(j=>j.id===e.executionId);
+     if(job&&['WAITING_ACCOUNT','MANUAL_READY','RESERVED','ATTEMPTED'].includes(job.status)&&(!job.live||job.live.state!=='running'||job.live.session!==e.session||job.live.phase!==e.phase)&&q.isActive())schedule(e.runId,e.configId);
+     client.setQueryData(q.queryKey,heartbeatJobs(old,e,now()));
+    }
     const key=['journey-summary',e.runId],old=client.getQueryData<JourneySummary>(key),next=heartbeatSnapshot(old,e,now());
     if(next){if(next!==old)client.setQueryData(key,next);}else if(client.getQueryCache().find({queryKey:key,exact:true})?.isActive())schedule(e.runId,e.configId);
    }else schedule(e.kind==='reset'?null:e.runId,e.configId);

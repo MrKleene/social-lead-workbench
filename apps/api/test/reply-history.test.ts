@@ -9,7 +9,7 @@ it('task-scoped queue keeps mode/status, pagination and administrator restrictio
  expect(db.autoContactJob.findMany).not.toHaveBeenCalled();
  await service.jobs({role:'ADMIN'} as any,20,'UNKNOWN','run-old');
  const where={mode:'REAL',status:'UNKNOWN',review:{runId:'run-old'}};
- expect(db.autoContactJob.findMany).toHaveBeenCalledWith(expect.objectContaining({where,skip:20,take:20}));
+ expect(db.autoContactJob.findMany).toHaveBeenCalledWith(expect.objectContaining({where,skip:20,take:20,orderBy:[{createdAt:'asc'},{id:'asc'}]}));
  expect(db.autoContactJob.count).toHaveBeenCalledWith({where});
  await service.jobs({role:'ADMIN'} as any,0);
  expect(db.autoContactJob.count).toHaveBeenLastCalledWith({where:{mode:'REAL'}});

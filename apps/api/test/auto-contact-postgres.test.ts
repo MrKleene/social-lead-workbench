@@ -687,3 +687,17 @@ it('pending menu shows failed/unknown channels but cannot reselect an attempted 
  const list=await pending.list(actor);expect(list.items).toContainEqual(expect.objectContaining({id:comment.id,status:'FAILED',selectable:false,channel:'COMMENT'}));await expect(pending.preview(actor,{accountId:f.account.id,jobs:[{id:comment.id,version:comment.updatedAt.toISOString()}]})).rejects.toThrow();
  (sender.send as any).mockResolvedValue({kind:'UNKNOWN',reason:'mock uncertain'});await service.tick();const dm=await db.autoContactJob.findFirstOrThrow({where:{channel:'DM'}});expect((await pending.list(actor)).items).toContainEqual(expect.objectContaining({id:dm.id,status:'UNKNOWN',selectable:false}));expect(sender.send).toHaveBeenCalledTimes(2);
 });
+
+it('display ordering matches reservation order across pages, tied timestamps and per-row live evidence',async()=>{
+ await rule('ordered','COMMENT',[100]);for(let i=0;i<23;i++)await source();await service.enqueue();
+ const all=await db.autoContactJob.findMany({orderBy:[{createdAt:'asc'},{id:'asc'}]});
+ const tie=new Date('2026-01-01T00:00:00Z');await db.autoContactJob.updateMany({where:{id:{in:all.slice(0,3).map(j=>j.id)}},data:{createdAt:tie}});
+ const expected=await db.autoContactJob.findMany({orderBy:[{createdAt:'asc'},{id:'asc'}]});
+ const page1=await settings.jobs(actor,0),page2=await settings.jobs(actor,20);expect([...page1.items,...page2.items].map(j=>j.id)).toEqual(expected.map(j=>j.id));
+ const reserved=await service.reserve();expect(reserved!.id).toBe(page1.items[0].id);expect(sender.send).not.toHaveBeenCalled();
+ const review=await db.semanticReview.findUniqueOrThrow({where:{id:reserved!.reviewId}});
+ await db.auditLog.create({data:{actorId:actor.id,entityId:review.runId!,action:'JOURNEY_PROGRESS',metadata:{v:1,executionId:reserved!.id,stage:'contact',phase:'CHECKING_ACCOUNT',session:'synthetic-session'}}});
+ const view=await settings.jobs(actor,0,undefined,review.runId!);expect(view.items[0].live).toMatchObject({executionId:reserved!.id,phase:'CHECKING_ACCOUNT',state:'running'});
+ await db.autoContactJob.update({where:{id:reserved!.id},data:{status:'UNKNOWN'}});expect((await settings.jobs(actor,0,'UNKNOWN',review.runId!)).items[0].live).toBeUndefined();
+ expect(sender.send).not.toHaveBeenCalled();expect(await db.semanticModelCall.count()).toBe(0);
+});

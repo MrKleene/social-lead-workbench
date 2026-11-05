@@ -1,3 +1,4 @@
+import {heartbeatJobs} from './journey-event-sync';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {QueryClient,QueryObserver} from '@tanstack/react-query';
 import type {JourneySummary} from '@crm/contracts';
@@ -33,6 +34,15 @@ describe('journey event synchronization',()=>{
  it('lost phase event is repaired by a new-phase heartbeat',async()=>{
   const read=await observe(['journey-summary','one']);sources[0].emit('journey',{...event('hb','one','heartbeat'),at:new Date().toISOString(),executionId:'exec',session:'session',phase:'REVIEWING'});await vi.advanceTimersByTimeAsync(130);expect(read).toHaveBeenCalledTimes(1);
  });
+ it('row heartbeats recover stale or missing phases by reading the database, but healthy rows do not poll',async()=>{
+  const key=['auto-contact-jobs',0,'','one'],live={executionId:'j',stage:'contact',session:'s',phase:'SUBMITTING',at:new Date().toISOString(),state:'stale'};
+  const read=vi.fn(async()=>({items:[{id:'j',status:'ATTEMPTED',live:{...live,state:'running'}}],total:1}));
+  await observe(key,read as any);client.setQueryData(key,{items:[{id:'j',status:'ATTEMPTED',live}],total:1});
+  const hb={...event('row-hb','one','heartbeat'),executionId:'j',session:'s',phase:'SUBMITTING',at:new Date().toISOString()};
+  sources[0].emit('journey',hb);await vi.advanceTimersByTimeAsync(130);expect(read).toHaveBeenCalledTimes(1);read.mockClear();
+  sources[0].emit('journey',{...hb,id:'healthy',at:new Date().toISOString()});await vi.advanceTimersByTimeAsync(130);expect(read).not.toHaveBeenCalled();
+  sources[0].emit('journey',{...hb,id:'lost-change',phase:'CONFIRMING',at:new Date().toISOString()});await vi.advanceTimersByTimeAsync(130);expect(read).toHaveBeenCalledTimes(1);
+ });
  it('reconnect, unavailable listener, reset and refresh each reconcile snapshots',async()=>{
   const read=await observe(['journey-summary','one']);sources[0].emit('error',{});expect(client.getQueryData(journeyConnectionKey)).toBe('reconnecting');await vi.advanceTimersByTimeAsync(130);
   sources[0].emit('ready',{available:false});expect(client.getQueryData(journeyConnectionKey)).toBe('degraded');await vi.advanceTimersByTimeAsync(130);
@@ -63,4 +73,14 @@ it('heartbeat only extends a matching live execution and phase, never resurrects
 });
 it('query scope covers histories and pagination without crossing runs/configs',()=>{
  expect(journeyQuery(['run-review','two','posts',0],'one','c')).toBe(false);expect(journeyQuery(['auto-contact-jobs',0,'','two'],'one','c')).toBe(false);expect(journeyQuery(['collection','run-history','other',''], 'one','c')).toBe(false);expect(journeyQuery(['collection','c','run-posts','one',30],'one','c')).toBe(true);expect(journeyQuery(['journey-connection'])).toBe(false);
+});
+
+
+it('row heartbeats renew only matching live identity and never resurrect terminal outcomes',()=>{
+ const now=Date.now(),at=new Date(now-1000).toISOString(),live={executionId:'j',stage:'contact' as const,session:'s',phase:'SUBMITTING',label:'正在发送',at,state:'running' as const,concurrent:1};
+ const old:any={items:[{id:'j',status:'ATTEMPTED',live},{id:'done',status:'CONFIRMED',live:{...live,executionId:'done'}}],total:2};
+ const e:any={...event('beat','one','heartbeat'),executionId:'j',session:'s',phase:'SUBMITTING',at:new Date(now).toISOString()};
+ const next=heartbeatJobs(old,e,now)!;expect(next.items[0].live?.at).toBe(e.at);expect(next.items[0].status).toBe('ATTEMPTED');expect(next.items[1]).toBe(old.items[1]);
+ for(const patch of [{session:'wrong'},{phase:'CONFIRMING'},{at:new Date(now-2000).toISOString()},{at:new Date(now+6000).toISOString()}])expect(heartbeatJobs(old,{...e,...patch},now)).toBe(old);
+ expect(heartbeatJobs({...old,items:[{...old.items[0],status:'UNKNOWN'}]},e,now)?.items[0].live?.at).toBe(at);
 });

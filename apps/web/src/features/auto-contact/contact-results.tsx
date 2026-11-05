@@ -1,6 +1,8 @@
 import {Link} from 'react-router-dom';
-import {ArrowUpRight} from 'lucide-react';
-import {contactStatusLabel,type AutoContactJobView,type AutoContactOverview,type AutoContactRule} from '@crm/contracts';
+import {useEffect,useState} from 'react';
+import {contactJobStatus} from './contact-job-status';
+import {ArrowUpRight,LoaderCircle} from 'lucide-react';
+import {type AutoContactJobView,type AutoContactOverview,type AutoContactRule} from '@crm/contracts';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {Table,TableHeader,TableHead,TableBody,TableRow,TableCell} from '@/components/ui/table';
@@ -22,14 +24,15 @@ export function SelectedReplyAccounts({data,rule}:{data:AutoContactOverview;rule
 const object=(x:unknown):Record<string,unknown>=>x&&typeof x==='object'&&!Array.isArray(x)?x as Record<string,unknown>:{};
 const text=(x:unknown)=>typeof x==='string'&&x.trim()?x:undefined;
 export function jobSource(job:AutoContactJobView){const s=object(job.sourceSnapshot),c=object(s.comment),p=object(s.post);return {name:displayNickname(c.authorNickname),comment:text(c.comment),title:text(p.title)};}
-const labels:Record<string,string>={PENDING_ACTION:'待处理',MANUAL_READY:'已确认发送',CONFIRMED:'已回复',UNKNOWN:'结果未知',ATTEMPTED:'等待回执',SIMULATED_SUCCESS:'模拟完成'};
-export function ContactResultsTable({items,onOpen}:{items:AutoContactJobView[];onOpen:(job:AutoContactJobView)=>void}){
- return <Table className="contact-results-table" aria-label="回复结果"><TableHeader><TableRow><TableHead>评论与来源</TableHead><TableHead>回复内容</TableHead><TableHead>发送账号 / 渠道</TableHead><TableHead>相关度</TableHead><TableHead>状态 / 原因</TableHead><TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{items.map(j=>{const source=jobSource(j),name=source.name||'用户昵称未保存';return <TableRow key={j.id}>
+export function ContactResultsTable({items,onOpen,disconnected=false}:{items:AutoContactJobView[];onOpen:(job:AutoContactJobView)=>void;disconnected?:boolean}){
+ const [now,setNow]=useState(Date.now);const active=items.some(j=>j.live&&['WAITING_ACCOUNT','MANUAL_READY','RESERVED','ATTEMPTED'].includes(j.status));
+ useEffect(()=>{if(!active)return;setNow(Date.now());const timer=setInterval(()=>setNow(Date.now()),2000);return()=>clearInterval(timer);},[active,items]);
+ return <Table className="contact-results-table" aria-label="回复结果"><TableHeader><TableRow><TableHead>评论与来源</TableHead><TableHead>回复内容</TableHead><TableHead>发送账号 / 渠道</TableHead><TableHead>相关度</TableHead><TableHead>状态 / 原因</TableHead><TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{items.map(j=>{const source=jobSource(j),name=source.name||'用户昵称未保存',state=contactJobStatus(j,now,disconnected);return <TableRow key={j.id}>
  <TableCell className="contact-result-source" data-label="评论与来源"><strong>{name}</strong>{!source.name&&<small className="contact-recipient-id">{j.recipientId||'用户身份待核查'}</small>}<SavedText key={`${j.id}:comment`} text={source.comment||'评论原文未保存'} limit={110} label="评论"/>{source.title&&<small className="contact-source-title">来源：{source.title}</small>}</TableCell>
  <TableCell className="contact-result-content" data-label="回复内容"><SavedText key={`${j.id}:content`} text={j.content||'回复内容未保存'} limit={110} label="回复内容"/>{!j.attempt?.attemptedAt&&j.status!=='CONFIRMED'&&<small>{j.mode==='SIMULATION'?'模拟内容':'计划内容'}</small>}</TableCell>
  <TableCell data-label="发送账号 / 渠道"><span>{j.attempt?.historySnapshot?.accountLabel||j.accountLabel||'尚未分配'}</span><small>{j.channel==='COMMENT'?'评论回复':j.channel==='DM'?'私信':'渠道未记录'}</small></TableCell>
  <TableCell className="contact-result-score" data-label="相关度">{Number.isFinite(j.evidence.score)?j.evidence.score:'—'}</TableCell>
- <TableCell className="contact-result-state" data-label="状态 / 原因"><Badge variant="outline" data-tone={j.status==='CONFIRMED'?'success':['UNKNOWN','FAILED','BLOCKED_POST'].includes(j.status)?'warning':'neutral'}>{labels[j.status]||contactStatusLabel[j.status]||'状态待核查'}</Badge>{j.reason&&<SavedText key={`${j.id}:reason`} text={j.reason} limit={140} label="原因"/>}{j.status==='UNKNOWN'&&<small className="contact-result-risk">保留占用 · 勿重发</small>}{j.status==='PENDING_ACTION'&&!j.reason&&<small>选择账号并确认后才会发送</small>}{j.updatedAt&&<small>更新 {readingTime(j.updatedAt)}</small>}</TableCell>
+ <TableCell className="contact-result-state" data-label="状态 / 原因"><Badge variant="outline" data-tone={j.status==='CONFIRMED'?'success':['UNKNOWN','FAILED','BLOCKED_POST'].includes(j.status)?'warning':'neutral'}><span role="status" aria-live="polite" className="contact-live-status">{state.busy&&<LoaderCircle aria-hidden="true" size={13} className="contact-live-spinner"/>}{state.label}</span></Badge>{j.reason&&<SavedText key={`${j.id}:reason`} text={j.reason} limit={140} label="原因"/>}{j.status==='UNKNOWN'&&<small className="contact-result-risk">保留占用 · 勿重发</small>}{j.status==='PENDING_ACTION'&&!j.reason&&<small>选择账号并确认后才会发送</small>}{j.updatedAt&&<small>更新 {readingTime(j.updatedAt)}</small>}</TableCell>
  <TableCell className="contact-result-action"><Button variant="ghost" size="sm" aria-label={`查看回复任务 ${j.id}`} onClick={()=>onOpen(j)}>详情</Button></TableCell>
  </TableRow>;})}</TableBody></Table>;
 }

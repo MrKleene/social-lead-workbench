@@ -76,6 +76,7 @@ export type AutoContactOverview = {
     day: string;
 };
 export type AutoContactJobView = {
+    live?:JourneyLiveStep;
     executionEvidence?:{at:string;event:unknown}[];
     availability?:import('./post-availability').PostAvailabilityView;
     sourceSnapshot?:unknown;

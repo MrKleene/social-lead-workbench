@@ -1,11 +1,11 @@
-import {useJourneyPolling} from '@/lib/use-events';
+import {useJourneyConnection,useJourneyPolling} from '@/lib/use-events';
 import {contactPagination} from './contact-pagination';
 import {accountReadyForRule} from './account-ready';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { autoContactConsent, type AutoContactOverview, type AutoContactRuleInput, type AutoContactJobView } from '@crm/contracts';
 import { api, send } from '@/lib/api';
-export function useAutoContact(enabled: boolean, runId?:string) {const poll=useJourneyPolling();
+export function useAutoContact(enabled: boolean, runId?:string) {const poll=useJourneyPolling(),connection=useJourneyConnection();
     const client = useQueryClient(), [offset, setOffset] = useState(0), [status, setStatus] = useState(''), [draft, setDraft] = useState<AutoContactRuleInput | null>(null), [confirm, setConfirm] = useState(false), [detail, setDetail] = useState<AutoContactJobView | null>(null), trigger = useRef<HTMLElement | null>(null);
     const overview = useQuery({ queryKey: ['auto-contact'], queryFn: () => api<AutoContactOverview>('/auto-contact'), enabled, refetchInterval: poll });
     const jobs = useQuery({ queryKey: ['auto-contact-jobs', offset, status, runId], queryFn: ({signal}) => api<{
@@ -24,5 +24,5 @@ export function useAutoContact(enabled: boolean, runId?:string) {const poll=useJ
     const initialDraft = useRef('');
     const open = () => { trigger.current = document.activeElement as HTMLElement; const d = overview.data; if (!d)
         return; const next:AutoContactRuleInput = { channelPlans:rule?.channelPlans, version: rule?.version ?? 0, platform: rule?.platform ?? 'XHS', policyId: rule?.policyId ?? d.policies[0]?.id ?? '', policyRevision: rule?.policyRevision ?? d.policies[0]?.revision ?? 1, threshold: rule?.threshold ?? 80, channel: rule?.channel ?? 'COMMENT', channels:rule?.channels??[rule?.channel??'COMMENT'],templateId:rule?.templateId??null,templateVersion:rule?.templateVersion??null, content: rule?.content ?? '', accounts: rule?.accountIds.map(id => ({ id, version: d.accounts.find(a => a.id === id)?.version ?? 0, dailyLimit: rule.accountLimits.find(a => a.id === id)?.dailyLimit ?? d.accounts.find(a => a.id === id)?.dailyLimit ?? 0 })) ?? [] }; initialDraft.current=JSON.stringify(next); setDraft(next); save.reset(); };
-    return { dirty:!!draft&&JSON.stringify(draft)!==initialDraft.current, canEnable, overview, jobs, rule, offset, setOffset, status, setStatus: (s: string) => { setStatus(s); setOffset(0); }, draft, setDraft, confirm, setConfirm, detail:detail?(jobs.data?.items.find(j=>j.id===detail.id)??detail):null, setDetail, trigger, open, save, toggle, cancel, busy: save.isPending || toggle.isPending || cancel.isPending };
+    return { disconnected:connection==='reconnecting'||connection==='degraded', dirty:!!draft&&JSON.stringify(draft)!==initialDraft.current, canEnable, overview, jobs, rule, offset, setOffset, status, setStatus: (s: string) => { setStatus(s); setOffset(0); }, draft, setDraft, confirm, setConfirm, detail:detail?(jobs.data?.items.find(j=>j.id===detail.id)??detail):null, setDetail, trigger, open, save, toggle, cancel, busy: save.isPending || toggle.isPending || cancel.isPending };
 }
