@@ -1,3 +1,5 @@
+import {Collapsible,CollapsibleTrigger,CollapsibleContent} from '@/components/ui/collapsible';
+import './project-dashboard.css';
 import {Link} from 'react-router-dom';
 import {ArrowRight,RefreshCw,Archive,ScanLine,Send,UsersRound} from 'lucide-react';
 import {Button} from '@/components/ui/button';
@@ -27,7 +29,7 @@ function ProjectData({data:d}:{data:ProjectOverview}){
  {!a.posts&&!a.comments&&!d.activity.length&&<Card className="project-no-history"><h2>暂无可见业务记录</h2><Button asChild variant="outline"><Link to="/home">去首页 <ArrowRight size={15}/></Link></Button></Card>}
  <div className="project-lower"><section className="project-health"><h2>运行与关注</h2><Link to="/automation"><span>自动化任务</span><strong>{d.tasks.running} 采集中 · {d.tasks.queued} 待采集</strong><ArrowRight size={16}/></Link><Link to="/comment-review"><span>自动匹配作业</span><strong>{d.tasks.reviewPending} 待处理</strong><ArrowRight size={16}/></Link><Link to="/reply-history?outcome=UNKNOWN"><span>可见未知记录</span><strong>{s.unknown} 个未知结果</strong><ArrowRight size={16}/></Link>{s.blockedJobs>0&&<Link to="/auto-contact"><span>帖子不可用</span><strong>{s.blockedJobs} 个受阻任务</strong><ArrowRight size={16}/></Link>}{a.failed>0&&<Link to="/comment-review"><span>评分异常</span><strong>{a.failed} 条最新评论未评分且有失败记录</strong><ArrowRight size={16}/></Link>}</section>
  <section className="project-activity"><header><h2>最近活动</h2><span>北京时间</span></header>{d.activity.length?d.activity.map(x=><Link key={x.kind+x.id} to={x.kind==='send'?'/reply-history':'/automation?'+new URLSearchParams({config:x.configId!,run:x.id,stage:'collect'})}><span className="activity-icon">{x.kind==='send'?<Send size={15}/>:<Archive size={15}/>}</span><div><strong>{x.label}</strong><small>{time(x.at)}</small></div><Badge variant="secondary">{statuses[x.status]||'状态待核查'}</Badge></Link>):<p>暂无可见活动记录。</p>}</section></div>
- <details className="project-method"><summary>统计口径</summary><p>这里只统计当前可见记录，隐藏归档与模拟数据不计入；底层风险和额度保护始终保留。帖子按平台与帖子 ID 去重；评论按平台、帖子与评论 ID 去重。评分覆盖只看最新归档的原文／上下文版本，任一方案已评分即计入一次；不把不同方案门槛合并为全局高分。</p><p>确认、未知、失败按真实发送尝试计数。待处理包含未绑定发送尝试的队列任务与已预占／已提交尝试，关联任务不重复计数。账号仅含未归档真实账号；今日额度占用与评论、私信共用账本一致，按 Asia/Shanghai 零点划分，未验证账号的当前在线状态。</p></details>
+ <Collapsible className="project-method"><CollapsibleTrigger asChild><Button type="button" variant="ghost" size="sm">统计口径</Button></CollapsibleTrigger><CollapsibleContent><p>这里只统计当前可见记录，隐藏归档与模拟数据不计入；底层风险和额度保护始终保留。帖子按平台与帖子 ID 去重；评论按平台、帖子与评论 ID 去重。评分覆盖只看最新归档的原文／上下文版本，任一方案已评分即计入一次；不把不同方案门槛合并为全局高分。</p><p>确认、未知、失败按真实发送尝试计数。待处理包含未绑定发送尝试的队列任务与已预占／已提交尝试，关联任务不重复计数。账号仅含未归档真实账号；今日额度占用与评论、私信共用账本一致，按 Asia/Shanghai 零点划分，未验证账号的当前在线状态。</p></CollapsibleContent></Collapsible>
  </>;
 }
 function Pair({a,b}:{a:[number,string];b:[number,string]}){return <div className="dashboard-stat-pair">{[a,b].map(([n,label])=><div className="dashboard-stat" key={label}><strong>{n}</strong><span>{label}</span></div>)}</div>;}

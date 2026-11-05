@@ -1,6 +1,6 @@
+import {ResultPagination} from '@/components/result-pagination';
 import {DmHistoryVerification} from './dm-history-verification';
 import {useRef,useState} from 'react';
-import {Pager} from '@/components/pager';
 import {Alert,AlertDescription} from '@/components/ui/alert';
 import {FormField} from '@/components/form-field';
 import {SelectField,SelectOption} from '@/components/select-field';
@@ -26,7 +26,7 @@ export function ReplyHistory({enabled}:{enabled:boolean}) {
   <ErrorNotice error={s.query.error}/>{s.query.isError&&<Alert role="alert"><AlertDescription>历史读取失败，不能据此判断没有回复记录。{d?'下方保留上次成功读取的数据。':''}</AlertDescription></Alert>}
   {s.query.isPending?<Loading/>:d&&<>
    {d.items.length?<ReplyHistoryTable items={d.items} onOpen={open}/>:<p className="reply-history-empty" role="status">{s.outcome?'当前筛选没有记录。可切换“全部结果”查看其他历史。':'尚无发送尝试记录。'}</p>}
-   <div className="reply-history-pagination"><small>符合筛选 {d.total} 条 · 第 {Math.floor(s.offset/20)+1} 页 · 每页20条</small><Pager className="action-row"><Button variant="ghost" size="content" disabled={!s.offset||s.query.isFetching} onClick={()=>s.setOffset(Math.max(0,s.offset-20))}>上一页回复历史</Button><Button variant="ghost" size="content" disabled={s.offset+20>=d.total||s.query.isFetching} onClick={()=>s.setOffset(s.offset+20)}>下一页回复历史</Button></Pager></div>
+   <ResultPagination total={d.total} offset={s.offset} pending={s.query.isFetching} onChange={s.setOffset} label="回复记录分页"/>
   </>}
   <Sheet open={!!detail} onOpenChange={open=>{if(!open)setSelected(null);}}><SheetContent className="reply-history-dialog" onCloseAutoFocus={event=>{event.preventDefault();if(returnFocus.current?.isConnected)returnFocus.current.focus();else heading.current?.focus();}}><SheetHeader><SheetTitle>回复记录详情</SheetTitle><SheetDescription className="sr-only">保存的原文、发送结果与执行证据</SheetDescription></SheetHeader>{detail&&<><ReplyHistoryDetail item={detail}/><DmHistoryVerification key={detail.id} item={detail}/></>}<SheetFooter><Button variant="outline" onClick={()=>setSelected(null)}>关闭</Button></SheetFooter></SheetContent></Sheet>
  </section>;

@@ -1,3 +1,4 @@
+import {ResultPagination} from '@/components/result-pagination';
 import {Link} from 'react-router-dom';
 import {useEffect,useState} from 'react';
 import {contactJobStatus} from './contact-job-status';
@@ -6,12 +7,10 @@ import {type AutoContactJobView,type AutoContactOverview,type AutoContactRule} f
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {Table,TableHeader,TableHead,TableBody,TableRow,TableCell} from '@/components/ui/table';
-import {Pager} from '@/components/pager';
 import {SavedText} from '@/features/collection/saved-text';
 import {displayNickname,readingTime} from '@/features/collection/display-metadata';
 import {accountSendSummary,currentQuotaDay} from './account-send-summary';
 
-import {contactPagination,contactPageSize} from './contact-pagination';
 export function SelectedReplyAccounts({data,rule}:{data:AutoContactOverview;rule?:AutoContactRule}){
  const current=currentQuotaDay(data.day,data.timezone);
  return <section className="contact-panel selected-reply-accounts"><div className="contact-heading"><div><h2>已选择自动回复账号</h2><small>{current?'今日额度':'额度日期'} · {data.day} · {data.timezone==='Asia/Shanghai'?'北京时间':data.timezone}</small></div><Button asChild variant="ghost" size="sm"><Link to="/work?module=accounts">账号中心<ArrowUpRight data-icon="inline-end"/></Link></Button></div>
@@ -37,6 +36,5 @@ export function ContactResultsTable({items,onOpen,disconnected=false}:{items:Aut
  </TableRow>;})}</TableBody></Table>;
 }
 export function ContactResultsPagination({total,offset,pending,onChange}:{total?:number;offset:number;pending:boolean;onChange:(offset:number)=>void}){
- const p=contactPagination(total??0,offset);
- return <div className="contact-results-pagination"><span>{total===undefined?'数量暂不可用':`共 ${total} 条 · 每页 ${contactPageSize} 条 · 第 ${p.page}/${p.pages} 页`}</span><Pager aria-label="回复结果分页"><Button variant="outline" size="sm" disabled={pending||total===undefined||!offset} onClick={()=>onChange(Math.max(0,offset-contactPageSize))}>上一页</Button><Button variant="outline" size="sm" disabled={pending||total===undefined||offset+contactPageSize>=total} onClick={()=>onChange(offset+contactPageSize)}>下一页</Button></Pager></div>;
+ return <ResultPagination total={total} offset={offset} pending={pending} onChange={onChange} label="回复结果分页"/>;
 }

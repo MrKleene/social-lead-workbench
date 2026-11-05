@@ -1,5 +1,5 @@
+import {ResultPagination} from '@/components/result-pagination';
 import {Table,TableHeader,TableBody,TableRow,TableHead,TableCell} from '@/components/ui/table';
-import {Pager} from '@/components/pager';
 import { FormField } from '@/components/form-field';
 import { Empty } from '@/components/ui/empty';
 import { SelectField, SelectOption } from '@/components/select-field';
@@ -32,7 +32,7 @@ export function CollectionResults({configs,initialId,onSettings}:{configs:Config
  {s.list.isPending?<Loading/>:s.list.error instanceof ApiError&&s.list.error.status===404?<p role="status">原文接口尚未部署。</p>:s.list.isError?<div className="archive-load-error"><ErrorNotice error={s.list.error}/><Button variant="outline" onClick={()=>void s.list.refetch()}>重试查询</Button></div>:d&&<>
  {<div className="info-scope"><span>当前展示 <strong>{s.visible.length}</strong> 篇帖子</span><span>配置内 <strong>{s.list.data?.postTotal??'—'}</strong> 篇匹配帖子</span><span>帖子列表 · {s.list.data?.hasMore?'还有下一页帖子':'已到列表末页'}</span></div>}
 <Table className="archive-post-table" aria-label="已采集帖子"><TableHeader><TableRow><TableHead>帖子</TableHead><TableHead>原帖访问</TableHead><TableHead>已保存评论</TableHead><TableHead>读取覆盖</TableHead><TableHead>最近保存</TableHead><TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{s.visible.map(p=><CollectionPostCard key={p.id} post={p} platform={s.selected!.platform} onOpen={()=>{scroll.current={inner:root.current?.scrollTop||0,outer:window.scrollY};returnTo.current=p.id;s.open(p);}}/>)}{!s.visible.length&&<TableRow><TableCell colSpan={6}><div className="archive-list-empty" role="status"><h2>暂无已保存帖子</h2><p>当前筛选条件下无结果</p></div></TableCell></TableRow>}</TableBody></Table>
- {<Pager className="action-row info-pagination"><Button variant="outline" disabled={!s.offset} onClick={()=>s.setPage(Math.max(0,s.offset-20))}>上一页帖子</Button><span>帖子列表第 {s.offset/20+1} 页{d.hasMore?" · 还有下一页":""}</span><Button variant="outline" disabled={!s.list.data?.hasMore||s.offset>=100000} onClick={()=>s.setPage(s.offset+20)}>下一页帖子</Button></Pager>}
+ <ResultPagination total={d.postTotal} offset={s.offset} pending={s.list.isFetching} onChange={s.setPage} label="采集信息分页"/>
  {d.legacyWithoutSnapshot>0&&<p role="status">当前关键词组共有 {d.legacyWithoutSnapshot} 条历史观察缺少原文，无法重建；不是当前帖的缺失评论数。</p>}
  </>}
  </>}
