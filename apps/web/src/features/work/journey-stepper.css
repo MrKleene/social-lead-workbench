@@ -20,9 +20,3 @@
 @keyframes journey-step-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.journey-step-spinner{animation:none}}
 @media(max-width:600px){:root .journey-progress-list{gap:16px}:root .journey-progress-list .journey-step-button{padding:10px 2px;gap:6px;flex-direction:column;min-height:102px;text-align:center}.journey-progress-list>li:not(:last-child)::after{left:calc(100% + 2px);width:12px;top:24px}.journey-step-copy{gap:4px}.journey-step-copy strong{font-size:12px}.journey-step-copy small{font-size:11px}.journey-step-marker{width:26px;height:26px}}
-
-.journey-live-trail{font-size:12px;margin:-8px 0 18px;color:var(--muted-foreground)}
-.journey-live-trail summary{cursor:pointer;width:fit-content;padding:4px 0}
-.journey-live-trail summary:focus-visible{outline:2px solid var(--foreground);outline-offset:3px}
-.journey-live-trail ol{list-style:none;padding:8px 0;margin:0;display:grid;gap:8px}
-.journey-live-trail li{display:flex;gap:12px;overflow-wrap:anywhere}.journey-live-trail time{font-variant-numeric:tabular-nums;flex:none}
