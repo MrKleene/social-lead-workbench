@@ -95,7 +95,7 @@ export class ManualReviewService {
    if(batchIds.length&&!wholePostCapacity(payload,next.model).fits){await tx.manualReviewJob.update({where:{id:next.id},data:{status:'INVALIDATED',reason:wholePostCapacityMessage}});return null;}
    if(!batchIds.length){await tx.manualReviewJob.update({where:{id:next.id},data:{items:json(items),status:'COMPLETED',reason:'全部已保存评论已处理或跳过'}});return null;}
    const usage=await this.policies.qwen.status(tx,undefined,{enabled:true,version:policy.version});
-   if(!usage.usage.canCall){await tx.manualReviewJob.update({where:{id:next.id},data:{items:json(items),reason:'等待既有每日预算、在途请求或 30 秒间隔；可取消'}});return null;}
+   if(!usage.usage.canCall){await tx.manualReviewJob.update({where:{id:next.id},data:{items:json(items),reason:'等待每日预算、在途请求或失败退避；可取消'}});return null;}
    return tx.manualReviewJob.update({where:{id:next.id},data:{status:'PROCESSING',items:json(items),batchIds,reason:'正在处理已确认范围'}});
   });if(!job)return;
   let success=false,reason='批次检查失败，未自动重试；剩余未处理';

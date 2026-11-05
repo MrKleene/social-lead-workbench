@@ -1,3 +1,4 @@
+import {modelCallWaitMs} from './model-call-pacing';
 import {archivedReviewIds} from '../history-archive/archive-guard';
 import {activeAcceptance,acceptanceConflict} from '../auto-contact/normal-acceptance';
 import {outputFailureReason,modelOutputFailure} from '@crm/contracts';
@@ -24,12 +25,12 @@ export class QwenMatchingService {
   const connection={...status,...(model?{priceVersion:model.priceVersion,priceDescription:model.priceDescription}:{})};
   const [totals,last,unknown,active]=await Promise.all([
    db.semanticModelCall.aggregate({where:{createdAt:{gte:startOfDay()}},_count:{_all:true},_sum:{inputTokens:true,outputTokens:true}}),
-   db.semanticModelCall.findFirst({orderBy:{createdAt:'desc'},select:{status:true,createdAt:true}}),
+   db.semanticModelCall.findFirst({orderBy:{createdAt:'desc'},select:{status:true,createdAt:true,finishedAt:true,errorCode:true}}),
    db.semanticModelCall.count({where:{createdAt:{gte:startOfDay()},inputTokens:null}}),
    db.semanticModelCall.count({where:{status:'RESERVED',reservedUntil:{gt:new Date()}}}),
   ]);
   const control=independentControl??(configId?(await db.semanticControl.findUnique({where:{configId}})||{enabled:false,version:0}):{enabled:false,version:0});
-  return {connection,control,usage:{requests:totals._count._all,dailyLimit:connection.dailyLimit,inputTokens:totals._sum.inputTokens||0,outputTokens:totals._sum.outputTokens||0,unknownUsage:unknown,lastStatus:last?.status||null,canCall:control.enabled&&connection.state==='READY'&&(connection.dailyLimit===null||totals._count._all<connection.dailyLimit)&&!active&&(!last||Date.now()-last.createdAt.getTime()>=30000)}};
+  return {connection,control,usage:{requests:totals._count._all,dailyLimit:connection.dailyLimit,inputTokens:totals._sum.inputTokens||0,outputTokens:totals._sum.outputTokens||0,unknownUsage:unknown,lastStatus:last?.status||null,canCall:control.enabled&&connection.state==='READY'&&(connection.dailyLimit===null||totals._count._all<connection.dailyLimit)&&!active&&modelCallWaitMs(last)===0}};
  }
  private async batch(configId:string,db:Db|Prisma.TransactionClient=this.db,reviewIds?:string[]){
   const config=await db.collectionConfig.findUnique({where:{id:configId}});
@@ -52,7 +53,7 @@ export class QwenMatchingService {
    const previous=await tx.semanticModelCall.findUnique({where:{requestKey:input.requestKey}});
    if(previous){if(previous.configId!==configId||previous.actorId!==actor.id||previous.previewHash!==input.previewHash)throw new ConflictException('请求标识已被使用');return {previous};}
    await tx.$queryRaw`SELECT id FROM "CollectionConfig" WHERE id=${configId} FOR UPDATE`;
-   const {usage}=await this.status(tx,configId);if(!usage.canCall)throw new ConflictException('LLM开关关闭、模型未就绪、每日次数上限已到、已有请求或处于30秒冷却期；未外发');
+   const {usage}=await this.status(tx,configId);if(!usage.canCall)throw new ConflictException('LLM开关关闭、模型未就绪、每日次数上限已到、已有请求或处于请求节流或失败退避期；未外发');
    const b=await this.batch(configId,tx,input.reviewIds);
    if(!b.rows.length||b.hash!==input.previewHash)throw new ConflictException('批次或规则已变化，请重新预览');
    if(input.priceVersion!==qwenModel(b.model)?.priceVersion)throw new ConflictException('模型价格已变化，请重新预览并确认价格');

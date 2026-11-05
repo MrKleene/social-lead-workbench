@@ -58,7 +58,7 @@ export class AutoReviewService {
    try{await assertAutoReview(tx,next.id,model.configurationVersion);}catch(e){await tx.autoReviewJob.update({where:{id:next.id},data:{status:'CANCELLED',reason:e instanceof Error?e.message:'自动授权已失效'}});return null;}
    const status=await this.policies.qwen.status(tx,undefined,{enabled:true,version:next.policyVersion});
    if(!model.status.authorized||model.status.state!=='READY'){await tx.autoReviewJob.update({where:{id:next.id},data:{status:'CANCELLED',reason:'模型未配置或未授权'}});return null;}
-   if(!status.usage.canCall){await tx.autoReviewJob.update({where:{id:next.id},data:{status:'PENDING',reason:'等待每日预算、在途请求或 30 秒调用间隔'}});return null;}
+   if(!status.usage.canCall){await tx.autoReviewJob.update({where:{id:next.id},data:{status:'PENDING',reason:'等待每日预算、在途请求或失败退避'}});return null;}
    return next;
   });if(!job)return;
   const live=liveReporter(this.db,job.runId,'review',job.id);await live.set('PREPARING_REVIEW');

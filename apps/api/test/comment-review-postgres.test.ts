@@ -57,6 +57,31 @@ beforeAll(async()=>{actor=await db.user.create({data:{email:randomUUID()+'@examp
 beforeEach(async()=>{await clear();transport.mockClear();});
 afterAll(async()=>{await clear();await db.session.deleteMany({where:{userId:{in:[actor.id,sales.id]}}});await db.user.deleteMany({where:{id:{in:[actor.id,sales.id]}}});await app?.close();await db.$disconnect();rmSync(home,{recursive:true,force:true});});
 describe('independent comment review: disposable database and mocked provider only',()=>{
+ it('serial model reservations survive faster pacing and service recreation',async()=>{
+  const p=await enabled(),a=await source('a','护理学'),b=await source('b','法学');
+  const first=await batch(p.version,[a.p.id]),second=await batch(p.version,[b.p.id]);
+  const normal=transport.getMockImplementation()!;let release!:()=>void;const wait=new Promise<void>(r=>release=r);
+  transport.mockImplementationOnce(async(url,init)=>{await wait;return normal(url,init)});
+  const running=evaluation.evaluate(actor,p.id,input(first));
+  try{await vi.waitFor(()=>expect(transport).toHaveBeenCalledTimes(1));await expect(evaluation.evaluate(actor,p.id,input(second))).rejects.toThrow();expect(transport).toHaveBeenCalledTimes(1);}finally{release()}
+  expect(await running).toMatchObject({status:'COMPLETED'});
+  await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-2000)}});
+  const restarted=new QwenMatchingService(db,undefined,store);
+  expect((await restarted.status(db,undefined,{enabled:true,version:p.version})).usage.canCall).toBe(true);
+  expect(await evaluation.evaluate(actor,p.id,input(second))).toMatchObject({status:'COMPLETED'});expect(transport).toHaveBeenCalledTimes(2);
+ });
+ it('persisted rate-limit backoff blocks across restart without retrying failed call',async()=>{
+  const p=await enabled();await source();const preview=await batch(p.version);
+  transport.mockImplementationOnce(async()=>new Response('rate limit',{status:429}));
+  expect(await evaluation.evaluate(actor,p.id,input(preview))).toMatchObject({status:'FAILED',errorCode:'RATE_LIMIT'});
+  await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-120000)}});
+  const restarted=new QwenMatchingService(db,undefined,store);
+  expect((await restarted.status(db,undefined,{enabled:true,version:p.version})).usage.canCall).toBe(false);
+  await db.semanticModelCall.updateMany({data:{finishedAt:new Date(Date.now()-61000)}});
+  expect((await restarted.status(db,undefined,{enabled:true,version:p.version})).usage.canCall).toBe(true);
+  expect(transport).toHaveBeenCalledTimes(1);expect(await db.semanticModelCall.findFirst()).toMatchObject({status:'FAILED',errorCode:'RATE_LIMIT'});
+ });
+
  it('normal HTTP rules -> collection -> one whole-post model call -> dispatch -> history, without manual approval',async()=>{
   await autoEnabled();const send=vi.fn(async()=>({kind:'CONFIRMED',receipt:'synthetic-only'})),sender:any={mode:'SIMULATION',capability:()=>true,healthy:async()=>true,send};
   const mod=await Test.createTestingModule({imports:[AppModule]}).overrideProvider(Db).useValue(db).overrideProvider(CONTACT_SENDER).useValue(sender).compile(),http=mod.createNestApplication({bodyParser:false});configure(http);await http.init();
@@ -178,7 +203,7 @@ describe('independent comment review: disposable database and mocked provider on
   const run=await db.collectionRun.findUniqueOrThrow({where:{id:complete.capture.runId}});await automatic.postFinished(run,{post:{id:complete.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});
   expect(await db.autoReviewJob.count()).toBe(2);expect(await db.autoReviewJob.findFirst({where:{postId:partial.p.id}})).toMatchObject({status:'SKIPPED',reason:'覆盖未通过：COMMENT_LIMIT'});
   await Promise.all([automatic.tick(),automatic.tick()]);expect(transport).toHaveBeenCalledTimes(1);expect(await db.semanticModelCall.count()).toBe(1);
-  await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoReviewJob.findFirst({where:{postId:complete.p.id}})).toMatchObject({status:'COMPLETED',processed:1});
+  await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-61000),finishedAt:new Date(Date.now()-61000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoReviewJob.findFirst({where:{postId:complete.p.id}})).toMatchObject({status:'COMPLETED',processed:1});
  });
  it('collector complete hook enqueues automatically and saves still never dispatch',async()=>{
   await autoEnabled();const c=await collection.create(actor,{name:'合成自动覆盖',platform:'XHS',mode:'MOCK',keywords:['护理'],excludeWords:[],batchLimit:1,enabled:true});
@@ -202,7 +227,7 @@ describe('independent comment review: disposable database and mocked provider on
   try{expect(await evaluation.evaluate(actor,p.id,input(preview),job.id)).toMatchObject({status:'FAILED'});expect(transport).not.toHaveBeenCalled();}finally{spy.mockRestore();}
  });
  it('automatic failed/uncertain calls are never retried; manual recovery stays possible',async()=>{
-  const p=await autoEnabled();await finishedSource();transport.mockImplementationOnce(async()=>new Response('rate limit',{status:429}));await automatic.tick();expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'FAILED'});await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);
+  const p=await autoEnabled();await finishedSource();transport.mockImplementationOnce(async()=>new Response('rate limit',{status:429}));await automatic.tick();expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'FAILED'});await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-61000),finishedAt:new Date(Date.now()-61000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);
   const off=await policies.automatic(actor,p.id,{version:p.version,enabled:false});const preview=await batch(off.version);expect(await evaluation.evaluate(actor,p.id,input(preview))).toMatchObject({status:'COMPLETED'});
   const s=await source('新搜索','药学');await db.autoReviewJob.create({data:{policyId:p.id,policyVersion:off.version,postId:s.p.id,runId:s.capture.runId,status:'PROCESSING',updatedAt:new Date(Date.now()-430000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(2);expect(await db.autoReviewJob.findFirst({where:{postId:s.p.id}})).toMatchObject({status:'FAILED'});
  });
@@ -211,7 +236,7 @@ describe('independent comment review: disposable database and mocked provider on
   await autoEnabled();const s=await finishedSource();
   for(let i=0;i<5;i++)await db.capturedComment.create({data:{configId:s.c.id,runId:s.capture.runId,lastRunId:s.capture.runId,postId:s.p.id,platformCommentId:randomUUID(),contentHash:randomUUID(),contextVersion:'captured-context-v1',snapshot:{...(s.capture.snapshot as object),comment:['法学','医学','会计学','社会学','药学'][i]},isDemo:true}});
   await db.modelSettings.updateMany({data:{dailyLimit:1}});await automatic.tick();expect(await db.semanticModelCall.findFirst()).toMatchObject({rows:6,trigger:'AUTOMATIC',configurationVersion:1});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);
-  await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'COMPLETED',processed:6});
+  await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-61000),finishedAt:new Date(Date.now()-61000)}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'COMPLETED',processed:6});
   await db.modelSettings.updateMany({data:{dailyLimit:2}});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.semanticReview.count({where:{state:'EVALUATED'}})).toBe(6);
  });
  it.each(['complete','partial','forged'] as const)('root-scoped Go evidence integrates with automatic gate: %s',async mode=>{
@@ -244,7 +269,7 @@ describe('independent comment review: disposable database and mocked provider on
 
 const wholeInput=(j:any)=>({hash:j.scopeHash,requestKey:randomUUID(),consent:manualPostConsent,providerConsent:reviewUseConsent});
 async function wholeSource(n=56){const s=await source();for(let i=1;i<n;i++){const snapshot={...(s.capture.snapshot as any),comment:'护理学专业'+String.fromCodePoint(0x4e00+i),commentId:randomUUID(),parentId:i%3?s.capture.platformCommentId:'nested-parent',parent:'护理学专业'};await db.capturedComment.create({data:{configId:s.c.id,runId:s.capture.runId,lastRunId:s.capture.runId,postId:s.p.id,platformCommentId:snapshot.commentId,contentHash:semanticHash(snapshot),contextVersion:'captured-context-v1',snapshot,isDemo:true}});}return s;}
-async function nextManual(){await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});await manual.tick();}
+async function nextManual(){await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-61000),finishedAt:new Date(Date.now()-61000)}});await manual.tick();}
 describe('whole saved post manual tasks and relevance results (mock transport)',()=>{
  it('56 saved comments including nested replies survive preview pagination in ONE call, with auto OFF and idempotency',async()=>{
   const p=await saved(),s=await wholeSource();const [a,b]=await Promise.all([manual.prepare(actor,p.id,{revision:p.revision,postId:s.p.id}),manual.prepare(actor,p.id,{revision:p.revision,postId:s.p.id})]);expect(a.id).toBe(b.id);expect(a).toMatchObject({total:56,pending:56,skipped:0,maxCalls:1,coverage:'PARTIAL'});expect(transport).not.toHaveBeenCalled();
@@ -332,7 +357,7 @@ describe('original input authorization and historical preservation (mock provide
   for(let n=0;n<captures.length;n++){const c=captures[n],snapshot={...(c.snapshot as any),comment:'护理学'+n+'字'.repeat(6000)};await db.capturedComment.update({where:{id:c.id},data:{snapshot,contentHash:semanticHash(snapshot)}});}
   if(mode==='whole'){const j=await manual.prepare(actor,p.id,{revision:1,postId:s.p.id});expect(j.maxCalls).toBe(1);await manual.confirm(actor,j.id,wholeInput(j));}else{await policies.automatic(actor,p.id,{version:p.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});await db.capturedPost.update({where:{id:s.p.id},data:{coverage:'COMPLETE'}});const run=await readyStageRun(s.capture.runId);await automatic.postFinished(run,{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});}
   const normal=transport.getMockImplementation()!;transport.mockImplementation(async(u,i)=>{const p=JSON.parse(JSON.parse(i.body as string).messages[1].content);expect(p.items).toHaveLength(5);expect(Buffer.byteLength(JSON.stringify(p))).toBeGreaterThan(48000);const response=await normal(u,i),data:any=await response.json();const result=JSON.parse(data.choices[0].message.content);result.items.forEach((r:any)=>r.evidence[0].quote=r.evidence[0].quote.slice(0,30));data.choices[0].message.content=JSON.stringify(result);return new Response(JSON.stringify(data));});
-  try{for(let i=0;i<4;i++){await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});if(mode==='whole')await manual.tick();else await automatic.tick();}if(mode==='whole')expect((await manual.list(actor,p.id))[0]).toMatchObject({success:5,status:'COMPLETED'});else expect(await db.autoReviewJob.findFirst()).toMatchObject({processed:5,status:'COMPLETED'});expect(transport).toHaveBeenCalledTimes(1);expect((await db.semanticReview.findMany()).every(r=>(r.evaluationInput as any).items.every((i:any)=>i.comment.length===6004))).toBe(true);}finally{transport.mockImplementation(normal);}
+  try{for(let i=0;i<4;i++){await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-61000),finishedAt:new Date(Date.now()-61000)}});if(mode==='whole')await manual.tick();else await automatic.tick();}if(mode==='whole')expect((await manual.list(actor,p.id))[0]).toMatchObject({success:5,status:'COMPLETED'});else expect(await db.autoReviewJob.findFirst()).toMatchObject({processed:5,status:'COMPLETED'});expect(transport).toHaveBeenCalledTimes(1);expect((await db.semanticReview.findMany()).every(r=>(r.evaluationInput as any).items.every((i:any)=>i.comment.length===6004))).toBe(true);}finally{transport.mockImplementation(normal);}
  });
 });
 
@@ -410,7 +435,7 @@ describe('current observation, resumed counts and cross-entry dedup (synthetic o
  });
  it('manual success is reused by automatic and by another search source; observation-only change never causes implicit paid rerun',async()=>{
   const p=await saved(),s=await resumedObservation(),j=await manual.prepare(actor,p.id,{revision:1,postId:s.p.id});await manual.confirm(actor,j.id,wholeInput(j));await manual.tick();expect(transport).toHaveBeenCalledTimes(1);const history=await db.semanticReview.findMany({orderBy:{id:'asc'}});
-  const on=await policies.automatic(actor,p.id,{version:p.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});
+  const on=await policies.automatic(actor,p.id,{version:p.version,enabled:true,consent:reviewAutoConsent,modelVersion:1,priceVersion:'beijing-2026-10-21'});await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-61000),finishedAt:new Date(Date.now()-61000)}});
   await automatic.postFinished(await db.collectionRun.update({where:{id:s.run.id},data:{snapshot:{...(s.run.snapshot as object),strictStages:await frozenStagePlan()}}}),{post:{id:s.p.platformPostId,title:''},comments:[],deletedIds:[],complete:true,windowRead:true});await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);expect(await db.autoReviewJob.findFirst()).toMatchObject({status:'COMPLETED',processed:0});
   const other=await source('其他搜索','合成专业',s.captures[0].contentHash);expect((await policies.prepare(actor,p.id,{version:on.version,scope:{kind:'POSTS',postIds:[other.p.id]}},true)).count).toBe(0);
   expect(await db.semanticReview.findMany({orderBy:{id:'asc'}})).toEqual(history);
@@ -496,7 +521,7 @@ it.each(['success','failed'])('strict three-stage multi-post lifecycle survives 
   const run=await collection.start(actor,c.id,'BASELINE',randomUUID());await collection.execute(run.id,adapter);expect(n).toBe(3);expect(await db.autoReviewJob.count({where:{runId:run.id,status:'PENDING'}})).toBe(3);expect(transport).not.toHaveBeenCalled();
   await automatic.tick();expect(transport).toHaveBeenCalledTimes(1);await contacts.tick();expect(sender.send).not.toHaveBeenCalled();expect(await db.autoContactJob.count()).toBe(0);
   if(outcome==='failed')transport.mockImplementationOnce(async()=>new Response('synthetic failure',{status:429}));
-  for(let i=0;i<2;i++){await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-31000)}});await new AutoReviewService(db,policies,evaluation).tick();if(i===0){await contacts.tick();expect(sender.send).not.toHaveBeenCalled();}}
+  for(let i=0;i<2;i++){await db.semanticModelCall.updateMany({data:{createdAt:new Date(Date.now()-61000),finishedAt:new Date(Date.now()-61000)}});await new AutoReviewService(db,policies,evaluation).tick();if(i===0){await contacts.tick();expect(sender.send).not.toHaveBeenCalled();}}
   expect(transport).toHaveBeenCalledTimes(3);await new AutoContactService(db,sender).tick();expect(sender.send).toHaveBeenCalledTimes(outcome==='success'?1:0);expect(await db.autoContactJob.count()).toBe(outcome==='success'?3:0);
   await automatic.tick();expect(transport).toHaveBeenCalledTimes(3);
  }finally{await db.autoContactJob.deleteMany();await db.contactAttempt.deleteMany();await db.contactLedger.deleteMany();await db.accountDay.deleteMany();await db.autoContactRule.deleteMany();await db.autoContactControl.deleteMany();await db.platformAccount.delete({where:{id:account.id}});}
