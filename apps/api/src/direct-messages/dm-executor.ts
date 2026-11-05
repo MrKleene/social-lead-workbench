@@ -11,13 +11,14 @@ import {sendExactDm} from './dm-transport';
 import {inspectExistingDm} from './dm-readback';
 export type DmReadbackProof={observations:Awaited<ReturnType<typeof inspectExistingDm>>[];stopped:true};
 // The first release remains unavailable to ordinary UI until the constrained real acceptance completes.
-export const DM_REVIEWED_BUILD='4da06fa2ecbeef644674a26474a4d6a2cec558d2d275a061d0f0e43a160f1b56';
+export const DM_REVIEWED_BUILD='3bc85936ced1b696c29bf810fdc48322c8ded3bc3639cc076cab24e2d9058a82';
 export const DM_PRODUCTION_ACCEPTED=true;
-export interface DmExecutor {verify?(actor:Actor,c:DmCommand,sessionKey:string,signal:AbortSignal):Promise<DmReadbackProof>;available():boolean;run(actor:Actor,c:DmCommand,sessionKey:string,beforeDispatch:()=>Promise<boolean>,signal:AbortSignal):Promise<DmExecution>}
+export interface DmExecutor {supportsReplies?():boolean;verify?(actor:Actor,c:DmCommand,sessionKey:string,signal:AbortSignal):Promise<DmReadbackProof>;available():boolean;run(actor:Actor,c:DmCommand,sessionKey:string,beforeDispatch:()=>Promise<boolean>,signal:AbortSignal):Promise<DmExecution>}
 export const DM_EXECUTOR=Symbol('DM_EXECUTOR');
 @Injectable()
 export class LocalDmExecutor implements DmExecutor {
  constructor(@Inject(Db) private db:Db,@Inject(DeviceService) private devices:DeviceService,@Inject(LoginRuntime) private runtime:LoginRuntime){}
+ supportsReplies(){return this.available();} // Reply-aware build is pinned; no claim of live conversation acceptance.
  available(){return process.platform==='darwin'&&this.devices.enabled()&&this.runtime.mode()==='real'&&this.runtime.persistent()&&toolPlan(process.env.HOME??'').hash===DM_REVIEWED_BUILD;}
  async verify(actor:Actor,c:DmCommand,sessionKey:string,signal:AbortSignal):Promise<DmReadbackProof>{
   if(!this.available())throw Error('DM_VERIFY_UNAVAILABLE');const permit=await this.devices.acquire(actor,c.accountId),observations: DmReadbackProof['observations']=[];let stopped=true;

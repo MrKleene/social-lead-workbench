@@ -27,5 +27,5 @@ export class DirectMessagesController {
  @Get('requests/:id') @Header('Cache-Control','no-store, private')
  status(@Req() req:AuthedRequest,@Param('id') id:string){return this.sender.status(req.actor,id);}
 }
-@Module({imports:[AuthModule,DevicesModule],controllers:[DirectMessagesController],providers:[DmPreparationService,DmSendService,LoginRuntime,{provide:DM_EXECUTOR,useClass:LocalDmExecutor}]})
+@Module({imports:[AuthModule,DevicesModule],controllers:[DirectMessagesController],providers:[DmPreparationService,DmSendService,LoginRuntime,{provide:DM_EXECUTOR,useClass:LocalDmExecutor}],exports:[DM_EXECUTOR]})
 export class DirectMessagesModule{}

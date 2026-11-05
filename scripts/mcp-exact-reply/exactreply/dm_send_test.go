@@ -102,3 +102,11 @@ func TestDMSendInvalidNeverCreatesDriver(t *testing.T) {
 		}
 	}
 }
+
+func TestConversationReplyAnchorIsExactAndFirstContactUnchanged(t *testing.T) {
+ c:=dmCommand();if !c.Valid(){t.Fatal("legacy first contact changed")}
+ c.ReplyTo=&DMReplyAnchor{MessageID:"123456789012345",ContentHash:Hash("incoming")}
+ if !c.Valid()||!ReplyAnchorMatches(c,"123456789012345","incoming",false){t.Fatal("valid inbound rejected")}
+ for _,v:=range []struct{id,body string;after bool}{{"123456789012346","incoming",false},{"123456789012345","changed",false},{"123456789012345","incoming",true}} {if ReplyAnchorMatches(c,v.id,v.body,v.after){t.Fatal("unsafe anchor accepted")}}
+ c.ReplyTo.MessageID="local-fallback";if c.Valid(){t.Fatal("fallback ID accepted")}
+}

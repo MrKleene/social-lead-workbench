@@ -68,3 +68,7 @@ it('projects old refusal evidence without releasing unknown or inventing a platf
  expect(replyPlatformDiagnostic([{...r,receipt:{...r.receipt,fields:[]}}])).toBeNull();
  expect(replyPlatformDiagnostic([{...r,receipt:{...r.receipt,failure:{category:'BUSINESS_REJECTION',code:-9131,messageClass:'RATE_LIMITED'}}}])).toContain('平台提示操作频繁');
 });
+it('conversation replies retain original incoming message and are not labelled a first-contact test',()=>{
+ const x=replyHistoryItem({...attempt,requestKey:'inbox:preview',channel:'DM',historySnapshot:{platform:'XHS',recipientId:recipient,senderPlatformId:sender,senderNickname:'虚构接收账号',incoming:{senderName:'虚构来信人',body:'保存的私信'}}},[]);
+ expect(x).toMatchObject({origin:'CONVERSATION',recipientName:'虚构来信人',inboundMessage:'保存的私信',postTitle:null,originalComment:null});
+});

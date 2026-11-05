@@ -12,7 +12,12 @@ import (
 
 const DMSendProtocol = "workbench.xhs.exact-dm.v1"
 
+type DMReplyAnchor struct {
+ MessageID string `json:"messageId"`
+ ContentHash string `json:"contentSha256"`
+}
 type DMCommand struct {
+ ReplyTo *DMReplyAnchor `json:"replyTo,omitempty"`
 	Protocol       string `json:"protocol"`
 	AttemptID      string `json:"attemptId"`
 	RequestKey     string `json:"requestKey"`
@@ -27,7 +32,7 @@ type DMCommand struct {
 
 func (c DMCommand) Valid() bool {
 	until, e := time.Parse(time.RFC3339Nano, c.ExpiresAt)
-	return e == nil && until.After(time.Now()) && until.Before(time.Now().Add(5*time.Minute)) && c.Protocol == DMSendProtocol && uuid.MatchString(c.AttemptID) && opaque.MatchString(c.RequestKey) && opaque.MatchString(c.AccountID) && id.MatchString(c.SenderID) && id.MatchString(c.RecipientID) && c.SenderID != c.RecipientID && strings.TrimSpace(c.Content) == c.Content && c.Content != "" && !strings.ContainsAny(c.Content, "\r\n\x00") && utf8.RuneCountInString(c.Content) <= 1000 && Hash(c.Content) == c.ContentHash && c.MaxSubmissions == 1
+	return (c.ReplyTo == nil || (ValidDMMessageID(c.ReplyTo.MessageID,c.RecipientID,c.SenderID) && regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(c.ReplyTo.ContentHash))) && e == nil && until.After(time.Now()) && until.Before(time.Now().Add(5*time.Minute)) && c.Protocol == DMSendProtocol && uuid.MatchString(c.AttemptID) && opaque.MatchString(c.RequestKey) && opaque.MatchString(c.AccountID) && id.MatchString(c.SenderID) && id.MatchString(c.RecipientID) && c.SenderID != c.RecipientID && strings.TrimSpace(c.Content) == c.Content && c.Content != "" && !strings.ContainsAny(c.Content, "\r\n\x00") && utf8.RuneCountInString(c.Content) <= 1000 && Hash(c.Content) == c.ContentHash && c.MaxSubmissions == 1
 }
 
 type DMReceipt struct {
@@ -193,4 +198,9 @@ func closeDMSafely(ctx context.Context, d DMSender) (ok bool) {
 		}
 	}()
 	return d.Close(ctx) == nil
+}
+
+// A conversational reply requires the latest visible inbound message, not merely an existing chat.
+func ReplyAnchorMatches(c DMCommand, messageID, body string, outgoingAfter bool) bool {
+ return c.ReplyTo != nil && !outgoingAfter && c.ReplyTo.MessageID == messageID && Hash(body)==c.ReplyTo.ContentHash && ValidDMMessageID(messageID,c.RecipientID,c.SenderID)
 }

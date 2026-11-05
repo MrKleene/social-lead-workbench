@@ -120,7 +120,7 @@ export type AutoContactJobView = {
 
 export type ReplyHistoryItem = {
     jobId?: string | null; canVerifyDm?: boolean;
-    id: string; mode: string; channel: string; origin: 'RULE' | 'SINGLE_TEST'; outcome: string; displayStatus: string;
+    id: string; mode: string; channel: string; origin: 'RULE' | 'SINGLE_TEST' | 'CONVERSATION'; inboundMessage?: string | null; outcome: string; displayStatus: string;
     senderId: string | null; senderName: string | null; senderNameSource: string;
     recipientId: string | null; recipientName: string | null; postId: string | null; postTitle: string | null; postUrl: string | null;
     commentId: string | null; originalComment: string | null; content: string;

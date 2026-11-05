@@ -3,7 +3,7 @@ import {z} from 'zod';
 export const DM_SEND_PROTOCOL='workbench.xhs.exact-dm.v1';
 export const dmDigest=(s:string)=>createHash('sha256').update(s).digest('hex');
 const pid=z.string().regex(/^[a-f0-9]{24}$/),opaque=z.string().regex(/^[A-Za-z0-9:_-]{1,200}$/),hash=z.string().regex(/^[a-f0-9]{64}$/);
-export const dmCommandSchema=z.object({protocol:z.literal(DM_SEND_PROTOCOL),attemptId:z.string().uuid(),requestKey:opaque,accountId:opaque,senderId:pid,recipientId:pid,content:z.string().min(1).max(1000).refine(s=>s.trim()===s&&!/[\r\n\0]/.test(s)),contentSha256:hash,maxSubmissions:z.literal(1),expiresAt:z.string().datetime()}).strict().refine(c=>c.senderId!==c.recipientId&&dmDigest(c.content)===c.contentSha256);
+export const dmCommandSchema=z.object({protocol:z.literal(DM_SEND_PROTOCOL),attemptId:z.string().uuid(),requestKey:opaque,accountId:opaque,senderId:pid,recipientId:pid,content:z.string().min(1).max(1000).refine(s=>s.trim()===s&&!/[\r\n\0]/.test(s)),contentSha256:hash,replyTo:z.object({messageId:z.string().min(10).max(100),contentSha256:hash}).strict().optional(),maxSubmissions:z.literal(1),expiresAt:z.string().datetime()}).strict().refine(c=>c.senderId!==c.recipientId&&dmDigest(c.content)===c.contentSha256&&(!c.replyTo||validDmMessageId(c.replyTo.messageId,c.recipientId,c.senderId)));
 export type DmCommand=z.infer<typeof dmCommandSchema>;
 export const validDmMessageId=(value:string,sender:string,recipient:string)=>/^[0-9]{10,30}$/.test(value)||(value.startsWith(sender+'.'+recipient+'.')&&/^[a-f0-9]{12,32}$/.test(value.slice(sender.length+recipient.length+2)));
 const receipt=z.object({messageId:z.string().min(10).max(100),senderId:pid,recipientId:pid,contentSha256:hash,observedAt:z.string().datetime()}).strict();

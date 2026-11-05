@@ -24,7 +24,7 @@ func NewDMSendDriver(p *rod.Page, closeBrowser func()) *DMSendDriver {
 
 const dmSendDOM = `(sender,recipient,content)=>{
  const o=JSON.parse((` + dmConversationDOM + `)(sender,recipient));
- const out={safe:false,ready:false,empty:false,exact:false,focused:false,existingOutgoing:0,matches:[],failed:false,pending:false};
+ const out={safe:false,ready:false,empty:false,exact:false,focused:false,existingOutgoing:0,lastIncomingID:"",lastIncomingBody:"",outgoingAfterIncoming:false,matches:[],failed:false,pending:false};
  if(o.identity!=='MATCH'||o.route!=='CHAT'||o.risk||o.loginChallenge||!o.boundRecipient||o.conversationKind!=='c2c'||o.loading||!o.headerPresent)return JSON.stringify(out);
  const windows=document.querySelectorAll('.xhs-im-chat-window');if(windows.length!==1)return JSON.stringify(out);
  const win=windows[0],eds=win.querySelectorAll('.xhs-im-input-bar-editor[contenteditable="true"]');if(eds.length!==1)return JSON.stringify(out);
@@ -34,7 +34,8 @@ const dmSendDOM = `(sender,recipient,content)=>{
  if(notices.some(e=>/无法发送|不能发送|禁止|封禁|频繁|频率|验证码|安全验证|已达|不支持发|已被|对方不接收|发送失败|仅能发送/.test(e.innerText||e.textContent||'')))return JSON.stringify(out);
  out.safe=true;out.empty=ed.textContent==='';out.exact=ed.textContent===content&&!ed.querySelector('img,br');out.focused=document.activeElement===ed;
  for(const row of win.querySelectorAll('.xhs-im-msg-list .chat-item')){
-  if(!row.querySelector('.chat-item__bubble-row--right'))continue;
+  if(row.querySelector('.chat-item__bubble-row--left')&&!row.querySelector('.chat-item__bubble-row--right')){out.lastIncomingID=row.getAttribute('data-message-id')||'';out.lastIncomingBody=(row.querySelector('.chat-item__bubble')?.textContent||'').slice(0,10000);out.outgoingAfterIncoming=false;continue;}
+  if(!row.querySelector('.chat-item__bubble-row--right'))continue;out.outgoingAfterIncoming=true;
   out.existingOutgoing++;
   const text=row.querySelector('.xhs-im-bubble__text');if(!text||text.textContent!==content)continue;
   const failed=!!row.querySelector('.chat-item__status-btn--failed'),pending=!!row.querySelector('.chat-item__status-loading');out.failed||=failed;out.pending||=pending;
@@ -46,7 +47,9 @@ const dmSendDOM = `(sender,recipient,content)=>{
 
 type dmState struct {
 	Safe, Ready, Empty, Exact, Focused bool
-	ExistingOutgoing                   int
+	LastIncomingID, LastIncomingBody string
+ OutgoingAfterIncoming bool
+ ExistingOutgoing                   int
 	Matches                            []string
 	Failed, Pending                    bool
 }
@@ -77,16 +80,17 @@ func (d *DMSendDriver) Check(ctx context.Context, c exactreply.DMCommand, filled
 	if !s.Safe || !s.Ready {
 		return errors.New("CONVERSATION_UNSAFE")
 	}
-	if s.ExistingOutgoing > 0 {
+	if c.ReplyTo != nil && !exactreply.ReplyAnchorMatches(c,s.LastIncomingID,s.LastIncomingBody,s.OutgoingAfterIncoming) { return errors.New("INBOUND_ANCHOR_UNVERIFIED") }
+ if c.ReplyTo == nil && s.ExistingOutgoing > 0 {
 		return errors.New("EXISTING_OUTGOING_CONTACT")
 	}
 	if filled {
 		if !s.Exact || !s.Focused {
 			return errors.New("DRAFT_CHANGED")
 		}
-	} else if !s.Empty {
-		return errors.New("EXISTING_DRAFT")
-	}
+	} else {
+  if !s.Empty { return errors.New("EXISTING_DRAFT") };for _,id:=range s.Matches {d.existing[id]=true}
+ }
 	return nil
 }
 func (d *DMSendDriver) Input(ctx context.Context, c exactreply.DMCommand) error {
@@ -134,7 +138,8 @@ func (d *DMSendDriver) waitReceipt(ctx context.Context, c exactreply.DMCommand, 
 		if s.Failed {
 			return exactreply.DMReceipt{}, errors.New("PLATFORM_SEND_FAILED")
 		}
-		if len(s.Matches) > 1 {
+		filtered:=[]string{};for _,id:=range s.Matches {if (want!="" && id==want)||(want=="" && !d.existing[id]) {filtered=append(filtered,id)}};s.Matches=filtered
+ if len(s.Matches) > 1 {
 			return exactreply.DMReceipt{}, errors.New("RECEIPT_AMBIGUOUS")
 		}
 		if len(s.Matches) == 1 && !s.Pending && (want == "" || s.Matches[0] == want) {

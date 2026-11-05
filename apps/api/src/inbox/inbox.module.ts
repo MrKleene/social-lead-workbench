@@ -1,3 +1,7 @@
+import {ChatController} from './chat-controller';
+import {ChatStore} from './chat-store';
+import {ChatReply} from './chat-reply';
+import {DirectMessagesModule} from '../direct-messages/direct-messages.module';
 import {Controller,Get,Header,Inject,Module,Param,Post,Query,Req,Sse,UseGuards,MessageEvent,OnModuleDestroy} from '@nestjs/common';
 import {Observable} from 'rxjs';
 import {AuthModule,SessionGuard,type AuthedRequest} from '../auth/auth';
@@ -26,5 +30,5 @@ export class InboxController implements OnModuleDestroy{
   const change=this.store.changed.subscribe(()=>void emit());const timer=setInterval(()=>void emit(),15000);void emit();return()=>{this.connections.delete(close);closed=true;clearInterval(timer);change.unsubscribe()};
  })}
 }
-@Module({imports:[AuthModule,DevicesModule],controllers:[InboxController],providers:[InboxStore,InboxService,LoginRuntime,{provide:INBOX_RUNTIME,useClass:LocalInboxRuntime}],exports:[InboxStore]})
+@Module({imports:[AuthModule,DevicesModule,DirectMessagesModule],controllers:[InboxController,ChatController],providers:[ChatStore,ChatReply,InboxStore,InboxService,LoginRuntime,{provide:INBOX_RUNTIME,useClass:LocalInboxRuntime}],exports:[InboxStore]})
 export class InboxModule{}
