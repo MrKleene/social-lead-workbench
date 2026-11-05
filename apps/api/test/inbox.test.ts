@@ -1,0 +1,21 @@
+import 'reflect-metadata';
+import {describe,it,expect,vi} from 'vitest';
+import {decodeFrame,decodeDM} from '../src/inbox/protocol';
+import {InboxStore,eventTime,messageSchema} from '../src/inbox/inbox-store';
+import {InboxService} from '../src/inbox/inbox-service';
+const admin={id:'admin',name:'Admin',email:'fake@example.invalid',role:'ADMIN'} as const;
+const sales={...admin,role:'SALES'} as const;
+const sig=(id:string)=>JSON.stringify({v:1,t:4,m:id,b:{d:{biz:'push',b:[{d:Buffer.from(JSON.stringify({topic:'message_center',payload:JSON.stringify({you:{mentions:1}})})).toString('base64')}]}}});
+describe('inbox receive-only safety',()=>{
+ it('timestamps preserve unknown and reject future, support seconds',()=>{expect(eventTime(null,Date.now())).toBeNull();expect(eventTime(1,Date.now())).toBeNull();expect(eventTime(Date.now()+10000,Date.now())).toBeNull();expect(eventTime(1760000000,Date.now())?.getTime()).toBe(1760000000000)});
+ it('does not treat heartbeat as business event',()=>expect(decodeFrame('{"v":1,"t":0}').events).toEqual([]));
+ it('parses encoded count signal and retains transport id',()=>{const f=decodeFrame(sig('event'));expect(f.id).toBe('event');expect(f.events).toEqual([{kind:'comment-signal',mentions:1}])});
+ it('rejects oversize, wrong protocol and malformed protobuf',()=>{expect(()=>decodeFrame('x'.repeat(300000))).toThrow();expect(()=>decodeFrame('{"v":2,"t":0}')).toThrow();expect(()=>decodeDM(Buffer.from([34,55]))).toThrow()});
+ it('strips secrets or extra fields from normalized message',()=>{expect(messageSchema.parse({id:'1',sender:'2',channel:'DM',xsecToken:'secret'})).not.toHaveProperty('xsecToken')});
+ it('rejects invalid channel, absent recipient identity and oversize content',()=>{for(const v of[{id:'1',sender:'2',channel:'SEND'},{id:'1',channel:'DM'},{id:'1',sender:'2',channel:'DM',body:'x'.repeat(10001)}])expect(messageSchema.safeParse(v).success).toBe(false)});
+ it('sales cannot list or mutate inbox state',async()=>{const db={}as any,s=new InboxStore(db);for(const f of[()=>s.accounts(sales),()=>s.receivers(sales),()=>s.list(sales,{}),()=>s.unread(sales),()=>s.markRead(sales,'x')])await expect(f()).rejects.toThrow('仅管理员')});
+ it('invalid filter never reaches SQL',async()=>{const db={$transaction:vi.fn()},s=new InboxStore(db as any);await expect(s.list(admin,{page:0})).rejects.toThrow();await expect(s.list(admin,{channel:'X'})).rejects.toThrow();expect(db.$transaction).not.toHaveBeenCalled()});
+ it('requires explicit read side-effect acknowledgement',async()=>{const s=new InboxService({}as any,{}as any,{}as any,{}as any);await expect(s.start(admin,{accountId:'a'})).rejects.toThrow('读取范围')});
+ it('active business refuses receive without opening browser',async()=>{const runtime={open:vi.fn()},store={db:{$queryRawUnsafe:vi.fn().mockResolvedValue([{busy:true}])}};const s=new InboxService(store as any,{}as any,{}as any,runtime);await expect(s.start(admin,{accountId:'a',consent:'receive-inbox-may-mark-read-v1'})).rejects.toThrow('执行任务');expect(runtime.open).not.toHaveBeenCalled()});
+ it('missing saved session refuses without platform access',async()=>{const runtime={open:vi.fn()},store={db:{$queryRawUnsafe:vi.fn().mockResolvedValue([{busy:false}]),platformAccount:{findUnique:vi.fn().mockResolvedValue(null)}}};const s=new InboxService(store as any,{}as any,{}as any,runtime);await expect(s.start(admin,{accountId:'a',consent:'receive-inbox-may-mark-read-v1'})).rejects.toThrow('登录会话');expect(runtime.open).not.toHaveBeenCalled()});
+});

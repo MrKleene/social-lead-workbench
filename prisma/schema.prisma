@@ -49,6 +49,8 @@ model User {
   followups FollowUp[]
   audits AuditLog[]
   noticeReads NoticeRead[]
+  inboxReceivers InboxReceiver[]
+  inboxReads InboxRead[]
 }
 model Session {
   id String @id
@@ -90,6 +92,8 @@ model LoginBucket {
   @@index([expiresAt])
 }
 model PlatformAccount {
+  inboxReceiver InboxReceiver?
+  inboxMessages InboxMessage[]
   defaultCollectionConfigs CollectionConfig[] @relation("DefaultExecutionAccount")
   id String @id @default(cuid())
   platform Platform
@@ -845,4 +849,53 @@ model HistoryArchiveItem {
  previousStatus String?
  @@id([batchId,entity,recordId])
  @@index([entity,recordId],map:"HistoryArchiveItem_lookup")
+}
+
+// Receive-only inbox. Platform read status and local read status are independent.
+model InboxReceiver {
+  accountId String @id
+  account PlatformAccount @relation(fields:[accountId], references:[id], onDelete:Cascade, onUpdate:NoAction)
+  ownerId String
+  owner User @relation(fields:[ownerId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  generation String
+  state String @default("STOPPED")
+  commentMode String @default("UNCONFIRMED")
+  dmMode String @default("UNCONFIRMED")
+  baselineAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+  lastEventAt DateTime? @db.Timestamptz(6)
+  expiresAt DateTime? @db.Timestamptz(6)
+  leaseToken String?
+  stopRequested Boolean @default(false)
+  coverage String @default("NOT_CHECKED")
+  reason String?
+}
+model InboxMessage {
+  id String @id
+  accountId String
+  account PlatformAccount @relation(fields:[accountId], references:[id], onDelete:Cascade, onUpdate:NoAction)
+  channel String
+  platformId String
+  senderId String
+  senderName String @default("")
+  body String @default("")
+  postId String?
+  postTitle String?
+  commentId String?
+  publishedAt DateTime? @db.Timestamptz(6)
+  receivedAt DateTime @default(now()) @db.Timestamptz(6)
+  isNew Boolean @default(false)
+  source String
+  contentType String @default("TEXT")
+  reads InboxRead[]
+  @@unique([accountId,channel,platformId])
+  @@index([receivedAt(sort:Desc),id], map:"InboxMessage_received")
+}
+model InboxRead {
+  messageId String
+  message InboxMessage @relation(fields:[messageId], references:[id], onDelete:Cascade, onUpdate:NoAction)
+  userId String
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade, onUpdate:NoAction)
+  readAt DateTime @default(now()) @db.Timestamptz(6)
+  @@id([messageId,userId])
 }

@@ -1,3 +1,4 @@
+import {InboxIndicator} from '@/features/inbox/inbox-indicator';
 import {TooltipProvider} from './ui/tooltip';
 import {useEffect,useRef} from 'react';
 import {Outlet,useLocation} from 'react-router-dom';
@@ -17,7 +18,7 @@ function ShellContent(){
  const spatial=isWorkPath(location.pathname)||location.pathname==='/home'||location.pathname==='/automation',module=new URLSearchParams(location.search).get('module');
  const phase=module==='follow'?'handoff':module||location.pathname!=='/work'?'review':'overview';
  return <AuroraMotionContext.Provider value={motion.reduced}><div className="space-shell ui-workspace graphite-workspace" data-phase={phase}>
- <a className="aurora-skip" href="#workspace-main">跳到工作内容</a>
+ <InboxIndicator enabled={user?.role==='ADMIN'}/><a className="aurora-skip" href="#workspace-main">跳到工作内容</a>
  <AppNavigation admin={user?.role==='ADMIN'} name={user?.name||''} motion={motion} loggingOut={logout.isPending} onLogout={async()=>{if(await confirmLeave())logout.mutate();}}/>
  <main id="workspace-main" tabIndex={-1} className={spatial?'space-page':'page space-document'} key={location.pathname.split('/')[1]}><ErrorNotice error={logout.error}/><Outlet/></main>
  </div></AuroraMotionContext.Provider>;

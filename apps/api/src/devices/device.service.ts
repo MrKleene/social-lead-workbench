@@ -86,8 +86,17 @@ export class DeviceService implements OnModuleInit,OnModuleDestroy {
     const d=await tx.executionDevice.findUnique({where:{id:permit.deviceId}});
     if(!d?.enabled||d.keyId!==permit.keyId||permit.signal.aborted||!await tx.deviceExecutionLease.findFirst({where:{token:permit.token,expiresAt:{gt:new Date()}}}))throw new ConflictException('设备授权已撤销或任务租约失效');
   }
-  async acquire(actor:Actor,accountId:string):Promise<ExecutionPermit>{
-    requireAdmin(actor);this.requireEnabled();const token=randomUUID();
+  private async yieldInbox(accountId:string){
+    // Receiver is lower priority. Request graceful stop; never delete its lease or kill an unrelated process.
+    const exists=await this.db.$queryRaw<{present:boolean}[]>`SELECT to_regclass('"InboxReceiver"') IS NOT NULL AS present`;
+    if(!exists[0]?.present)return;
+    const requested=await this.db.$executeRaw`UPDATE "InboxReceiver" r SET "stopRequested"=true,"state"='YIELDING',"updatedAt"=now() WHERE r."accountId"=${accountId} AND r."leaseToken" IS NOT NULL AND EXISTS(SELECT 1 FROM "DeviceExecutionLease" l WHERE l."accountId"=r."accountId" AND l.token=r."leaseToken" AND l."expiresAt">now())`;
+    if(!requested)return;
+    for(let i=0;i<120;i++){const live=await this.db.$queryRaw<{live:boolean}[]>`SELECT EXISTS(SELECT 1 FROM "InboxReceiver" r JOIN "DeviceExecutionLease" l ON l.token=r."leaseToken" WHERE r."accountId"=${accountId} AND l."expiresAt">now()) AS live`;if(!live[0]?.live)return;await new Promise(r=>setTimeout(r,100))}
+    throw new ConflictException('消息接收尚未退出，请稍后重试');
+  }
+  async acquire(actor:Actor,accountId:string,options:{purpose?:'INBOX'}={}):Promise<ExecutionPermit>{
+    requireAdmin(actor);this.requireEnabled();if(options.purpose!=='INBOX')await this.yieldInbox(accountId);const token=randomUUID();
     // Register cancellation before awaiting DB locks so revoke cannot miss a pending dispatch.
     const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),300000);timer.unref();this.permits.set(token,{abort,timer});
     try{const lease=await this.db.$transaction(async tx=>{
@@ -103,7 +112,8 @@ export class DeviceService implements OnModuleInit,OnModuleDestroy {
       const prior=await tx.deviceExecutionLease.findUnique({where:{accountId}});if(prior&&prior.expiresAt>new Date())throw new ConflictException('同账号已有执行任务');
       await tx.deviceExecutionLease.deleteMany({where:{accountId}});
       await tx.deviceExecutionLease.create({data:{accountId,deviceId:d.id,token,expiresAt:new Date(Date.now()+300000)}});
-      await tx.auditLog.create({data:{actorId:actor.id,entityId:accountId,action:'DEVICE_EXECUTION_RESERVED',metadata:{deviceId:d.id}}});return d;
+      if(options.purpose==='INBOX')await tx.$executeRaw`UPDATE "InboxReceiver" SET "leaseToken"=${token} WHERE "accountId"=${accountId} AND NOT "stopRequested"`;
+      await tx.auditLog.create({data:{actorId:actor.id,entityId:accountId,action:'DEVICE_EXECUTION_RESERVED' ,metadata:{deviceId:d.id}}});return d;
     });
     if(abort.signal.aborted)throw new ConflictException('设备授权在任务准备期间已撤销');
     return {token,deviceId:lease.id,keyId:lease.keyId,root:lease.credentialRoot,signal:abort.signal,release:async()=>{clearTimeout(timer);this.permits.delete(token);await this.db.deviceExecutionLease.deleteMany({where:{token}});}};

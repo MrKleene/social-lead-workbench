@@ -7,6 +7,7 @@ export const primaryNavigation:NavigationItem[]=[
  {id:'reply-history',label:'回复记录',path:'/reply-history',adminOnly:true},
 ];
 export const secondaryNavigation:NavigationItem[]=[
+ {id:'inbox',label:'接收消息',path:'/inbox',adminOnly:true,group:'工作管理'},
  {id:'archive',label:'采集信息',path:'/work?module=archive',module:'archive',adminOnly:true,group:'工作管理'},
  {id:'review',label:'评论审核',path:'/comment-review',adminOnly:true,group:'工作管理'},
  {id:'configuration',label:'配置管理',path:'/configuration?tab=keywords',adminOnly:true,group:'管理'},
@@ -29,6 +30,7 @@ export function activeNavigation(path:string,search:string,admin:boolean){
  if(path==='/review-policies'||path==='/configuration')return admin?'configuration':null;
  if(/^\/comment-review(?:\/|$)/.test(path))return admin?(new URLSearchParams(search).get('manage')==='1'?'configuration':'review'):null;
  if(/^\/leads(?:\/|$)/.test(path))return 'all-leads';
+ if(path==='/inbox')return admin?'inbox':null;
  if(path==='/tasks')return 'tasks';
  if(path==='/platforms')return 'platforms';
  return null;

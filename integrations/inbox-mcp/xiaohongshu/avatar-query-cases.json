@@ -1,0 +1,193 @@
+{
+  "synthetic": true,
+  "cases": [
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg",
+      "accepted": true
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80",
+      "accepted": true
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/1/w/80/h/80/format/webp/q/90",
+      "accepted": true
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/h/1024",
+      "accepted": true
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/q/100/format/jpg/w/1",
+      "accepted": true
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?unknown",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/0/w/80",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/0",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/1025",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/080",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/-1",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/1e2",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80/w/90",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80/q/101",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80/format/svg",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80/format/gif",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80/ignore-error/1",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80/redirect/https://evil.invalid",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80|saveas/FAKE",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80&token=FAKE",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80&imageView2/2/h/80",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2%2F2%2Fw%2F80",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80%2526token",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80#",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80#FAKE",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80?",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80/",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80/FORMAT/png",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/format/webp",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80\n",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80\\",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/\uff18\uff10",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "accepted": false
+    },
+    {
+      "url": "https://evil.invalid/avatar/synthetic.jpg?imageView2/2/w/80",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com.evil.invalid/avatar/synthetic.jpg?imageView2/2/w/80",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com:443/avatar/synthetic.jpg?imageView2/2/w/80",
+      "accepted": false
+    },
+    {
+      "url": "https://u:FAKE@sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80",
+      "accepted": false
+    },
+    {
+      "url": "https://SNS-AVATAR-QC.XHSCDN.COM/avatar/synthetic.jpg?imageView2/2/w/80",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/../a?imageView2/2/w/80",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/./a?imageView2/2/w/80",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/%2e%2e/a?imageView2/2/w/80",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/%2561?imageView2/2/w/80",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/avatar/?imageView2/2/w/80",
+      "accepted": false
+    },
+    {
+      "url": "https://sns-avatar-qc.xhscdn.com/other/a?imageView2/2/w/80",
+      "accepted": false
+    },
+    {
+      "url": "http://sns-avatar-qc.xhscdn.com/avatar/synthetic.jpg?imageView2/2/w/80",
+      "accepted": false
+    }
+  ]
+}

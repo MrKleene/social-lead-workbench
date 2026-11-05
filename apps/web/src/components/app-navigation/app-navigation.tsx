@@ -1,3 +1,4 @@
+import {InboxCount} from '@/features/inbox/inbox-indicator';
 import {useEffect,useId,useRef,useState} from 'react';
 import {Link} from 'react-router-dom';
 import {Archive,Bell,BriefcaseBusiness,ContactRound,House,LayoutDashboard,ListChecks,LogOut,MessageSquare,Play,ScanLine,Send,Settings2,ShieldCheck,UsersRound,Layers,Menu,ChevronDown} from 'lucide-react';
@@ -6,15 +7,15 @@ import {Switch} from '@/components/ui/switch';
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import type {useWorkspaceMotion} from '@/features/work/use-workspace-motion';
 import {useAppNavigation} from './use-app-navigation';
-const icons:Record<string,typeof House>={home:House,overview:LayoutDashboard,runs:Play,archive:Archive,review:ScanLine,configuration:Settings2,'reply-history':MessageSquare,'auto-contact':Send,'pending-replies':ListChecks,matches:UsersRound,follow:BriefcaseBusiness,'all-leads':UsersRound,tasks:ListChecks,templates:MessageSquare,notices:Bell,accounts:ContactRound,settings:Settings2,platforms:ShieldCheck};
-const groups=[{label:'工作区',ids:['overview','runs']},{label:'数据与审核',ids:['archive','review']},{label:'回复管理',ids:['auto-contact','pending-replies','reply-history']},{label:'线索与跟进',ids:['matches','follow','all-leads','tasks']},{label:'管理',ids:['configuration','accounts','notices','platforms']}];
+const icons:Record<string,typeof House>={inbox:MessageSquare,home:House,overview:LayoutDashboard,runs:Play,archive:Archive,review:ScanLine,configuration:Settings2,'reply-history':MessageSquare,'auto-contact':Send,'pending-replies':ListChecks,matches:UsersRound,follow:BriefcaseBusiness,'all-leads':UsersRound,tasks:ListChecks,templates:MessageSquare,notices:Bell,accounts:ContactRound,settings:Settings2,platforms:ShieldCheck};
+const groups=[{label:'工作区',ids:['overview','runs']},{label:'数据与审核',ids:['archive','review']},{label:'回复管理',ids:['auto-contact','pending-replies','reply-history','inbox']},{label:'线索与跟进',ids:['matches','follow','all-leads','tasks']},{label:'管理',ids:['configuration','accounts','notices','platforms']}];
 type Props={admin:boolean;name:string;motion:ReturnType<typeof useWorkspaceMotion>;loggingOut:boolean;onLogout:()=>void};
 export function AppNavigation({admin,name,motion,loggingOut,onLogout}:Props){
  const n=useAppNavigation(admin),id=useId(),[mobile,setMobile]=useState(false),[preferences,setPreferences]=useState(false);
  const menuTrigger=useRef<HTMLButtonElement>(null),preferenceTrigger=useRef<HTMLButtonElement|null>(null);
  useEffect(()=>{setMobile(false);},[n.locationKey]);
  const items=[...n.primary,...n.secondary],active=items.find(item=>item.id===n.active);
- const navigation=(mobileView=false)=><nav className="graphite-navigation" aria-label={mobileView?'移动导航':'主导航'}>{groups.map(group=>{const visible=group.ids.flatMap(key=>items.filter(item=>item.id===key));return visible.length>0&&<section key={group.label} className="graphite-nav-group"><h2>{group.label}</h2>{visible.map(item=>{const Icon=icons[item.id];return <Link key={item.id} to={n.href(item)} aria-current={n.active===item.id?'page':undefined}><Icon aria-hidden="true"/><span>{item.id==='auto-contact'?'自动回复':item.label}</span></Link>;})}</section>;})}</nav>;
+ const navigation=(mobileView=false)=><nav className="graphite-navigation" aria-label={mobileView?'移动导航':'主导航'}>{groups.map(group=>{const visible=group.ids.flatMap(key=>items.filter(item=>item.id===key));return visible.length>0&&<section key={group.label} className="graphite-nav-group"><h2>{group.label}</h2>{visible.map(item=>{const Icon=icons[item.id];return <Link key={item.id} to={n.href(item)} aria-current={n.active===item.id?'page':undefined}><Icon aria-hidden="true"/><span>{item.id==='auto-contact'?'自动回复':item.label}</span>{item.id==='inbox'&&<InboxCount enabled={admin}/>}</Link>;})}</section>;})}</nav>;
  const brand=<Link className="graphite-brand" to="/home" aria-label="Social Lead 首页" aria-current={n.active==='home'?'page':undefined}><Layers aria-hidden="true"/><strong>Social Lead</strong></Link>;
  return <>
   <aside className="graphite-sidebar">{brand}{navigation()}<div className="graphite-profile"><Button variant="ghost" size="content" onClick={event=>{preferenceTrigger.current=event.currentTarget;setPreferences(true);}} aria-label="个人偏好"><span className="graphite-avatar" aria-hidden="true">{name.slice(0,1)||'S'}</span><span><strong>{name||'工作账号'}</strong><small>{admin?'管理员':'销售'}</small></span><ChevronDown aria-hidden="true"/></Button></div></aside>

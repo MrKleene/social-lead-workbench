@@ -1,3 +1,4 @@
+import {InboxModule} from './inbox/inbox.module';
 import {HistoryArchiveModule} from './history-archive/history-archive.module';
 import "reflect-metadata";
 import { DirectMessagesModule } from "./direct-messages/direct-messages.module";
@@ -34,6 +35,7 @@ class HealthController {
 @Module({
   imports: [
     DatabaseModule,
+    InboxModule,
     HistoryArchiveModule,
     AccountsModule,
     RepliesModule,

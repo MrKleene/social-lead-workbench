@@ -31,7 +31,7 @@
     "test:aurora:ui": "npm run build -w @crm/web && node scripts/test-aurora-workspace-ui.mjs",
     "test:automation-settings:ui": "npm run build -w @crm/web && node scripts/test-automation-settings-ui.mjs",
     "test:settings-toggle:ui": "npm run build -w @crm/web && node scripts/test-settings-toggle-ui.mjs",
-    "test:workbench": "vitest run apps/web/src/features/work/run-selection.test.ts apps/web/src/features/work/dashboard-model.test.ts apps/web/src/features/work/journey-progress.test.ts apps/web/src/features/accounts/login-availability.test.ts apps/web/src/features/accounts/account-status.test.ts apps/web/src/features/work/stable-results.test.ts apps/web/src/features/work/motion-policy.test.ts apps/web/src/features/work/navigation-policy.test.ts apps/web/src/features/collection/mode.test.ts apps/web/src/features/collection/saved-post-review-notice.test.ts apps/web/src/features/collection/run-stats.test.ts apps/web/src/features/work/collection-preflight.test.ts apps/web/src/features/work/collection-progress.test.ts apps/web/src/features/collection/collection-info-model.test.ts apps/web/src/features/collection/post-counts.test.ts apps/web/src/features/collection/coverage-reading-summary.test.ts apps/web/src/features/collection/coverage-progress-summary.test.ts apps/web/src/features/collection/comment-stream.test.ts apps/web/src/features/collection/collection-outcome.test.ts apps/web/src/lib/api.test.ts apps/web/src/features/work/settings-request.test.ts apps/web/src/features/auto-contact/account-ready.test.ts",
+    "test:workbench": "vitest run apps/web/src/features/work/run-selection.test.ts apps/web/src/features/work/dashboard-model.test.ts apps/web/src/features/work/journey-progress.test.ts apps/web/src/features/accounts/login-availability.test.ts apps/web/src/features/accounts/account-status.test.ts apps/web/src/features/work/stable-results.test.ts apps/web/src/features/work/motion-policy.test.ts apps/web/src/features/work/navigation-policy.test.ts apps/web/src/features/collection/mode.test.ts apps/web/src/features/collection/saved-post-review-notice.test.ts apps/web/src/features/collection/run-stats.test.ts apps/web/src/features/work/collection-preflight.test.ts apps/web/src/features/work/collection-progress.test.ts apps/web/src/features/collection/collection-info-model.test.ts apps/web/src/features/collection/post-counts.test.ts apps/web/src/features/collection/coverage-reading-summary.test.ts apps/web/src/features/collection/coverage-progress-summary.test.ts apps/web/src/features/collection/comment-stream.test.ts apps/web/src/features/collection/collection-outcome.test.ts apps/web/src/lib/api.test.ts apps/web/src/features/work/settings-request.test.ts apps/web/src/features/auto-contact/account-ready.test.ts apps/web/src/features/inbox/inbox.test.ts",
     "test:mcp": "node scripts/test-queue-isolated.mjs --mcp",
     "test:mock:isolated": "node scripts/test-queue-isolated.mjs --mock-only",
     "dev:mcp:offline": "node scripts/dev-mock-isolated.mjs --mcp-fixture",
@@ -74,7 +74,8 @@
     "test:session-preflight:ui": "npm run build -w @crm/web && node scripts/test-session-preflight-ui.mjs",
     "test:post-availability:ui": "npm run build -w @crm/web && node scripts/test-post-availability-ui.mjs",
     "test:auto-contact:ui": "npm run build -w @crm/web && node scripts/test-auto-contact-ui.mjs",
-    "test:auth": "node scripts/test-remember-login.mjs"
+    "test:auth": "node scripts/test-remember-login.mjs",
+    "build:inbox": "node scripts/inbox/build.mjs"
   },
   "devDependencies": {
     "prisma": "6.19.0",

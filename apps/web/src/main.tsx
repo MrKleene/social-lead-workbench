@@ -1,3 +1,4 @@
+import {InboxPage} from '@/features/inbox/inbox-page';
 import {AutomationPage} from '@/features/work/automation-page';
 import {automationPath} from '@/features/work/navigation-policy';
 import {HomePage} from '@/features/work/home-page';
@@ -56,6 +57,7 @@ function App() {
         <Route path="/automation" element={<AutomationPage />} />
         <Route path="/templates" element={<Navigate to={legacyWorkspacePath("templates")} replace/>} />
         <Route path="/collection/:configId?" element={<LegacySettings />} />
+        <Route path="/inbox" element={<InboxPage/>}/>
         <Route path="/reply-history" element={<ReplyHistoryPage />} />
         <Route path="/auto-contact" element={<AutoContactPage />} />
         <Route path="/configuration" element={<ConfigurationPage />} />

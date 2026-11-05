@@ -1,0 +1,6 @@
+{
+  "upstream": "https://github.com/xpzouying/xiaohongshu-mcp",
+  "baseRevision": "a5c8f7799980ba1fdd501999843eb2d17e4c9a9f",
+  "localVariant": "workbench-receive-only-v1",
+  "separateFromInstalledSender": true
+}
