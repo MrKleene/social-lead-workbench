@@ -1,11 +1,12 @@
 import {describe,it,expect,vi} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {MemoryRouter} from 'react-router-dom';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {AppNavigation} from './app-navigation';
 import type {useWorkspaceMotion} from '@/features/work/use-workspace-motion';
 
 const motion={reduced:false,toggle:vi.fn()} as unknown as ReturnType<typeof useWorkspaceMotion>;
-const render=(admin:boolean,path='/home')=>renderToStaticMarkup(<MemoryRouter initialEntries={[path]}><AppNavigation admin={admin} name="虚构用户" motion={motion} loggingOut={false} onLogout={vi.fn()}/></MemoryRouter>);
+const render=(admin:boolean,path='/home')=>renderToStaticMarkup(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><MemoryRouter initialEntries={[path]}><AppNavigation admin={admin} name="虚构用户" motion={motion} loggingOut={false} onLogout={vi.fn()}/></MemoryRouter></QueryClientProvider>);
 describe('graphite navigation preserves authorized destinations',()=>{
  it('keeps all administrator modules reachable and marks the current route',()=>{
   const html=render(true,'/automation?config=example&run=example-run');
