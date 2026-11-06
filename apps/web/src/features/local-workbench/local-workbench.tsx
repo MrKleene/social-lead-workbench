@@ -2,6 +2,7 @@ import {useState,type FormEvent} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {useLocalWorkbench} from './use-local-workbench';
+import {LocalAutomation} from './local-automation';
 import {LocalPlatform} from './local-platform';
 import {LocalDataManagement} from './local-data-management';
 import {LocalHistory} from './local-history';
@@ -27,7 +28,7 @@ export function LocalWorkbench(){
  <section className="local-panel"><h2>模型密钥</h2><p>{work.status.data.modelKeyConfigured?'已配置；密钥不会回显。':'仅保存在本机系统保护区。保存不会调用模型。'}</p><form className="local-key-form" onSubmit={saveKey}><label>千问 API Key<Input type="password" value={keyValue} autoComplete="off" onChange={e=>setKeyValue(e.target.value)} required/></label><Button type="submit" pending={work.key.isPending} disabled={!work.status.data.credentialsAvailable}>加密保存</Button></form>{!work.status.data.credentialsAvailable&&<p>系统凭据保护未就绪，暂时不能保存密钥。</p>}</section>
  <section className="local-panel"><h2>备份与恢复</h2><p>备份包含业务数据，不包含模型密钥或平台登录凭据。恢复先生成独立副本，不覆盖当前数据。</p><div className="local-actions"><Button variant="outline" pending={work.backup.isPending} onClick={()=>work.backup.mutate()}>创建本地备份</Button><Button variant="outline" pending={work.restore.isPending} onClick={()=>work.restore.mutate()}>校验并恢复副本</Button></div></section>
  <LocalDataManagement/><section className="local-panel"><h2>任务记录</h2>{work.jobs.data?.length?<ul>{work.jobs.data.map(j=><li key={j.id}>{j.kind} · {j.state}{['QUEUED','RUNNING'].includes(j.state)&&<Button variant="outline" pending={work.cancel.isPending} onClick={()=>work.cancel.mutate(j.id)}>取消任务</Button>}</li>)}</ul>:<p className="local-empty">暂无任务。打开应用不会自动采集或发送。</p>}</section>
- <LocalPlatform credentialsAvailable={work.status.data.credentialsAvailable}/><LocalModelSettings keyConfigured={work.status.data.modelKeyConfigured}/><LocalHistory/>
+ <LocalPlatform credentialsAvailable={work.status.data.credentialsAvailable}/><LocalModelSettings keyConfigured={work.status.data.modelKeyConfigured}/><LocalAutomation/><LocalHistory/>
  </>}
  </main>;
 }

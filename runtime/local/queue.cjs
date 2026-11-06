@@ -33,7 +33,7 @@ class LocalQueue {
    // An expired lease must be reconciled first, never stolen and blindly replayed.
    if(this.db.prepare("SELECT 1 FROM jobs WHERE state='RUNNING' LIMIT 1").get())return null;
    this.db.prepare("UPDATE jobs SET state='CANCELLED',updated_at=? WHERE state='QUEUED' AND (cancel_requested=1 OR NOT EXISTS(SELECT 1 FROM authorizations a WHERE a.id=jobs.authorization_id AND a.state='ACTIVE' AND a.expires_at>?))").run(now,now);
-   const row=this.db.prepare("SELECT * FROM jobs WHERE state='QUEUED' AND available_at<=? ORDER BY created_at,id LIMIT 1").get(now);if(!row)return null;
+   const row=this.db.prepare("SELECT * FROM jobs WHERE state='QUEUED' AND available_at<=? ORDER BY CASE WHEN kind='SEND' THEN 0 ELSE 1 END,created_at,rowid LIMIT 1").get(now);if(!row)return null;
    this.db.prepare("UPDATE jobs SET state='RUNNING',lease_owner=?,lease_until=?,fence=fence+1,updated_at=? WHERE id=? AND state='QUEUED'").run(owner,now+leaseMs,now,row.id);
    return {...row,state:'RUNNING',lease_owner:owner,lease_until:now+leaseMs,fence:row.fence+1,payload:JSON.parse(row.payload)};
   });
@@ -47,6 +47,14 @@ class LocalQueue {
   if(row.dispatch_started)throw new LocalError('ALREADY_DISPATCHED');
   this.db.prepare('UPDATE jobs SET dispatch_started=1,updated_at=? WHERE id=?').run(this.store.clock(),row.id);
   this.db.prepare("UPDATE authorizations SET state='CONSUMED' WHERE id=?").run(grant.id);this.store.audit('AUTOMATION','DISPATCH_INTENT',row.id,{kind:row.kind});
+ });}
+ yieldInbox(lease){return this.store.transaction(()=>{
+  const job=this.current(lease),now=this.store.clock(),grant=this.db.prepare('SELECT * FROM authorizations WHERE id=?').get(job.authorization_id);
+  if(job.kind!=='INBOX'||!job.dispatch_started||job.cancel_requested||!grant||grant.purpose!=='INBOX'||grant.state!=='CONSUMED'||grant.scope_hash!==job.payload_hash||grant.expires_at<=now)throw new LocalError('INBOX_CONTINUATION_ENDED');
+  // This is continuation of the same bounded receive window, not new authority.
+  this.db.prepare("UPDATE authorizations SET state='ACTIVE' WHERE id=?").run(grant.id);
+  this.db.prepare("UPDATE jobs SET state='QUEUED',dispatch_started=0,lease_owner=NULL,lease_until=NULL,available_at=?,updated_at=?,result=? WHERE id=?").run(now+100,now,canonical({reason:'YIELDED_FOR_SEND',expiresAt:grant.expires_at}),job.id);
+  this.store.audit('AUTOMATION','INBOX_YIELDED_AFTER_STOP',job.id,{expiresAt:grant.expires_at});return {resumedWithinOriginalWindow:true};
  });}
  finish(lease,state,result={}){if(!['SUCCEEDED','FAILED','CANCELLED','UNKNOWN'].includes(state))throw new LocalError('INVALID_JOB_RESULT');return this.store.transaction(()=>{
   const row=this.current(lease);

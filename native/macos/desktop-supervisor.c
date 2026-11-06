@@ -12,8 +12,19 @@
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
+#include <time.h>
 static volatile sig_atomic_t stopping=0;
 static void stop(int sig){(void)sig;stopping=1;}
+static long long monotonic_ms(void){struct timespec t;if(clock_gettime(CLOCK_MONOTONIC,&t))return -1;return (long long)t.tv_sec*1000+t.tv_nsec/1000000;}
+static void wait_handoff(void){
+ long long start=monotonic_ms();if(start<0)return;
+ for(;;){long long now=monotonic_ms();if(now<0||now-start>=15000)return;struct pollfd ctl={.fd=3,.events=POLLIN|POLLHUP};int n=poll(&ctl,1,(int)(15000-(now-start)));if(n<0&&errno==EINTR)continue;if(n<=0)return;
+  char bytes[32];ssize_t count=read(3,bytes,sizeof bytes);if(count<=0)return;
+  // A stop request T can race with natural exit/STOPPED delivery. Only D
+  // acknowledges completed parent handoff; T must never authorize cleanup.
+  for(ssize_t i=0;i<count;i++)if(bytes[i]=='D')return;
+ }
+}
 static int clear_dir(int fd){
  DIR *dir=fdopendir(dup(fd));if(!dir)return -1;struct dirent *entry;int ok=0;
  while((entry=readdir(dir))){if(!strcmp(entry->d_name,".")||!strcmp(entry->d_name,".."))continue;struct stat s;if(fstatat(fd,entry->d_name,&s,AT_SYMLINK_NOFOLLOW)){ok=-1;break;}
@@ -46,7 +57,7 @@ int main(int argc,char **argv){
  while(kill(-child,0)==0||errno==EPERM)usleep(100000);
  // Save credentials only after a positive stop proof. Parent gets <=15 seconds
  // to seal the final file; EOF or timeout cleans up even if the parent crashes.
- if(controller_alive){char ready[64];snprintf(ready,sizeof ready,"STOPPED %d\n",WIFEXITED(status)?WEXITSTATUS(status):-WTERMSIG(status));if(write(1,ready,strlen(ready))>0){struct pollfd ctl={.fd=3,.events=POLLIN|POLLHUP};(void)poll(&ctl,1,15000);}}
+ if(controller_alive){char ready[64];snprintf(ready,sizeof ready,"STOPPED %d\n",WIFEXITED(status)?WEXITSTATUS(status):-WTERMSIG(status));if(write(1,ready,strlen(ready))>0){wait_handoff();}}
  int cleaned=clear_dir(session);close(session);if(!cleaned){if(lstat(argv[2],&check)||check.st_ino!=s.st_ino||check.st_dev!=s.st_dev||rmdir(argv[2]))cleaned=-1;}
  close(guard);return cleaned?74:0;
 }

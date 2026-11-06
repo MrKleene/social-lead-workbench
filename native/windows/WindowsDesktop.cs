@@ -33,7 +33,9 @@ partial class WindowsHost {
     if(!AssignProcessToJobObject(job,pi.process)){TerminateProcess(pi.process,1);throw new Exception();}
     if(ResumeThread(pi.thread)==0xffffffff){TerminateProcess(pi.process,1);throw new Exception();}
     Console.WriteLine("STARTED "+pi.pid);Console.Out.Flush();
-    var control=Task.Run(()=>{int value=Console.Read();TerminateJobObject(job,1);return value;});
+    // The reader must never use a Job handle after the owner closes it.
+    // All termination and handle lifetime stay on this supervision thread.
+    var control=Task.Run(()=>Console.Read());
     while(WaitForSingleObject(pi.process,100)==258&&!control.IsCompleted){}
     if(!TerminateJobObject(job,1))throw new Exception();
     for(int i=0;i<100&&!JobEmpty(job);i++)Thread.Sleep(100);

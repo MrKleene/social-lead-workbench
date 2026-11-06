@@ -19,7 +19,7 @@ class LocalRunner {
   this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();const lease=this.queue.claim(this.owner);if(!lease)return false;
   const executor=this.executors[lease.kind];if(!executor){this.queue.finish(lease,'FAILED',{code:'EXECUTOR_UNAVAILABLE'});return false;}
   const abort=new AbortController();this.abort=abort;let dispatched=false,attemptId,batchId,commentCommand;
-  const heartbeat=setInterval(()=>{try{this.queue.heartbeat(lease);}catch{abort.abort();}},5000);heartbeat.unref();
+  const heartbeat=setInterval(()=>{try{this.queue.heartbeat(lease);if(lease.kind==='INBOX'&&this.store.db.prepare("SELECT 1 FROM jobs WHERE kind='SEND' AND state='QUEUED' AND cancel_requested=0 AND available_at<=?").get(this.store.clock()))abort.abort('INBOX_YIELD_FOR_SEND');}catch{abort.abort();}},5000);heartbeat.unref();
   try{
    // prepare validates local authority and may inspect the exact comment target read-only.
    // It must never submit a message or invoke a paid model.
@@ -34,7 +34,7 @@ class LocalRunner {
     command=lease.payload.channel==='DM'?this.sends.commandForDm(attemptId):(commentCommand=this.sends.commandForComment(attemptId,reference));
    }else if(lease.kind==='REVIEW'){batchId=this.reviews.reserve(lease);command=this.reviews.dispatch(lease,batchId);}else this.queue.beginDispatch(lease);
    dispatched=true;const result=await executor.execute(command,abort.signal,{lease});
-   if(lease.kind==='SEND'){if(lease.payload.channel==='DM')this.sends.resultDm(lease,attemptId,result);else this.sends.resultComment(lease,attemptId,commentCommand,result);}else if(lease.kind==='REVIEW')this.reviews.complete(lease,batchId,result);else this.queue.finish(lease,abort.signal.aborted||this.queue.current(lease).cancel_requested?'CANCELLED':'SUCCEEDED',result);
+   if(lease.kind==='SEND'){if(lease.payload.channel==='DM')this.sends.resultDm(lease,attemptId,result);else this.sends.resultComment(lease,attemptId,commentCommand,result);}else if(lease.kind==='REVIEW'){this.reviews.complete(lease,batchId,result);try{new (require('./automation.cjs').LocalAutomation)(this.store,{enabled:()=>!!this.executors.SEND}).afterReview(lease.payload.runId);}catch{this.store.transaction(()=>this.store.audit('RECOVERY','AUTOMATION_COORDINATION_INTERRUPTED',lease.payload.runId));}}else if(lease.kind==='INBOX'&&result?.reason==='YIELDED_FOR_SEND'&&!this.stopping&&!this.queue.current(lease).cancel_requested)this.queue.yieldInbox(lease);else this.queue.finish(lease,abort.signal.aborted||this.queue.current(lease).cancel_requested?'CANCELLED':'SUCCEEDED',result);
   }catch{
    try{if(attemptId)this.sends.result(lease,attemptId,dispatched?{kind:'UNKNOWN'}:{kind:'NOT_SUBMITTED',submissions:0,stopped:true});else if(batchId)this.reviews.fail(lease,batchId);else this.queue.finish(lease,dispatched&&['SEND','REVIEW'].includes(lease.kind)?'UNKNOWN':!['SEND','REVIEW'].includes(lease.kind)&&(abort.signal.aborted||this.queue.current(lease).cancel_requested)?'CANCELLED':'FAILED',{code:'EXECUTION_INTERRUPTED'});}catch{/* Expired leases are handled by recovery; never overwrite a newer owner. */}
   }finally{clearInterval(heartbeat);this.abort=null;await executor.close?.();}

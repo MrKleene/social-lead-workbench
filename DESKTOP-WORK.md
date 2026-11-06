@@ -12,12 +12,14 @@ supervisor with sandbox retained. Mac packaged offline native chain and system
 synthetic encryption roundtrip passed. Windows MCP cross-build succeeded; Windows
 Job Object handoff source exists but remains gated and unvalidated on Windows.
 
-135 local tests; 12 desktop IPC/native/wire tests; Mac UI/import/restart/backup,
+149 local tests; 15 desktop IPC/native/wire tests; Mac UI/import/restart/backup,
 packaged self-test and native browser chain. No live platform acceptance.
 Legacy rows fully archived; reliable captures/reviews map to read-only history,
-ambiguous provenance remains explicitly unmapped. Import/restore send hold stays.
+ambiguous provenance remains explicitly unmapped. Import/restore hold has explicit hash-bound safe recovery UI; UNKNOWN cannot be cleared.
 
-Still incomplete: automatic contact UI/orchestration, full independent-review and
+Now added: multiple rule drafts/consent, frozen-round orchestration, persisted decisions, cancellation and final dispatch revalidation; stopped inbox yield/continuation within original expiry, recovery summary and safe new-work enabling.
+
+Still incomplete: full independent-review and
 cross-run recovery UI, importer/recovery parity, Windows native/browser/installer
 acceptance, signing/notarization and real platform acceptance. Do not promote this
 as fully finished or switch original data. See docs/DESKTOP-LOCAL.md.

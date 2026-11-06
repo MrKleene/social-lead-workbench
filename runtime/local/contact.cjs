@@ -2,7 +2,7 @@
 const {randomUUID}=require('node:crypto');
 const {LocalError,canonical,hash}=require('./database.cjs');
 const {LocalReview}=require('./review.cjs');
-const {assertSendAccount}=require('./account-safety.cjs');
+const {assertConfiguredSendAccount}=require('./account-safety.cjs');
 const policy=require('./policy.cjs');
 function definition(r){return {id:r.id,version:r.version,policyId:r.policy_id,policyRevision:r.policy_revision,model:r.model,threshold:r.threshold,plans:JSON.parse(r.plans),accounts:JSON.parse(r.accounts)};}
 class LocalContact {
@@ -28,13 +28,14 @@ class LocalContact {
  authorize(id,version){return this.store.transaction(()=>{
   const r=this.db.prepare('SELECT * FROM contact_rules WHERE id=?').get(id);if(!r||r.version!==version)throw new LocalError('CONTACT_RULE_CHANGED');
   this.templates(JSON.parse(r.plans));
-  for(const a of JSON.parse(r.accounts))for(const p of JSON.parse(r.plans))assertSendAccount(this.store,a.id,a.version,p.channel);
+  for(const a of JSON.parse(r.accounts))for(const p of JSON.parse(r.plans))assertConfiguredSendAccount(this.store,a.id,a.version,p.channel);
   const p=this.db.prepare('SELECT * FROM review_policies WHERE id=?').get(r.policy_id),model=this.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get();
   if(!p?.enabled||p.revision!==r.policy_revision||!model?.authorized||p.model_version!==model.version||model.model!==r.model)throw new LocalError('REVIEW_POLICY_CHANGED');
   const digest=hash(definition(r));this.db.prepare('UPDATE contact_rules SET enabled=1,authorization_hash=?,authorized_at=? WHERE id=?').run(digest,this.store.clock(),id);
   this.store.audit('LOCAL_USER','CONTACT_RULE_AUTHORIZED',id,{version,scopeHash:digest});return {id,version,hash:digest};
  });}
- revoke(id){return this.store.transaction(()=>{this.db.prepare('UPDATE contact_rules SET enabled=0,version=version+1,authorization_hash=NULL,authorized_at=NULL WHERE id=?').run(id);this.store.audit('LOCAL_USER','CONTACT_RULE_REVOKED',id);});}
+ revoke(id){return this.store.transaction(()=>this.revokeInTransaction(id));}
+ revokeInTransaction(id){if(!this.db.isTransaction)throw new LocalError('TRANSACTION_REQUIRED');this.db.prepare('UPDATE contact_rules SET enabled=0,version=version+1,authorization_hash=NULL,authorized_at=NULL WHERE id=?').run(id);this.store.audit('LOCAL_USER','CONTACT_RULE_REVOKED',id);}
  frozen(ref){
   if(!ref||typeof ref.id!=='string'||typeof ref.hash!=='string'||!Number.isInteger(ref.version))throw new LocalError('CONTACT_RULE_AUTHORIZATION_CHANGED');
   const r=this.db.prepare('SELECT * FROM contact_rules WHERE id=?').get(ref?.id);
@@ -49,7 +50,7 @@ class LocalContact {
   const snapshot=JSON.parse(row.snapshot),evidence=JSON.parse(row.evidence);
   if(!evidence.some(e=>e.source==='COMMENT'&&typeof e.quote==='string'&&e.quote.trim()&&row.body.includes(e.quote))||snapshot.comment!==row.body||snapshot.userId!==row.user_id)throw new LocalError('CONTACT_EVIDENCE_CHANGED');
   const plan=JSON.parse(r.plans).find(p=>p.channel===channel),a=JSON.parse(r.accounts).find(a=>a.id===accountId);
-  if(!plan||!a||!a.dailyLimit)throw new LocalError('CONTACT_ACCOUNT_OR_CHANNEL_NOT_AUTHORIZED');this.templates([plan]);assertSendAccount(this.store,a.id,a.version,channel);
+  if(!plan||!a||!a.dailyLimit)throw new LocalError('CONTACT_ACCOUNT_OR_CHANNEL_NOT_AUTHORIZED');this.templates([plan]);assertConfiguredSendAccount(this.store,a.id,a.version,channel);
   const basis={type:'AUTOMATIC',reviewId,ruleId,ruleVersion:r.version,eligibilityHash:hash({ruleHash:ref.hash,reviewVersion:row.version,sourceHash:row.source_hash,score:row.score,decision:row.decision,context:row.context,evidence})};
   return {scope:{platform:'XHS',channel,accountId,accountRevision:a.version,recipientId:row.user_id,content:plan.content,target:channel==='DM'?{recipientId:row.user_id}:{postId:row.post_platform_id,commentId:row.platform_id,recipientId:row.user_id},basis},dailyLimit:a.dailyLimit,parent:{runId:row.run_id,ruleId,ruleVersion:r.version,ruleHash:ref.hash}};
  }
@@ -58,7 +59,8 @@ class LocalContact {
   const plan=this.plan(s.basis.reviewId,s.basis.ruleId,s.channel,s.accountId);
   if(hash(plan.scope)!==hash(s)||grant?.issuer!=='AUTOMATION'||grant.parent_proof!==canonical(plan.parent))throw new LocalError('AUTOMATIC_AUTHORIZATION_CHANGED');return plan;
  }
- enqueue(reviewId,ruleId,channel,accountId){return this.store.transaction(()=>{
+ enqueue(reviewId,ruleId,channel,accountId){return this.store.transaction(()=>this.enqueueInTransaction(reviewId,ruleId,channel,accountId));}
+ enqueueInTransaction(reviewId,ruleId,channel,accountId){if(!this.db.isTransaction)throw new LocalError('TRANSACTION_REQUIRED');
   const plan=this.plan(reviewId,ruleId,channel,accountId),s=plan.scope,key='auto:'+hash({runId:plan.parent.runId,reviewId,ruleId,version:s.basis.ruleVersion,channel});
   // An attempt cannot silently switch account or be recreated after failure/UNKNOWN.
   const existing=this.db.prepare('SELECT id FROM jobs WHERE request_key=?').get(key);if(existing)return existing.id;
@@ -66,6 +68,6 @@ class LocalContact {
   this.db.prepare("INSERT INTO authorizations(id,purpose,scope,scope_hash,state,created_at,expires_at,issuer,parent_proof) VALUES(?,'SEND',?,?,'ACTIVE',?,?,'AUTOMATION',?)").run(grant,canonical(s),hash(s),now,expires,canonical(plan.parent));
   this.db.prepare("INSERT INTO jobs(id,request_key,kind,payload,payload_hash,authorization_id,state,available_at,created_at,updated_at) VALUES(?,?,'SEND',?,?,?,'QUEUED',?,?,?)").run(id,key,canonical(s),hash(s),grant,now,now,now);
   this.store.audit('AUTOMATION','CONTACT_RULE_JOB_DERIVED',id,{...plan.parent,scopeHash:hash(s)});return id;
- });}
+ }
 }
-module.exports={LocalContact};
+module.exports={LocalContact,definition};
