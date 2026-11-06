@@ -10,7 +10,7 @@
   "modelReviewAdapter": "standing-frozen-auto-consent-whole-round-and-optional-manual-review-synthetic-tested-no-paid-calls",
   "exactReplyAndDmAdapters": "registered-original-protocols-manual-ui-journal-and-stop-guarded-synthetic-tested",
   "inboxAdapter": "registered-bounded-receiver-yield-resume-same-expiry-synthetic-tested-live-unverified",
-  "windowsBrowserReview": "fixed-zip-hash-pe-version-and-files-static-checked-native-offline-gate-pending",
+  "windowsBrowserReview": "pinned-archive-and-76-files-static-checked-native-proof-os-arch-binding-pending-windows",
   "windowsDpapiAndLifecycle": "acl-resource-journal-and-job-code-connected-native-windows-unverified",
   "windowsCleanMachineInstaller": "native-x64-validation-versioned-nsis-artifact-hash-receipt-pipeline-not-executed",
   "consistentBackupAndCopyRestore": "implemented-with-explicit-copy-activation-synthetic-tested",
@@ -25,8 +25,9 @@
   "electronPackagingFuses": "verified-macos-arm64-preview-windows-pending",
   "legacyReadOnlyExport": "repeatable-read-readonly-synthetic-client-tested-live-export-unverified",
   "macosArm64Installer": "native-components-bundled-dmg-offline-self-test-passed-unsigned",
-  "macosCredentialsAndLifecycle": "synthetic-os-encryption-and-owned-tree-cleanup-tested-upgrade-pending",
+  "macosCredentialsAndLifecycle": "synthetic-os-encryption-owned-tree-cleanup-and-initialization-failure-recovery-tested-upgrade-pending",
   "windowsMcpBuild": "portable-native-build-environment-tested-mac-crosscompiled-pe-x64-not-run-on-windows",
   "executionPreferences": "per-config-autoapply-versioned-legacy-defaults-restored-backup-tested-no-grants",
-  "readOnlyDiagnosticsAndReports": "new-link-owned-session-bounded-diagnostics-cross-version-comparison-and-reporting-synthetic-tested"
+  "readOnlyDiagnosticsAndReports": "new-link-owned-session-bounded-diagnostics-cross-version-comparison-and-reporting-synthetic-tested",
+  "windowsStaticInputs": "archive-pe-x64-and-428-build-source-hashes-verified-on-mac-native-helper-not-built"
 }

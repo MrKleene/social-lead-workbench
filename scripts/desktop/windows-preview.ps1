@@ -15,7 +15,7 @@ foreach ($entry in @($Go,$ModuleCache,$BrowserArchive)) {
 Set-Location -LiteralPath $project
 $env:DESKTOP_GO = $Go
 $env:DESKTOP_GO_MODCACHE = $ModuleCache
-$pin = Get-Content -LiteralPath 'apps/desktop/windows-browser-source.json' -Raw | ConvertFrom-Json
+$pin = Get-Content -LiteralPath 'apps/desktop/src/windows-browser-source.json' -Raw | ConvertFrom-Json
 $hash = (Get-FileHash -LiteralPath $BrowserArchive -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($hash -ne $pin.archiveSha256) {throw 'Windows browser archive differs from the fixed source manifest.'}
 if (-not (Test-Path -LiteralPath 'apps/desktop/dist/native/win32-x64/browser')) {

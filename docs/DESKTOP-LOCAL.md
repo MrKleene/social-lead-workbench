@@ -50,7 +50,7 @@ Mac 原生监督器持有本次进程组与独占锁；停止证明后等待明�
 
 ## Windows 构建状态
 
-固定 Windows Chromium 148.0.7778.215 ZIP 已下载，SHA256 `5ae94143fa323167b7085242504e05dc8eeb6d96ca5feb80c887ade36f242b40`，76 个文件完成结构、路径、PE x64、版本及逐文件哈希检查；没有在 Windows 执行，不代表发行者签名验证或安全审计。固定来源见 `apps/desktop/windows-browser-source.json`。
+固定 Windows Chromium 148.0.7778.215 ZIP 已下载，SHA256 `5ae94143fa323167b7085242504e05dc8eeb6d96ca5feb80c887ade36f242b40`，76 个文件完成结构、路径、PE x64、版本及逐文件哈希检查；没有在 Windows 执行，不代表发行者签名验证或安全审计。固定来源见 `apps/desktop/src/windows-browser-source.json`。
 
 Windows MCP 已在 Mac 交叉编译为 PE x64；C# helper/Job Object、私有目录与资源 ACL、DPAPI、日志读取、受管浏览器和凭据交接有源代码及构建流程。原生运行入口要求精确绑定 MCP/helper/browser/license 的真机离线验证文件，缺失就禁用平台能力。未放宽为“Mac 通过即 Windows 通过”。
 

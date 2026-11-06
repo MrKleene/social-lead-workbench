@@ -2,7 +2,7 @@
 import fs from 'node:fs';import path from 'node:path';import {createHash} from 'node:crypto';import extract from '@electron-internal/extract-zip';
 const root=path.resolve(import.meta.dirname,'../..'),archive=process.argv[2],expected=process.argv[3];
 if(!archive||!path.isAbsolute(archive)||! /^[a-f0-9]{64}$/.test(expected||''))throw Error('Pass absolute archive path and reviewed expected SHA256');
-const pinned=JSON.parse(fs.readFileSync(path.join(root,'apps/desktop/windows-browser-source.json'),'utf8'));if(expected!==pinned.archiveSha256)throw Error('UNREVIEWED_WINDOWS_BROWSER_ARCHIVE');
+const pinned=JSON.parse(fs.readFileSync(path.join(root,'apps/desktop/src/windows-browser-source.json'),'utf8'));if(expected!==pinned.archiveSha256)throw Error('UNREVIEWED_WINDOWS_BROWSER_ARCHIVE');
 const bytes=fs.readFileSync(archive),sha=b=>createHash('sha256').update(b).digest('hex');if(sha(bytes)!==expected)throw Error('ARCHIVE_HASH_MISMATCH');
 let end=-1;for(let i=bytes.length-22;i>=Math.max(0,bytes.length-65557);i--)if(bytes.readUInt32LE(i)===0x06054b50){end=i;break;}if(end<0||bytes.readUInt16LE(end+4)||bytes.readUInt16LE(end+6))throw Error('ZIP_FORMAT_UNSUPPORTED');
 const count=bytes.readUInt16LE(end+10),names=new Set();let offset=bytes.readUInt32LE(end+16),total=0;if(count<1||count>5000)throw Error('ZIP_BOUND');

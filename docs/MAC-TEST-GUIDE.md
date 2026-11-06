@@ -1,4 +1,4 @@
-# Mac 本地试用（preview.7）
+# Mac 本地试用（preview.8）
 
 适用 macOS 13 或以上、Apple Silicon（arm64）。程序内置 Electron、SQLite、浏览器与 MCP，无需自行安装 Node、Docker、PostgreSQL 或 Redis。当前安装包未使用 Developer ID 签名及公证，其他电脑的 Gatekeeper/安装升级仍未验收；不要关闭系统安全设置来绕过失败，保留系统提示用于定位。
 
@@ -14,3 +14,5 @@
 旧数据迁入先生成副本、展示数量和限制，再经确认切换；不会覆盖源数据库或恢复旧授权任务。被旧系统覆盖掉的逐轮原文无法恢复，不会伪造。业务备份不含 Cookie、Key 或来源访问凭据，换机器需重新配置。
 
 已完成合成界面与包内离线验证。真实平台、付费模型、跨机器安装/升级和 Windows 真机仍未验收；具体页面差异在 DESKTOP-PAGE-PARITY.md。模型运行页没有供应商实际账单/Token 数据，显示的请求占用不等于实际费用。
+
+preview.8 修复会话初始化失败后的忙碌状态残留，收紧 Windows 固定浏览器来源及原生验证记录匹配，并提前检查合并后的审核目标数量。preview.7 安装包单独保留。

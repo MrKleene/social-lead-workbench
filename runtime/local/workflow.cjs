@@ -5,7 +5,7 @@ const {LocalReview}=require('./review.cjs');
 const policy=require('./policy.cjs');
 class LocalWorkflow {
  constructor(store,vault,{capabilities=()=>({review:false,collect:false,inbox:false,send:false})}={}){this.store=store;this.db=store.db;this.vault=vault;this.capabilities=capabilities;this.queue=new LocalQueue(store);}
- overview(){const model=this.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get();return {capabilities:this.capabilities(),model:model??null,choices:policy.qwenModelChoices(model?.model),policies:this.db.prepare('SELECT * FROM review_policies p WHERE NOT EXISTS(SELECT 1 FROM configurations c WHERE c.id=p.id AND c.archived=1) ORDER BY name,id').all().map(p=>({...p,autoEnabled:new(require('./automatic-review.cjs').AutomaticReview)(this.store).enabled().some(a=>a.policyId===p.id)})),modelPaused:!!this.db.prepare("SELECT 1 FROM safety_state WHERE id='model' AND reason IS NOT NULL").get()};}
+ overview(){const automatic=new Set(new(require('./automatic-review.cjs').AutomaticReview)(this.store).enabled().map(a=>a.policyId));const model=this.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get();return {capabilities:this.capabilities(),model:model??null,choices:policy.qwenModelChoices(model?.model),policies:this.db.prepare('SELECT * FROM review_policies p WHERE NOT EXISTS(SELECT 1 FROM configurations c WHERE c.id=p.id AND c.archived=1) ORDER BY name,id').all().map(p=>({...p,autoEnabled:automatic.has(p.id)})),modelPaused:!!this.db.prepare("SELECT 1 FROM safety_state WHERE id='model' AND reason IS NOT NULL").get()};}
  saveModel({version,model,dailyLimit,priceAck,consent}){return this.store.transaction(()=>{
   const old=this.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get(),spec=policy.qwenModel(model);
   if(!Number.isInteger(version)||version!==(old?.version??0))throw new LocalError('MODEL_CONFIGURATION_CHANGED');
@@ -51,6 +51,7 @@ class LocalWorkflow {
   if(!Array.isArray(ruleIds)||ruleIds.length>100)throw new LocalError('INVALID_CONTACT_RULES');
   const rulePolicies=ruleIds.map(id=>this.db.prepare('SELECT policy_id FROM contact_rules WHERE id=? AND enabled=1').get(id)?.policy_id).filter(Boolean);
   const policies=[...new Set([...policyIds,...automaticReview.map(a=>a.policyId),...rulePolicies])].map(id=>{const p=this.db.prepare('SELECT * FROM review_policies WHERE id=? AND enabled=1').get(id);if(!p)throw new LocalError('REVIEW_POLICY_CHANGED');return {id:p.id,revision:p.revision,version:p.version,modelVersion:p.model_version};});
+  if(policies.length>100)throw new LocalError('INVALID_COLLECTION_PLAN');
   const scope={configId:c.id,configRevision:c.revision,accountId:a.id,accountRevision:a.revision,readPlan:{kind:'SEARCH',batchLimit},strictStages:{version:1,policies,...(automaticReview.length?{automaticReview}:{}),contactRules:new (require('./automation.cjs').LocalAutomation)(this.store).frozen(ruleIds,policies)}};
   return {scope,previewHash:hash(scope),accountName:a.name,configurationName:c.name,keywords:JSON.parse(c.body).keywords,batchLimit,reviewTargets:policies.length,automaticReviews:automaticReview.length,automaticRules:scope.strictStages.contactRules.length};
  }
