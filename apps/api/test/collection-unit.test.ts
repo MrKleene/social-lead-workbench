@@ -35,7 +35,7 @@ describe("只读采集契约与预算", () => {
     it("多关键词达到帖子预算后保留请求供评论与楼中楼读取", async () => {
         const adapter = new MockAdapter("XHS", "BASELINE");
         const search = vi.spyOn(adapter, "search");
-        const r = await collect(adapter, { ...config, keywords: Array.from({ length: 8 }, (_, i) => `关键词${i}`) }, async () => false, { ...limits, requests: 8 });
+        const r = await collect(adapter, { ...config, keywords: Array.from({ length: 100 }, (_, i) => `关键词${i}`) }, async () => false, { ...limits, requests: 8 });
         expect(r.status).toBe("COMPLETE");
         expect(r.posts[0].comments).toHaveLength(4);
         expect(search.mock.calls.every(args => args[0] === "关键词0")).toBe(true);
@@ -206,4 +206,9 @@ describe('saved-post selection: synthetic source only',()=>{
   const adapter=new MockAdapter('XHS','BASELINE');adapter.search=vi.fn();adapter.post=async()=>({id:'other',title:'合成'});
   const r=await collect(adapter,config,async()=>false,limits,undefined,{id:'selected',title:'合成'});expect(r.status).toBe('FAILED');expect(r.reason).toBe('INVALID_DATA');expect(adapter.search).not.toHaveBeenCalled();
  });
+});
+
+describe('多条关键词契约',()=>{
+ it('accepts 24/100 ordered keywords and rejects 101 or a long word',()=>{for(const count of [24,100]){const keywords=Array.from({length:count},(_,i)=>`关键词${i}`);expect(configInput.parse({...config,keywords}).keywords).toEqual(keywords);}expect(configInput.safeParse({...config,keywords:Array.from({length:101},(_,i)=>`关键词${i}`)}).success).toBe(false);expect(configInput.safeParse({...config,keywords:['长'.repeat(41)]}).success).toBe(false);});
+ it('keeps finite request budget even with 100 empty searches',async()=>{const adapter=new MockAdapter('XHS','BASELINE');const search=vi.spyOn(adapter,'search').mockResolvedValue({items:[],complete:true});const r=await collect(adapter,{...config,keywords:Array.from({length:100},(_,i)=>`词${i}`)},async()=>false,{...limits,requests:5});expect(r.reason).toBe('BUDGET');expect(r.requests).toBe(5);expect(search.mock.calls.map(args=>args[0])).toEqual(['词0','词1','词2','词3','词4']);});
 });

@@ -1,6 +1,6 @@
-import {FieldGroup} from '@/components/ui/field';
+import {Field,FieldGroup,FieldLabel,FieldDescription} from '@/components/ui/field';
 import {FormField} from '@/components/form-field';
-import {useState, useLayoutEffect, type FormEvent} from 'react';
+import {useState, useId, useLayoutEffect, type FormEvent} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Textarea} from '@/components/ui/textarea';
@@ -8,7 +8,7 @@ import {useDraftGuard} from '@/features/work/draft-guard';
 import {ErrorNotice} from '@/components/feedback';
 import type {Config, ConfigDraft} from './types';
 import {useWorkspaceMutation} from './use-collection';
-import {keywordDraft, keywordValidation} from './config-draft';
+import {keywordDraft, keywordValidation, keywordWords, KEYWORD_LIMIT} from './config-draft';
 
 export function ConfigEditor({config, defaults, onClose, onSaved, onDirty, onBusy}: {
     config?: Config;
@@ -19,6 +19,7 @@ export function ConfigEditor({config, defaults, onClose, onSaved, onDirty, onBus
     onSaved:(config:Config)=>void;
 }) {
     const mutation=useWorkspaceMutation<Config>();
+    const keywordsId=useId(),keywordHelpId=useId();
     const [name,setName]=useState(config?.name || '');
     const initialKeywords=config?.keywords.join('\n') || '';
     const [keywords,setKeywords]=useState(initialKeywords);
@@ -39,8 +40,8 @@ export function ConfigEditor({config, defaults, onClose, onSaved, onDirty, onBus
     };
     return <section className="configuration-editor"><header><h2>{config?'编辑关键词配置':'新增关键词配置'}</h2></header><form className="config-form" onSubmit={submit}><FieldGroup className="form-fields">
         <ErrorNotice error={validation||mutation.error}/>
-        <FormField>描述<Input autoFocus aria-label="描述" value={name} onChange={e=>setName(e.target.value)} maxLength={80} required disabled={mutation.isPending} placeholder="例如：企业部署需求"/></FormField>
-        <FormField>关键词内容<Textarea aria-label="关键词内容" value={keywords} onChange={e=>setKeywords(e.target.value)} required maxLength={328} disabled={mutation.isPending} placeholder="每行一个，最多 8 个，每个 40 字" rows={6}/></FormField>
+        <FormField>描述<Input autoFocus aria-label="描述" value={name} onChange={e=>{setName(e.target.value);setValidation(null);}} maxLength={80} required disabled={mutation.isPending} placeholder="例如：企业部署需求"/></FormField>
+        <Field className="form-field" data-disabled={mutation.isPending||undefined} data-invalid={!!validation||undefined}><FieldLabel htmlFor={keywordsId}>关键词内容</FieldLabel><Textarea id={keywordsId} aria-label="关键词内容" aria-describedby={keywordHelpId} aria-invalid={!!validation} value={keywords} onChange={e=>{setKeywords(e.target.value);setValidation(null);}} required disabled={mutation.isPending} placeholder="每行一个关键词，可直接粘贴多行" rows={8} className="h-52 min-h-32 max-h-80"/><FieldDescription id={keywordHelpId}>已填写 {keywordWords(keywords).length} / {KEYWORD_LIMIT} 条 · 每条最多 40 字</FieldDescription></Field>
         <div className="action-row"><Button disabled={mutation.isPending}>{mutation.isPending?'保存中…':'保存配置'}</Button><Button type="button" variant="ghost" disabled={mutation.isPending} onClick={close}>取消</Button></div>
     </FieldGroup></form></section>;
 }

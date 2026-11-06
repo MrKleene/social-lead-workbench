@@ -1,0 +1,10 @@
+import {it,expect,vi} from 'vitest';
+import {renderToStaticMarkup} from 'react-dom/server';
+const state=vi.hoisted(()=>({isPending:false,error:null,mutate:vi.fn()}));
+vi.mock('./use-collection',()=>({useWorkspaceMutation:()=>state}));
+vi.mock('@/features/work/draft-guard',()=>({useDraftGuard:()=>async()=>true}));
+import {ConfigEditor} from './config-editor';
+import type {Config} from './types';
+const config={id:'fixture',name:'虚构配置',keywords:Array.from({length:24},(_,i)=>`关键词${i}`)} as Config;
+it('shows every existing keyword with the new limit and no old paste truncation',()=>{const html=renderToStaticMarkup(<ConfigEditor config={config} onDirty={()=>{}} onClose={()=>{}} onSaved={()=>{}}/>);expect(html).toContain('已填写 24 / 100 条');expect(html).toContain('关键词23');expect(html).not.toMatch(/<textarea[^>]*maxLength=/i);expect(html).toContain('aria-describedby=');});
+it('locks the fields and cancellation throughout an in-flight save',()=>{state.isPending=true;const html=renderToStaticMarkup(<ConfigEditor config={config} onDirty={()=>{}} onClose={()=>{}} onSaved={()=>{}}/>);expect(html).toMatch(/<textarea[^>]*disabled=""/);expect(html).toContain('保存中…');expect(html).toMatch(/<button[^>]*disabled=""[^>]*>取消/);state.isPending=false;expect(state.mutate).not.toHaveBeenCalled();});

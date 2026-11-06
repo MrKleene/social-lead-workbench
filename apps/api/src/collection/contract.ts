@@ -9,7 +9,7 @@ export const configInput = z.object({
     semanticRules: semanticRulesSchema.nullable().optional(),
     commentRules: commentRulesSchema.nullable().optional(),
     name: z.string().trim().min(1).max(80), platform: z.enum(["XHS", "DOUYIN"]),
-    mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]), keywords: z.array(word).min(1).max(8),
+    mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]), keywords: z.array(word).min(1).max(100),
     excludeWords: z.array(word).max(20), batchLimit: z.number().int().min(1).max(10),
     enabled: z.boolean(),
     defaultExecutionAccountId: z.string().min(1).max(100).nullable().optional(),

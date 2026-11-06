@@ -1,3 +1,5 @@
+import {Button} from '@/components/ui/button';
+import './platforms-page.css';
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldAlert } from "lucide-react";
@@ -29,7 +31,7 @@ export function PlatformsPage() {
     queryFn: () => api<Data>("/platforms"),
   });
   return (
-    <>
+    <section className="platforms-page">
       <div className="page-heading">
         <div>
           <h1>平台能力</h1>
@@ -47,12 +49,12 @@ export function PlatformsPage() {
       <ErrorNotice error={query.error} />
       {query.isPending ? (
         <Loading />
-      ) : (
+      ) : query.isError ? <Button variant="outline" onClick={()=>void query.refetch()}>重试读取平台能力</Button> : (
         <>
           <section className="table-panel graphite-platform-panel"><h2>接入与读取能力</h2><Table className="graphite-platform-table" aria-label="平台接入与读取能力"><TableHeader><TableRow><TableHead>平台</TableHead><TableHead>接入状态</TableHead><TableHead>已实现读取范围</TableHead><TableHead>当前限制</TableHead><TableHead>入口</TableHead></TableRow></TableHeader><TableBody>{query.data?.capabilities.map(cap=><TableRow key={cap.platform}><TableCell><strong>{cap.name}</strong></TableCell><TableCell data-label="接入状态"><Badge variant="secondary">{cap.platform==='XHS'?'只读功能已实现':cap.platform==='DOUYIN'?'读取适配器未实现':cap.status}</Badge></TableCell><TableCell data-label="读取范围">{cap.platform==='XHS'?'有限搜索、帖子与评论读取、分块保存及符合条件的进度恢复。':cap.read}</TableCell><TableCell data-label="当前限制">{cap.platform==='XHS'?'执行前核验账号、设备与授权；读取覆盖以实际结果为准。':cap.reason}</TableCell><TableCell><Link to="/auto-contact">查看回复能力与资格 →</Link></TableCell></TableRow>)}</TableBody></Table></section>
 
         </>
       )}
-    </>
+    </section>
   );
 }

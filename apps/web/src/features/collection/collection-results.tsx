@@ -1,5 +1,6 @@
+import {RecordTable as Table} from '@/components/record-table';
 import {ResultPagination} from '@/components/result-pagination';
-import {Table,TableHeader,TableBody,TableRow,TableHead,TableCell} from '@/components/ui/table';
+import {TableHeader,TableBody,TableRow,TableHead,TableCell} from '@/components/ui/table';
 import { FormField } from '@/components/form-field';
 import { Empty } from '@/components/ui/empty';
 import { SelectField, SelectOption } from '@/components/select-field';

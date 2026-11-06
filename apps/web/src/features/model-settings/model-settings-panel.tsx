@@ -38,7 +38,7 @@ export function ModelSettingsBody({onBusyChange}:{onBusyChange:(busy:boolean)=>v
  const q=useModelSettings(),heading=useRef<HTMLHeadingElement>(null);
  if(q.isPending)return <Loading/>;
  if(q.error instanceof ApiError&&q.error.status===404)return <p role="status">模型设置后台尚未部署；请先完成后台升级，不要在其他字段输入 Key。</p>;
- if(q.isError||!q.data)return <ErrorNotice error={q.error}/>;
+ if(q.isError||!q.data)return <div className="model-settings-retry"><ErrorNotice error={q.error||new Error('模型配置暂不可用')}/><Button variant="outline" size="sm" onClick={()=>void q.refetch()}>重试读取模型配置</Button></div>;
  return <section className="model-settings" aria-label="管理员模型设置"><h3 className="sr-only" ref={heading} tabIndex={-1}>评论语义匹配模型</h3><ModelForm onBusyChange={onBusyChange} key={q.data.version} value={q.data} onComplete={()=>heading.current?.focus()}/></section>;
 }
 export function ModelSettingsPanel(){

@@ -34,7 +34,7 @@ class RepliesController {
       const item = await tx.replyTemplate.findUnique({ where: { id } });
       if (!item) throw new NotFoundException();
       if (item.version !== b.version) throw new ConflictException('话术已变化，请刷新');
-      if(await tx.autoContactRule.count({where:{templateId:id}}))throw new ConflictException('仍有自动回复配置引用此模板，请先更换发送模板');
+      if(await tx.autoContactRule.count({where:{templateId:id}}))throw new ConflictException('仍有自动回复配置引用此模板，请先更换回复模板');
       if (await tx.collectionConfig.count({ where: { defaultReplyTemplateId: id } })) throw new ConflictException('仍有关联搜索设置（包括归档设置），请先解除默认话术关联');
       await tx.replyTemplate.delete({ where: { id } });
       await tx.auditLog.create({ data: { actorId: req.actor.id, entityId: id, action: 'REPLY_TEMPLATE_DELETED' } }); return { ok: true };

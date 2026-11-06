@@ -41,6 +41,6 @@ it('home is reached through desktop and mobile brand links, not a sidebar item',
 it('shows one configuration menu while tabs are owned by the configuration page',()=>{
  const html=render(true,'/configuration?tab=matching');
  expect(html).toMatch(/<a(?=[^>]*href="\/configuration\?tab=matching")(?=[^>]*aria-current="page")[^>]*>/);
- expect(html).not.toContain('评论匹配方案配置');expect(html).not.toContain('发送模板配置');expect(html).not.toContain('关键词配置');
+ expect(html).not.toContain('评论匹配方案配置');expect(html).not.toContain('评论回复模板配置');expect(html).not.toContain('关键词配置');
  expect(render(false,'/configuration?tab=matching')).not.toContain('<span>配置管理</span></a>');
 });

@@ -89,7 +89,7 @@
 .graphite-review-jobs-dialog .review-job {padding:16px;margin:0;border:1px solid var(--border,#e4e4e7);border-radius:6px;background:var(--card,#fff);min-width:0;}
 .graphite-job-heading {display:flex;align-items:start;justify-content:space-between;gap:12px;}.graphite-review-jobs-dialog .graphite-job-heading h3 {font-size:14px;margin:0;overflow-wrap:anywhere;}
 .graphite-job-facts {display:grid;grid-template-columns:80px minmax(0,1fr);gap:8px 12px;font-size:13px;margin:16px 0;}.graphite-job-facts dt {color:var(--muted-foreground,#71717a);}.graphite-job-facts dd {margin:0;overflow-wrap:anywhere;}
-.graphite-job-progress {display:flex;align-items:center;gap:16px;padding:14px 0;border-top:1px solid var(--border,#e4e4e7);font-size:13px;}.graphite-job-progress strong {font-size:20px;font-weight:600;}.graphite-job-progress progress {flex:1;min-width:0;height:6px;accent-color:var(--primary,#202124);}
+.graphite-job-progress {display:flex;align-items:center;gap:16px;padding:14px 0;border-top:1px solid var(--border,#e4e4e7);font-size:13px;}.graphite-job-progress strong {font-size:20px;font-weight:600;}
 .graphite-review-jobs-dialog .graphite-job-counts {table-layout:fixed;width:100%;min-width:0;}.graphite-review-jobs-dialog .graphite-job-counts th,.graphite-review-jobs-dialog .graphite-job-counts td {font-size:12px;padding:9px 10px;white-space:normal;overflow-wrap:anywhere;border-bottom:1px solid var(--border,#e4e4e7);}.graphite-review-jobs-dialog .graphite-job-counts th {color:var(--muted-foreground,#71717a);background:var(--muted,#fafafa);}.graphite-review-jobs-dialog .graphite-job-counts th:first-child {width:25%;}.graphite-review-jobs-dialog .graphite-job-counts th:nth-child(2) {width:15%;}
 .graphite-review-jobs-dialog .review-job-reason {font-size:13px;color:var(--destructive,#b42318);margin:12px 0 0;overflow-wrap:anywhere;}.graphite-review-jobs-dialog .action-row {margin-top:14px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
 @media(max-width:560px){.task-settings-sheet.review-task-sheet.graphite-review-jobs-dialog {width:calc(100vw - 20px);}.graphite-review-jobs-dialog [data-slot=sheet-header],.graphite-review-jobs-dialog .task-settings-body {padding:14px;}.graphite-review-jobs-dialog .review-job {padding:12px;}.graphite-job-facts {grid-template-columns:70px minmax(0,1fr);}.graphite-review-jobs-dialog .action-row button {min-height:44px;}.graphite-review-jobs-dialog .graphite-job-counts th,.graphite-review-jobs-dialog .graphite-job-counts td {padding:8px 6px;}.graphite-review-jobs-dialog .graphite-job-counts th:first-child {width:30%;}}
@@ -98,10 +98,10 @@
 .graphite-review-dialog .review-detail-body>.graphite-review-manual {border-top:1px solid var(--border,#e4e4e7);padding-top:14px;}
 :root .graphite-workspace .graphite-review-results {color:var(--foreground);}
 :root .graphite-workspace .graphite-review-results .review-result-tabs [data-state=on] {background:var(--secondary);color:var(--foreground);}
-.graphite-job-progress progress {appearance:none;border:0;border-radius:99px;overflow:hidden;background:var(--muted,#e4e4e7);}
-.graphite-job-progress progress::-webkit-progress-bar {background:var(--muted,#e4e4e7);border-radius:99px;}
-.graphite-job-progress progress::-webkit-progress-value {background:var(--primary,#202124);border-radius:99px;}
-.graphite-job-progress progress::-moz-progress-bar {background:var(--primary,#202124);border-radius:99px;}
+
+
+
+
 /* Compact review workspace with publication metadata, A16 / A19. */
 :root .graphite-workspace .comment-review-page{gap:14px;}
 :root .graphite-workspace .comment-review-page .review-workspace-heading h1{font-size:22px;line-height:30px;margin:0;}
@@ -174,3 +174,7 @@
  .review-filter-source-control{flex-wrap:wrap;}
  .review-filter-source-control>span{flex-basis:100%;}
 }
+
+.graphite-job-progress [data-slot=progress]{flex:1;min-width:0;height:6px}
+
+.review-post-picker .review-post-option{justify-content:flex-start;border-radius:6px}.review-post-picker .review-post-option>span{flex:1;text-align:left}.review-post-picker .review-post-option>img{flex-shrink:0}

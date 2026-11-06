@@ -47,12 +47,12 @@ export function AccountEditor({
     });
   };
   return (
-    <form className="account-form" onSubmit={submit}><FieldGroup className="form-fields">
+    <form aria-busy={pending} className="account-form" onSubmit={submit}><FieldGroup className="form-fields">
       <FormField>
         平台
         <SelectField
           aria-label="平台"
-          disabled={!!account}
+          disabled={pending || !!account}
           value={value.platform}
           onValueChange={(e) =>
             setValue({ ...value, platform: e as "XHS" | "DOUYIN" })
@@ -65,6 +65,7 @@ export function AccountEditor({
       <FormField>
         别名
         <Input
+          disabled={pending}
           required
           maxLength={80}
           value={value.label}
@@ -75,7 +76,7 @@ export function AccountEditor({
         负责人
         <SelectField
           aria-label="负责人"
-          disabled={users.isPending || users.isError}
+          disabled={pending || users.isPending || users.isError}
           value={value.ownerId}
           onValueChange={(e) => setValue({ ...value, ownerId: e })}
         >
@@ -89,6 +90,7 @@ export function AccountEditor({
             ))}
         </SelectField>
       </FormField>
+      {users.isPending&&<p role="status" className="helper-text">正在读取负责人…</p>}
       {users.isError&&<div className="account-owner-error"><ErrorNotice error={users.error}/><Button type="button" variant="outline" size="sm" onClick={()=>void users.refetch()}>重新读取负责人</Button></div>}
       <FormField>
         每日共用额度{account?.isDemo?'（UTC 演示）':'（北京时间）'}
@@ -96,6 +98,7 @@ export function AccountEditor({
           type="number"
           min={0}
           max={1000}
+          disabled={pending}
           required
           value={value.dailyLimit}
           onChange={(e) =>
@@ -107,7 +110,7 @@ export function AccountEditor({
         评论与私信共用日额度。
       </p>
       <div className="action-row">
-        <Button disabled={pending || users.isError}>{pending&&<Spinner/>}{pending?'保存中…':'保存账号设置'}</Button>
+        <Button disabled={pending || users.isPending || users.isError}>{pending&&<Spinner/>}{pending?'保存中…':'保存账号设置'}</Button>
         {onArchive && (
           <Button
             type="button"

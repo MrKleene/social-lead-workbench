@@ -464,7 +464,7 @@ it('legacy paired checkboxes require content before re-enabling and never invent
  const dy=await settings.save(actor,'preset-DOUYIN',{version:0,platform:'DOUYIN',policyId:'workspace',policyRevision:1,threshold:92,channel:'COMMENT',channels:[],content:'另一个平台',accounts:[]});expect(dy.enabled).toBe(false);await expect(settings.toggle(actor,dy.id,{version:dy.version,enabled:true,consent:autoContactConsent,hash:ruleHash(dy)})).rejects.toThrow();
  expect((await settings.overview(actor)).rules).toHaveLength(2);expect(sender.send).toHaveBeenCalledTimes(1);
  await db.replyTemplate.update({where:{id:template.id},data:{version:{increment:1},body:'新正文'}});
- await expect(settings.save(actor,'other',{version:0,platform:'XHS',policyId:'workspace',policyRevision:1,threshold:90,channel:'COMMENT',templateId:template.id,templateVersion:template.version,content:'合成正文',accounts:[]})).rejects.toThrow('发送模板已变化');expect((await db.autoContactRule.findUniqueOrThrow({where:{id:r.id}})).content).toBe('合成正文');
+ await expect(settings.save(actor,'other',{version:0,platform:'XHS',policyId:'workspace',policyRevision:1,threshold:90,channel:'COMMENT',templateId:template.id,templateVersion:template.version,content:'合成正文',accounts:[]})).rejects.toThrow('回复模板已变化');expect((await db.autoContactRule.findUniqueOrThrow({where:{id:r.id}})).content).toBe('合成正文');
 });
 it('preset selection uses optimistic versions and preserves historical policy revisions',async()=>{
  const {readAutomationPreferences,saveAutomationPreferences}=await import('../src/auto-contact/automation-preferences');
@@ -651,7 +651,7 @@ it.each(['success','dm-failed','comment-unknown','quota'])('paired jobs freeze s
 });
 it('paired configuration rejects wrong-channel templates and variables; old runs never gain a DM',async()=>{
  const f=await pairedFixture();const old=await source();expect(await service.enqueue()).toBe(2);expect(await db.autoContactJob.count({where:{reviewId:old.id}})).toBe(0);
- await expect(settings.save(actor,'bad-channel',{...f.input,accounts:[],channelPlans:[f.input.channelPlans[0],{...f.input.channelPlans[1],templateId:f.templates[0].id,templateVersion:f.templates[0].version,content:f.templates[0].body}]})).rejects.toThrow('发送模板已变化');
+ await expect(settings.save(actor,'bad-channel',{...f.input,accounts:[],channelPlans:[f.input.channelPlans[0],{...f.input.channelPlans[1],templateId:f.templates[0].id,templateVersion:f.templates[0].version,content:f.templates[0].body}]})).rejects.toThrow('回复模板已变化');
  await expect(settings.save(actor,'bad-variable',{...f.input,accounts:[],channelPlans:[f.input.channelPlans[0],{channel:'DM',templateId:null,templateVersion:null,content:'hello {{昵称}}'}]})).rejects.toThrow('固定正文');
  expect(sender.send).not.toHaveBeenCalled();
 });

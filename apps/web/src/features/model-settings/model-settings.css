@@ -14,3 +14,5 @@
 .model-settings .action-row { flex-wrap: wrap; }
 .model-settings button { white-space: normal; height: auto; min-height: 36px; }
 @media (max-width: 680px) { .model-fields { grid-template-columns: minmax(0, 1fr); gap: 16px; } }
+
+.model-settings-retry{display:grid;gap:12px;justify-items:start;min-width:0}.model-settings-retry>[role=alert]{width:100%}

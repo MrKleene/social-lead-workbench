@@ -8,3 +8,9 @@
 .pending-account-status,.pending-submitted{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px}.pending-account-status span{color:var(--muted-foreground)}.pending-replies tr[data-selected=true]{background:var(--muted)}.pending-tools>.form-field{max-width:100%;min-width:0}.pending-tools [role=combobox]{max-width:100%}
 
 .pending-replies td:last-child>strong{display:block;margin-bottom:4px}
+
+:root .graphite-workspace .pending-tools{padding:12px;border:1px solid var(--border);border-radius:8px;gap:12px;margin:0 0 4px;align-items:end}
+:root .graphite-workspace .pending-tools>.pending-filter{flex:0 1 280px;width:280px;min-width:0;gap:6px}
+:root .graphite-workspace .pending-tools>.pending-filter [role=combobox]{width:100%}
+:root .graphite-workspace .pending-tools>span{font-size:12px;color:var(--muted-foreground);align-self:center}
+@media(max-width:600px){:root .graphite-workspace .pending-tools>.pending-filter{flex-basis:100%;width:100%}}

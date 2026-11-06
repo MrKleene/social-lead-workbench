@@ -1,3 +1,4 @@
+import {RecordTable as Table} from '@/components/record-table';
 import {SavedText} from '@/features/collection/saved-text';
 import {ReviewRowActions} from './review-manual-actions';
 import {manualReviewLabel} from './manual-review-label';
@@ -9,7 +10,7 @@ import {PostStateTag,PostStateEvidence} from '@/features/collection/post-availab
 import {useRef,useState} from 'react';
 import {displayReviewFailure,isBatchOutputFailure,semanticInputPolicy,semanticStateLabels,type SemanticReviewItem} from '@crm/contracts';
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
-import {Table,TableHeader,TableBody,TableRow,TableHead,TableCell,TableCaption} from '@/components/ui/table';
+import {TableHeader,TableBody,TableRow,TableHead,TableCell,TableCaption} from '@/components/ui/table';
 import {Button} from '@/components/ui/button';
 import {Textarea} from '@/components/ui/textarea';
 import {ErrorNotice} from '@/components/feedback';

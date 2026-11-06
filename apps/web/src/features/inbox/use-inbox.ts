@@ -6,9 +6,10 @@ export function useInboxEvents(enabled:boolean){const client=useQueryClient(),[o
 export function useInbox(admin:boolean){
  const client=useQueryClient(),[params,setParams]=useSearchParams(),f=filters(params),[account,setAccount]=useState(''),[consent,setConsent]=useState(false);
  const query=new URLSearchParams({page:String(f.page)});if(f.channel!=='all')query.set('channel',f.channel);if(f.unread)query.set('unread','1');if(f.accountId)query.set('accountId',f.accountId);
+ const summaries=useQuery({queryKey:['inbox','account-summaries'],queryFn:inboxApi.summaries,enabled:admin});
  const accounts=useQuery({queryKey:['inbox','accounts'],queryFn:inboxApi.accounts,enabled:admin});const receivers=useQuery({queryKey:['inbox','receivers'],queryFn:inboxApi.receivers,enabled:admin});
  const messages=useQuery({queryKey:['inbox','messages',query.toString()],queryFn:()=>inboxApi.messages(query.toString()),enabled:admin});
  const invalidate=()=>client.invalidateQueries({queryKey:['inbox']});const start=useMutation({mutationFn:inboxApi.start,onSuccess:()=>{setConsent(false);void invalidate()}}),stop=useMutation({mutationFn:inboxApi.stop,onSuccess:invalidate}),read=useMutation({mutationFn:inboxApi.read,onSuccess:invalidate});
  const update=(key:string,value:string)=>{const p=new URLSearchParams(params);value?p.set(key,value):p.delete(key);if(key!=='page')p.delete('page');setParams(p)};
- return{f,accounts,receivers,messages,start,stop,read,update,account,setAccount,consent,setConsent};
+ return{f,accounts,summaries,receivers,messages,start,stop,read,update,account,setAccount,consent,setConsent};
 }

@@ -94,7 +94,7 @@ export class ContactSettingsService {
             if(plans.length&&(plans.length!==channels.length||plans.some(p=>!channels.includes(p.channel))))throw new ConflictException('渠道与模板范围不一致');
             for(const p of plans.length?plans:[{channel,content:input.content,templateId:input.templateId,templateVersion:input.templateVersion}]){
              if(p.channel==='DM'&&/\{\{|\}\}/.test(p.content))throw new ConflictException('自动私信请使用固定正文；含变量模板可在私信预览中逐条核对发送');
-             if(p.templateId){await tx.$queryRaw`SELECT id FROM "ReplyTemplate" WHERE id=${p.templateId} FOR UPDATE`;const t=await tx.replyTemplate.findUnique({where:{id:p.templateId}});if(!t||t.channel!==p.channel||t.version!==p.templateVersion||t.body!==p.content)throw new ConflictException('发送模板已变化，请重新选择并保存');}
+             if(p.templateId){await tx.$queryRaw`SELECT id FROM "ReplyTemplate" WHERE id=${p.templateId} FOR UPDATE`;const t=await tx.replyTemplate.findUnique({where:{id:p.templateId}});if(!t||t.channel!==p.channel||t.version!==p.templateVersion||t.body!==p.content)throw new ConflictException('回复模板已变化，请重新选择并保存');}
             }
             const primary=plans.find(p=>p.channel===channel);
             const policy = await tx.commentReviewPolicy.findUnique({ where: { id: input.policyId } });

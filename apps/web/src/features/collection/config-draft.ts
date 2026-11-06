@@ -1,5 +1,6 @@
 import type {Config, ConfigDraft} from './types';
 
+export const KEYWORD_LIMIT = 100;
 export const keywordWords = (value: string) => value.split(/[\n,，、]/).map(v => v.trim()).filter(Boolean);
 
 // Copy only the existing input contract, never runtime/history fields. Editing the
@@ -27,7 +28,7 @@ export function keywordDefaults(config: Config | undefined, availableMode: Confi
 export function keywordValidation(name: string, content: string): string | null {
     if (!name.trim()) return '请填写描述';
     const words = keywordWords(content);
-    if (!words.length || words.length > 8) return '请填写 1–8 个关键词';
+    if (!words.length || words.length > KEYWORD_LIMIT) return `请填写 1–${KEYWORD_LIMIT} 个关键词`;
     if (words.some(word => word.length > 40)) return '每个关键词最多 40 字';
     if (new Set(words.map(word => word.normalize('NFKC').toLowerCase())).size !== words.length) return '关键词不能重复';
     return null;

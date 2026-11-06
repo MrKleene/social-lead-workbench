@@ -14,7 +14,7 @@ export function replyRuleChannelIssue(rule:AutoContactRule,contact:AutoContactOv
   if(!ready)return `${channel==='DM'?'私信':'评论回复'}渠道未就绪，请检查自动回复设置。`;
  }
  const plans=rule.channelPlans?.length?rule.channelPlans:[{channel:rule.channel,content:rule.content}];
- if(plans.length!==channels.length||channels.some(channel=>plans.filter(p=>p.channel===channel&&p.content.trim()).length!==1))return '请分别选择已开启渠道的发送模板。';
+ if(plans.length!==channels.length||channels.some(channel=>plans.filter(p=>p.channel===channel&&p.content.trim()).length!==1))return '请分别选择已开启渠道的回复模板。';
  return null;
 }
 /** Only switched-on stages are prerequisites for a new collection. No mutation or authorization. */

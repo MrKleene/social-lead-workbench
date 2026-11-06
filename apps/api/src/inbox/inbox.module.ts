@@ -18,6 +18,7 @@ export class InboxController implements OnModuleDestroy{
  onModuleDestroy(){for(const close of this.connections)close();this.connections.clear()}
  constructor(@Inject(InboxStore)private store:InboxStore,@Inject(InboxService)private receiver:InboxService){}
  @Get('accounts') @Header('Cache-Control','no-store, private') accounts(@Req()r:AuthedRequest){return this.store.accounts(r.actor)}
+ @Get('account-summaries') @Header('Cache-Control','no-store, private') summaries(@Req()r:AuthedRequest){return this.store.accountSummaries(r.actor)}
  @Get('receivers') @Header('Cache-Control','no-store, private') receivers(@Req()r:AuthedRequest){return this.store.receivers(r.actor)}
  @Get('messages') @Header('Cache-Control','no-store, private') messages(@Req()r:AuthedRequest,@Query()q:unknown){return this.store.list(r.actor,q)}
  @Get('unread') @Header('Cache-Control','no-store, private') unread(@Req()r:AuthedRequest){return this.store.unread(r.actor)}

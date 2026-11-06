@@ -1,0 +1,3 @@
+ .platforms-page{display:flex;flex-direction:column;gap:16px;min-width:0}.platforms-page>.page-heading{margin-bottom:0}.platforms-page>.table-panel{margin-top:0}.platforms-page>[data-slot=button]{align-self:flex-start}
+
+@media(max-width:1000px){:root .graphite-workspace .graphite-platform-table tbody tr:last-child{border-bottom:0}}

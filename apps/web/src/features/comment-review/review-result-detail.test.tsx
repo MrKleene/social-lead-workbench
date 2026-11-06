@@ -21,7 +21,7 @@ describe('standalone review presentation',()=>{
 });
 
 describe('review job progress presentation',()=>{
- it('does not turn completed job status into an all-scored claim',()=>{const job:ManualReviewTask={id:'fictional-job',postId:'fictional-post',title:'虚构作业',coverage:'COMPLETE',policyRevision:2,model:'示例模型',modelVersion:1,priceVersion:'test',scopeHash:'synthetic',status:'COMPLETED',reason:null,total:8,pending:1,success:4,failed:2,skipped:1,maxCalls:1,retrying:0,capacityError:null,target:'虚构需求',dailyLimit:10,authorized:true};const html=render(createElement(ReviewJobSummary,{job}));for(const text of ['处理结束','已评分','未获评分','未重复发送','需重新选择帖子并确认后才会再次调用','虚构需求','示例模型'])expect(html).toContain(text);expect(html).toContain('value="4"');expect(html).toContain('max="8"');expect(html).not.toContain('全部成功');expect(html).not.toContain('自动重试');});
+ it('does not turn completed job status into an all-scored claim',()=>{const job:ManualReviewTask={id:'fictional-job',postId:'fictional-post',title:'虚构作业',coverage:'COMPLETE',policyRevision:2,model:'示例模型',modelVersion:1,priceVersion:'test',scopeHash:'synthetic',status:'COMPLETED',reason:null,total:8,pending:1,success:4,failed:2,skipped:1,maxCalls:1,retrying:0,capacityError:null,target:'虚构需求',dailyLimit:10,authorized:true};const html=render(createElement(ReviewJobSummary,{job}));for(const text of ['处理结束','已评分','未获评分','未重复发送','需重新选择帖子并确认后才会再次调用','虚构需求','示例模型'])expect(html).toContain(text);expect(html).toContain('role="progressbar"');expect(html).toContain('aria-valuenow="50"');expect(html).toContain('aria-valuetext="4 / 8 条"');expect(html).not.toContain('全部成功');expect(html).not.toContain('自动重试');});
 });
 
 describe('saved publication and source metadata',()=>{

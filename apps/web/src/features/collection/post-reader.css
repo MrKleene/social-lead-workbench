@@ -40,9 +40,10 @@
  :root [data-slot=sheet-content].post-reader-dialog .info-detail-bar [data-slot=button]{min-height:44px;height:44px}
  :root [data-slot=sheet-content].post-reader-dialog .info-detail-actions{width:100%;justify-content:flex-start;gap:6px}
  :root [data-slot=sheet-content].post-reader-dialog .info-detail-grid{display:flex;flex-direction:column;gap:12px;min-height:0}
- :root [data-slot=sheet-content].post-reader-dialog .info-story{max-height:52dvh;padding:12px;flex-shrink:0}
+ :root [data-slot=sheet-content].post-reader-dialog .info-story{max-height:none;overflow:visible;scrollbar-gutter:auto;padding:12px;flex-shrink:0}
  :root [data-slot=sheet-content].post-reader-dialog .info-story h2{font-size:18px}
- :root [data-slot=sheet-content].post-reader-dialog .info-conversation{height:64dvh;min-height:360px;flex-shrink:0;padding:0 12px}
+ :root [data-slot=sheet-content].post-reader-dialog .info-conversation{height:auto;min-height:0;overflow:visible;flex-shrink:0;padding:0 12px}
+ :root [data-slot=sheet-content].post-reader-dialog .info-comments{height:auto;min-height:0;overflow:visible;scrollbar-gutter:auto}
  :root [data-slot=sheet-content].post-reader-dialog .info-comment-search{min-width:0;width:100%;flex-basis:100%}
  :root [data-slot=sheet-content].post-reader-dialog .info-comment-tabs{width:100%;gap:0}
  :root [data-slot=sheet-content].post-reader-dialog .info-comment-tabs [data-slot=toggle-group-item]{flex:1;padding-inline:6px}
