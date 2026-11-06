@@ -4,7 +4,8 @@ const {LocalQueue}=require('./queue.cjs');
 const {LocalReview}=require('./review.cjs');
 const {requestQwen,qwenSettings}=require('./model-provider.cjs');
 // No environment variables, caller-supplied URLs, retry or fallback model. This
-// adapter is not registered by the desktop preview and never runs on startup.
+// adapter is registered in the desktop main process; each batch needs a fresh
+// explicit authorization. Startup recovery never resumes previous jobs.
 class LocalModelExecutor {
  constructor(store,vault,{transport=globalThis.fetch}={}){this.store=store;this.vault=vault;this.transport=transport;this.queue=new LocalQueue(store);this.review=new LocalReview(store);}
  async prepare(_payload,signal,{lease}){

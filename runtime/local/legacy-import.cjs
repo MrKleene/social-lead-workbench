@@ -4,7 +4,7 @@ const {LocalError,canonical,hash}=require('./database.cjs');
 const {historicalSendHold,legacyAccountRestricted}=require('./account-safety.cjs');
 const allowed=new Set(['PlatformAccount','PlatformIdentity','SourcePost','SourceComment','Lead','FollowUp','Task','AuditLog','ReplyTemplate','CollectionConfig','CollectionRun','MonitorPost','CommentObservation','SourceMatch','CollectionNotice','NoticeRead','AccountDay','ContactLedger','ContactAttempt','SemanticReview','SemanticModelCall','SemanticControl','CapturedPost','CapturedComment','CommentReadCheckpoint','AutoReviewJob','CommentReviewPolicy','CommentReviewPolicyVersion','ManualReviewJob','AutoContactRule','AutoContactControl','AutoContactJob','PostAvailability','PostAvailabilityEvent','AutomationPreferences','NormalAutomationAcceptance','NormalAcceptancePost','ManualReplyRequest','HistoryArchiveBatch','HistoryArchiveItem','InboxReceiver','InboxMessage','InboxRead']);
 const excluded=new Set(['User','Session','RefreshGrant','RefreshToken','LoginBucket','AccountLogin','AccountSessionReference','ExecutionDevice','DeviceExecutionLease','ModelSettings']);
-const credentialFields=new Set(['passwordhash','encryptedkey','csrftoken','cookies','cookie','authorization','loginSessionKey'.toLowerCase(),'sessionkey','tokenhash','xsec_token','xsectoken','privatekey','secret','accesstoken','refreshtoken','token']);
+const credentialFields=new Set(['password','leasetoken','sourcereference','sourcereferenceref','passwordhash','encryptedkey','csrftoken','cookies','cookie','authorization','loginSessionKey'.toLowerCase(),'sessionkey','tokenhash','xsec_token','xsectoken','privatekey','secret','accesstoken','refreshtoken','token']);
 function clean(value,report){
  if(Array.isArray(value))return value.map(v=>clean(v,report));
  if(value&&typeof value==='object'){const out={};for(const [key,v] of Object.entries(value)){if(credentialFields.has(key.toLowerCase())){report.omittedFields++;continue;}Object.defineProperty(out,key,{value:clean(v,report),enumerable:true,writable:true,configurable:true});}return out;}
@@ -42,6 +42,12 @@ function importLegacySnapshot(store,snapshot){
   for(const event of tables.AuditLog||[])if(accounts.has(event.entityId)&&event.action==='ACCOUNT_SEND_OBSERVATION'&&event.metadata?.state&&event.metadata.state!=='UNKNOWN')store.db.prepare('INSERT INTO account_holds VALUES(?,?,NULL,?,?,?)').run(randomUUID(),event.entityId,'LEGACY_ACCOUNT_OBSERVATION',hash(event),now);
   for(const c of tables.CollectionConfig||[]){if(c.archivedAt)continue;if(!Array.isArray(c.keywords)||!Array.isArray(c.excludeWords))throw new LocalError('INVALID_LEGACY_CONFIGURATION');store.db.prepare('INSERT INTO configurations(id,kind,name,body,revision,updated_at) VALUES(?,?,?,?,?,?)').run(c.id,'KEYWORDS',c.name,canonical({keywords:c.keywords,excludeWords:c.excludeWords}),Math.max(1,c.revision||1),now);}
   for(const r of tables.ReplyTemplate||[]){if(!['DM','COMMENT'].includes(r.channel))throw new LocalError('INVALID_LEGACY_TEMPLATE');store.db.prepare('INSERT INTO configurations(id,kind,name,body,revision,updated_at) VALUES(?,?,?,?,?,?)').run(r.id,r.channel==='DM'?'DM_TEMPLATE':'COMMENT_TEMPLATE',r.name,canonical({text:r.body}),Math.max(1,r.version||1),now);}
+  for(const p of tables.CommentReviewPolicy||[]){
+   if(typeof p.id!=='string'||!require('./policy.cjs').reviewPolicySaveSchema.safeParse({version:0,name:p.name,target:p.target}).success)throw new LocalError('INVALID_LEGACY_REVIEW_POLICY');
+   const revision=Math.max(1,p.revision||1),version=Math.max(1,p.version||1)+1;
+   store.db.prepare('INSERT INTO configurations(id,kind,name,body,revision,updated_at) VALUES(?,?,?,?,?,?)').run(p.id,'MATCHING',p.name,canonical({text:p.target}),revision,now);
+   store.db.prepare('INSERT INTO review_policies(id,name,target,revision,version,enabled) VALUES(?,?,?,?,?,0)').run(p.id,p.name,p.target,revision,version);
+  }
   const identities=new Map((tables.PlatformIdentity||[]).map(i=>[i.id,i])),ledgers=new Map((tables.ContactLedger||[]).map(l=>[l.id,l]));
   function block(identityId,channels,reason,hard=true){
    const i=identities.get(identityId);if(!i||typeof i.platformUserId!=='string'||!i.platformUserId)throw new LocalError('LEGACY_CONTACT_IDENTITY_MISSING');if(i.platform!=='XHS')return;
@@ -69,4 +75,4 @@ function importLegacySnapshot(store,snapshot){
   return {id,counts,reused:false,credentialsImported:false,sendPaused:true,nativeMessages};
  });
 }
-module.exports={prepareLegacySnapshot,importLegacySnapshot};
+module.exports={prepareLegacySnapshot,importLegacySnapshot,legacyEntities:Object.freeze([...allowed]),credentialFields:Object.freeze([...credentialFields])};

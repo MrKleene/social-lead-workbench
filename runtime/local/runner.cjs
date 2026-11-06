@@ -9,6 +9,12 @@ const {LocalCollection}=require('./collection.cjs');
 class LocalRunner {
  constructor(store,executors={}){this.store=store;this.queue=new LocalQueue(store);this.sends=new SendSafety(store);this.reviews=new LocalReview(store);this.collection=new LocalCollection(store);this.executors=executors;this.owner=randomUUID();this.pending=null;this.stopping=false;}
  tick(){if(this.pending||this.stopping)return this.pending??Promise.resolve(false);this.pending=this.runOne().finally(()=>{this.pending=null;});return this.pending;}
+ recoverStartup(){
+  // The application holds its exclusive instance lock. Never resume a previous
+  // desktop session's pending external actions merely because the app opened.
+  this.store.transaction(()=>{this.store.db.exec("UPDATE authorizations SET state='REVOKED' WHERE state='ACTIVE'; UPDATE jobs SET state='INTERRUPTED',cancel_requested=1 WHERE state='QUEUED'; UPDATE jobs SET lease_until=0 WHERE state='RUNNING'");this.store.audit('RECOVERY','DESKTOP_SESSION_RECOVERED','installation');});
+  this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();
+ }
  async runOne(){
   this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();const lease=this.queue.claim(this.owner);if(!lease)return false;
   const executor=this.executors[lease.kind];if(!executor){this.queue.finish(lease,'FAILED',{code:'EXECUTOR_UNAVAILABLE'});return false;}

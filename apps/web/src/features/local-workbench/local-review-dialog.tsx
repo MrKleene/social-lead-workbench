@@ -1,0 +1,12 @@
+import {useState} from 'react';
+import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
+import {Button} from '@/components/ui/button';
+import {localApi,type ReviewPreview} from './local-api';
+export function LocalReviewDialog({runId,onClose}:{runId:string;onClose:()=>void}){
+ const client=useQueryClient(),options=useQuery({queryKey:['local','review-options',runId],queryFn:()=>localApi('postReviewOptions',{runId})}),[post,setPost]=useState(''),[policy,setPolicy]=useState(''),[plan,setPlan]=useState<(ReviewPreview&{requestKey:string})|null>(null),[consent,setConsent]=useState(false);
+ const selectedPost=post||options.data?.posts[0]?.id,selectedPolicy=policy||options.data?.policies[0]?.id;
+ const preview=useMutation({mutationFn:()=>localApi('previewReview',{runId,postId:selectedPost,policyId:selectedPolicy}),onSuccess:data=>{setPlan({...data,requestKey:crypto.randomUUID()});setConsent(false);}});
+ const authorize=useMutation({mutationFn:()=>localApi('authorizeReview',{scope:plan!.scope,previewHash:plan!.previewHash,requestKey:plan!.requestKey,consent:'comment-review-original-first-use-v2'}),onSuccess:()=>{void client.invalidateQueries({queryKey:['local']});onClose();}});
+ const error=options.error||preview.error||authorize.error;
+ return <div className="local-editor"><h3>按笔记审核评论</h3><p>仅接受完整采集轮次及当时冻结的匹配目标。目标或模型版本变化后，需重新采集。</p>{error&&<p role="alert">{error.message}</p>}<label>笔记<select value={selectedPost??''} onChange={e=>{setPost(e.target.value);setPlan(null);}}>{options.data?.posts.map(p=><option key={p.id} value={p.id}>{p.title||'无标题笔记'}</option>)}</select></label><label>匹配目标<select value={selectedPolicy??''} onChange={e=>{setPolicy(e.target.value);setPlan(null);}}>{options.data?.policies.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><div className="local-actions"><Button variant="outline" disabled={!selectedPost||!selectedPolicy} pending={preview.isPending} onClick={()=>preview.mutate()}>预览审核范围</Button><Button variant="outline" onClick={onClose}>关闭</Button></div>{plan&&<><p>{plan.comments} 条评论；本地估算约 ¥{plan.estimatedMicros===null?'未知':(plan.estimatedMicros/1000000).toFixed(4)}。这是估算，不是费用上限。</p><label className="local-check"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>同意将本批评论原文发送至已配置的北京千问，执行一次付费请求。</label><Button disabled={!consent||plan.empty} pending={authorize.isPending} onClick={()=>authorize.mutate()}>授权并审核本批</Button></>}</div>;
+}

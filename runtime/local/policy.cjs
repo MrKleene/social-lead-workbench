@@ -48,22 +48,22 @@ var require_qwen_models = __commonJS({
       "qwen3.7-plus-2026-05-26": [[256e3, 2, 8], [1e6, 6, 24]],
       "qwen3.8-max-0902": [[1e6, 12, 36]]
     });
-    function qwenModel4(model) {
+    function qwenModel5(model) {
       if (!Object.hasOwn(catalog, model)) return null;
       const tiers = catalog[model];
       if (!tiers?.length || !tiers.every((t) => t.length === 3 && t.every((n3) => Number.isFinite(n3) && n3 > 0))) return null;
       const priceVersion = model === "qwen3.8-max" ? "beijing-2026-10-26" : QWEN_PRICE_VERSION;
       return { id: model, priceTiers: tiers.map(([up, input2, output2]) => ({ upToInputTokens: up, inputCnyPerMillion: input2, outputCnyPerMillion: output2 })), maxInputTokens: 991808, maxOutputTokens: 131072, contextTokens: 1e6, priceVersion, priceAck: model + ":" + priceVersion, priceDescription: tiers.map(([up, input2, output2]) => "\u8F93\u5165\u2264" + up + " token\uFF1A\u8F93\u5165/\u8F93\u51FA " + input2 + "/" + output2 + " \u5143/\u767E\u4E07token").join("\uFF1B") };
     }
-    function qwenModelChoices(savedModel) {
+    function qwenModelChoices2(savedModel) {
       const ids = ["qwen3.8-flash", "qwen3.8-max", "qwen3.8-max-0902"];
-      if (savedModel && !ids.includes(savedModel) && qwenModel4(savedModel)) ids.push(savedModel);
+      if (savedModel && !ids.includes(savedModel) && qwenModel5(savedModel)) ids.push(savedModel);
       return ids.map((id3) => {
-        const model = qwenModel4(id3);
+        const model = qwenModel5(id3);
         return { id: id3, priceDescription: model.priceDescription, priceVersion: model.priceVersion };
       });
     }
-    module2.exports = { DEFAULT_QWEN_MODEL: DEFAULT_QWEN_MODEL2, QWEN_PRICE_VERSION, qwenModel: qwenModel4, qwenModelChoices };
+    module2.exports = { DEFAULT_QWEN_MODEL: DEFAULT_QWEN_MODEL2, QWEN_PRICE_VERSION, qwenModel: qwenModel5, qwenModelChoices: qwenModelChoices2 };
   }
 });
 
@@ -75,7 +75,11 @@ __export(index_exports, {
   assessComment: () => assessComment,
   autoContactRuleInput: () => autoContactRuleInput,
   boundedReadReportSchema: () => boundedReadReportSchema,
+  checkpointHash: () => checkpointHash,
   collectionBarrier: () => collectionBarrier,
+  commentCheckpointSchema: () => commentCheckpointSchema,
+  commentChunkSchema: () => commentChunkSchema,
+  commentDigest: () => commentDigest,
   commentSchema: () => commentSchema,
   configInput: () => configInput,
   decodeDM: () => decodeDM,
@@ -89,12 +93,17 @@ __export(index_exports, {
   postSchema: () => postSchema,
   prepareOutbound: () => prepareOutbound,
   prepareXhsReply: () => prepareXhsReply,
+  qwenModel: () => import_qwen_models4.qwenModel,
+  qwenModelChoices: () => import_qwen_models4.qwenModelChoices,
   redactText: () => redactText,
+  reviewPolicySaveSchema: () => reviewPolicySaveSchema,
+  reviewUseConsent: () => reviewUseConsent,
   safeRunCoverage: () => safeRunCoverage,
   semanticInputPolicy: () => semanticInputPolicy,
   semanticSnapshot: () => semanticSnapshot,
   stagePlanSchema: () => stagePlanSchema,
   validDmMessageId: () => validDmMessageId,
+  validateChunk: () => validateChunk,
   validateQwenEvidence: () => validateQwenEvidence,
   verifyXhsReplyResult: () => verifyXhsReplyResult,
   wholePostCapacity: () => wholePostCapacity,
@@ -20528,6 +20537,17 @@ var configInput = external_exports.object({
   defaultReplyTemplateId: external_exports.string().min(1).max(100).nullable().optional()
 }).strict().refine((v) => v.mode === "MOCK" || v.platform === "XHS", "MCP\u53EA\u652F\u6301\u5C0F\u7EA2\u4E66").refine((v) => new Set(v.keywords.map(normalize2)).size === v.keywords.length, "\u5173\u952E\u8BCD\u4E0D\u80FD\u91CD\u590D").refine((v) => !v.legacyMatchingEnabled || !!v.semanticRules || !!v.commentRules || !v.keywords.some((k) => v.excludeWords.some((e) => normalize2(k).includes(normalize2(e)))), "\u6392\u9664\u8BCD\u4E0D\u80FD\u8986\u76D6\u641C\u7D22\u5173\u952E\u8BCD");
 var scenarioSchema = external_exports.enum(["BASELINE", "NEW", "PARTIAL", "TIMEOUT", "LOGIN_EXPIRED", "RESTRICTED", "MISSING", "DELETED", "READ_WINDOW"]);
+var ReadFailure = class extends Error {
+  constructor(code, retryAfterMs, diagnostic) {
+    super(code);
+    this.code = code;
+    this.retryAfterMs = retryAfterMs;
+    this.diagnostic = diagnostic;
+  }
+  code;
+  retryAfterMs;
+  diagnostic;
+};
 var imageDiagnostics = external_exports.preprocess(safeImageDiagnostics, imageDiagnosticsSchema.optional());
 var displayFields = { imageDiagnostics, authorNickname: external_exports.preprocess(savedNickname, external_exports.string().optional()), authorAvatarUrl: external_exports.preprocess(safeAvatarUrl, external_exports.string().optional()), publishedAt: external_exports.preprocess(savedPublishedAt, external_exports.string().optional()) };
 var postSchema = external_exports.object({ boundedRead: boundedReadReportSchema.optional(), boundedReadWindows: external_exports.array(boundedReadReportSchema).max(8).optional(), coverageDiagnostic: external_exports.preprocess(safeCoverageDiagnostic, coverageDiagnosticSchema.optional()), sourceReference: postReferenceSchema.optional(), id: external_exports.string().min(1).max(200), title: external_exports.string().max(500), body: external_exports.string().max(2e4).optional(), coverUrl: external_exports.preprocess(safePostCoverUrl, external_exports.string().optional()), ...displayFields });
@@ -20696,6 +20716,32 @@ function verifyXhsReplyResult(command, raw) {
     return unknown2();
   return { kind: "CONFIRMED", receipt: r.response.commentId };
 }
+
+// packages/local-policy/src/index.ts
+var import_qwen_models4 = __toESM(require_qwen_models());
+
+// apps/api/src/collection/comment-checkpoint.ts
+var import_node_crypto3 = require("node:crypto");
+function checkpointHash(value) {
+  return (0, import_node_crypto3.createHash)("sha256").update(JSON.stringify(commentCheckpointSchema.parse(value))).digest("hex");
+}
+function commentDigest(post, c) {
+  const values = [post, c.id, c.parentId || "", c.userId, c.text];
+  return (0, import_node_crypto3.createHash)("sha256").update(values.map((x) => `${Buffer.byteLength(x)}:${x}`).join("")).digest("hex");
+}
+function validateChunk(previous, receipt2, post, comments) {
+  const next = commentCheckpointSchema.parse(receipt2.checkpoint);
+  if (checkpointHash(next) !== receipt2.hash || next.sequence !== previous.sequence + (comments.length ? 1 : 0) || next.marks.length !== previous.marks.length + comments.length || JSON.stringify(next.marks.slice(0, previous.marks.length)) !== JSON.stringify(previous.marks)) throw new ReadFailure("INVALID_DATA");
+  const byId = new Map(comments.map((c) => [c.id, c]));
+  if (byId.size !== comments.length) throw new ReadFailure("INVALID_DATA");
+  next.marks.slice(previous.marks.length).forEach((m) => {
+    const c = byId.get(m.id);
+    if (!c) throw new ReadFailure("INVALID_DATA");
+    if (m.id !== c.id || m.parent !== (c.parentId || "") || m.digest !== commentDigest(post, c)) throw new ReadFailure("INVALID_DATA");
+  });
+  if (receipt2.replaying && comments.length) throw new ReadFailure("INVALID_DATA");
+  return next;
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   DM_SEND_PROTOCOL,
@@ -20703,7 +20749,11 @@ function verifyXhsReplyResult(command, raw) {
   assessComment,
   autoContactRuleInput,
   boundedReadReportSchema,
+  checkpointHash,
   collectionBarrier,
+  commentCheckpointSchema,
+  commentChunkSchema,
+  commentDigest,
   commentSchema,
   configInput,
   decodeDM,
@@ -20717,12 +20767,17 @@ function verifyXhsReplyResult(command, raw) {
   postSchema,
   prepareOutbound,
   prepareXhsReply,
+  qwenModel,
+  qwenModelChoices,
   redactText,
+  reviewPolicySaveSchema,
+  reviewUseConsent,
   safeRunCoverage,
   semanticInputPolicy,
   semanticSnapshot,
   stagePlanSchema,
   validDmMessageId,
+  validateChunk,
   validateQwenEvidence,
   verifyXhsReplyResult,
   wholePostCapacity,

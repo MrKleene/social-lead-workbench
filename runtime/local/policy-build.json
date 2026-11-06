@@ -1,6 +1,7 @@
 {
   "sourceHashes": {
     "apps/api/src/auto-contact/xhs-reply-protocol.ts": "ec52ea64535523ef1b2e0f014fe0426f256288f3d858fb1b550e0204e82560f3",
+    "apps/api/src/collection/comment-checkpoint.ts": "2de7d8b8e24413527b9552e4e58f60e2af07bc8917df5aa735b57cbfef9ae003",
     "apps/api/src/collection/comment-rules.ts": "a159d5035e4b64d52b15161cf24b0338559a70e3a5d60d3845a1ebb3797bdfbd",
     "apps/api/src/collection/contract.ts": "25685263ec4b03c58d4ed6bb86ff587d4026f8e7585964e42a402fbc847e1b11",
     "apps/api/src/collection/model-call-pacing.ts": "c2b4701e27b4faa8005600916c582ae21ca8fc3d0037ee9d4252a4b8a2ccc0ab",
@@ -38,8 +39,8 @@
     "packages/contracts/src/semantic-review.ts": "52a1cf4b5f1cfb962c8f939c4ebdd9cdda1dc965317eb090416343d35c61799c",
     "packages/contracts/src/xhs-reference-parameters.ts": "255a91480a80a1884178f0fe6cb2e637a845da2a420f98f7d9d4eaf7543cb9cf",
     "packages/local-policy/src/collection-barrier.ts": "f2c415c64067be9285ca195c9260fc70f31b4d85861065ff6fec5f5fc9598ced",
-    "packages/local-policy/src/index.ts": "28c9b972774b765b5e6bffa2ba5a687f42baa2f89738924742f30c08dab73d67",
+    "packages/local-policy/src/index.ts": "5b146b94fef1f646f49d5692384e2e4148299b6db30d9f5fc334416ed0ee1bd5",
     "runtime/qwen-models.cjs": "da900dedad87cbd626bf7eebadeb138e94876076b91290043b234de896cf9d0a"
   },
-  "outputSha256": "0b64e361b66abc4309583d5f5beb83c7613649c6a1654dd73cfa36731007cacf"
+  "outputSha256": "6fc0551b259af00789517f5e36b55ef6a5b4e6a21e82249d7f73382b72cd52bd"
 }

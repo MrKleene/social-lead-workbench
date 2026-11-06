@@ -3,7 +3,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {randomUUID}=require('node:crypto');
 const {LocalError,entryExists}=require('./database.cjs');
-const kinds=new Set(['MODEL_KEY','PLATFORM_SESSION']);
+const kinds=new Set(['MODEL_KEY','PLATFORM_SESSION','POST_REFERENCE']);
 // Protector is supplied by the desktop main process (Electron safeStorage).
 // This module never creates a plaintext master key or falls back to plaintext.
 class CredentialStore {

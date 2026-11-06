@@ -86,7 +86,10 @@
     "local:test": "node --test tests/local/*.test.cjs",
     "local:import:offline": "node scripts/local/import-offline.mjs",
     "local:policy": "node scripts/local/build-policy.mjs",
-    "desktop:verify-package": "node scripts/desktop/verify-package.cjs"
+    "desktop:verify-package": "node scripts/desktop/verify-package.cjs",
+    "desktop:package:mac:preview": "npm run desktop:build && npm run desktop:stage && electron-builder --config apps/desktop/electron-builder.cjs --mac dmg --arm64",
+    "desktop:package:mac": "npm run desktop:release-check && npm run desktop:package:mac:preview",
+    "local:export:readonly": "node scripts/local/export-legacy.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

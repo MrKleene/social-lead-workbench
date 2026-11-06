@@ -1,78 +1,70 @@
-# 单人本地桌面版：实现与交接
+# 单人本地桌面版：实现与验证
 
-2026-11-06。用户已确认采用 Electron。沿用 React 界面和 Node 本地服务；应用内置 Node/SQLite，不要求普通用户另装 Docker、PostgreSQL 或 Redis。
+2026-11-06。目标是 **macOS Apple Silicon 与 Windows 11 x64 两版**，共享 Electron/React、SQLite 和持久本地队列。程序自带 Node/SQLite；普通使用者无需安装 Docker、PostgreSQL、Redis 或 Node。Mac 当前目标为 macOS 13+、arm64（最低系统版本取自固定 Electron 45.2.3 的 Info.plist）。Intel Mac 尚无经过验证的构建。
 
-本分支是隔离开发的桌面迁移预览，**尚不能替代原工作台**。目前能初始化、管理本地配置、保存受系统保护的模型密钥、创建一致性备份及恢复到独立副本，浏览本地采集/审核/会话记录并保存人工审核决定。小红书登录、采集、模型匹配、评论/私信发送和收件尚未接入桌面版。界面明确显示此限制，正式 Windows 安装包命令会被发布检查阻止。
+**这是隔离开发的迁移预览，不能替代原工作台。** 本次没有修改、迁移或启动原业务数据，也没有采集、付费模型调用或对外发送。当前可用：首次初始化、多组关键词与匹配目标、系统加密模型 Key、逐批模型授权、业务记录/人工审核、备份恢复、旧 JSON 导入核对和数据副本切换。模型执行器已注册（合成测试模式禁用），只有使用者逐批明确授权后才调用；测试仅用假响应。平台扫码登录、实际采集、发送、接收和自动联系编排仍未接通，界面明确显示限制。
 
-## 已实现的边界
+## 实现与保护
 
-| 部分 | 实现位置 | 当前行为 |
-| --- | --- | --- |
-| SQLite | `runtime/local/database.cjs`, `schema.sql` | Node 内置 SQLite，WAL/FULL、外键、同步 `BEGIN IMMEDIATE` 事务；schema 版本及校验和；拒绝接管未知数据库 |
-| 持久任务 | `runtime/local/queue.cjs`, `runner.cjs` | SQLite 持久化、单任务领取、租约与 fencing、请求幂等、范围绑定授权；过期执行转中断/未知，绝不自动重放 |
-| 发送保护 | `runtime/local/send-safety.cjs` | 账号身份与版本、精确目标、授权消费、共享日额度/当日覆盖值、勿联系、跨账号及渠道去重、未知保留额度并暂停 |
-| 单人模式 | `runtime/local/service.cjs` | 新桌面数据库无 User/Session/密码；审计用 LOCAL_USER/AUTOMATION/RECOVERY/IMPORT 来源和安装标识，无需伪造管理员账户 |
-| 凭据 | `runtime/local/credentials.cjs` | 系统加密提供者、原子密文保存、绑定凭据种类和引用、无明文降级、前端无密钥读取接口 |
-| 桌面边界 | `apps/desktop/src` | 单实例、沙箱 renderer、contextIsolation、固定 IPC 方法、发送窗口/mainFrame/origin 检查、禁止导航与新窗口；不开本机 HTTP 管理端口 |
-| 配置界面 | `apps/web/src/features/local-workbench` | 初始化、多组配置、每组 1–100 条关键词、匹配目标及渠道模板、版本冲突检查；独立入口，无应用账号密码页 |
-| 备份恢复 | `runtime/local/backup.cjs` | 空闲时 SQLite backup API；SHA256、schema/完整性/FK 检查；仅写新副本，保留额度和历史去重，撤销授权并要求重新登录平台 |
-| 离线导入 | `runtime/local/legacy-import.cjs` | 只读显式提供的离线 JSON，凭据/用户表排除；全部允许业务行保留到 legacy_records，部分配置/账号及风险保护转入原生表；不恢复旧任务 |
-| 打包 | `scripts/desktop/stage.mjs`, `apps/desktop/electron-builder.cjs` | 固定源码白名单、Electron 自带 Node/SQLite；不带 PostgreSQL、Redis、Docker、`.env`、数据库或 node_modules；Windows NSIS 每用户安装、卸载保留数据 |
+| 部分 | 当前行为与代码 |
+| --- | --- |
+| SQLite | `runtime/local/database.cjs`：内置 SQLite，WAL/FULL/FK、同步 BEGIN IMMEDIATE；校验和迁移，升级前一致性副本；v6 新增采集分块检查点 |
+| 队列 | `queue.cjs`, `runner.cjs`：持久领取、租约/fencing、范围授权、请求幂等；重启撤销旧会话未消费授权和排队工作，已提交未知不重放 |
+| 发送 | `send-safety.cjs`, `contact.cjs`：账号/会话/发送人、审核与模板版本、整轮屏障、勿联系、去重、日额度和规则额度；UNKNOWN 保留占用并暂停；尚无真实平台执行器 |
+| 原采集器 | `collection-executor.cjs`, `collection-provider.cjs`：复用原有限采集器、覆盖协议与 XhsMcpAdapter，原文与分块检查点同事务，来源引用加密；停止未确认使本轮失败并持久暂停平台；当前仅注入合成 runtime 验证，未在桌面注册 |
+| 模型 | `model-executor.cjs`, `workflow.cjs`：固定北京接口，无重试/换模型；原文/证据、整帖预算、当前账号版本和授权再验；持久提交意图限制一批一次；UI 配置授权与逐批预览/确认分开 |
+| 无工作台登录 | 新库无 User/Session/密码表；审计来源 LOCAL_USER/AUTOMATION/RECOVERY/IMPORT；平台账号与可靠入站身份仍保留 |
+| 凭据 | `credentials.cjs`：Electron safeStorage，种类/引用绑定、原子密文保存、无明文降级，Key/Cookie/来源访问引用不进数据库备份。OS 凭据往返尚未实际验证 |
+| 桌面 IPC | 沙箱/contextIsolation/无 Node renderer；固定方法、窗口/mainFrame/origin 与大小校验；无本机管理 HTTP；禁止新窗口、导航、下载和权限请求 |
+| 数据副本 | `data-manager.cjs`：只接受本机文件选择器给出的源文件；导入新库并展示计数；显式确认和 SHA256 绑定；空闲时备份当前库、原子更新活动库指针、重建服务。原库和备份保留，不重命名打开的 SQLite 文件 |
+| 打包 | 固定源码白名单、无 node_modules/环境文件/业务数据/凭据；安全 fuses；Mac DMG、Windows 每用户 NSIS（卸载保留数据）；只允许在目标系统/架构构建 |
 
-现已迁入本轮采集成员和完整覆盖屏障、整轮审核与原文证据校验、入站可靠身份、冻结规则授权和严格评论/私信回执解析。完整迁移范围见 [业务迁移核对](LOCAL-BUSINESS-PARITY.md)。目前没有注册任何真实执行器，也没有向桌面 IPC 暴露 enqueue/authorize/dispatch/result，不能通过本预览发起真实业务。
+Windows 使用 `%LOCALAPPDATA%\SocialLeadDesktop`；Mac 使用 `~/Library/Application Support/SocialLeadDesktop`，均与原工作台独立。安装目录只存程序资源。Windows 辅助程序代码检查用户 ACL、NTFS、重解析点及系统版本，safeStorage 使用用户范围 DPAPI；**Windows 未实测，不代表已验收**。Windows ARM64/Server/WSL/网络盘不支持。
 
-## 数据与系统保护
+静态加密不能阻止同一用户权限的恶意程序。业务 SQLite/备份本身未整体加密，依靠私有用户目录；不自动同步。跨电脑恢复后需重新输入 Key、登录小红书。macOS Keychain 稳定性、正式签名身份与升级兼容仍待测试。当前同步 safeStorage API 固定于 Electron 45.2.3，后续升级须重新核对 API 和密文兼容。
 
-Windows 目标为 Windows 11 x64、本机 NTFS。程序资源与业务数据分开：程序安装目录只放可替换资源；`%LOCALAPPDATA%\SocialLeadDesktop` 放数据库、备份、恢复副本、密文凭据。macOS 预览用 `~/Library/Application Support/SocialLeadDesktop`。二者均与原工作台数据目录独立。
+## 迁移范围与使用
 
-Windows 复用 `native/windows/WindowsHost.cs` 检查目录和已有文件 ACL、拒绝重解析点/云同步位置，并由 Electron safeStorage 使用用户范围的 DPAPI。辅助程序在开发/发布机器编译后随包携带，普通用户不应需要装编译器、Node 或数据库服务。干净 Windows 的 .NET 运行时、NTFS/路径限制、ACL 与杀毒软件行为尚需实测。Windows ARM64、Windows Server、WSL 和网络磁盘未支持。
+桌面：选择已导出的旧业务 JSON → 生成独立副本 → 核对逐表数量 → 勾选确认 → 备份当前库并切换。恢复 SQLite 备份也先生成独立副本，再经过同一核对/切换步骤。重新启动沿活动库指针打开，不会自动恢复业务任务。
 
-DPAPI 主要保护静态密文免受其他系统用户读取；不能声称可以防住同一 Windows 用户权限下的恶意程序。数据库和业务备份本身未整体加密，依靠用户目录权限保护，不应自动同步或上传。备份不包含 credentials 目录；跨电脑恢复应重新输入模型 Key、重新登录小红书。密钥不会写入 URL、命令行参数或 Git。
+旧业务白名单全部保留到 `legacy_records` 并可分页查阅；原生映射包括账号、关键词/模板/匹配目标、当天限额（含 0）和已占用次数、联系禁用与去重、收件和已回复消息标记、账号独立风险限制。模型和自动联系授权不继承；历史 actorId 仅为档案文字，不产生登录用户。历史收件缺少可靠身份时仍只读，不能因导入制造回复资格。
 
-官方依据：[Electron safeStorage](https://www.electronjs.org/docs/latest/api/safe-storage)、[Electron 安全指南](https://www.electronjs.org/docs/latest/tutorial/security)、[Node SQLite backup](https://nodejs.org/api/sqlite.html#sqlitebackupsource-db-path-options)。当前固定 Electron 45.2.3；所用同步 safeStorage API 已公告将在 46 移除，升级 Electron 前须改用异步接口并验证密钥兼容。macOS 密钥长期稳定性还需要一致的正式签名；本次未访问真实系统凭据。
+**仍未完成全部旧业务原生映射**：旧采集轮、审核批次/结果、历史自动任务等目前归档可查，不能当成新轮次直接继续执行。完整业务迁移尚不能声称完成。
 
-## 离线迁移约束
+管理员可用只读导出器（本次仅假数据库接口测试，未连接真实 PostgreSQL）：
 
-`npm run local:import:offline -- /绝对路径/export.json /私有目录/new.sqlite` 只接受新目标文件，不连接旧 PostgreSQL、不加载 `.env`、不运行采集或发送。源格式为 `{tables: {PlatformAccount: [...], ...}}` 或直接表名到行数组的映射；也接受已清理的 `social-lead-business-export-v1`。禁止覆盖或合并当前本地库，失败回滚并清理仅由本命令创建的目标。
+```sh
+# 在私有目录中写新文件；连接串只从显式环境变量读取，不自动加载 .env。
+# LOCAL_LEGACY_EXPORT_DATABASE_URL 由操作者在本机安全设置，不要写入命令历史或 Git。
+npm run local:export:readonly -- --ack-readonly-source /私有目录/business-export.json
+npm run local:import:offline -- /私有目录/business-export.json /私有目录/new.sqlite
+```
 
-用户、会话、刷新令牌、模型设置、设备密钥和平台登录凭据表不导入。业务历史中的旧 actorId 等只作为历史文本保留，不创建 User 关系或登录身份。收件历史同时进入原生消息表，但仍标记入站身份未核验，不能由导入制造“可回复”资格。未知、占用中的尝试跨渠道拦截，已知终态按原渠道拦截；勿联系、已联系和有兴趣的历史线索继续拦截；未知原因的暂停账号按限制状态导入，单纯等待登录授权的暂停不冒充平台风险；独立审计限制和历史发送限制另行保留；当天限额（含 0）及已占用次数保留。
+导出在一个 REPEATABLE READ + READ ONLY 事务中读取白名单，排除用户/会话/设备/Key 表及凭据列，清理嵌套秘密、Cookie 和来源访问引用；失败不留下部分导出。业务一致性迁移仍需操作者停止旧执行器，防止快照以后旧实例继续产生发送，而新副本不知情。不能用运行中的 SQLite 主文件复制代替 backup API。
 
-**这不是完整的数据迁移工具。** 目前没有旧库一致性导出器、所有旧表到新表的原生映射、迁移核对 UI 或新库激活。legacy_records 是保护原始业务历史的存档，不代表这些行已经能在新界面继续使用。备份恢复同样先生成独立副本，没有切换正在使用的数据库。正式切换前需停止旧实例所有执行器，取得同一时点导出、核对数量与风险证据、在新副本试运行，之后才选择激活；旧库和原备份必须保留。不能复制运行中的 SQLite 单个主文件来代替 backup API。
+## 构建与实际验证
 
-## 开发与验证
-
-数据、安全及队列的独立测试在 `tests/local`；运行 `node --test tests/local/*.test.cjs` 使用 Node 内置模块及已生成并提交的纯规则包（内含 Zod），不需要安装 node_modules 或 Electron；重新生成规则包需要构建依赖。
-
-开发机使用 Node 24.11+（用户安装包不需要另装 Node）：
+开发需要 Node 24.11+ 和构建依赖，安装用户不需要。正式发布检查保持阻断：
 
 ```sh
 npm ci
-npm run local:test
 npm run desktop:test
 npm run desktop:build
 npm run desktop:test:ui
-npm run desktop:start
-npm run desktop:package:preview
+npm run desktop:package:mac:preview
+node scripts/desktop/verify-package.cjs /绝对路径/Social\ Lead\ Desktop.app
+node scripts/desktop/test-package.cjs /绝对路径/Social\ Lead\ Desktop.app
 npm run desktop:release-check
 ```
 
-`desktop:start` 会打开**独立的**桌面用户数据目录；无业务适配器，不会自动启动旧服务。`desktop:test:ui` 使用 `/tmp` 下专用、带标记的合成目录，显式禁用系统凭据访问，测试后清理。`--test-fixture` 在已打包应用中被拒绝。UI 证据写入被 Git 忽略的 `.local/desktop-qa/`。
+Windows 在 Windows 11 x64 上构建 `desktop:package:win`，本机编译并打包 WindowsHost 辅助程序；命令首先检查发布门槛，当前预期拒绝正式打包。不应在 Mac 上伪称生成了原生依赖完整的 Windows 安装包。
 
-本次实际结果：
+已通过：110 项本地核心测试、1 项 IPC 边界测试；规则生成/Web TypeScript/Vite 构建；Mac Electron 合成真实窗口验证（3 条关键词、2 条匹配目标、键盘操作、历史私信只读、已读持久化、备份、导入预览/确认/切换、旧库保留、应用真正关闭重启、320/390px 布局）。模型与原采集器只用合成传输，未触及真实平台。
 
-- 90 项本地核心合成测试及 1 项 IPC 边界测试通过：事务回滚、两个独立进程竞争同一任务、进程退出无半写、授权撤销与 fencing、额度与未知状态、跨账号/渠道去重、备份恢复、凭据隔离及离线迁移保护。
-- Web TypeScript 检查和 Vite 桌面生产构建通过。
-- macOS Electron 实际 UI 通过：初始化、3 个关键词保存、键盘启动新增操作、创建备份、刷新后持久化、390px/320px 无横向溢出，历史私信只读提示、会话已读持久化和业务记录切换通过，无页面/console 错误。
-- 构建未使用 Developer ID 签名的 macOS arm64 目录预览；ASAR 38 文件、7,443,324 字节，与源码一致且无 node_modules/环境文件/数据库/凭据；RunAsNode、NODE_OPTIONS、inspect 和 file 额外权限禁用，ASAR 完整性与 only-load-ASAR 已读回验证。仅用于开发验证，不是 Windows 安装包。打包后的真实平台链路、OS 凭据和升级恢复未验收。
-- `desktop:release-check` 预期失败，列明待完成的发布条件，禁止将预览当正式成品。
+`--test-fixture` 只用于未打包开发；`--self-test` 可在安装包执行固定离线自检，只创建自己的临时目录，禁止用户指定数据目录，禁用系统凭据和外部执行器，退出清理。安装包核对、自检和截图证据在 `.local/desktop-qa/`，不包含真实业务数据。
 
-依赖扫描：已将构建链 minimatch 固定为 11.0.1，npm install 审计剩余 3 项 high，来自原服务器 Nest/Express 的 body-parser、multer 链；该服务不在桌面 asar 内。本轮没有强制跨主版本升级原服务，发布前仍须处理或隔离此项。桌面构建链原有的 6 项 moderate 告警已消除。
+DMG 为未取得 Developer ID/公证的开发预览，不能作为公开签名发行版。Mac 和 Windows 的 OS 凭据、崩溃/休眠、升级保留、卸载保留、浏览器与 MCP 实际业务验收仍待完成。Windows 原浏览器审核状态为 pending；现有 inbox MCP 在入口强制只收件，不能直接当通用登录/采集/发送二进制。
 
-## 剩余实现顺序与验收门槛
+桌面构建链 minimatch 先前已固定 11.0.1。旧服务器依赖审计的 3 项 high 不在桌面 ASAR 内，未以跨主版本强制升级来改动原服务；正式分发仍需完整依赖和许可证复核。
 
-1. 将原服务的业务仓储迁到 SQLite：采集轮次/覆盖证据、模型审核、规则版本与整轮屏障、自动回复/手动处理、收件增量与可靠身份。不能直接把 PostgreSQL URL 换成 SQLite：行锁、advisory lock、jsonb/数组查询、LISTEN/NOTIFY、xmin 证明等需逐项替代。
-2. 接入现有业务界面与受限 IPC 服务；只有本机明确操作能创建范围绑定授权。完整移除桌面旧 User/角色依赖，保留历史归属与安全审计。原服务器路径目前仍保留原 User/认证体系，不能把新入口无登录误说成整个项目已删完。
-3. 实现并合成测试 XHS 扫码登录和密文 Cookie 适配、账号租约/子进程生命周期、采集、千问审核、精确评论/私信、收件。千问适配器已完成假响应测试，但尚未注册启用。旧 MCP 仍期待 Cookie 文件，不能把 `.sealed` 直接当 Cookie JSON 使用；需完成适配后才注册执行器。
-4. 完成一致性导出、原生数据映射、逐项核对、恢复副本激活和升级迁移。已冻结 v1，新增 v2 入站消息、v3 采集审核、v4 联系规则、v5 模型单次请求迁移；升级前生成一致性副本，按校验和逐版本验证，后续变更必须新增迁移。
-5. Windows 11 x64 真机验收：干净机器安装、首次初始化、离线启动、不需 Docker/PG/Redis/Node、中文路径、普通账户、DPAPI 重启/跨用户失败、ACL/重解析点拒绝、休眠/崩溃/重启、双实例、辅助进程退出、升级保留数据、卸载保留数据、备份恢复、真实浏览器能力。
-6. 完成依赖告警处理、安装包签名与分发、资源校验和及平台授权范围内的实际验收，再更新 `apps/desktop/release-readiness.json` 并构建 `desktop:package:win`。本次没有签名、上传、发布或调用任何真实平台/付费模型。
+本次包验证：Mac arm64 DMG 约 119 MB；ASAR 44 个文件、8,343,435 字节，禁入文件和过期源码均为 0，fuses 读回通过。实际启动包内程序的固定离线自检通过：初始化、保存 1 组合成配置、SQLite 备份，OS 凭据和外部执行器保持禁用。

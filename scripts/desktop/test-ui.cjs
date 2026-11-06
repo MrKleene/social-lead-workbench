@@ -23,7 +23,7 @@ const root = path.resolve(__dirname, '../..');
       args: [path.join(root, 'apps/desktop/src/main.cjs'), '--test-fixture', fixture],
       timeout: 30000,
     });
-    const page = await app.firstWindow();
+    let page = await app.firstWindow();
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     await page.getByRole('button', {name: '初始化并打开'}).click();
@@ -56,10 +56,27 @@ const root = path.resolve(__dirname, '../..');
     // Native integration is intentionally unavailable. UI cannot imply readiness.
     await page.getByText('平台功能尚未切换', {exact: true}).waitFor();
     assert.equal(await page.getByRole('button', {name: '加密保存'}).isDisabled(), true);
+    const exported=path.join(fixture,'synthetic-export.json');
+    fs.writeFileSync(exported,JSON.stringify({CollectionConfig:[{id:'new-config',name:'合成迁移关键词',keywords:['迁移一','迁移二'],excludeWords:[]}],CommentReviewPolicy:[{id:'p-one',name:'合成匹配一',target:'寻找明确提出学习方法指导需求的评论'},{id:'p-two',name:'合成匹配二',target:'寻找明确提出选题方法指导需求的评论'}],CapturedPost:[{id:'archived-post',title:'合成历史笔记'}]}));
+    await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},exported);
+    await page.getByRole('button',{name:'选择旧业务导出文件'}).click();
+    await page.getByRole('heading',{name:'切换前核对'}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'备份当前数据并切换'}).isDisabled(),true);
+    await page.getByLabel('我已核对副本，确认切换当前业务数据。').check();
+    await page.getByRole('button',{name:'备份当前数据并切换'}).click();
+    await page.getByText('合成迁移关键词',{exact:true}).waitFor();
+    assert.equal(await page.getByText('合成关键词配置',{exact:true}).count(),0);
+    await page.getByLabel('历史记录类型').selectOption('CapturedPost');
+    await page.locator('.local-archive').getByText(/合成历史笔记/).waitFor();
+    await app.close();app=await _electron.launch({executablePath:require('electron'),args:[path.join(root,'apps/desktop/src/main.cjs'),'--test-fixture',fixture],timeout:30000});page=await app.firstWindow();await page.getByText('合成迁移关键词',{exact:true}).waitFor();
+    assert.equal(await page.getByText('合成匹配一',{exact:true}).count(),2);
+    assert.equal(await page.getByText('合成匹配二',{exact:true}).count(),2);
+    assert.ok(fs.existsSync(path.join(fixture,'workbench.sqlite')));
+    await page.screenshot({path:path.join(evidence,'migration.png'),fullPage:true});
     assert.deepEqual(errors, []);
     const result = {platform: process.platform, title: await page.title(), url: page.url(), initialized: true,
       keywordsSaved: 3, backupCreated: true, reloadPersisted: true, keyboardActivation: true, importedInboxViewOnly:true,markReadPersisted:true,
-      widthsWithoutOverflow: [390, 320], osCredentialsAccessed: false, externalCalls: false, errors};
+      widthsWithoutOverflow: [390, 320],migrationPreviewAndActivation:true,oldDatabaseRetained:true,multipleMatchingTargets:2,activatedCopySurvivesRestart:true, osCredentialsAccessed: false, externalCalls: false, errors};
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify(result, null, 2));
     console.log(JSON.stringify(result));
   } finally {

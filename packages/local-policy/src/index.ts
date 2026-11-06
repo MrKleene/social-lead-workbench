@@ -13,3 +13,7 @@ export {modelCallWaitMs} from '../../../apps/api/src/collection/model-call-pacin
 export {collectionBarrier,stagePlanSchema} from './collection-barrier';
 export {autoContactRuleInput} from '@crm/contracts';
 export {prepareXhsReply,verifyXhsReplyResult,XHS_REPLY_PROTOCOL} from '../../../apps/api/src/auto-contact/xhs-reply-protocol';
+export {reviewPolicySaveSchema,reviewUseConsent} from '@crm/contracts';
+export {qwenModel,qwenModelChoices} from '../../../runtime/qwen-models.cjs';
+export {validateChunk,checkpointHash,commentDigest} from '../../../apps/api/src/collection/comment-checkpoint';
+export {commentChunkSchema,commentCheckpointSchema} from '@crm/contracts';

@@ -64,6 +64,16 @@ class LocalCollection {
           this.db.prepare('INSERT INTO run_comments(id,run_id,post_id,platform_id,user_id,parent_id,body,snapshot,source_hash,ordinal) VALUES(?,?,?,?,?,?,?,?,?,?)')
             .run(randomUUID(),runId,saved.id,c.id,c.userId,c.parentId||null,c.text,canonical(snapshot),hash(snapshot),ordinal);addedComments++;
         }
+        if(entry.chunk){
+          const receipt=policy.commentChunkSchema.pick({checkpoint:true,hash:true,replaying:true,remainingAnchors:true}).parse(entry.chunk),chunkComments=(entry.chunkComments??[]).map(c=>policy.commentSchema.parse(c)),prior=this.db.prepare('SELECT * FROM run_checkpoints WHERE post_id=?').get(saved.id),previous=prior?JSON.parse(prior.checkpoint):{version:1,sequence:0,marks:[]};
+          if(prior?.hash===receipt.hash){
+            if(hash(previous)!==hash(receipt.checkpoint)||receipt.replaying&&chunkComments.length)throw new LocalError('CHECKPOINT_REPLAY_CONFLICT');
+            for(const c of chunkComments){const m=previous.marks.find(m=>m.id===c.id);if(!m||m.digest!==policy.commentDigest(post.id,c))throw new LocalError('CHECKPOINT_REPLAY_CONFLICT');}
+          }else policy.validateChunk(previous,receipt,post.id,chunkComments);
+          const retained=this.db.prepare('SELECT platform_id,user_id,parent_id,body FROM run_comments WHERE post_id=?').all(saved.id);
+          if(receipt.checkpoint.marks.length!==retained.length||retained.some(c=>!receipt.checkpoint.marks.some(m=>m.id===c.platform_id&&m.parent===(c.parent_id||'')&&m.digest===policy.commentDigest(post.id,{id:c.platform_id,userId:c.user_id,parentId:c.parent_id||undefined,text:c.body}))))throw new LocalError('CHECKPOINT_MEMBERSHIP_MISMATCH');
+          this.db.prepare('INSERT INTO run_checkpoints VALUES(?,?,?,?,?,?) ON CONFLICT(post_id) DO UPDATE SET checkpoint=excluded.checkpoint,hash=excluded.hash,remaining_anchors=excluded.remaining_anchors,sequence=excluded.sequence,updated_at=excluded.updated_at').run(saved.id,canonical(receipt.checkpoint),receipt.hash,receipt.remainingAnchors,receipt.checkpoint.sequence,this.store.clock());
+        }
       }
       this.store.audit('AUTOMATION','CAPTURE_CHECKPOINT',runId,{addedPosts,addedComments,conflicts});return {addedPosts,addedComments,conflicts};
     });
@@ -75,7 +85,8 @@ class LocalCollection {
     if(evidence.posts.length!==posts.length||new Set(evidence.posts.map(p=>p.postRef)).size!==posts.length)throw new LocalError('RUN_MEMBERSHIP_MISMATCH');
     for(const post of posts){
       const e=evidence.posts.find(p=>p.postRef===post.platform_id),rows=this.db.prepare('SELECT * FROM run_comments WHERE post_id=? ORDER BY ordinal').all(post.id),snapshot=JSON.parse(post.snapshot);
-      if(!e||e.ordinal!==post.ordinal||e.saved!==rows.length||e.roots!==rows.filter(c=>!c.parent_id).length||e.replies!==rows.filter(c=>!!c.parent_id).length||e.recovery)throw new LocalError('RUN_MEMBERSHIP_MISMATCH');
+      if(!e||e.ordinal!==post.ordinal||e.saved!==rows.length||e.roots!==rows.filter(c=>!c.parent_id).length||e.replies!==rows.filter(c=>!!c.parent_id).length)throw new LocalError('RUN_MEMBERSHIP_MISMATCH');
+      if(e.recovery){const saved=this.db.prepare('SELECT * FROM run_checkpoints WHERE post_id=?').get(post.id);if(!saved||e.recovery.confirmedTotal!==rows.length||e.recovery.sequence!==saved.sequence||e.recovery.remainingAnchors!==saved.remaining_anchors||e.complete&&saved.remaining_anchors!==0)throw new LocalError('CHECKPOINT_MEMBERSHIP_MISMATCH');}
       const bounded=policy.boundedReadReportSchema.safeParse(snapshot.boundedRead);
       if(e.complete&&(!bounded.success||bounded.data.state!=='COMPLETE'))throw new LocalError('COMPLETE_COVERAGE_REQUIRED');
       if(e.complete){const totals=bounded.data.chunkSummary||bounded.data.retained.loaded;if(!totals||(totals.unique??totals.uniqueKnown)!==rows.length||totals.roots!==e.roots||totals.replies!==e.replies||e.boundedRead&&hash(e.boundedRead)!==hash(bounded.data))throw new LocalError('RUN_MEMBERSHIP_MISMATCH');}
@@ -98,6 +109,7 @@ class LocalCollection {
     return policy.collectionBarrier({snapshot:JSON.parse(run.snapshot),cancelRequested:!!run.cancel_requested,status:run.status,finishedAt:run.finished_at,reason:run.reason,capturedPosts:posts,capturedCommentsCount:comments,metrics:{coverage:run.coverage?JSON.parse(run.coverage):null}});
   }
   cancel(runId){return this.store.transaction(()=>{const run=this.db.prepare('SELECT job_id FROM collection_runs WHERE id=?').get(runId);if(!run)throw new LocalError('RUN_NOT_FOUND');this.db.prepare('UPDATE collection_runs SET cancel_requested=1 WHERE id=?').run(runId);this.db.prepare('UPDATE jobs SET cancel_requested=1 WHERE id=?').run(run.job_id);this.store.audit('LOCAL_USER','COLLECTION_CANCEL_REQUESTED',runId);});}
+  fail(lease,runId,reason='COLLECTION_INTERRUPTED'){return this.store.transaction(()=>{const job=this.queue.current(lease);if(!this.db.prepare('SELECT 1 FROM collection_runs WHERE id=? AND job_id=?').get(runId,job.id))throw new LocalError('RUN_NOT_FOUND');this.db.prepare("UPDATE collection_runs SET status='FAILED',reason=?,finished_at=? WHERE id=?").run(reason,this.store.clock(),runId);});}
   recover(){return this.store.transaction(()=>this.db.prepare("UPDATE collection_runs SET status='INTERRUPTED',reason='WORKER_INTERRUPTED',finished_at=? WHERE status='RUNNING' AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=collection_runs.job_id AND j.state NOT IN('QUEUED','RUNNING'))").run(this.store.clock()).changes);}
   posts(runId){return this.db.prepare('SELECT * FROM run_posts WHERE run_id=? ORDER BY ordinal').all(runId).map(p=>({...p,snapshot:JSON.parse(p.snapshot)}));}
   comments(runId,postId){return this.db.prepare('SELECT * FROM run_comments WHERE run_id=? AND post_id=? ORDER BY ordinal').all(runId,postId).map(c=>({...c,snapshot:JSON.parse(c.snapshot)}));}

@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {createHash} = require('node:crypto');
-const files = ['schema.sql', 'migrations/002-inbox.sql', 'migrations/003-collection-review.sql','migrations/004-contact-rules.sql','migrations/005-model-submission.sql'];
+const files = ['schema.sql', 'migrations/002-inbox.sql', 'migrations/003-collection-review.sql','migrations/004-contact-rules.sql','migrations/005-model-submission.sql','migrations/006-collection-checkpoints.sql'];
 const migrations = files.map((file, index) => {
   const sql = fs.readFileSync(path.join(__dirname, file), 'utf8');
   return {version: index + 1, sql, checksum: createHash('sha256').update(sql).digest('hex')};

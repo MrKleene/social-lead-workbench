@@ -23,4 +23,9 @@ const providerSources=Object.keys(provider.metafile.inputs).filter(p=>!p.include
 if(providerSources.some(p=>p.includes('/auth/')||p.includes('/common/db')))throw Error('Original server dependency entered local model provider');
 writeFileSync(path.join(root,'runtime/local/model-provider.cjs'),provider.outputFiles[0].text);
 writeFileSync(path.join(root,'runtime/local/model-provider-build.json'),JSON.stringify({sourceHashes:Object.fromEntries(providerSources.map(p=>[p,createHash('sha256').update(readFileSync(path.join(root,p))).digest('hex')])),outputSha256:createHash('sha256').update(provider.outputFiles[0].text).digest('hex')},null,2)+'\n');
+const collection=await build({absWorkingDir:root,entryPoints:['packages/local-policy/src/collection-provider.ts'],bundle:true,platform:'node',target:'node24',format:'cjs',treeShaking:true,metafile:true,write:false,legalComments:'inline',alias:{'@crm/contracts':path.join(root,'packages/contracts/src/index.ts')}});
+const collectionSources=Object.keys(collection.metafile.inputs).filter(p=>!p.includes('node_modules')).sort();
+if(collectionSources.some(p=>p.includes('/auth/')||p.includes('/common/db')))throw Error('Original server dependency entered local collector');
+writeFileSync(path.join(root,'runtime/local/collection-provider.cjs'),collection.outputFiles[0].text);
+writeFileSync(path.join(root,'runtime/local/collection-provider-build.json'),JSON.stringify({sourceHashes:Object.fromEntries(collectionSources.map(p=>[p,createHash('sha256').update(readFileSync(path.join(root,p))).digest('hex')])),outputSha256:createHash('sha256').update(collection.outputFiles[0].text).digest('hex')},null,2)+'\n');
 console.log(JSON.stringify({generated:'runtime/local/policy.cjs',bytes:Buffer.byteLength(output),sourceFiles:sources.length,networkCalls:0}));

@@ -1,22 +1,18 @@
 # Local desktop implementation work
 
-Source: original working tree snapshot d08f965, original repository untouched.
-Target: Windows 11 x64, SQLite, durable queue, no workspace password, local credentials.
+Original snapshot d08f965; work only on desktop-local-sqlite in the isolated copy.
+Targets: macOS 13+ arm64 and Windows 11 x64, shared Electron/SQLite/local queue.
+No production data, Cookie, model key, service or platform operation may be touched.
 
-Implementation sequence:
-1. Durable SQLite storage/queue/authorization/send safety and synthetic failure tests.
-2. Exclusive user-data lifecycle, credential provider, consistent backup/restore and explicit offline import.
-3. Desktop IPC boundary and packaged lifecycle; no anonymous local HTTP management API.
-4. Port existing business repositories and UI onto local services; preserve account identities and UNKNOWN handling.
-5. Package resources and Windows build/acceptance gates. Do not claim native verification on macOS.
+Implemented: local storage/queue/safety repositories; frozen automatic contact
+eligibility; strict send receipts; model adapter registered with per-batch consent;
+original finite collector bridge and durable chunk checkpoints (synthetic runtime
+only); no workspace login; configuration/model/history UI; read-only legacy export;
+offline import and archive viewer; explicit previewed data-copy activation with
+backup; Mac DMG and packaged offline self-test; Windows NSIS/DPAPI helper source.
 
-No production database, Cookie, model key, running service or platform operation may be touched.
-Do not promote or switch the real instance until repository parity and data migration validation pass.
-
-Implementation checkpoint: Electron is confirmed by the user. SQLite storage,
-queue, native collection/review/inbox repositories, frozen-rule automatic contact,
-strict receipt parsing and local history UI are implemented with synthetic tests.
-The old production instance is untouched. No real executor is registered yet.
-Windows packaging/lifecycle, full legacy native mapping, platform adapters and
-full UI parity remain unfinished; this is not a product release.
-See docs/DESKTOP-LOCAL.md and docs/LOCAL-BUSINESS-PARITY.md for current evidence.
+Not a product release: actual platform login/read/send/receive runtimes and native
+resources, full legacy-native mapping, full original UI parity, native credential
+and Windows installation validation, signing/notarization remain incomplete.
+Tests must use synthetic transports and temporary directories. Do not promote or
+switch the original workbench. See docs/DESKTOP-LOCAL.md and LOCAL-BUSINESS-PARITY.md.

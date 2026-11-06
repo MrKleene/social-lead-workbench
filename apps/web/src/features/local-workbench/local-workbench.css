@@ -3,3 +3,7 @@
 .local-workbench button[data-variant="default"]{background:#252a32;color:#fff}.local-workbench button:disabled{opacity:.45;cursor:not-allowed}
 .local-config-list strong,.local-messages p{overflow-wrap:anywhere;white-space:pre-wrap}.local-messages{list-style:none;padding:0}.local-messages li{padding:14px 0;border-bottom:1px solid #e2e4e7}.local-messages small{color:#73777c;font-size:12px}.local-config-list li>button{flex-shrink:0}
 .local-workbench [data-slot=button][aria-pressed=true]{background:#252a32;color:#fff;transition:none}
+
+.local-workbench .local-check{display:flex;flex-direction:row;align-items:flex-start;gap:8px;margin:12px 0;font-size:13px}.local-check input{flex:none;margin-top:4px}.local-editor input[type=number]{background:white;border:1px solid #d6d9de;padding:8px;border-radius:5px}
+.local-archive {padding-left:1.25rem;max-height:34rem;overflow:auto;}
+.local-archive pre {white-space:pre-wrap;overflow-wrap:anywhere;font-size:.8rem;max-width:100%;}
