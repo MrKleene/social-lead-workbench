@@ -1,0 +1,34 @@
+'use strict';
+const {randomUUID}=require('node:crypto');
+const {LocalError,canonical}=require('./database.cjs');
+const KINDS=new Set(['KEYWORDS','MATCHING','COMMENT_TEMPLATE','DM_TEMPLATE']);
+function validateConfiguration(input){
+ if(!input||!KINDS.has(input.kind)||typeof input.name!=='string'||!input.name.trim()||input.name.trim().length>100||!input.body||Object.getPrototypeOf(input.body)!==Object.prototype)throw new LocalError('INVALID_CONFIGURATION');
+ if(Buffer.byteLength(canonical(input.body))>32768)throw new LocalError('CONFIGURATION_TOO_LARGE');
+ if(input.kind==='KEYWORDS'){
+  const keywords=input.body.keywords;if(!Array.isArray(keywords)||!keywords.length||keywords.length>100||keywords.some(x=>typeof x!=='string'||!x.trim()||[...x.trim()].length>40))throw new LocalError('INVALID_KEYWORDS');
+  if(Object.keys(input.body).some(x=>!['keywords','excludeWords'].includes(x)))throw new LocalError('INVALID_CONFIGURATION');
+  if(input.body.excludeWords!==undefined&&(!Array.isArray(input.body.excludeWords)||input.body.excludeWords.length>100||input.body.excludeWords.some(x=>typeof x!=='string'||!x.trim()||[...x.trim()].length>40)))throw new LocalError('INVALID_KEYWORDS');
+ }else if(typeof input.body.text!=='string'||!input.body.text.trim()||input.body.text.length>4000||Object.keys(input.body).some(x=>x!=='text'))throw new LocalError('INVALID_CONFIGURATION');
+ return {kind:input.kind,name:input.name.trim(),body:input.body};
+}
+class LocalService {
+ constructor(store,vault){this.store=store;this.vault=vault;}
+ status(){return {storage:'SQLITE',loginRequired:false,initialized:!!this.store.db.prepare("SELECT 1 FROM settings WHERE key='initialized'").get(),modelKeyConfigured:!!this.vault?.has('MODEL_KEY','qwen'),credentialsAvailable:!!this.vault?.protector?.available(),platform:{ready:false,reason:'DESKTOP_PLATFORM_ADAPTER_PENDING'},version:1};}
+ initialize(){return this.store.transaction(()=>{this.store.db.prepare("INSERT INTO settings VALUES('initialized','true',1) ON CONFLICT DO NOTHING").run();this.store.audit('LOCAL_USER','INITIALIZED','installation');return {initialized:true};});}
+ configurations(){return this.store.db.prepare('SELECT * FROM configurations WHERE archived=0 ORDER BY updated_at DESC,id').all().map(x=>({...x,body:JSON.parse(x.body)}));}
+ saveConfiguration(input){const value=validateConfiguration(input);return this.store.transaction(()=>{
+  const id=input.id||randomUUID();if(typeof id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(id))throw new LocalError('INVALID_CONFIGURATION');
+  const old=this.store.db.prepare('SELECT * FROM configurations WHERE id=?').get(id);
+  if(old){if(old.archived||old.kind!==value.kind||old.revision!==input.revision)throw new LocalError('CONFIGURATION_CHANGED');this.store.db.prepare('UPDATE configurations SET name=?,body=?,revision=revision+1,updated_at=? WHERE id=?').run(value.name,canonical(value.body),this.store.clock(),id);}
+  else{if(input.id||input.revision!==undefined)throw new LocalError('CONFIGURATION_NOT_FOUND');this.store.db.prepare('INSERT INTO configurations(id,kind,name,body,updated_at) VALUES(?,?,?,?,?)').run(id,value.kind,value.name,canonical(value.body),this.store.clock());}
+  this.store.audit('LOCAL_USER','CONFIGURATION_SAVED',id,{kind:value.kind});return {id};
+ });}
+ archiveConfiguration({id,revision}){return this.store.transaction(()=>{const n=this.store.db.prepare('UPDATE configurations SET archived=1,revision=revision+1,updated_at=? WHERE id=? AND revision=? AND archived=0').run(this.store.clock(),id,revision).changes;if(n!==1)throw new LocalError('CONFIGURATION_CHANGED');this.store.audit('LOCAL_USER','CONFIGURATION_ARCHIVED',id);return {ok:true};});}
+ saveModelKey({key}){if(typeof key!=='string'||! /^[\x21-\x7e]{16,512}$/.test(key))throw new LocalError('INVALID_MODEL_KEY');if(!this.vault)throw new LocalError('OS_CREDENTIAL_PROTECTION_UNAVAILABLE');this.vault.put('MODEL_KEY','qwen',key);this.store.audit('LOCAL_USER','MODEL_KEY_SAVED','qwen');return {configured:true};}
+ jobs(){return this.store.db.prepare('SELECT id,kind,state,created_at,updated_at FROM jobs ORDER BY created_at DESC,id LIMIT 100').all();}
+ accounts(){return this.store.db.prepare('SELECT id,platform,name,state,daily_limit FROM accounts ORDER BY name,id').all();}
+ messages(){return this.store.db.prepare('SELECT id,account_id,channel,sender_id,body,received_at,read_at FROM inbox_messages ORDER BY received_at DESC,id LIMIT 100').all();}
+ markRead({id}){return this.store.transaction(()=>{const r=this.store.db.prepare('UPDATE inbox_messages SET read_at=? WHERE id=?').run(this.store.clock(),id);return {updated:r.changes===1};});}
+}
+module.exports={LocalService,validateConfiguration};
