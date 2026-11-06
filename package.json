@@ -74,19 +74,32 @@
     "test:post-availability:ui": "npm run build -w @crm/web && node scripts/test-post-availability-ui.mjs",
     "test:auto-contact:ui": "npm run build -w @crm/web && node scripts/test-auto-contact-ui.mjs",
     "test:auth": "node scripts/test-remember-login.mjs",
-    "build:inbox": "node scripts/inbox/build.mjs"
+    "build:inbox": "node scripts/inbox/build.mjs",
+    "desktop:build": "npm run build -w @crm/contracts && npm run typecheck -w @crm/web && npm exec --workspace @crm/web -- vite build --config vite.desktop.config.ts",
+    "desktop:test": "npm run local:test && node --test apps/desktop/test/*.test.cjs",
+    "desktop:start": "electron apps/desktop/src/main.cjs",
+    "desktop:release-check": "node scripts/desktop/release-check.mjs",
+    "desktop:package:preview": "npm run desktop:build && node scripts/build-windows-host.mjs && npm run desktop:stage && electron-builder --config apps/desktop/electron-builder.cjs --dir",
+    "desktop:package:win": "npm run desktop:release-check && npm run desktop:build && node scripts/build-windows-host.mjs && npm run desktop:stage && electron-builder --config apps/desktop/electron-builder.cjs --win nsis --x64",
+    "desktop:stage": "node scripts/desktop/stage.mjs",
+    "desktop:test:ui": "npm run desktop:build && node scripts/desktop/test-ui.cjs",
+    "local:test": "node --test tests/local/*.test.cjs",
+    "local:import:offline": "node scripts/local/import-offline.mjs"
   },
   "devDependencies": {
+    "@types/node": "^24.10.0",
+    "concurrently": "^9.2.1",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0",
+    "playwright": "1.65.0",
     "prisma": "6.19.0",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.3",
-    "concurrently": "^9.2.1",
-    "@types/node": "^24.10.0"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@inquirer/prompts": "^7.9.0",
     "@prisma/client": "6.19.0",
     "argon2": "^0.44.0",
-    "@inquirer/prompts": "^7.9.0",
     "dotenv": "^17.2.3"
   },
   "overrides": {

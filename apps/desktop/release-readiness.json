@@ -1,0 +1,20 @@
+{
+  "sqliteStorage": "implemented-synthetic-tested",
+  "persistentQueue": "implemented-synthetic-tested",
+  "sendSafetyCore": "implemented-synthetic-tested",
+  "localIdentityWithoutUserTable": "implemented-synthetic-tested",
+  "configurationUi": "implemented-macos-synthetic-ui-tested",
+  "existingBusinessRepositoryParity": "pending",
+  "legacyFullDataMigration": "pending",
+  "platformCollectionAdapter": "pending",
+  "modelReviewAdapter": "pending",
+  "exactReplyAndDmAdapters": "pending",
+  "inboxAdapter": "pending",
+  "windowsBrowserReview": "pending",
+  "windowsDpapiAndLifecycle": "pending-native-validation",
+  "windowsCleanMachineInstaller": "pending-native-validation",
+  "consistentBackupAndCopyRestore": "implemented-synthetic-tested",
+  "offlineLegacyImport": "implemented-archive-and-safety-only",
+  "dependencySecurityReview": "pending-build-tool-advisories",
+  "desktopFrameworkDecision": "pending-user-comparison"
+}
