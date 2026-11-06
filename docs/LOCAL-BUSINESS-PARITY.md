@@ -33,4 +33,4 @@
 
 千问适配器复用原请求代码，独立生成到 `model-provider.cjs`，与纯规则包分开。请求前持久写入 `model_submissions`，重建执行器也不能重复提交同一批；模型 Key 轮换先撤销授权，写密文失败也保持停用。没有加载环境中的 Key 或可自选 URL，没有将执行方法暴露给 renderer，未注册实际付费执行器。
 
-最新 macOS 预览包经过 `scripts/desktop/verify-package.cjs` 只读核对：38 个文件、ASAR 7,443,001 字节、0 个禁入数据文件、0 个过期源码文件，安全 fuses 读回通过。Windows 未验证。
+最新 macOS 预览包经过 `scripts/desktop/verify-package.cjs` 只读核对：38 个文件、ASAR 7,443,324 字节、0 个禁入数据文件、0 个过期源码文件，安全 fuses 读回通过。Windows 未验证。

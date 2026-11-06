@@ -63,7 +63,7 @@ npm run desktop:release-check
 - 90 项本地核心合成测试及 1 项 IPC 边界测试通过：事务回滚、两个独立进程竞争同一任务、进程退出无半写、授权撤销与 fencing、额度与未知状态、跨账号/渠道去重、备份恢复、凭据隔离及离线迁移保护。
 - Web TypeScript 检查和 Vite 桌面生产构建通过。
 - macOS Electron 实际 UI 通过：初始化、3 个关键词保存、键盘启动新增操作、创建备份、刷新后持久化、390px/320px 无横向溢出，历史私信只读提示、会话已读持久化和业务记录切换通过，无页面/console 错误。
-- 构建未使用 Developer ID 签名的 macOS arm64 目录预览；ASAR 38 文件、7,443,001 字节，与源码一致且无 node_modules/环境文件/数据库/凭据；RunAsNode、NODE_OPTIONS、inspect 和 file 额外权限禁用，ASAR 完整性与 only-load-ASAR 已读回验证。仅用于开发验证，不是 Windows 安装包。打包后的真实平台链路、OS 凭据和升级恢复未验收。
+- 构建未使用 Developer ID 签名的 macOS arm64 目录预览；ASAR 38 文件、7,443,324 字节，与源码一致且无 node_modules/环境文件/数据库/凭据；RunAsNode、NODE_OPTIONS、inspect 和 file 额外权限禁用，ASAR 完整性与 only-load-ASAR 已读回验证。仅用于开发验证，不是 Windows 安装包。打包后的真实平台链路、OS 凭据和升级恢复未验收。
 - `desktop:release-check` 预期失败，列明待完成的发布条件，禁止将预览当正式成品。
 
 依赖扫描：已将构建链 minimatch 固定为 11.0.1，npm install 审计剩余 3 项 high，来自原服务器 Nest/Express 的 body-parser、multer 链；该服务不在桌面 asar 内。本轮没有强制跨主版本升级原服务，发布前仍须处理或隔离此项。桌面构建链原有的 6 项 moderate 告警已消除。
