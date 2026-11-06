@@ -25,7 +25,7 @@ function restoreToNewFile(source,destination,sha256){
  try{
   fs.writeFileSync(destination,data,{flag:'wx',mode:0o600});owned=true;store=new LocalDatabase(destination,{migrationBackup:false});
   store.transaction(()=>{
-   const now=store.clock();
+   const now=store.clock();store.db.prepare("UPDATE evidence_checks SET state='INTERRUPTED',finished_at=? WHERE state='RUNNING'").run(now);
    store.db.prepare("UPDATE authorizations SET state='REVOKED' WHERE state='ACTIVE'").run();
    store.db.prepare("UPDATE jobs SET state=CASE WHEN dispatch_started=1 AND kind IN('SEND','REVIEW') THEN 'UNKNOWN' ELSE 'CANCELLED' END,lease_owner=NULL,lease_until=NULL,fence=fence+1,updated_at=? WHERE state IN('QUEUED','RUNNING','INTERRUPTED')").run(now);
    // Restores preserve quota/duplicate-contact evidence; never automatically refund it.

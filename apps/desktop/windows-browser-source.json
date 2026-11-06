@@ -1,0 +1,12 @@
+{
+  "version": "148.0.7778.215",
+  "platform": "win32",
+  "arch": "x64",
+  "source": "https://cdn.one-world.ai/browsers/148.0.7778.215/windows-x64.zip",
+  "archiveSha256": "5ae94143fa323167b7085242504e05dc8eeb6d96ca5feb80c887ade36f242b40",
+  "archiveBytes": 189954738,
+  "staticFiles": 76,
+  "validation": "PE_X64_VERSION_AND_FILE_MANIFEST_ONLY",
+  "windowsExecuted": false,
+  "publisherSignatureValidated": false
+}

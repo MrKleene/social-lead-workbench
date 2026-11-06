@@ -17,7 +17,11 @@ const root = path.resolve(__dirname, '../..');
     const {LocalDatabase}=require('../../runtime/local/database.cjs');
     const {prepareLegacySnapshot,importLegacySnapshot}=require('../../runtime/local/legacy-import.cjs');
     const seed=new LocalDatabase(path.join(fixture,'workbench.sqlite'));
-    importLegacySnapshot(seed,prepareLegacySnapshot({PlatformAccount:[{id:'synthetic-account',platform:'XHS',label:'合成测试账号',dailyLimit:2,version:1,loginProvider:'real',loginPlatformUserId:'a'.repeat(24)}],InboxMessage:[{id:'synthetic-message',accountId:'synthetic-account',channel:'DM',platformId:'1234567890123',senderId:'b'.repeat(24),senderName:'合成会话用户',body:'合成历史私信；只用于离线界面验证。',contentType:'TEXT',receivedAt:'2026-11-06T04:00:00Z',isNew:true}]}));seed.db.exec(`INSERT INTO review_policies VALUES('synthetic-policy','合成自动规则目标','寻找明确提出学习方法指导需求的评论',1,1,1,1); INSERT INTO model_profile VALUES('qwen','qwen3.8-flash',1,1,10,'qwen3.8-flash:beijing-2026-10-21','beijing-original-comments-v2');`);seed.close();
+    importLegacySnapshot(seed,prepareLegacySnapshot({PlatformAccount:[{id:'synthetic-account',platform:'XHS',label:'合成测试账号',dailyLimit:2,version:1,loginProvider:'real',loginPlatformUserId:'a'.repeat(24)}],InboxMessage:[{id:'synthetic-message',accountId:'synthetic-account',channel:'DM',platformId:'1234567890123',senderId:'b'.repeat(24),senderName:'合成会话用户',body:'合成历史私信；只用于离线界面验证。',contentType:'TEXT',receivedAt:'2026-11-06T04:00:00Z',isNew:true}]}));seed.db.exec(`INSERT INTO review_policies VALUES('synthetic-policy','合成自动规则目标','寻找明确提出学习方法指导需求的评论',1,1,1,1); INSERT INTO model_profile VALUES('qwen','qwen3.8-flash',1,1,10,'qwen3.8-flash:beijing-2026-10-21','beijing-original-comments-v2');`);seed.db.exec(`UPDATE accounts SET state='VERIFIED',session_ref='synthetic-no-real-cookie' WHERE id='synthetic-account'; INSERT INTO configurations(id,kind,name,body,updated_at) VALUES('history-config','KEYWORDS','合成历史配置','{"keywords":["合成"],"excludeWords":[]}',0);`);
+    const {LocalQueue}=require('../../runtime/local/queue.cjs'),{LocalCollection}=require('../../runtime/local/collection.cjs'),{entry}=require('../../tests/local/flow-fixture.cjs');
+    const queue=new LocalQueue(seed),collection=new LocalCollection(seed);
+    for(let i=0;i<2;i++){const scope={configId:'history-config',configRevision:1,accountId:'synthetic-account',accountRevision:2,readPlan:{kind:'SEARCH',batchLimit:1},strictStages:{version:1,policies:[{id:'synthetic-policy',revision:1,version:1,modelVersion:1}],contactRules:[]}},id=queue.enqueue('COLLECT',scope,queue.authorize('COLLECT',scope),'synthetic-history-'+i),lease=queue.claim('seed');queue.beginDispatch(lease);const run=collection.start(lease),e=entry('c'.repeat(24),['合成历史评论第 '+i+' 轮']);collection.checkpoint(lease,run,[e]);collection.finish(lease,run,{status:'COMPLETE',coverage:{version:1,search:'COMPLETE',reasons:[],posts:[{postRef:e.post.id,ordinal:1,saved:1,roots:1,replies:0,complete:true,boundedRead:e.post.boundedRead}]}});queue.finish(lease,'SUCCEEDED');}
+    seed.close();
     app = await _electron.launch({
       executablePath: require('electron'),
       args: [path.join(root, 'apps/desktop/src/main.cjs'), '--test-fixture', fixture],
@@ -51,6 +55,17 @@ const root = path.resolve(__dirname, '../..');
     await page.getByLabel('已停止原工作台任务，核对副本和历史限制。仅解除副本核对暂停；新账号登录和新任务另行授权。').check();
     await page.getByRole('button',{name:'允许重新授权新任务'}).click();
     await page.getByRole('status').filter({hasText:'已解除副本核对暂停'}).waitFor();
+    await page.getByRole('button',{name:'采集记录',exact:true}).click();
+    await page.getByRole('button',{name:'查看笔记与恢复'}).first().click();
+    await page.getByRole('button',{name:'查看原文与评论'}).click();
+    await page.getByRole('heading',{name:'同一笔记的历史快照'}).waitFor();
+    await page.getByRole('button',{name:'独立审核历史原文'}).click();
+    await page.getByRole('button',{name:'预览审核范围'}).click();
+    await page.getByText('本轮未选择自动联系规则。',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'授权并审核本批'}).isDisabled(),true);
+    await page.getByRole('button',{name:'关闭',exact:true}).click();
+    await page.getByRole('button',{name:'收起笔记',exact:true}).click();
+    await page.getByRole('button',{name:'私信会话',exact:true}).click();
     await page.getByRole('button',{name:'查看会话'}).click();
     await page.getByText('缺少可靠入站身份，只可查看。历史消息不会因导入而自动获得回复资格。',{exact:true}).waitFor();
     await page.getByRole('button',{name:'标记已读'}).click();
@@ -73,7 +88,7 @@ const root = path.resolve(__dirname, '../..');
     await page.getByText('平台功能尚未切换', {exact: true}).waitFor();
     assert.equal(await page.getByRole('button', {name: '加密保存'}).isDisabled(), true);
     const exported=path.join(fixture,'synthetic-export.json');
-    fs.writeFileSync(exported,JSON.stringify({CollectionConfig:[{id:'new-config',name:'合成迁移关键词',keywords:['迁移一','迁移二'],excludeWords:[]}],CommentReviewPolicy:[{id:'p-one',name:'合成匹配一',target:'寻找明确提出学习方法指导需求的评论'},{id:'p-two',name:'合成匹配二',target:'寻找明确提出选题方法指导需求的评论'}],CapturedPost:[{id:'archived-post',title:'合成历史笔记'}]}));
+    fs.writeFileSync(exported,JSON.stringify({CollectionConfig:[{id:'new-config',name:'合成迁移关键词',keywords:['迁移一','迁移二'],excludeWords:[]}],CommentReviewPolicy:[{id:'p-one',name:'合成匹配一',target:'寻找明确提出学习方法指导需求的评论'},{id:'p-two',name:'合成匹配二',target:'寻找明确提出选题方法指导需求的评论'}],CapturedPost:[{id:'archived-post',title:'合成历史笔记'}],PlatformAccount:[{id:'unknown-account',platform:'XHS',label:'历史未知合成账号',loginProvider:'real',loginPlatformUserId:'a'.repeat(24),dailyLimit:2,version:1}],PlatformIdentity:[{id:'unknown-recipient',platform:'XHS',platformUserId:'b'.repeat(24)}],ContactLedger:[{id:'unknown-ledger',identityId:'unknown-recipient',accountId:'unknown-account',mode:'REAL'}],ContactAttempt:[{id:'unknown-attempt',ledgerId:'unknown-ledger',accountIdSnapshot:'unknown-account',mode:'REAL',channel:'DM',outcome:'UNKNOWN',content:'合成历史未知发送，禁止重发',day:'2026-11-06',createdAt:'2026-11-06T04:00:00Z',updatedAt:'2026-11-06T04:01:00Z',historySnapshot:{accountId:'unknown-account',senderPlatformId:'a'.repeat(24),recipientId:'b'.repeat(24)}}]}));
     await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},exported);
     await page.getByRole('button',{name:'选择旧业务导出文件'}).click();
     await page.getByRole('heading',{name:'切换前核对'}).waitFor();
@@ -82,6 +97,10 @@ const root = path.resolve(__dirname, '../..');
     await page.getByRole('button',{name:'备份当前数据并切换'}).click();
     await page.locator('.local-config-list strong').getByText('合成迁移关键词',{exact:true}).waitFor();
     assert.equal(await page.getByText('合成关键词配置',{exact:true}).count(),0);
+    await page.getByRole('heading',{name:'未知发送证据核对'}).waitFor();
+    await page.getByRole('button',{name:'预览证据核对'}).click();
+    await page.getByRole('alert').filter({hasText:'请先重新登录这条记录绑定的原小红书账号'}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'允许重新授权新任务'}).count(),0);
     await page.getByLabel('历史记录类型').selectOption('CapturedPost');
     await page.locator('.local-archive').getByText(/合成历史笔记/).waitFor();
     await app.close();app=await _electron.launch({executablePath:require('electron'),args:[path.join(root,'apps/desktop/src/main.cjs'),'--test-fixture',fixture],timeout:30000});page=await app.firstWindow();await page.locator('.local-config-list strong').getByText('合成迁移关键词',{exact:true}).waitFor();
@@ -91,7 +110,7 @@ const root = path.resolve(__dirname, '../..');
     await page.screenshot({path:path.join(evidence,'migration.png'),fullPage:true});
     assert.deepEqual(errors, []);
     const result = {platform: process.platform, title: await page.title(), url: page.url(), initialized: true,
-      multipleAutomationDrafts:2,unregisteredAutomationDisabled:true,reviewedCopyRecovery:true,keywordsSaved: 3, backupCreated: true, reloadPersisted: true, keyboardActivation: true, importedInboxViewOnly:true,markReadPersisted:true,
+      independentReviewPreview:true,crossRoundHistoryVisible:true,legacyUnknownVisibleAndRequiresRelogin:true,multipleAutomationDrafts:2,unregisteredAutomationDisabled:true,reviewedCopyRecovery:true,keywordsSaved: 3, backupCreated: true, reloadPersisted: true, keyboardActivation: true, importedInboxViewOnly:true,markReadPersisted:true,
       widthsWithoutOverflow: [390, 320],migrationPreviewAndActivation:true,oldDatabaseRetained:true,multipleMatchingTargets:2,activatedCopySurvivesRestart:true, osCredentialsAccessed: false, externalCalls: false, errors};
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify(result, null, 2));
     console.log(JSON.stringify(result));

@@ -24,20 +24,22 @@ class LocalCollectionExecutor {
    const status=await session.status(signal);if(!status.loggedIn||status.userId!==account.platform_user_id)throw new LocalError('ACCOUNT_IDENTITY_CHANGED');
    await guard();adapter=this.adapterFactory(session.readTransport(),guard);
    const run=this.store.db.prepare('SELECT snapshot FROM collection_runs WHERE id=?').get(runId),{strictStages,...config}=JSON.parse(run.snapshot);
-   let selected;
+   let selected,restored=[];
    if(scope.readPlan.kind==='SAVED_POST'){
-    const post=this.store.db.prepare('SELECT * FROM run_posts WHERE id=? AND platform_id=?').get(scope.readPlan.savedPostId,scope.readPlan.postId);if(!post?.source_reference_ref)throw new LocalError('SAVED_POST_REFERENCE_UNAVAILABLE');
-    const sourceReference=JSON.parse(this.vault.get('POST_REFERENCE',post.source_reference_ref));if(sourceReference.postId!==post.platform_id)throw new LocalError('SAVED_POST_REFERENCE_UNAVAILABLE');
+    const post=this.store.db.prepare('SELECT * FROM run_posts WHERE id=? AND platform_id=?').get(scope.readPlan.savedPostId,scope.readPlan.postId);if(!post||scope.readPlan.sourceHash!==post.content_hash||!this.store.db.prepare('SELECT 1 FROM run_posts WHERE platform_id=? AND source_reference_ref=?').get(post.platform_id,scope.readPlan.referenceRef))throw new LocalError('SAVED_POST_REFERENCE_UNAVAILABLE');
+    const sourceReference=JSON.parse(this.vault.get('POST_REFERENCE',scope.readPlan.referenceRef));if(sourceReference.postId!==post.platform_id)throw new LocalError('SAVED_POST_REFERENCE_UNAVAILABLE');
     selected={...JSON.parse(post.snapshot),sourceReference};
+    if(scope.readPlan.resume){if(!adapter.restoreCheckpoint)throw new LocalError('CHECKPOINT_ADAPTER_UNAVAILABLE');const recovery=new (require('./history-recovery.cjs').HistoryRecovery)(this.store).seed(lease,runId,scope.readPlan.resume);restored=recovery.comments;adapter.restoreCheckpoint(selected,recovery.checkpoint);}
    }
    const save=async result=>{
     await guard();const entries=result.posts.map(entry=>{
+     if(scope.readPlan.resume){if(!entry.chunk)throw new LocalError('CHECKPOINT_PROTOCOL_REQUIRED');const current=new Set(entry.comments.map(c=>c.id));entry.comments=[...restored.filter(c=>!current.has(c.id)),...entry.comments];}
      const ref=entry.post.sourceReference;let id;
      if(ref){const old=references.get(entry.post.id);if(old?.digest===hash(ref))id=old.id;else{id=randomUUID();this.vault.put('POST_REFERENCE',id,JSON.stringify(ref));references.set(entry.post.id,{id,digest:hash(ref)});}}
      return {...entry,sourceReferenceRef:id??null};
     });this.collection.checkpoint(lease,runId,entries);
    };
-   const result=await collect(adapter,config,async()=>{try{await guard();return false;}catch{return true;}},{requests:32,pagesPerStream:4,comments:800,callMs:40000,runMs:180000},save,selected);
+   const result=await collect(adapter,config,async()=>{try{await guard();return false;}catch{return true;}},{requests:32,pagesPerStream:4,comments:800-restored.length,callMs:40000,runMs:180000},save,selected);
    if(result.discarded||result.status==='FAILED'||result.status==='PAUSED')throw new LocalError('COLLECTION_INCOMPLETE');
    await save(result);const coverage=runCoverage(result);if(!coverage)throw new LocalError('COLLECTION_COVERAGE_UNAVAILABLE');
    this.collection.finish(lease,runId,{status:result.status,reason:result.reason??null,coverage});return {runId,status:result.status,posts:result.posts.length,requests:result.requests};

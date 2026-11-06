@@ -1,5 +1,5 @@
 import {spawnSync} from 'node:child_process';
-import {mkdirSync,readFileSync,writeFileSync,lstatSync} from 'node:fs';
+import {mkdirSync,readFileSync,writeFileSync,lstatSync,copyFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -15,4 +15,5 @@ if(process.platform==='win32'){
  const hash=p=>createHash('sha256').update(readFileSync(p)).digest('hex');let unchanged=false;
  try{const saved=JSON.parse(readFileSync(stamp,'utf8'));unchanged=!lstatSync(binary).isSymbolicLink()&&saved.source===hash(source)&&saved.desktopSource===hash(desktopSource)&&saved.binary===hash(binary);}catch{}
  if(!unchanged){const r=spawnSync(compiler,['/nologo','/target:exe','/platform:x64','/optimize+','/reference:System.Security.dll','/reference:System.Web.Extensions.dll',`/out:${binary}`,source,desktopSource],{stdio:'inherit',windowsHide:true});if(r.status!==0)throw Error('Windows host build failed; no fallback');writeFileSync(stamp,JSON.stringify({source:hash(source),desktopSource:hash(desktopSource),binary:hash(binary)}));}
+ const desktopNative=join(root,'apps/desktop/dist/native');mkdirSync(desktopNative,{recursive:true});copyFileSync(binary,join(desktopNative,'windows-host.exe'));copyFileSync(stamp,join(desktopNative,'windows-build.json'));
 }else console.log('Windows host build skipped on this OS; Windows native validation remains pending.');

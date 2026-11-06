@@ -1,25 +1,21 @@
 # Local desktop implementation work
 
-Original snapshot d08f965; only branch desktop-local-sqlite in the isolated copy.
-Targets macOS 13+ arm64 and Windows 11 x64. Never touch production data/services,
-credentials, real platform operations or paid models during implementation tests.
+Only isolated branch desktop-local-sqlite; original source-baseline.json tree remains read-only.
+Targets macOS 13+ arm64 and Windows 11 x64. No production data, credentials,
+real platform actions or paid model calls in implementation tests.
 
-Current: Electron main registers native LOGIN/COLLECT/INBOX/SEND and model adapters
-behind explicit UI scope consent; SQLite queue/guards, sealed local credentials,
-original strict receipts/journals, bounded collection/inbox and reviewed manual
-contact/replies. Mac package includes fixed browser, restricted Go MCP and owned
-supervisor with sandbox retained. Mac packaged offline native chain and system
-synthetic encryption roundtrip passed. Windows MCP cross-build succeeded; Windows
-Job Object handoff source exists but remains gated and unvalidated on Windows.
+Electron main registers actual restricted native platform and model adapters.
+SQLite v9, durable queue, OS sealed secrets, original exact receipts/journals,
+automation rules/frozen orchestration, inbox yield, independent historical review,
+cross-round checkpoint revalidation and two-session UNKNOWN readback are connected.
+Legacy UNKNOWN maps only with precise immutable sender/recipient/content binding;
+ambiguous evidence stays archived and blocked. Never restart old sending jobs.
 
-149 local tests; 15 desktop IPC/native/wire tests; Mac UI/import/restart/backup,
-packaged self-test and native browser chain. No live platform acceptance.
-Legacy rows fully archived; reliable captures/reviews map to read-only history,
-ambiguous provenance remains explicitly unmapped. Import/restore hold has explicit hash-bound safe recovery UI; UNKNOWN cannot be cleared.
-
-Now added: multiple rule drafts/consent, frozen-round orchestration, persisted decisions, cancellation and final dispatch revalidation; stopped inbox yield/continuation within original expiry, recovery summary and safe new-work enabling.
-
-Still incomplete: full independent-review and
-cross-run recovery UI, importer/recovery parity, Windows native/browser/installer
-acceptance, signing/notarization and real platform acceptance. Do not promote this
-as fully finished or switch original data. See docs/DESKTOP-LOCAL.md.
+161 local tests and 22 desktop boundary/native tests passed. Mac synthetic GUI,
+packaged offline tests and native-browser evidence under .local/desktop-qa.
+Mac preview.4 is arm64, unsigned, live platform unverified. See docs/DESKTOP-LOCAL.md.
+Windows fixed browser statically checked, MCP crosscompiled; resource ACL/private
+journal code and native acceptance-to-NSIS route exist. No Windows machine:
+C#/ACL/DPAPI/Job/browser/installer acceptance remains pending, runtime gate retained.
+Original history overwritten by old shared captures cannot be invented. Full live
+migration, native Windows packaging, install upgrades and signing remain unfinished.

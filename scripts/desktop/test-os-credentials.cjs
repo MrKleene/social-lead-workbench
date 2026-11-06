@@ -6,7 +6,9 @@ app.setName('SocialLeadDesktopCredentialTest');app.setPath('userData',directory)
 app.whenReady().then(()=>{
  assert.equal(safeStorage.isEncryptionAvailable(),true);
  const vaultDir=path.join(directory,'vault');fs.mkdirSync(vaultDir,{mode:0o700});
- const vault=new CredentialStore(vaultDir,{available:()=>true,encrypt:s=>safeStorage.encryptString(s),decrypt:b=>safeStorage.decryptString(b)});
+ const checkPrivateFile=file=>{if(process.platform==='win32')require('../../apps/desktop/src/windows-native.cjs').windowsNative({isPackaged:false},{operation:'file',path:file});};
+ if(process.platform==='win32')require('../../apps/desktop/src/windows-native.cjs').windowsNative({isPackaged:false},{operation:'directory',path:vaultDir,create:false});
+ const vault=new CredentialStore(vaultDir,{available:()=>true,encrypt:s=>safeStorage.encryptString(s),decrypt:b=>safeStorage.decryptString(b)},{checkPrivateFile});
  const synthetic='synthetic-only-'+randomBytes(24).toString('hex');vault.put('MODEL_KEY','qwen',synthetic);
  assert.equal(vault.get('MODEL_KEY','qwen'),synthetic);
  for(const name of fs.readdirSync(vaultDir))assert.equal(fs.readFileSync(path.join(vaultDir,name)).includes(Buffer.from(synthetic)),false);

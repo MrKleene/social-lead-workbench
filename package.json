@@ -89,7 +89,9 @@
     "desktop:verify-package": "node scripts/desktop/verify-package.cjs",
     "desktop:package:mac:preview": "npm run desktop:build && npm run desktop:stage && electron-builder --config apps/desktop/electron-builder.cjs --mac dmg --arm64",
     "desktop:package:mac": "npm run desktop:release-check && npm run desktop:package:mac:preview",
-    "local:export:readonly": "node scripts/local/export-legacy.mjs"
+    "local:export:readonly": "node scripts/local/export-legacy.mjs",
+    "desktop:validate:win": "node scripts/build-windows-host.mjs && node scripts/desktop/build-mcp.mjs && node scripts/desktop/validate-windows-runtime.cjs",
+    "desktop:package:win:preview": "npm run desktop:validate:win && npm run desktop:build && npm run desktop:stage && electron-builder --config apps/desktop/electron-builder.cjs --win nsis --x64"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

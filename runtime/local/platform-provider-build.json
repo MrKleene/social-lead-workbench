@@ -10,6 +10,7 @@
     "apps/api/src/collection/mcp/policy.ts": "c03362ef3c685291726f2a31187242928917fefef094214076824dc2638af13b",
     "apps/api/src/collection/mcp/transport.ts": "b8e09ce159540f54a421ecef68d1eba2680dd1db7c12ba22f858bd26e8ed262a",
     "apps/api/src/collection/post-reference.ts": "98fd9fa48d0dfb9628e9a38e151610cd19b62f6be79ebec673c9366a474a6a23",
+    "apps/api/src/direct-messages/dm-readback.ts": "e720fc0f8efcde7964e67c157829c620954b84cc2a13c99ab52728c07877d015",
     "apps/api/src/direct-messages/dm-send-protocol.ts": "d53f0b889c524721a106a240d878229cff9fbed15d74cdccd6c5a1912da09f3c",
     "apps/api/src/direct-messages/dm-transport.ts": "871cd4853e898bf3674ea7ff54fc8abeb188359ecc697894aefd4d5d400260c4",
     "packages/contracts/src/auto-contact.ts": "0eab9e1a3be64441090b0aefa80602126aa043ee12a20604e7e0eff879b32895",
@@ -37,7 +38,7 @@
     "packages/contracts/src/semantic-output-errors.ts": "76a53d54d528d187ef443d8d839b0c044a97aaad978a35069958a67b966e288c",
     "packages/contracts/src/semantic-review.ts": "52a1cf4b5f1cfb962c8f939c4ebdd9cdda1dc965317eb090416343d35c61799c",
     "packages/contracts/src/xhs-reference-parameters.ts": "255a91480a80a1884178f0fe6cb2e637a845da2a420f98f7d9d4eaf7543cb9cf",
-    "packages/local-policy/src/platform-provider.ts": "9b8663582dbb29ac6a44bd2ecac16308c243de4a58ffe0e885b45e43cebc5a23"
+    "packages/local-policy/src/platform-provider.ts": "24db9338fa00b598d7896e3a33defbbedb1904bd93e168a2cf8e57d670dc380a"
   },
-  "outputSha256": "6032f5714cf1913b69fb0cd42e9e28dbc41a7d8b8e3be98f83e938b49512a781"
+  "outputSha256": "05d039732114d7ae0ab25e5ab5d8942528833502cb0c0fc0a25c9ae6fdc11f72"
 }

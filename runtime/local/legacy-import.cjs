@@ -74,7 +74,7 @@ function importLegacySnapshot(store,snapshot){
    if(accounts.has(accountId)&&typeof platformId==='string'&&platformId)store.db.prepare('INSERT INTO inbound_history_blocks VALUES(?,?,?) ON CONFLICT(account_id,platform_id) DO NOTHING').run(accountId,platformId,a.outcome);
   }
   for(const usage of tables.AccountDay||[]){if(!accounts.has(usage.accountId)||!/^REAL:Asia\/Shanghai:\d{4}-\d{2}-\d{2}$/.test(usage.day))continue;if(!Number.isInteger(usage.occupied)||usage.occupied<0||usage.dailyLimitOverride!=null&&(!Number.isInteger(usage.dailyLimitOverride)||usage.dailyLimitOverride<0||usage.dailyLimitOverride>1000))throw new LocalError('INVALID_LEGACY_QUOTA');store.db.prepare('INSERT INTO account_days VALUES(?,?,?,?)').run(usage.accountId,usage.day.slice('REAL:Asia/Shanghai:'.length),usage.occupied,usage.dailyLimitOverride??null);}
-  const nativeHistory=require('./legacy-history.cjs').importHistory(store,tables,id);
+  const nativeHistory={...require('./legacy-history.cjs').importHistory(store,tables,id),...require('./legacy-evidence.cjs').importUnknownEvidence(store,tables,id)};
   const event=store.audit('IMPORT','LEGACY_BUSINESS_IMPORTED',id,{sourceHash:digest,counts,credentialsImported:false,automaticTasksResumed:false,nativeMessages,nativeHistory});
   store.db.prepare("INSERT INTO safety_state VALUES('sending',1,?,'LEGACY_IMPORT_REQUIRES_REVIEW',?)").run(event,now);
   return {id,counts,reused:false,credentialsImported:false,sendPaused:true,nativeMessages,nativeHistory};

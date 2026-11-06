@@ -31,7 +31,7 @@ class LocalQueue {
   return this.store.transaction(()=>{
    const now=this.store.clock();
    // An expired lease must be reconciled first, never stolen and blindly replayed.
-   if(this.db.prepare("SELECT 1 FROM jobs WHERE state='RUNNING' LIMIT 1").get())return null;
+   if(this.db.prepare("SELECT 1 FROM jobs WHERE state='RUNNING' LIMIT 1").get()||this.db.prepare("SELECT 1 FROM evidence_checks WHERE state='RUNNING'").get())return null;
    this.db.prepare("UPDATE jobs SET state='CANCELLED',updated_at=? WHERE state='QUEUED' AND (cancel_requested=1 OR NOT EXISTS(SELECT 1 FROM authorizations a WHERE a.id=jobs.authorization_id AND a.state='ACTIVE' AND a.expires_at>?))").run(now,now);
    const row=this.db.prepare("SELECT * FROM jobs WHERE state='QUEUED' AND available_at<=? ORDER BY CASE WHEN kind='SEND' THEN 0 ELSE 1 END,created_at,rowid LIMIT 1").get(now);if(!row)return null;
    this.db.prepare("UPDATE jobs SET state='RUNNING',lease_owner=?,lease_until=?,fence=fence+1,updated_at=? WHERE id=? AND state='QUEUED'").run(owner,now+leaseMs,now,row.id);

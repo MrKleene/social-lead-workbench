@@ -1,71 +1,74 @@
 # 单人本地桌面版：实现与验证
 
-2026-11-06，隔离分支 `desktop-local-sqlite`。目标是 macOS 13+ Apple Silicon 和 Windows 11 x64；共享 Electron 45.2.3、React、内置 SQLite、本地持久队列。安装用户无需另装 Docker、PostgreSQL、Redis、Node、Go 或浏览器。
+2026-11-06，隔离分支 `desktop-local-sqlite`。目标为 macOS 13+ Apple Silicon 和 Windows 11 x64；Electron 45.2.3、React、内置 SQLite、本地持久队列。安装用户无需另装 Docker、PostgreSQL、Redis、Node、Go 或浏览器。
 
-**Mac 已有包含平台组件的可安装测试版；两平台完整产品交付仍未完成。** 不应替换原工作台。当前没有迁移、覆盖或启动真实业务数据，没有真实平台采集、消息发送或付费模型调用。原工作区 1612 个基线文件复核无变动。
+**Mac 已生成包含实际平台组件的测试版；Windows 安装包与正式产品验收尚未完成。** 原工作台及业务数据不动，不能直接替换原工作台。本次只使用合成数据、临时库和本地页面，无真实扫码、采集、收件、发送或付费模型调用。
 
-## 已接入的实际代码
+## 实际可运行范围
 
-- 无工作台账号密码；首次初始化后进入本地工作台。小红书账号身份、发送权限与独立风险限制继续保留。
-- 多组关键词（每组最多 100 条）、多条匹配目标、评论/私信模板，模型配置和逐批费用/原文授权。
-- 扫码登录：主进程启动固定 LOGIN 模式；二维码有界；稳定平台 ID 校验、重登不能换人或清除限制；原生进程确认退出后才加密保存 Cookie。取消/过期清理临时目录。
-- 有界采集：UI 预览账号、关键词、笔记数和匹配目标；确认后冻结版本，注册原有限采集器/XhsMcpAdapter；HTTP 稳定身份证明、原文与分块检查点同事务；来源访问引用保存在系统密文库。
-- 模型审核：固定北京接口，原整帖输入/证据校验、预算、等待间隔和持久提交意图。无重试、换模型或隐式环境 Key。
-- 限时收件：显式同意可能标记已读，最多 15 分钟；分段受管原生会话、历史补读、推送帧解析、身份/代次/租约/去重、自然新消息与历史基线分开。UI 可通过任务列表取消。不会自动回复。
-- 私信回复：只有可靠入站身份和最新锚点才能预览；逐条确认账号、对象、内容。原精确 DM 协议最多一次，平台 ID 和新页面读回必须绑定同一目标及内容。
-- 人工审核联系：原生新轮次的审核结果须明确通过，且完整性屏障、原文和证据仍有效；UI 选择账号、渠道、模板及内容，再确认单次联系。评论先执行只读精确目标预检，证明绑定当前会话/账号/构建且最多有效 5 分钟。
-- SEND 执行器已注册。先在 SQLite 持久记录发送意图；发送前再次检查资格，结束后先确认原生进程停止、保存原阶段日志再删除临时目录。错误回执、日志缺失、断线或停止无法确认均保留 UNKNOWN/额度并暂停，不自动重发。
+- 首次初始化后进入免工作台登录的本地界面；小红书账号、发送授权、风险限制仍保留。多组关键词、多个匹配目标、模板、模型设置、记录及备份都有界面。
+- 主进程注册实际 LOGIN/COLLECT/INBOX/SEND 和模型执行器，调用原有限采集器、精确评论/私信协议及模型证据规则。普通安装包没有模拟平台替代物。只有专用临时测试参数禁用外部执行器和系统凭据。
+- 扫码必须取得稳定平台身份并确认进程停止，才加密保存会话；重新登录不能换人或解除账号限制。
+- 采集冻结账号、配置、审核目标和明确授权的自动联系规则；按轮保存独立原文与分块检查点。来源访问凭据存系统密文库。
+- 模型审核逐批预览原文、范围和费用，明确授权；提交意图持久化，未知调用保留预算，不盲目重试。固定原接口，没有环境 Key 或任意 URL 后门。
+- 多规则管理、草稿停用、精确授权、按轮冻结、完整审核屏障后幂等派生、停用取消待发与提交前重验均接入。没有自动换账号。
+- 收件授权最多十五分钟，明确可能标记已读；需要发送时先停止收件进程，随后仅在原截止时间内续收。身份/代次/账号租约、去重、历史基线和自然新消息区分保留。
+- 历史私信缺可靠入站身份时仅可查看；最新可靠入站锚点、账号、对象和内容均通过检查才能人工回复。人工审核联系仍须明确通过、证据有效和单次授权。
+- SEND 先持久记录意图，提交前再检查资格；停止证明、阶段日志、平台回执与精确读回共同决定结果。断线、日志不足、回执不一致或停止不明继续 UNKNOWN，额度不释放、不自动重发。
 
-以上链路不是空适配器或占位页面；代码已经接到 Electron 主进程。但真实平台页面、扫码、自然新消息和真实发送效果仍未做本次验收，不能把合成成功当作平台验收。
+代码接入和合成成功不代表真实平台验收。平台页面变更、扫码、实际覆盖、自然新消息时效及真实发送仍需要用户明确授权的独立验收。
 
-## 系统与安全边界
+## 本轮补全：独立审核、历史恢复、UNKNOWN
 
-`runtime/local/database.cjs` 使用 SQLite WAL/FULL/FK 和同步 BEGIN IMMEDIATE；队列按 owner/fence/expiry 领取。重启撤销旧会话未消费授权及排队工作，已提交未知不重放。模型与平台执行器在合成测试模式全部禁用。
+历史界面可以分页查看原文/评论，并切换同一笔记不同轮次的快照。只有来源摘要、完整性报告、评论成员/计数、任务状态一致的原生历史笔记才能独立审核。独立审核使用当前启用的目标和模型，单独授权；不借用旧轮次配置，不获得自动联系资格。人工通过后仍需独立联系预览/授权及提交前重验。
 
-Mac 随包包含固定 Chromium 148.0.7778.215、源代码构建的专用 Go MCP 和 C 监督器。MCP 每次只开放 LOGIN/COLLECT/INBOX/DM/COMMENT/PREFLIGHT 对应工具或登录路由，禁止旧发布、点赞等通用接口。只监听随机数字回环地址，随机 Bearer 凭据不进入 renderer。主应用没有管理 HTTP 服务，使用固定 IPC、受信主窗口/mainFrame/origin 检查、请求大小限制、renderer 沙箱及 contextIsolation。
+可使用本机仍有效的来源引用重新读取一个保存笔记，创建新轮次并保留旧轮次。检查点续读先核对历史行摘要、checkpoint 摘要和评论身份，再复制到新轮次，由原平台适配器重新验证锚点；新进度必须带分块证明。缺锚点或身份冲突不能宣称完整。缺少旧访问凭据时，可通过新搜索找到同一平台笔记后再读取；不从旧导出文件恢复 Cookie 或令牌。
 
-Mac 监督器持有独占操作锁，按本次创建的进程组托管子孙；控制器 EOF/取消后停止，再发送肯定退出证明，给主进程短暂密封凭据/保留日志窗口，最后清理。修正了原依赖另建进程组和默认关闭浏览器沙箱的问题；现在保留沙箱且关闭嵌套 leakless。不会使用历史存盘 PID 杀进程。
+UNKNOWN 核对是独立只读模式：固定 DMVERIFY/VERIFY 专用工具、原账号/对象/内容、两次独立会话、两次均确认停止、相同且严格匹配的消息证据，才能将原发送标为 CONFIRMED。界面提交的候选评论 ID 只是查找线索，不能当证据。查不到、冲突、取消、超时或重启保留 UNKNOWN；停止失败另设平台暂停。没有“标记失败并重发”入口。
 
-Windows 新增 `WindowsDesktop.cs`：挂起创建后加入 kill-on-close Job Object，再启动；父进程退出/控制通道关闭时停止，确认 Job 清空后做凭据交接和目录清理。共享 JS 已实现 Windows stdin/CRLF 生命周期协议，但 C#、ACL、DPAPI、Chromium 和安装仍必须真机验证。现有 Windows 浏览器审核门槛保留；不会因为 Mac 测试通过就开启 Windows 平台操作。
+已确认后仍保留额度、历史联系限制与原始记录；发送暂停还须独立核对后明确解除。旧 UNKNOWN 只有历史发送账号、稳定发送人、接收人、目标、内容和时间可精确绑定时才建立原生核对记录，创建的是已撤销授权与不可执行旧任务。多个冲突记录或缺失绑定仅保留档案，继续阻止解除暂停，绝不补造身份。旧模型 UNKNOWN 也不能靠平台读回解除。
 
-Mac 数据位于 `~/Library/Application Support/SocialLeadDesktop`，Windows 预定 `%LOCALAPPDATA%\SocialLeadDesktop`。安装目录仅程序资源。Key/Cookie/来源访问引用通过 Electron safeStorage 密封，不进 Git、业务备份或日志。Cookie 仅在受限操作临时目录中为浏览器短暂解密，停止证明后清理。系统加密不可用时拒绝保存，无明文降级。Mac 合成 Key 已实际完成系统加密往返；Windows safeStorage 对应用户 DPAPI 尚未验收。
+## 数据、凭据与应用边界
 
-SQLite/备份不做整库加密，使用私有用户目录；不自动同步。系统加密不能防御同一用户权限的恶意程序。跨电脑恢复后需要重新输入模型 Key、扫码登录；来源访问引用需重新采集。同步 safeStorage API 在固定 Electron 45.2.3 可用但有弃用提示，后续升级需迁移异步 API并重测兼容。
+SQLite WAL/FULL/FK；同步 BEGIN IMMEDIATE；队列 owner/fence/expiry。启动撤销未消费旧授权，未知外部提交不重放。schema v1–v9 逐版本校验，升级前保留一致性副本。
 
-## 迁移、备份和旧数据
+Mac 数据在 `~/Library/Application Support/SocialLeadDesktop`；Windows 在 `%LOCALAPPDATA%\SocialLeadDesktop`。安装目录只有程序。Key/Cookie/来源引用通过 safeStorage 系统保护，不进 Git、业务备份或日志。临时 Cookie 在私有受管目录解密，确认停止并交接后清理；无系统加密就拒绝保存。Mac 系统加密合成值往返已实测，Windows 用户 DPAPI 未实测。SQLite 本身没有整库加密；不能防御同一用户权限的恶意程序。跨电脑需重新输入 Key、登录和获取来源引用。
 
-业务 JSON → 独立新库 → 核对逐表计数 → 明确确认 SHA256 → 备份当前库 → 原子切换活动库指针。SQLite 恢复也先到新副本。原库保留，不重命名打开中的 SQLite，不从运行中的主文件直接复制。升级前保留一致性副本并校验 v1–v7 迁移摘要。
+无工作台管理 HTTP 服务；受信主窗口的固定 IPC、mainFrame/origin 校验、请求边界、沙箱/contextIsolation、禁止窗口外跳和权限申请。MCP 仅本次随机数字回环地址/Bearer，凭据不进入 renderer；每个进程只注册指定业务工具，其他发布/点赞接口不可达。
 
-白名单全部业务行在 `legacy_records` 保留并可分页查阅，排除登录用户、令牌、设备授权、模型 Key 和 Cookie。原生映射包括账号、配置/模板/目标、每日额度（含 0）、勿联系/去重、独立账号风险、收件和历史已回复标记，以及可证明归属的采集轮次、笔记、评论、带分数审核结果。
+Mac 原生监督器持有本次进程组与独占锁；停止证明后等待明确数据交接，再清理。T 停止请求不能误作 D 交接完成。保留浏览器沙箱，不使用存盘 PID 杀进程。
 
-旧库的共享捕获记录可能由后续轮次更新，因此无法凭最后快照重建每一轮的完整原文。无法可靠映射的记录保留在档案并计入 unmapped 计数，绝不编造归属。原生历史轮次标记 `LEGACY_HISTORY_READ_ONLY`，审核自动联系资格为 0；不能重启旧任务或借旧审核发送。历史 actorId 仅为档案文字，没有创建工作台用户体系。
+## 迁移与备份
 
-导入/恢复后新增安全核对界面：展示映射计数、未知结果、账号限制及去重/禁发数。仅当没有活动任务、未知发送/模型或平台进程暂停时，明确确认已停止旧工作台后，才可解除副本待核对暂停。预览摘要变化即拒绝；不清除历史限制、额度或恢复旧授权。UNKNOWN 的可靠平台读回核对界面尚未完成，不能直接标记失败或重发。**完整旧业务可操作迁移仍未完成**，原始行存档完整不等于业务功能全部迁入。
+只读一致性导出 → 独立副本导入 → 查看映射及逐表数量 → 确认 SHA256 → 备份当前库 → 原子切换活动库指针。原库保留；不直接复制运行中 SQLite 主文件。恢复副本撤销旧授权、平台重新登录；没有自动恢复旧任务。
 
-只读导出命令 `npm run local:export:readonly -- --ack-readonly-source /私有目录/business-export.json`；连接串仅从显式 `LOCAL_LEGACY_EXPORT_DATABASE_URL` 获取，不自动加载 .env。导出使用 REPEATABLE READ + READ ONLY。此轮仅用合成数据库客户端验证，没有连接真实 PostgreSQL。正式切换前还需停止旧执行器并核对快照后新增的发送证据。
+业务白名单全部归档，可证明归属的账号、配置/目标/模板、每日额度（含 0）、去重/勿联系、独立账号风险、收件及已回复标记、采集/评论/审核历史转原生。历史审核默认无发送资格；actorId 只保留为档案文字，没有工作台用户表。
 
-## 构建与证据
+旧共享捕获记录若被后轮覆盖，无法重建不存在的逐轮原文。保留档案并显示 unmapped，不虚构历史。这些记录需要新的读取/审核，不能视为全部旧任务可续跑。导入全部原始业务行不等于完整业务语义都已恢复。
 
-- `npm run desktop:build`：规则包、TypeScript 和 Vite 通过。
-- `node --test tests/local/*.test.cjs`：149 项通过。
-- `node --test apps/desktop/test/*.test.cjs`：IPC、真实 Mac 监督器/崩溃清理、原生 MCP 模式目录、实际 SDK + 本机合成服务边界，共 15 项。
-- `scripts/desktop/test-ui.cjs`：真实 Electron 窗口，初始化、三条关键词、两条匹配目标、两条规则草稿、无执行器时授权禁用、安全副本恢复确认、历史私信只读、已读持久化、备份、导入/核对/切换、关闭重启和 320/390px 布局通过。
-- `scripts/desktop/test-os-credentials.cjs`：Electron 系统加密合成密钥往返，磁盘无该明文，不读取旧凭据。
-- `scripts/desktop/test-native-browser.cjs`：固定浏览器保留沙箱、本地页面、DNS 关闭、内置完整开源许可提取、子进程和临时目录清理通过。
-- `scripts/desktop/test-mcp-browser.cjs /绝对路径/App/Contents/Resources/native/darwin-arm64`：直接使用安装包内 Go → 浏览器 → CDP 渲染本地页面，通过；没有平台导航。
-- `verify-package.cjs`：ASAR 与源码逐文件比对、无 node_modules/环境/业务文件、fuses 和原生资源 SHA 校验。
-- `test-package.cjs`：安装包内固定离线自检通过；自建临时数据库、初始化、配置、备份，凭据和外部执行器禁用。
+只读导出：`npm run local:export:readonly -- --ack-readonly-source /私有目录/business-export.json`，连接串只从显式 `LOCAL_LEGACY_EXPORT_DATABASE_URL` 读取，不加载 .env。本次没有连接真实 PostgreSQL。实际切换必须先停止旧执行器并核对导出后的增量证据。
 
-构建者需准备固定 Go 1.24.13、项目依赖模块缓存和经审核浏览器程序；普通安装用户不需要这些开发依赖。`build-supervisor.mjs`、`build-mcp.mjs`、`prepare-browser.mjs` 生成本机原生资源；Mac 再执行 `desktop:package:mac:preview`。原生组件许可随包附带。`build-mcp.mjs --windows-x64` 已在 Mac 交叉编译生成 PE32+ x86-64 MCP；不是 Windows 运行验收。
+## Windows 构建状态
 
-本次 Mac 文件：`.local/desktop-packages/Social-Lead-Desktop-0.1.0-preview.3-mac-arm64.dmg`。未有 Developer ID 签名/公证，仅本机开发测试；不声称通过下载隔离属性/Gatekeeper、安装升级或其他 Mac 机器验收。Intel Mac 无验证构建。
+固定 Windows Chromium 148.0.7778.215 ZIP 已下载，SHA256 `5ae94143fa323167b7085242504e05dc8eeb6d96ca5feb80c887ade36f242b40`，76 个文件完成结构、路径、PE x64、版本及逐文件哈希检查；没有在 Windows 执行，不代表发行者签名验证或安全审计。固定来源见 `apps/desktop/windows-browser-source.json`。
 
-新增规则管理：可新增/编辑多条规则草稿，每条界面指定一个账号和渠道、内容、阈值与每日上限。保存后停用，精确预览授权后方可在采集时选择；采集确认会明确提示自动发送，审核预览再次提示。整轮全部审核完成后派生持久任务，记录派生/跳过原因，幂等且不失败换号。停用会取消待发任务；真正提交前重验规则。评论规则配置不要求短时能力证明，但实际发送仍须新的预检证明。
+Windows MCP 已在 Mac 交叉编译为 PE x64；C# helper/Job Object、私有目录与资源 ACL、DPAPI、日志读取、受管浏览器和凭据交接有源代码及构建流程。原生运行入口要求精确绑定 MCP/helper/browser/license 的真机离线验证文件，缺失就禁用平台能力。未放宽为“Mac 通过即 Windows 通过”。
 
-收件遇到排队发送会先停止本次原生进程，确认停止后让出；只在同一原始授权截止时间内重新排队，不延长十五分钟窗口。取消、过期、重启、停止无法确认均不自动续收。界面显示状态与截止时间。
+构建者在 Windows 11 x64 系统 NTFS 用户目录准备 Node/项目依赖、固定 Go 1.24.13 windows/amd64 和现有 Go 模块缓存（普通安装用户无需这些）。PowerShell 示例：
 
-剩余重点：采集跨轮恢复/独立审核完整流程；UNKNOWN 可靠平台证据核对 UI 和完整迁移业务对齐；Windows 浏览器审核、C# 编译/ACL/DPAPI/Job 清理及干净机器 NSIS 安装；正式签名、公证、升级兼容；明确授权后的真实平台验收。`desktop:release-check` 继续阻止正式发布。
+```powershell
+$env:DESKTOP_GO = 'C:\BuildTools\go\bin\go.exe'
+$env:DESKTOP_GO_MODCACHE = 'C:\BuildTools\gomodcache'
+node scripts/desktop/prepare-windows-browser.mjs 'C:\BuildTools\windows-x64.zip' '5ae94143fa323167b7085242504e05dc8eeb6d96ca5feb80c887ade36f242b40'
+npm run desktop:package:win:preview
+```
 
-Windows 构建补充：Go 构建脚本现在支持固定 Windows amd64 编译器及隔离的 Windows 环境变量，不继承模型 Key、代理或服务配置。监督器控制读取线程不再持有可在关闭后复用的 Job 句柄。两项环境单测通过；交叉编译成功仅证明编译，不证明 Windows 实际运行。Windows NativeResources 接入、浏览器清单审核及回复日志的 Windows ACL 适配仍未完成，平台入口继续关闭。
+流程依次编译系统 .NET helper、原生 Go MCP，测试 DPAPI/ACL/重解析点/子孙进程清理、Electron safeStorage、Go→浏览器本地页面和内置开源许可，然后才构建 NSIS。浏览器目标已存在时准备工具拒绝覆盖。安装固定为单用户默认目录，卸载保留业务数据；系统盘 NTFS、非网络盘/重解析点是当前限制。Windows 原生编译/运行、完整打包与干净机器安装/升级/卸载均尚未实测，因此当前没有可交付 Windows 安装包。
 
-最终离线包复测发现并修复 Mac 自然退出与停止请求竞争：监督器现在区分 T（停止）和 D（主进程已保存凭据/日志），仅 D、EOF 或有限超时可结束交接。新增实际原生回归测试：收到 STOPPED 后故意再发 T，确认文件仍在，D 后才清理。
+## Mac 测试与产物
+
+本轮 `desktop:build` 通过，161 项本地核心测试、22 项桌面 IPC/原生/SDK 边界测试通过。实际 Electron 合成 UI 覆盖初始化、多关键词、多目标、多规则、恢复核对、跨轮原文/独立审核预览、旧未知记录登录限制、导入切换/重启、备份和窄屏。模型/平台执行在该测试被禁用。
+
+Mac 包含固定浏览器、Go MCP 与监督器，许可证随包提供。测试版：`.local/desktop-packages/Social-Lead-Desktop-0.1.0-preview.4-mac-arm64.dmg`。最终包证据见 `.local/desktop-qa/package-verification.json`、`packaged-smoke.json`、`mac-artifact.json`、`result.json` 和测试日志。包内本地自检与 Go→浏览器离线渲染只证明安装组件可启动，不证明真实平台成功。
+
+Mac 未有 Developer ID 签名/公证，没有验收下载隔离/Gatekeeper、其他机器安装升级或 Intel Mac。safeStorage 同步 API 在固定版本可用但已提示弃用，升级 Electron 需迁移并复验。`desktop:release-check` 继续阻止正式发布；Windows 真机、真实平台与正式签名发布仍是明确剩余范围。

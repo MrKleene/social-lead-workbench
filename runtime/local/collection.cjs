@@ -49,13 +49,12 @@ class LocalCollection {
         const comments=entry.comments.map(c=>policy.commentSchema.parse(c)),contentHash=hash({id:post.id,title:post.title,body:post.body||''});
         let saved=this.db.prepare('SELECT * FROM run_posts WHERE run_id=? AND platform_id=?').get(runId,post.id);
         if(saved&&saved.content_hash!==contentHash){conflict(post.id,'POST_TEXT_CHANGED',post);continue;}
+        const reference=entry.sourceReferenceRef??null;if(reference!==null&&(typeof reference!=='string'||!/^[-a-zA-Z0-9_]{1,100}$/.test(reference)))throw new LocalError('INVALID_SOURCE_REFERENCE');
         if(!saved){
           const count=this.db.prepare('SELECT count(*) n FROM run_posts WHERE run_id=?').get(runId).n;
           if(count>=plan.batchLimit)throw new LocalError('POST_OUTSIDE_READ_PLAN');
-          const reference=entry.sourceReferenceRef??null;
-          if(reference!==null&&(typeof reference!=='string'||!/^[-a-zA-Z0-9_]{1,100}$/.test(reference)))throw new LocalError('INVALID_SOURCE_REFERENCE');
           const id=randomUUID();this.db.prepare('INSERT INTO run_posts(id,run_id,platform_id,snapshot,content_hash,ordinal,source_reference_ref) VALUES(?,?,?,?,?,?,?)').run(id,runId,post.id,canonical(post),contentHash,count+1,reference);saved=this.db.prepare('SELECT * FROM run_posts WHERE id=?').get(id);addedPosts++;
-        }else this.db.prepare('UPDATE run_posts SET snapshot=? WHERE id=?').run(canonical({...JSON.parse(saved.snapshot),...post}),saved.id);
+        }else this.db.prepare('UPDATE run_posts SET snapshot=?,source_reference_ref=coalesce(?,source_reference_ref) WHERE id=?').run(canonical({...JSON.parse(saved.snapshot),...post}),reference,saved.id);
         for(const c of comments){
           const old=this.db.prepare('SELECT * FROM run_comments WHERE run_id=? AND platform_id=?').get(runId,c.id);
           if(old){if(old.post_id!==saved.id||old.user_id!==c.userId||old.body!==c.text||(old.parent_id||null)!==(c.parentId||null))conflict(c.id,'COMMENT_IDENTITY_OR_TEXT_CHANGED',c);continue;}

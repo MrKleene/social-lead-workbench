@@ -1,0 +1,19 @@
+// Static preparation only. Does not execute Windows files or approve runtime use.
+import fs from 'node:fs';import path from 'node:path';import {createHash} from 'node:crypto';import extract from '@electron-internal/extract-zip';
+const root=path.resolve(import.meta.dirname,'../..'),archive=process.argv[2],expected=process.argv[3];
+if(!archive||!path.isAbsolute(archive)||! /^[a-f0-9]{64}$/.test(expected||''))throw Error('Pass absolute archive path and reviewed expected SHA256');
+const pinned=JSON.parse(fs.readFileSync(path.join(root,'apps/desktop/windows-browser-source.json'),'utf8'));if(expected!==pinned.archiveSha256)throw Error('UNREVIEWED_WINDOWS_BROWSER_ARCHIVE');
+const bytes=fs.readFileSync(archive),sha=b=>createHash('sha256').update(b).digest('hex');if(sha(bytes)!==expected)throw Error('ARCHIVE_HASH_MISMATCH');
+let end=-1;for(let i=bytes.length-22;i>=Math.max(0,bytes.length-65557);i--)if(bytes.readUInt32LE(i)===0x06054b50){end=i;break;}if(end<0||bytes.readUInt16LE(end+4)||bytes.readUInt16LE(end+6))throw Error('ZIP_FORMAT_UNSUPPORTED');
+const count=bytes.readUInt16LE(end+10),names=new Set();let offset=bytes.readUInt32LE(end+16),total=0;if(count<1||count>5000)throw Error('ZIP_BOUND');
+for(let i=0;i<count;i++){
+ if(offset+46>end||bytes.readUInt32LE(offset)!==0x02014b50)throw Error('ZIP_DIRECTORY_INVALID');const flags=bytes.readUInt16LE(offset+8),method=bytes.readUInt16LE(offset+10),size=bytes.readUInt32LE(offset+24),length=bytes.readUInt16LE(offset+28),extra=bytes.readUInt16LE(offset+30),comment=bytes.readUInt16LE(offset+32),mode=bytes.readUInt32LE(offset+38)>>>16,name=bytes.subarray(offset+46,offset+46+length).toString('utf8');
+ if(flags&1||![0,8].includes(method)||(mode&0o170000)===0o120000||size>536870912||(total+=size)>2147483648||!name.startsWith('browser/')||name.includes('\\')||/[\x00-\x1f:*?"<>|]/.test(name)||name.split('/').some((s,j,parts)=>s==='.'||s==='..'||!s&&j<parts.length-1||/[. ]$/.test(s)||/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(s))||names.has(name.toLowerCase()))throw Error('UNSAFE_ZIP_ENTRY');names.add(name.toLowerCase());offset+=46+length+extra+comment;
+}
+if(offset!==bytes.readUInt32LE(end+16)+bytes.readUInt32LE(end+12))throw Error('ZIP_DIRECTORY_INVALID');
+const native=path.join(root,'apps/desktop/dist/native/win32-x64'),stage=fs.mkdtempSync(path.join(root,'.local/desktop-native-build/windows-browser-'));
+try{
+ await extract(archive,{dir:stage});const folder=path.join(stage,'browser'),binary=fs.readFileSync(path.join(folder,'chrome.exe')),pe=binary.readUInt32LE(60);if(binary.toString('ascii',0,2)!=='MZ'||binary.readUInt32LE(pe)!==0x00004550||binary.readUInt16LE(pe+4)!==0x8664||!binary.includes(Buffer.from('148.0.7778.215','utf16le')))throw Error('WINDOWS_BROWSER_VERSION_OR_ARCH_CHANGED');
+ const files={};function walk(dir){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const file=path.join(dir,e.name),s=fs.lstatSync(file),rel=path.relative(folder,file).split(path.sep).join('/');if(e.isDirectory())walk(file);else if(!e.isFile()||s.isSymbolicLink()||s.nlink!==1)throw Error('UNSAFE_BROWSER_RESOURCE');else files[rel]={sha256:sha(fs.readFileSync(file)),size:s.size};}}walk(folder);
+ fs.mkdirSync(native,{recursive:true});const destination=path.join(native,'browser');if(fs.existsSync(destination))throw Error('BROWSER_DESTINATION_ALREADY_EXISTS');fs.renameSync(folder,destination);fs.writeFileSync(path.join(native,'browser-build.json'),JSON.stringify({platform:'win32',arch:'x64',version:'148.0.7778.215',binary:'browser/chrome.exe',archiveSha256:expected,source:'https://cdn.one-world.ai/browsers/148.0.7778.215/windows-x64.zip',reviewState:'STATIC_ONLY_REQUIRES_WINDOWS_OFFLINE_VALIDATION',files},null,2)+'\n');console.log(JSON.stringify({staticPrepared:true,files:Object.keys(files).length,archiveSha256:expected,windowsExecuted:false,runtimeApproved:false}));
+}finally{fs.rmSync(stage,{recursive:true,force:true});}

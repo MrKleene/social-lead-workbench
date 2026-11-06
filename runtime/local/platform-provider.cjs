@@ -7372,6 +7372,9 @@ __export(platform_provider_exports, {
   XhsExactPreflightTransport: () => XhsExactPreflightTransport,
   XhsHttpTransport: () => XhsHttpTransport,
   endpointUrl: () => endpointUrl,
+  inspectExistingDm: () => inspectExistingDm,
+  journalRecordSchema: () => journalRecordSchema,
+  parseExistingDm: () => parseExistingDm,
   readReplyJournal: () => readReplyJournal,
   sendExactDm: () => sendExactDm
 });
@@ -33068,6 +33071,58 @@ var executionEventSchema = external_exports.discriminatedUnion("stage", [
   external_exports.object({ stage: external_exports.literal("RPC_ERROR"), protocolAttemptId: external_exports.string().uuid(), code: external_exports.enum(["TIMEOUT_OR_CANCELLED", "RATE_LIMITED", "PLATFORM_REFUSED", "TRANSPORT_ERROR"]) }).strict(),
   external_exports.object({ stage: external_exports.literal("TRANSPORT_STOP"), processDiagnostics: external_exports.object({ categories: external_exports.array(external_exports.enum(["PANIC", "TIMEOUT", "BROWSER_DISCONNECTED", "OTHER"])).max(4), truncated: external_exports.boolean() }).strict().optional(), protocolAttemptId: external_exports.string().uuid(), stopped: external_exports.boolean(), journal: external_exports.object({ state: external_exports.enum(["AVAILABLE", "MISSING", "INVALID", "TRUNCATED"]), records: external_exports.array(journalRecordSchema).max(64) }).strict() }).strict()
 ]);
+
+// apps/api/src/direct-messages/dm-readback.ts
+var import_node_crypto2 = require("node:crypto");
+var DM_OBSERVE_PROTOCOL = "workbench.xhs.dm-conversation-inspection.v1";
+function parseExistingDm(raw, c) {
+  const r = external_exports.object({ protocol: external_exports.literal(DM_OBSERVE_PROTOCOL), code: external_exports.literal("CONVERSATION_OBSERVED_NOT_SEND_READY"), stopped: external_exports.literal(true), inputs: external_exports.literal(0), submissions: external_exports.literal(0), openInvocations: external_exports.literal(1), observedAt: external_exports.string().datetime(), observation: external_exports.object({ identity: external_exports.literal("MATCH"), route: external_exports.literal("CHAT"), risk: external_exports.literal(false), loginChallenge: external_exports.literal(false), boundRecipient: external_exports.literal(true), conversationKind: external_exports.literal("c2c"), loading: external_exports.literal(false), headerPresent: external_exports.literal(true), messages: external_exports.array(external_exports.object({ id: external_exports.string().max(120), contentSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), failed: external_exports.boolean(), pending: external_exports.boolean() })).max(5) }) }).parse(raw);
+  const matching = r.observation.messages.filter((m) => m.contentSha256 === c.contentSha256);
+  if (matching.length !== 1 || matching[0].failed || matching[0].pending || !validDmMessageId(matching[0].id, c.senderId, c.recipientId)) throw Error("DM_READBACK_UNVERIFIED");
+  return { messageId: matching[0].id, senderId: c.senderId, recipientId: c.recipientId, contentSha256: c.contentSha256, observedAt: r.observedAt };
+}
+async function inspectExistingDm(owned, expectedHash, command, signal) {
+  const c = command, inspectionId = (0, import_node_crypto2.randomUUID)(), input2 = { protocol: DM_OBSERVE_PROTOCOL, inspectionId, accountId: c.accountId, senderId: c.senderId, recipientId: c.recipientId, maxOpenings: 1, maxInputs: 0, maxSubmissions: 0 }, endpoint = owned.url.href, u = new URL(endpoint);
+  if (owned.binarySha256 !== expectedHash || owned.accountId !== c.accountId || !/^[a-f0-9]{64}$/.test(owned.token) || u.hostname !== "127.0.0.1" || u.protocol !== "http:" || u.pathname !== "/mcp" || u.username || u.password || u.search || u.hash) throw Error("DM_OWNED_ENDPOINT_MISMATCH");
+  let calls = 0, requests = 0;
+  const client = new Client({ name: "crm-exact-dm", version: "1" }, { capabilities: {} });
+  const transport = new StreamableHTTPClientTransport(u, { requestInit: { redirect: "error", credentials: "omit" }, reconnectionOptions: { maxRetries: 0, initialReconnectionDelay: 1e3, maxReconnectionDelay: 1e3, reconnectionDelayGrowFactor: 1 }, fetch: async (url2, init) => {
+    if (String(url2) !== endpoint || ++requests > 12) throw Error("DM_TRANSPORT_BOUNDARY");
+    if (init?.method === "GET") return new Response(null, { status: 405 });
+    if (!["POST", "DELETE"].includes(init?.method ?? "")) throw Error("DM_TRANSPORT_METHOD");
+    if (init?.method === "POST") {
+      const rpc = JSON.parse(String(init.body));
+      if (!["initialize", "notifications/initialized", "tools/list", "tools/call", "notifications/cancelled"].includes(rpc.method)) throw Error("DM_RPC_BOUNDARY");
+      if (rpc.method === "tools/call") {
+        if (calls || rpc.params?.name !== "workbench_dm_conversation_inspect" || JSON.stringify(rpc.params.arguments) !== JSON.stringify(input2)) throw Error("DM_ONE_CALL_ONLY");
+        if (signal.aborted) throw Error("DM_CANCELLED");
+        calls++;
+      }
+    }
+    const headers = new Headers(init?.headers);
+    if (headers.has("cookie") || headers.has("authorization")) throw Error("DM_AUTH_OVERRIDE");
+    headers.set("authorization", "Bearer " + owned.token);
+    const res = await fetch(endpoint, { ...init, headers, credentials: "omit", redirect: "error", signal });
+    if (!res.ok) throw Error("DM_HTTP");
+    let bytes = 0;
+    return new Response(res.body?.pipeThrough(new TransformStream({ transform(chunk, ctl) {
+      if ((bytes += chunk.byteLength) > 32e3) throw Error("DM_RESULT_SIZE");
+      ctl.enqueue(chunk);
+    } })), { status: res.status, headers: res.headers });
+  } });
+  try {
+    await client.connect(transport);
+    if (client.getServerVersion()?.name !== "xiaohongshu-mcp") throw Error("DM_SERVER_MISMATCH");
+    const list = await client.listTools({});
+    if (list.nextCursor || list.tools.length !== 1 || list.tools[0].name !== "workbench_dm_conversation_inspect" || list.tools[0].annotations?.readOnlyHint === true || !list.tools[0].description?.startsWith(DM_OBSERVE_PROTOCOL + " ")) throw Error("DM_EXCLUSIVE_MODE_REQUIRED");
+    const raw = await client.callTool({ name: "workbench_dm_conversation_inspect", arguments: input2 });
+    if (raw.isError) throw Error("DM_TOOL_ERROR");
+    return { inspectionId, ...parseExistingDm(raw.structuredContent, c) };
+  } finally {
+    await client.close().catch(() => {
+    });
+  }
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   Client,
@@ -33075,6 +33130,9 @@ var executionEventSchema = external_exports.discriminatedUnion("stage", [
   XhsExactPreflightTransport,
   XhsHttpTransport,
   endpointUrl,
+  inspectExistingDm,
+  journalRecordSchema,
+  parseExistingDm,
   readReplyJournal,
   sendExactDm
 });

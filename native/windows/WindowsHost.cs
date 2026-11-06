@@ -110,6 +110,7 @@ partial class WindowsHost {
    if(args.Length!=0)throw new Exception();
    if(op=="info"){Reply(Canonical(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)));return 0;}
    if(op=="directory"){DirectoryOperation(Text(r,"path"),r.ContainsKey("create")&&Convert.ToBoolean(r["create"]));Reply("");return 0;}
+   if(op=="resource-directory"){CheckAcl(Text(r,"path"),true,false);Reply("");return 0;}
    if(op=="file"||op=="executable"){CheckAcl(Text(r,"path"),false,op=="file");Reply("");return 0;}
    if(op=="protect"||op=="unprotect"){
     Guid device,key;if(!Guid.TryParse(Text(r,"deviceId"),out device)||!Guid.TryParse(Text(r,"keyId"),out key))throw new Exception();

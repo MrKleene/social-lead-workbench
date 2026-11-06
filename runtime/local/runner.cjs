@@ -12,7 +12,7 @@ class LocalRunner {
  recoverStartup(){
   // The application holds its exclusive instance lock. Never resume a previous
   // desktop session's pending external actions merely because the app opened.
-  this.store.transaction(()=>{this.store.db.exec("UPDATE authorizations SET state='REVOKED' WHERE state='ACTIVE'; UPDATE jobs SET state='INTERRUPTED',cancel_requested=1 WHERE state='QUEUED'; UPDATE jobs SET lease_until=0 WHERE state='RUNNING'; DELETE FROM account_leases WHERE owner LIKE 'login:%'");this.store.audit('RECOVERY','DESKTOP_SESSION_RECOVERED','installation');});
+  this.store.transaction(()=>{this.store.db.exec("UPDATE evidence_checks SET state='INTERRUPTED' WHERE state='RUNNING'; UPDATE authorizations SET state='REVOKED' WHERE state='ACTIVE'; UPDATE jobs SET state='INTERRUPTED',cancel_requested=1 WHERE state='QUEUED'; UPDATE jobs SET lease_until=0 WHERE state='RUNNING'; DELETE FROM account_leases WHERE owner LIKE 'login:%'");this.store.audit('RECOVERY','DESKTOP_SESSION_RECOVERED','installation');});
   this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();
  }
  async runOne(){
