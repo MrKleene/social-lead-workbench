@@ -9,6 +9,7 @@ function validateConfiguration(input){
  if(Buffer.byteLength(canonical(input.body))>32768)throw new LocalError('CONFIGURATION_TOO_LARGE');
  if(input.kind==='KEYWORDS'){
   const keywords=input.body.keywords;if(!Array.isArray(keywords)||!keywords.length||keywords.length>100||keywords.some(x=>typeof x!=='string'||!x.trim()||[...x.trim()].length>40))throw new LocalError('INVALID_KEYWORDS');
+  if(new Set(keywords.map(x=>x.trim().normalize('NFKC').toLowerCase())).size!==keywords.length)throw new LocalError('DUPLICATE_KEYWORDS');
   if(Object.keys(input.body).some(x=>!['keywords','excludeWords'].includes(x)))throw new LocalError('INVALID_CONFIGURATION');
   if(input.body.excludeWords!==undefined&&(!Array.isArray(input.body.excludeWords)||input.body.excludeWords.length>100||input.body.excludeWords.some(x=>typeof x!=='string'||!x.trim()||[...x.trim()].length>40)))throw new LocalError('INVALID_KEYWORDS');
  }else if(typeof input.body.text!=='string'||!input.body.text.trim()||input.body.text.length>4000||Object.keys(input.body).some(x=>x!=='text'))throw new LocalError('INVALID_CONFIGURATION');
@@ -17,6 +18,16 @@ function validateConfiguration(input){
 }
 class LocalService {
  constructor(store,vault,options={}){this.store=store;this.vault=vault;this.workflow=new LocalWorkflow(store,vault,options);this.accountService=options.accounts;this.evidence=options.evidence;this.automation=new (require('./automation.cjs').LocalAutomation)(store,{enabled:()=>!!this.workflow.capabilities().send});}
+ previewRunReview(input){return new(require('./run-review.cjs').RunReview)(this.store).preview(input);}
+ authorizeRunReview(input){if(!this.workflow.capabilities().review)throw new LocalError('MODEL_EXECUTOR_UNAVAILABLE');return new(require('./run-review.cjs').RunReview)(this.store).authorize(input);}
+ workspace(){return new(require('./workspace.cjs').LocalWorkspace)(this.store);}
+ workspaceOverview(){return this.workspace().overview();}
+ jobHistory(input){return this.workspace().jobs(input);}
+ replyHistory(input){return this.workspace().replies(input);}
+ accountDetails(){return this.workspace().accountDetails();}
+ updateAccount(input){return this.workspace().updateAccount(input);}
+ disconnectAccount(input){const result=this.workspace().disconnectAccount(input);if(result.secretRef)this.vault?.remove('PLATFORM_SESSION',result.secretRef);return {disconnected:true};}
+ notices(input){return this.workspace().notices(input);}
  status(){return {storage:'SQLITE',loginRequired:false,initialized:!!this.store.db.prepare("SELECT 1 FROM settings WHERE key='initialized'").get(),modelKeyConfigured:!!this.vault?.has('MODEL_KEY','qwen'),credentialsAvailable:!!this.vault?.protector?.available(),platform:{ready:!!this.workflow.capabilities().collect,reason:this.workflow.capabilities().collect?'LOGIN_COLLECTION_REGISTERED':'DESKTOP_PLATFORM_ADAPTER_PENDING'},version:1};}
  initialize(){return this.store.transaction(()=>{this.store.db.prepare("INSERT INTO settings VALUES('initialized','true',1) ON CONFLICT DO NOTHING").run();this.store.audit('LOCAL_USER','INITIALIZED','installation');return {initialized:true};});}
  configurations(){return this.store.db.prepare('SELECT * FROM configurations WHERE archived=0 ORDER BY updated_at DESC,id').all().map(x=>({...x,body:JSON.parse(x.body)}));}
@@ -46,7 +57,8 @@ class LocalService {
  unread(){return new LocalInbox(this.store).unread();}
  markRead({id}){return new LocalInbox(this.store).markRead(id);}
  runs({page=1}={}){this.page(page);return {items:this.store.db.prepare('SELECT r.id,r.status,r.reason,r.created_at,r.finished_at,c.name,(SELECT count(*) FROM run_posts p WHERE p.run_id=r.id) posts,(SELECT count(*) FROM run_comments m WHERE m.run_id=r.id) comments FROM collection_runs r JOIN configurations c ON c.id=r.config_id ORDER BY r.created_at DESC,r.id LIMIT 30 OFFSET ?').all((page-1)*30),total:this.store.db.prepare('SELECT count(*) n FROM collection_runs').get().n,page};}
- reviews({page=1}={}){this.page(page);return {items:this.store.db.prepare('SELECT r.id,r.score,r.context,r.decision,r.reason,r.review_status,r.version,r.created_at,b.review_mode,c.body,p.name policy_name FROM review_results r JOIN run_comments c ON c.id=r.comment_id JOIN review_batches b ON b.id=r.batch_id JOIN review_policies p ON p.id=b.policy_id ORDER BY r.created_at DESC,r.id LIMIT 30 OFFSET ?').all((page-1)*30),total:this.store.db.prepare('SELECT count(*) n FROM review_results').get().n,page};}
+ reviews(input){return this.workspace().reviews(input);}
+ runProgress(input){return this.workspace().runProgress(input); }
  decideReview({id,version,status}){if(typeof id!=='string'||!Number.isInteger(version)||!['APPROVED','REJECTED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_DECISION');return this.store.transaction(()=>{const n=this.store.db.prepare('UPDATE review_results SET review_status=?,version=version+1 WHERE id=? AND version=?').run(status,id,version).changes;if(n!==1)throw new LocalError('REVIEW_CHANGED');this.store.audit('LOCAL_USER','REVIEW_DECISION',id,{status,previousVersion:version});return {updated:true};});}
  legacyOverview(){return {imports:this.store.db.prepare('SELECT id,counts,created_at FROM legacy_imports ORDER BY created_at DESC').all().map(row=>({...row,counts:JSON.parse(row.counts)})),entities:this.store.db.prepare('SELECT entity,count(*) count FROM legacy_records GROUP BY entity ORDER BY entity').all()};}
  legacyPage({entity,page=1}){this.page(page);if(typeof entity!=='string'||!require('./legacy-import.cjs').legacyEntities.includes(entity))throw new LocalError('INVALID_LEGACY_TABLE');return {items:this.store.db.prepare('SELECT import_id,ordinal,body FROM legacy_records WHERE entity=? ORDER BY import_id,ordinal LIMIT 30 OFFSET ?').all(entity,(page-1)*30).map(row=>({import_id:row.import_id,ordinal:row.ordinal,record:JSON.parse(row.body)})),total:this.store.db.prepare('SELECT count(*) n FROM legacy_records WHERE entity=?').get(entity).n,page};}

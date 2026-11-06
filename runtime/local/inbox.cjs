@@ -38,7 +38,7 @@ function boundAccount(store, id, revision, sender) {
 }
 function pageInput(input = {}) {
   const page = input.page ?? 1;
-  if (!Number.isInteger(page) || page < 1 || page > 100000 || input.accountId !== undefined && typeof input.accountId !== 'string' || input.unread !== undefined && typeof input.unread !== 'boolean') throw new LocalError('INVALID_INBOX_QUERY');
+  if (!Number.isInteger(page) || page < 1 || page > 100000 || input.accountId !== undefined && (typeof input.accountId !== 'string' || input.accountId.length>200) || input.query !== undefined && (typeof input.query !== 'string' || input.query.length>200) || input.unread !== undefined && typeof input.unread !== 'boolean') throw new LocalError('INVALID_INBOX_QUERY');
   return {page, offset: (page - 1) * 30};
 }
 
@@ -138,8 +138,8 @@ class LocalInbox {
   list(input = {}) {
     const {page, offset} = pageInput(input);
     if (input.channel !== undefined && !['COMMENT','DM'].includes(input.channel)) throw new LocalError('INVALID_INBOX_QUERY');
-    const filter = 'WHERE (? IS NULL OR account_id=?) AND (? IS NULL OR channel=?) AND (?=0 OR (is_new=1 AND read_at IS NULL))';
-    const args = [input.accountId ?? null,input.accountId ?? null,input.channel ?? null,input.channel ?? null,input.unread ? 1 : 0];
+    const filter = `WHERE (? IS NULL OR account_id=?) AND (? IS NULL OR channel=?) AND (?=0 OR (is_new=1 AND read_at IS NULL)) AND (?='' OR instr(body,?)>0 OR instr(sender_name,?)>0 OR instr(coalesce(post_title,''),?)>0)`;
+    const args = [input.accountId ?? null,input.accountId ?? null,input.channel ?? null,input.channel ?? null,input.unread ? 1 : 0,...Array(4).fill(input.query??'')];
     return {items: this.db.prepare('SELECT *,is_new=1 AND read_at IS NULL AS unread FROM received_messages '+filter+' ORDER BY sequence DESC LIMIT 30 OFFSET ?').all(...args, offset),
       total: this.db.prepare('SELECT count(*) n FROM received_messages '+filter).get(...args).n, page, pageSize: 30};
   }
@@ -151,8 +151,8 @@ class LocalInbox {
       ROW_NUMBER() OVER(PARTITION BY m.account_id,m.sender_id ORDER BY m.sequence DESC) rank,
       SUM(CASE WHEN m.is_new=1 AND m.read_at IS NULL THEN 1 ELSE 0 END) OVER(PARTITION BY m.account_id,m.sender_id) unread
       FROM received_messages m JOIN accounts a ON a.id=m.account_id WHERE m.channel='DM' AND a.state<>'ARCHIVED' AND (? IS NULL OR m.account_id=?))
-      SELECT account_id,sender_id,account_name,sender_name,body,received_at,sequence,unread FROM ranked WHERE rank=1 AND (?=0 OR unread>0)`;
-    const args = [input.accountId ?? null,input.accountId ?? null,input.unread ? 1 : 0];
+      SELECT account_id,sender_id,account_name,sender_name,body,received_at,sequence,unread FROM ranked WHERE rank=1 AND (?=0 OR unread>0) AND (?='' OR instr(sender_name,?)>0 OR EXISTS(SELECT 1 FROM received_messages x WHERE x.account_id=ranked.account_id AND x.sender_id=ranked.sender_id AND x.channel='DM' AND instr(x.body,?)>0))`;
+    const args = [input.accountId ?? null,input.accountId ?? null,input.unread ? 1 : 0,...Array(3).fill(input.query??'')];
     return {items: this.db.prepare(query+' ORDER BY sequence DESC LIMIT 30 OFFSET ?').all(...args,offset), total: this.db.prepare('SELECT count(*) n FROM ('+query+')').get(...args).n, page, pageSize: 30};
   }
   thread({accountId, senderId, page = 1}) {

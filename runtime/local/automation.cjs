@@ -22,11 +22,19 @@ class LocalAutomation{
     let jobId=null,reason='RULE_JOB_CREATED';
     try{
      if(this.db.prepare("SELECT 1 FROM safety_state WHERE id IN('sending','platform') AND reason IS NOT NULL").get())throw new LocalError('SENDING_PAUSED');
-     this.contact.frozen(ref);const a=JSON.parse(rule.accounts)[0];if(!a)throw new LocalError('CONTACT_ACCOUNT_NOT_CONFIGURED');
-     // Account selection is deterministic and never falls back after a failure.
-     const scope=this.contact.plan(row.id,ref.id,plan.channel,a.id).scope;
+     this.contact.frozen(ref);let selected,scope;
+     // Allocate once, before any attempt: only exhausted/zero quotas may move to
+     // the next explicitly authorized account. Identity/risk failures stop planning.
+     for(const a of JSON.parse(rule.accounts)){
+      if(!a.dailyLimit)continue;const candidate=this.contact.plan(row.id,ref.id,plan.channel,a.id).scope;
+      const day=require('./send-safety.cjs').dayAt(this.store.clock()),account=this.db.prepare('SELECT daily_limit FROM accounts WHERE id=?').get(a.id),usage=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(a.id,day);
+      const pending=this.db.prepare("SELECT count(*) n FROM jobs j JOIN authorizations g ON g.id=j.authorization_id WHERE j.kind='SEND' AND j.state IN('QUEUED','RUNNING') AND j.cancel_requested=0 AND g.state='ACTIVE' AND g.expires_at>? AND json_extract(j.payload,'$.accountId')=? AND NOT EXISTS(SELECT 1 FROM send_attempts s WHERE s.request_key=j.request_key)").get(this.store.clock(),a.id).n;
+      if((usage?.occupied??0)+pending>=Math.min(usage?.daily_limit_override??account.daily_limit,a.dailyLimit))continue;
+      selected=a;scope=candidate;break;
+     }
+     if(!selected)throw new LocalError('ACCOUNT_POOL_QUOTA_EXHAUSTED');
      if(this.db.prepare("SELECT 1 FROM jobs WHERE kind='SEND' AND state IN('QUEUED','RUNNING','UNKNOWN') AND json_extract(payload,'$.recipientId')=? AND (json_extract(payload,'$.channel')=? OR state='UNKNOWN')").get(scope.recipientId,plan.channel)||this.db.prepare("SELECT 1 FROM send_attempts WHERE platform='XHS' AND recipient_id=? AND (state IN('RESERVED','DISPATCHED','UNKNOWN') OR channel=? AND state='CONFIRMED')").get(scope.recipientId,plan.channel))throw new LocalError('RECIPIENT_ALREADY_PLANNED_OR_CONTACTED');
-     jobId=this.contact.enqueueInTransaction(row.id,ref.id,plan.channel,a.id);queued++;
+     jobId=this.contact.enqueueInTransaction(row.id,ref.id,plan.channel,selected.id);queued++;
     }catch(error){if(!(error instanceof LocalError))throw error;reason=error.code;skipped++;}
     this.db.prepare('INSERT INTO automation_decisions(run_id,review_id,rule_id,channel,job_id,state,reason,created_at) VALUES(?,?,?,?,?,?,?,?)').run(runId,row.id,ref.id,plan.channel,jobId,jobId?'QUEUED':'SKIPPED',reason,this.store.clock());
    });

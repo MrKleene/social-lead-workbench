@@ -4,7 +4,7 @@ import {Button} from '@/components/ui/button';
 import {localApi,type ReviewPreview} from './local-api';
 export function LocalReviewDialog({runId,onClose,independent=false,postId}:{runId:string;onClose:()=>void;independent?:boolean;postId?:string}){
  const client=useQueryClient(),options=useQuery({queryKey:['local','review-options',runId],queryFn:()=>localApi('postReviewOptions',{runId})}),[post,setPost]=useState(postId??''),[policy,setPolicy]=useState(''),[plan,setPlan]=useState<(ReviewPreview&{requestKey:string})|null>(null),[consent,setConsent]=useState(false);
- const workflow=useQuery({queryKey:['local','workflow'],queryFn:()=>localApi('workflowOverview'),enabled:independent});
+ const workflow=useQuery({queryKey:['local','workflow'],queryFn:()=>localApi('workflowOverview')});
  const policies=independent?workflow.data?.policies.filter(p=>p.enabled):options.data?.policies;
  const selectedPost=post||options.data?.posts[0]?.id,selectedPolicy=policy||policies?.[0]?.id;
  const preview=useMutation({mutationFn:()=>localApi('previewReview',{runId,postId:selectedPost,policyId:selectedPolicy,...(independent?{reviewMode:'INDEPENDENT'}:{})}),onSuccess:data=>{setPlan({...data,requestKey:crypto.randomUUID()});setConsent(false);}});

@@ -11,9 +11,9 @@ cross-round checkpoint revalidation and two-session UNKNOWN readback are connect
 Legacy UNKNOWN maps only with precise immutable sender/recipient/content binding;
 ambiguous evidence stays archived and blocked. Never restart old sending jobs.
 
-161 local tests and 22 desktop boundary/native tests passed. Mac synthetic GUI,
+173 local tests and 22 desktop boundary/native tests passed. Mac synthetic GUI,
 packaged offline tests and native-browser evidence under .local/desktop-qa.
-Mac preview.4 is arm64, unsigned, live platform unverified. See docs/DESKTOP-LOCAL.md.
+Mac preview.5 is arm64, unsigned, live platform unverified. See docs/DESKTOP-LOCAL.md.
 Windows fixed browser statically checked, MCP crosscompiled; resource ACL/private
 journal code and native acceptance-to-NSIS route exist. No Windows machine:
 C#/ACL/DPAPI/Job/browser/installer acceptance remains pending, runtime gate retained.
