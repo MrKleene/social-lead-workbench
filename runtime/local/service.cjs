@@ -16,8 +16,8 @@ function validateConfiguration(input){
  return {kind:input.kind,name:input.name.trim(),body:input.body};
 }
 class LocalService {
- constructor(store,vault,options={}){this.store=store;this.vault=vault;this.workflow=new LocalWorkflow(store,vault,options);}
- status(){return {storage:'SQLITE',loginRequired:false,initialized:!!this.store.db.prepare("SELECT 1 FROM settings WHERE key='initialized'").get(),modelKeyConfigured:!!this.vault?.has('MODEL_KEY','qwen'),credentialsAvailable:!!this.vault?.protector?.available(),platform:{ready:false,reason:'DESKTOP_PLATFORM_ADAPTER_PENDING'},version:1};}
+ constructor(store,vault,options={}){this.store=store;this.vault=vault;this.workflow=new LocalWorkflow(store,vault,options);this.accountService=options.accounts;}
+ status(){return {storage:'SQLITE',loginRequired:false,initialized:!!this.store.db.prepare("SELECT 1 FROM settings WHERE key='initialized'").get(),modelKeyConfigured:!!this.vault?.has('MODEL_KEY','qwen'),credentialsAvailable:!!this.vault?.protector?.available(),platform:{ready:!!this.workflow.capabilities().collect,reason:this.workflow.capabilities().collect?'LOGIN_COLLECTION_REGISTERED':'DESKTOP_PLATFORM_ADAPTER_PENDING'},version:1};}
  initialize(){return this.store.transaction(()=>{this.store.db.prepare("INSERT INTO settings VALUES('initialized','true',1) ON CONFLICT DO NOTHING").run();this.store.audit('LOCAL_USER','INITIALIZED','installation');return {initialized:true};});}
  configurations(){return this.store.db.prepare('SELECT * FROM configurations WHERE archived=0 ORDER BY updated_at DESC,id').all().map(x=>({...x,body:JSON.parse(x.body)}));}
  saveConfiguration(input){const value=validateConfiguration(input);return this.store.transaction(()=>{
@@ -51,6 +51,18 @@ class LocalService {
  legacyOverview(){return {imports:this.store.db.prepare('SELECT id,counts,created_at FROM legacy_imports ORDER BY created_at DESC').all().map(row=>({...row,counts:JSON.parse(row.counts)})),entities:this.store.db.prepare('SELECT entity,count(*) count FROM legacy_records GROUP BY entity ORDER BY entity').all()};}
  legacyPage({entity,page=1}){this.page(page);if(typeof entity!=='string'||!require('./legacy-import.cjs').legacyEntities.includes(entity))throw new LocalError('INVALID_LEGACY_TABLE');return {items:this.store.db.prepare('SELECT import_id,ordinal,body FROM legacy_records WHERE entity=? ORDER BY import_id,ordinal LIMIT 30 OFFSET ?').all(entity,(page-1)*30).map(row=>({import_id:row.import_id,ordinal:row.ordinal,record:JSON.parse(row.body)})),total:this.store.db.prepare('SELECT count(*) n FROM legacy_records WHERE entity=?').get(entity).n,page};}
  page(value){if(!Number.isInteger(value)||value<1||value>100000)throw new LocalError('INVALID_PAGE');}
+ accountOverview(){return this.accountService.overview();}
+ beginLogin(input){return this.accountService.begin(input);}
+ pollLogin(input){return this.accountService.poll(input);}
+ cancelLogin(input){return this.accountService.cancel(input);}
+ previewContact(input){return this.workflow.previewContact(input);}
+ authorizeContact(input){return this.workflow.authorizeContact(input);}
+ previewReply(input){return this.workflow.previewReply(input);}
+ authorizeReply(input){return this.workflow.authorizeReply(input);}
+ previewInbox(input){return this.workflow.previewInbox(input);}
+ authorizeInbox(input){return this.workflow.authorizeInbox(input);}
+ previewCollection(input){return this.workflow.previewCollection(input);}
+ authorizeCollection(input){return this.workflow.authorizeCollection(input);}
  workflowOverview(){return this.workflow.overview();}
  saveModelProfile(input){return this.workflow.saveModel(input);}
  setReviewPolicy(input){return this.workflow.setPolicy(input);}

@@ -9,7 +9,9 @@ const asar=require('@electron/asar'),{getCurrentFuseWire,FuseV1Options}=require(
  assert.equal(entries.some(e=>asar.statFile(archive,e).link),false,'Package contains a link');
  const root=path.resolve(__dirname,'../..');
  for(const file of files){if(file==='package.json')continue;assert.equal(['apps/desktop/src/','apps/web/dist-desktop/','runtime/local/'].some(prefix=>file.startsWith(prefix)),true,'File outside desktop allowlist');assert.equal(fs.existsSync(path.join(root,file)),true,'Unexpected package file');assert.equal(fs.readFileSync(path.join(root,file)).equals(asar.extractFile(archive,file)),true,'Package is stale: '+file);}
+ const nativeVerified=app.endsWith('.app')?!!new (require('../../apps/desktop/src/native-resources.cjs').NativeResources)(path.join(resources,'native',process.platform+'-'+process.arch)).inspect():false;
+ if(nativeVerified)for(const file of ['BROWSER-LICENSES.txt','MCP-LICENSES.txt'])assert.equal(fs.readFileSync(path.join(root,'apps/desktop/dist/native',process.platform+'-'+process.arch,file)).equals(fs.readFileSync(path.join(resources,'native',process.platform+'-'+process.arch,file))),true,'Native license missing or stale');
  const fuses=await getCurrentFuseWire(app),expected={RunAsNode:48,EnableCookieEncryption:49,EnableNodeOptionsEnvironmentVariable:48,EnableNodeCliInspectArguments:48,EnableEmbeddedAsarIntegrityValidation:49,OnlyLoadAppFromAsar:49,GrantFileProtocolExtraPrivileges:48};
  for(const [name,value] of Object.entries(expected))assert.equal(fuses[FuseV1Options[name]],value,'Fuse mismatch: '+name);
- console.log(JSON.stringify({files:files.length,asarBytes:fs.statSync(archive).size,forbiddenFiles:0,staleFiles:0,fusesVerified:true,platform:process.platform,nativeWindowsVerified:false}));
+ console.log(JSON.stringify({files:files.length,asarBytes:fs.statSync(archive).size,forbiddenFiles:0,staleFiles:0,fusesVerified:true,nativeVerified,platform:process.platform,nativeWindowsVerified:false}));
 })().catch(error=>{console.error(error.message);process.exitCode=1;});

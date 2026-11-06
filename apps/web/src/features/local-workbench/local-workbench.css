@@ -7,3 +7,5 @@
 .local-workbench .local-check{display:flex;flex-direction:row;align-items:flex-start;gap:8px;margin:12px 0;font-size:13px}.local-check input{flex:none;margin-top:4px}.local-editor input[type=number]{background:white;border:1px solid #d6d9de;padding:8px;border-radius:5px}
 .local-archive {padding-left:1.25rem;max-height:34rem;overflow:auto;}
 .local-archive pre {white-space:pre-wrap;overflow-wrap:anywhere;font-size:.8rem;max-width:100%;}
+
+.local-login-qr {width:240px;max-width:100%;height:auto;background:#fff;padding:12px;}

@@ -1,0 +1,19 @@
+const test=require('node:test'),assert=require('node:assert/strict'),http=require('node:http'),{randomUUID,createHash}=require('node:crypto');
+const {submitDm,submitComment}=require('../src/send-wire.cjs');
+async function server(t,names,handler){
+ let calls=0;const token='f'.repeat(64),s=http.createServer(async(req,res)=>{try{
+  assert.equal(req.headers.authorization,'Bearer '+token);if(req.method==='GET'){res.writeHead(405).end();return;}
+  if(req.method==='DELETE'){res.writeHead(200).end();return;}
+  let body='';for await(const b of req)body+=b;const rpc=JSON.parse(body);if(rpc.id===undefined){res.writeHead(202).end();return;}
+  let result;if(rpc.method==='initialize')result={protocolVersion:rpc.params.protocolVersion,capabilities:{tools:{}},serverInfo:{name:'xiaohongshu-mcp',version:'synthetic'}};
+  else if(rpc.method==='tools/list')result={tools:names.map(name=>({name,description:'workbench.xhs.exact-dm.v1 synthetic',inputSchema:{type:'object'},annotations:{readOnlyHint:false}}))};
+  else {calls++;result={content:[],structuredContent:handler(rpc.params.name,rpc.params.arguments)};}
+  res.writeHead(200,{'content-type':'application/json'}).end(JSON.stringify({jsonrpc:'2.0',id:rpc.id,result}));
+ }catch{res.writeHead(500).end();}});
+ await new Promise(resolve=>s.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>s.close(resolve)));
+ return {session:{binaryHash:'a'.repeat(64),endpoint:()=>({url:new URL('http://127.0.0.1:'+s.address().port+'/mcp'),token}),stop:async()=>true},calls:()=>calls};
+}
+function dm(){const content='synthetic offline only';return {protocol:'workbench.xhs.exact-dm.v1',attemptId:randomUUID(),requestKey:randomUUID(),accountId:'account',senderId:'a'.repeat(24),recipientId:'b'.repeat(24),content,contentSha256:createHash('sha256').update(content).digest('hex'),maxSubmissions:1,expiresAt:new Date(Date.now()+60000).toISOString()};}
+test('actual SDK DM wire invokes exact synthetic command once after durable boundary callback',async t=>{const c=dm();let boundary=0;const f=await server(t,['workbench_dm_exact'],(name,args)=>{assert.equal(name,'workbench_dm_exact');assert.deepEqual(args,c);assert.equal(boundary,1);return {protocol:c.protocol,attemptId:c.attemptId,requestKey:c.requestKey,kind:'NOT_SENT',reason:'CANCELLED',inputs:0,submissions:0,stopped:true};});const result=await submitDm(f.session,c,AbortSignal.timeout(10000),async()=>{boundary++;return true;});assert.equal(result.kind,'NOT_SENT');assert.equal(f.calls(),1);});
+test('DM callback denial prevents any tools/call from reaching transport server',async t=>{const f=await server(t,['workbench_dm_exact'],()=>{throw Error('must not call');});await assert.rejects(()=>submitDm(f.session,dm(),AbortSignal.timeout(10000),async()=>false));assert.equal(f.calls(),0);});
+test('comment wire rejects missing durable-journal capability before submission',async t=>{const f=await server(t,['workbench_reply_capabilities','workbench_reply_exact','workbench_reply_status','workbench_reply_preflight','workbench_reply_verify'],name=>{assert.equal(name,'workbench_reply_capabilities');return {enabled:true};});let boundary=0;await assert.rejects(()=>submitComment(f.session,{protocol:'workbench.xhs.exact-reply.v1'},AbortSignal.timeout(10000),async()=>{boundary++;return true;}),/CAPABILITY/);assert.equal(boundary,0);assert.equal(f.calls(),1);});

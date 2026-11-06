@@ -6,6 +6,10 @@ const allowed=new Set(['PlatformAccount','PlatformIdentity','SourcePost','Source
 const excluded=new Set(['User','Session','RefreshGrant','RefreshToken','LoginBucket','AccountLogin','AccountSessionReference','ExecutionDevice','DeviceExecutionLease','ModelSettings']);
 const credentialFields=new Set(['password','leasetoken','sourcereference','sourcereferenceref','passwordhash','encryptedkey','csrftoken','cookies','cookie','authorization','loginSessionKey'.toLowerCase(),'sessionkey','tokenhash','xsec_token','xsectoken','privatekey','secret','accesstoken','refreshtoken','token']);
 function clean(value,report){
+ if(typeof value==='string'&&/^https?:\/\//i.test(value)){
+  try{const url=new URL(value);let changed=false;if(url.username||url.password){url.username='';url.password='';report.omittedFields++;changed=true;}for(const key of [...url.searchParams.keys()])if(['xsec_token','access_token','token','auth','authorization','key','api_key','cookie'].includes(key.toLowerCase())){url.searchParams.delete(key);report.omittedFields++;changed=true;}if(changed)return url.href;}catch{/* Ordinary business text stays unchanged. */}
+ }
+
  if(Array.isArray(value))return value.map(v=>clean(v,report));
  if(value&&typeof value==='object'){const out={};for(const [key,v] of Object.entries(value)){if(credentialFields.has(key.toLowerCase())){report.omittedFields++;continue;}Object.defineProperty(out,key,{value:clean(v,report),enumerable:true,writable:true,configurable:true});}return out;}
  return value;
@@ -40,7 +44,7 @@ function importLegacySnapshot(store,snapshot){
    if(legacyAccountRestricted(a)||historicalSendHold(a.loginPlatformUserId))store.db.prepare('INSERT INTO account_holds VALUES(?,?,NULL,?,?,?)').run(randomUUID(),a.id,historicalSendHold(a.loginPlatformUserId)?'LEGACY_REPLY_RESTRICTION':'RESTRICTED',hash({accountId:a.id,status:a.status,source:'LEGACY_ACCOUNT'}),now);
   }
   for(const event of tables.AuditLog||[])if(accounts.has(event.entityId)&&event.action==='ACCOUNT_SEND_OBSERVATION'&&event.metadata?.state&&event.metadata.state!=='UNKNOWN')store.db.prepare('INSERT INTO account_holds VALUES(?,?,NULL,?,?,?)').run(randomUUID(),event.entityId,'LEGACY_ACCOUNT_OBSERVATION',hash(event),now);
-  for(const c of tables.CollectionConfig||[]){if(c.archivedAt)continue;if(!Array.isArray(c.keywords)||!Array.isArray(c.excludeWords))throw new LocalError('INVALID_LEGACY_CONFIGURATION');store.db.prepare('INSERT INTO configurations(id,kind,name,body,revision,updated_at) VALUES(?,?,?,?,?,?)').run(c.id,'KEYWORDS',c.name,canonical({keywords:c.keywords,excludeWords:c.excludeWords}),Math.max(1,c.revision||1),now);}
+  for(const c of tables.CollectionConfig||[]){if(!Array.isArray(c.keywords)||!Array.isArray(c.excludeWords))throw new LocalError('INVALID_LEGACY_CONFIGURATION');store.db.prepare('INSERT INTO configurations(id,kind,name,body,revision,updated_at) VALUES(?,?,?,?,?,?)').run(c.id,'KEYWORDS',c.name,canonical({keywords:c.keywords,excludeWords:c.excludeWords}),Math.max(1,c.revision||1),now);if(c.archivedAt)store.db.prepare('UPDATE configurations SET archived=1 WHERE id=?').run(c.id);}
   for(const r of tables.ReplyTemplate||[]){if(!['DM','COMMENT'].includes(r.channel))throw new LocalError('INVALID_LEGACY_TEMPLATE');store.db.prepare('INSERT INTO configurations(id,kind,name,body,revision,updated_at) VALUES(?,?,?,?,?,?)').run(r.id,r.channel==='DM'?'DM_TEMPLATE':'COMMENT_TEMPLATE',r.name,canonical({text:r.body}),Math.max(1,r.version||1),now);}
   for(const p of tables.CommentReviewPolicy||[]){
    if(typeof p.id!=='string'||!require('./policy.cjs').reviewPolicySaveSchema.safeParse({version:0,name:p.name,target:p.target}).success)throw new LocalError('INVALID_LEGACY_REVIEW_POLICY');
@@ -70,9 +74,10 @@ function importLegacySnapshot(store,snapshot){
    if(accounts.has(accountId)&&typeof platformId==='string'&&platformId)store.db.prepare('INSERT INTO inbound_history_blocks VALUES(?,?,?) ON CONFLICT(account_id,platform_id) DO NOTHING').run(accountId,platformId,a.outcome);
   }
   for(const usage of tables.AccountDay||[]){if(!accounts.has(usage.accountId)||!/^REAL:Asia\/Shanghai:\d{4}-\d{2}-\d{2}$/.test(usage.day))continue;if(!Number.isInteger(usage.occupied)||usage.occupied<0||usage.dailyLimitOverride!=null&&(!Number.isInteger(usage.dailyLimitOverride)||usage.dailyLimitOverride<0||usage.dailyLimitOverride>1000))throw new LocalError('INVALID_LEGACY_QUOTA');store.db.prepare('INSERT INTO account_days VALUES(?,?,?,?)').run(usage.accountId,usage.day.slice('REAL:Asia/Shanghai:'.length),usage.occupied,usage.dailyLimitOverride??null);}
-  const event=store.audit('IMPORT','LEGACY_BUSINESS_IMPORTED',id,{sourceHash:digest,counts,credentialsImported:false,automaticTasksResumed:false,nativeMessages});
+  const nativeHistory=require('./legacy-history.cjs').importHistory(store,tables,id);
+  const event=store.audit('IMPORT','LEGACY_BUSINESS_IMPORTED',id,{sourceHash:digest,counts,credentialsImported:false,automaticTasksResumed:false,nativeMessages,nativeHistory});
   store.db.prepare("INSERT INTO safety_state VALUES('sending',1,?,'LEGACY_IMPORT_REQUIRES_REVIEW',?)").run(event,now);
-  return {id,counts,reused:false,credentialsImported:false,sendPaused:true,nativeMessages};
+  return {id,counts,reused:false,credentialsImported:false,sendPaused:true,nativeMessages,nativeHistory};
  });
 }
 module.exports={prepareLegacySnapshot,importLegacySnapshot,legacyEntities:Object.freeze([...allowed]),credentialFields:Object.freeze([...credentialFields])};

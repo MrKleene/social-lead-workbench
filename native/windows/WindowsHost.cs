@@ -12,7 +12,7 @@ using System.Collections.Generic;
 using System.Web.Script.Serialization;
 using System.Threading.Tasks;
 
-class WindowsHost {
+partial class WindowsHost {
  static readonly SecurityIdentifier User = WindowsIdentity.GetCurrent().User;
  static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 32768 };
  static string Text(Dictionary<string,object> r,string k) { return r.ContainsKey(k)?Convert.ToString(r[k]):""; }
@@ -104,6 +104,7 @@ class WindowsHost {
    int build;if(!Int32.TryParse(Convert.ToString(Microsoft.Win32.Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion","CurrentBuildNumber",null)),out build)||build<22000)throw new Exception();
    Console.InputEncoding=new UTF8Encoding(false);Console.OutputEncoding=new UTF8Encoding(false);
    var r=Json.Deserialize<Dictionary<string,object>>(ReadLine());string op=Text(r,"operation");
+   if(args.Length==1&&args[0]=="desktop"&&op=="desktop")return DesktopSupervise(r);
    if(args.Length==1&&args[0]=="supervise"&&op=="supervise")return Supervise(r);
    if(args.Length==1&&args[0]=="guard"&&op=="guard"){Guard(Convert.ToInt32(r["pid"]));return 0;}
    if(args.Length!=0)throw new Exception();

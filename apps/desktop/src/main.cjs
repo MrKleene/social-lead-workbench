@@ -8,10 +8,18 @@ const {LocalDataManager}=require('../../../runtime/local/data-manager.cjs');
 const {validateCall}=require('./ipc-policy.cjs');
 const {windowsNative}=require('./windows-native.cjs');
 const {LocalRunner}=require('../../../runtime/local/runner.cjs');
+const {LocalAccounts}=require('../../../runtime/local/accounts.cjs');
+const {LocalSendExecutor}=require('../../../runtime/local/send-executor.cjs');
+const sendWire=require('./send-wire.cjs');
+const {LocalInboxExecutor}=require('../../../runtime/local/inbox-executor.cjs');
+const {DesktopInboxWire}=require('./inbox-wire.cjs');
+const {LocalCollectionExecutor}=require('../../../runtime/local/collection-executor.cjs');
+const {NativeResources}=require('./native-resources.cjs');
+const {DesktopPlatformRuntime}=require('./platform-runtime.cjs');
 const {LocalModelExecutor}=require('../../../runtime/local/model-executor.cjs');
 const os=require('node:os');
 protocol.registerSchemesAsPrivileged([{scheme:'workbench',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
-const root=path.resolve(__dirname,'../../..');let window,store,service,runner,ticker,smokeDirectory,closing=false,operations=Promise.resolve();
+const root=path.resolve(__dirname,'../../..');let window,store,service,runner,accounts,ticker,smokeDirectory,closing=false,operations=Promise.resolve();
 // Separate app identity/data from the existing production workbench.
 app.setName('SocialLeadDesktop');
 function privateDirectory(p){
@@ -35,7 +43,9 @@ async function main(){
  const protector={available:()=>!fixture&&safeStorage.isEncryptionAvailable()&&(process.platform!=='linux'||safeStorage.getSelectedStorageBackend()!=='basic_text'),encrypt:s=>{if(fixture)throw Error('FIXTURE_NO_OS_SECRETS');return safeStorage.encryptString(s);},decrypt:b=>{if(fixture)throw Error('FIXTURE_NO_OS_SECRETS');return safeStorage.decryptString(b);}};
  const checkPrivateFile=file=>{if(process.platform==='win32')windowsNative(app,{operation:'file',path:file});};
  const vault=new CredentialStore(credentials,protector,{checkPrivateFile}),dataManager=new LocalDataManager(data,{checkPrivateFile});store=new LocalDatabase(dataManager.activeFile(),{checkPrivateFile});
- const bindRuntime=()=>{service=new LocalService(store,vault,{capabilities:()=>({review:!fixture,collect:false,inbox:false,send:false})});runner=new LocalRunner(store,fixture?{}:{REVIEW:new LocalModelExecutor(store,vault)});runner.recoverStartup();};
+ const resources=new NativeResources(app.isPackaged?path.join(process.resourcesPath,'native',process.platform+'-'+process.arch):path.join(root,'apps/desktop/dist/native',process.platform+'-'+process.arch));
+ const nativeReady=!fixture&&resources.status().ready,platformRuntime=nativeReady?new DesktopPlatformRuntime(privateDirectory(path.join(data,'native-sessions')),resources,vault,{onUnsafeStop:()=>store.transaction(()=>{const event=store.audit('RECOVERY','PLATFORM_PROCESS_STOP_UNCONFIRMED','installation');store.db.prepare("INSERT INTO safety_state VALUES('platform',1,?,'PLATFORM_PROCESS_STOP_UNCONFIRMED',?) ON CONFLICT(id) DO UPDATE SET version=version+1,event_id=excluded.event_id,reason=excluded.reason").run(event,store.clock());})}):{status:()=>({ready:false,reason:fixture?'SYNTHETIC_TEST_MODE':resources.status().reason}),available:()=>false};
+ const bindRuntime=()=>{accounts=new LocalAccounts(store,vault,platformRuntime);service=new LocalService(store,vault,{accounts,capabilities:()=>({review:!fixture,collect:nativeReady,inbox:nativeReady,send:nativeReady})});runner=new LocalRunner(store,fixture?{}:{REVIEW:new LocalModelExecutor(store,vault),...(nativeReady?{SEND:new LocalSendExecutor(store,vault,platformRuntime,sendWire),COLLECT:new LocalCollectionExecutor(store,vault,platformRuntime),INBOX:new LocalInboxExecutor(store,platformRuntime,{wireFactory:(endpoint,sender,signal)=>new DesktopInboxWire(endpoint,sender,signal)})}:{})});runner.recoverStartup();};
  const startTicker=()=>{ticker=setInterval(()=>{if(!closing)void runner.tick().catch(()=>{});},1000);ticker.unref();};
  bindRuntime();startTicker();
  const web=path.join(root,'apps/web/dist-desktop');
@@ -55,6 +65,7 @@ async function main(){
  window.webContents.session.on('will-download',event=>event.preventDefault());
  ipcMain.handle('workbench:call',async(event,method,input)=>{
   try{validateCall(event,window,method,input);if(closing)throw Error('APP_CLOSING');
+   if(method==='cancelLogin')return {ok:true,data:await service.cancelLogin(input)};
    // Serialize renderer mutations with backup/restore. No token or secret is sent in URLs.
    const operation=operations.then(async()=>{
     if(method==='backup'){
@@ -87,5 +98,5 @@ async function main(){
 }
 app.on('window-all-closed',()=>app.quit());
 app.on('quit',()=>{if(smokeDirectory)fs.rmSync(smokeDirectory,{recursive:true,force:true});});
-app.on('before-quit',event=>{if(closing||!store)return;event.preventDefault();closing=true;clearInterval(ticker);void operations.finally(async()=>{await runner?.stop();store.close();store=null;if(smokeDirectory)fs.rmSync(smokeDirectory,{recursive:true,force:true});app.quit();});});
+app.on('before-quit',event=>{if(closing||!store)return;event.preventDefault();closing=true;clearInterval(ticker);void Promise.allSettled([operations,accounts?.close()]).then(async()=>{await runner?.stop();store.close();store=null;if(smokeDirectory)fs.rmSync(smokeDirectory,{recursive:true,force:true});app.quit();});});
 main().catch(()=>{if(smokeDirectory){console.error('DESKTOP_SELF_TEST_FAILED');app.quit();return;}dialog.showErrorBox('工作台启动失败','本地数据目录、数据库或系统凭据保护不可用。没有连接或修改原工作台数据。');app.quit();});

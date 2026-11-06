@@ -11,7 +11,7 @@ function validateScope(s){
  if(s.channel==='COMMENT'&&(!s.target.postId||!s.target.commentId))throw new LocalError('EXACT_TARGET_REQUIRED');
  if(s.channel==='DM'&&s.target.recipientId!==s.recipientId)throw new LocalError('EXACT_TARGET_REQUIRED');
  if(Object.keys(s).some(k=>!['platform','channel','accountId','accountRevision','recipientId','content','target','intent','basis'].includes(k)))throw new LocalError('INVALID_SEND_SCOPE');
- if(s.basis&&(s.intent==='INBOX_REPLY'||s.basis.type!=='AUTOMATIC'))throw new LocalError('INVALID_SEND_SCOPE');
+ if(s.basis&&(s.intent==='INBOX_REPLY'||!['AUTOMATIC','MANUAL_REVIEW'].includes(s.basis.type)))throw new LocalError('INVALID_SEND_SCOPE');
  if(s.intent!==undefined&&!['FIRST_CONTACT','INBOX_REPLY'].includes(s.intent)||s.target.inboxMessageId&&s.intent!=='INBOX_REPLY')throw new LocalError('INVALID_SEND_SCOPE');
  canonical(s);
 }
@@ -27,7 +27,7 @@ class SendSafety {
   const blocked=this.db.prepare('SELECT blocked,first_contact_blocked FROM contact_ledger WHERE platform=? AND channel=? AND recipient_id=?').get(s.platform,s.channel,s.recipientId);if(blocked?.blocked||(s.intent!=='INBOX_REPLY'&&blocked?.first_contact_blocked))throw new LocalError('DO_NOT_CONTACT');
   if(this.db.prepare("SELECT 1 FROM send_attempts WHERE platform=? AND recipient_id=? AND (state IN('RESERVED','DISPATCHED','UNKNOWN') OR (channel=? AND state='CONFIRMED' AND ?=0))").get(s.platform,s.recipientId,s.channel,s.intent==='INBOX_REPLY'?1:0))throw new LocalError('ALREADY_CONTACTED_OR_UNKNOWN');
   const day=dayAt(now),usage=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(s.accountId,day),account=this.account(s);
-  const ruleLimit=s.basis?new (require('./contact.cjs').LocalContact)(this.store).assertScope(s,grant).dailyLimit:Infinity;
+  const ruleLimit=this.scopeLimit(s,grant);
   if((usage?.occupied||0)>=Math.min(usage?.daily_limit_override??account.daily_limit,ruleLimit))throw new LocalError('DAILY_LIMIT');
   this.db.prepare('INSERT INTO contact_ledger(platform,channel,recipient_id) VALUES(?,?,?) ON CONFLICT DO NOTHING').run(s.platform,s.channel,s.recipientId);
   this.db.prepare('INSERT INTO account_days(account_id,day,occupied) VALUES(?,?,1) ON CONFLICT(account_id,day) DO UPDATE SET occupied=occupied+1').run(s.accountId,day);
@@ -35,6 +35,7 @@ class SendSafety {
   this.db.prepare('UPDATE send_attempts SET sender_id=? WHERE id=?').run(account.platform_user_id,id);
   this.store.audit('AUTOMATION','SEND_RESERVED',id,{jobId:job.id,scopeHash:hash(s)});return id;
  });}
+ scopeLimit(s,grant){if(s.basis?.type==='AUTOMATIC')return new (require('./contact.cjs').LocalContact)(this.store).assertScope(s,grant).dailyLimit;if(s.basis?.type==='MANUAL_REVIEW'){if(grant.issuer!=='LOCAL_USER')throw new LocalError('MANUAL_AUTHORIZATION_REQUIRED');new (require('./manual-contact.cjs').ManualContact)(this.store).assertScope(s);}return Infinity;}
  account(s){return require('./account-safety.cjs').assertSendAccount(this.store,s.accountId,s.accountRevision,s.channel);}
  notPaused(){if(this.db.prepare("SELECT 1 FROM safety_state WHERE id='sending' AND reason IS NOT NULL").get())throw new LocalError('SENDING_PAUSED');}
  dispatch(lease,attemptId){return this.store.transaction(()=>{
@@ -47,7 +48,7 @@ class SendSafety {
   if(ledger?.blocked||(s.intent!=='INBOX_REPLY'&&ledger?.first_contact_blocked))throw new LocalError('DO_NOT_CONTACT');
   if(dayAt(this.store.clock())!==a.quota_day)throw new LocalError('QUOTA_DAY_CHANGED');
   const usage=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(a.account_id,a.quota_day);
-  const ruleLimit=s.basis?new (require('./contact.cjs').LocalContact)(this.store).assertScope(s,grant).dailyLimit:Infinity;
+  const ruleLimit=this.scopeLimit(s,grant);
   if(!usage||usage.occupied<1||usage.occupied>Math.min(usage.daily_limit_override??this.account(s).daily_limit,ruleLimit))throw new LocalError('DAILY_LIMIT_CHANGED');
   this.db.prepare("UPDATE send_attempts SET state='DISPATCHED',updated_at=?,execution_deadline=? WHERE id=?").run(this.store.clock(),Math.min(grant.expires_at,this.store.clock()+90000),a.id);
   this.db.prepare('UPDATE jobs SET dispatch_started=1,updated_at=? WHERE id=?').run(this.store.clock(),job.id);
