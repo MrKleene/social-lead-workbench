@@ -67,9 +67,9 @@ npm run desktop:package:win:preview
 
 ## Mac 测试与产物
 
-本轮 `desktop:build` 通过，173 项本地核心测试、22 项桌面 IPC/原生/SDK 边界测试通过。实际 Electron 合成 UI 覆盖初始化、多关键词、多目标、多规则、恢复核对、跨轮原文/独立审核预览、旧未知记录登录限制、导入切换/重启、备份和窄屏。模型/平台执行在该测试被禁用。
+本轮 `desktop:build` 通过，180 项本地核心测试、22 项桌面 IPC/原生/SDK 边界测试通过。实际 Electron 合成 UI 覆盖初始化、多关键词、多目标、多规则、恢复核对、跨轮原文/独立审核预览、旧未知记录登录限制、导入切换/重启、备份和窄屏。模型/平台执行在该测试被禁用。
 
-Mac 包含固定浏览器、Go MCP 与监督器，许可证随包提供。测试版：`.local/desktop-packages/Social-Lead-Desktop-0.1.0-preview.5-mac-arm64.dmg`。最终包证据见 `.local/desktop-qa/package-verification.json`、`packaged-smoke.json`、`mac-artifact.json`、`result.json` 和测试日志。包内本地自检与 Go→浏览器离线渲染只证明安装组件可启动，不证明真实平台成功。
+Mac 包含固定浏览器、Go MCP 与监督器，许可证随包提供。测试版：`.local/desktop-packages/Social-Lead-Desktop-0.1.0-preview.6-mac-arm64.dmg`。最终包证据见 `.local/desktop-qa/package-verification.json`、`packaged-smoke.json`、`mac-artifact.json`、`result.json` 和测试日志。包内本地自检与 Go→浏览器离线渲染只证明安装组件可启动，不证明真实平台成功。
 
 Mac 未有 Developer ID 签名/公证，没有验收下载隔离/Gatekeeper、其他机器安装升级或 Intel Mac。safeStorage 同步 API 在固定版本可用但已提示弃用，升级 Electron 需迁移并复验。`desktop:release-check` 继续阻止正式发布；Windows 真机、真实平台与正式签名发布仍是明确剩余范围。
 
@@ -78,3 +78,5 @@ Mac 未有 Developer ID 签名/公证，没有验收下载隔离/Gatekeeper、�
 已从长单页入口迁回原工作台导航、配置五分类、任务阶段、账号、审核、自动回复、待处理、消息通知、回复记录和异常页；直接复用原导航、JourneyStepper 与回复表格/详情。新增整轮剩余审核批次明确授权与间隔调度、多账号池首次额度分配、账号默认/当日额度编辑及断开会话、评论通知/会话筛选。详细已完成与差异见 [逐页核对](DESKTOP-PAGE-PARITY.md)，不能将本轮测试通过理解为原产品全部功能已迁完。
 
 Windows 可用 `scripts/desktop/windows-preview.ps1 -Go <绝对路径> -ModuleCache <绝对目录> -BrowserArchive <固定ZIP绝对路径>` 完整执行原生验证、NSIS 构建、最终资源验证和包内自检；该入口仍待 Windows 真机运行。
+
+本轮偏好按关键词组自动保存，并从旧档案恢复默认采集账号、笔记数及选中方案；不会恢复旧执行授权。账号中心新增只读本地资格检查，审核/存档增加状态、方案、评分和日期筛选及未评分原文；模型与规则运行记录区分占用、派生、失败、未知与实际任务结果。历史详情直接复用原读取和图片诊断组件。Mac 试用步骤见 [试用说明](MAC-TEST-GUIDE.md)。

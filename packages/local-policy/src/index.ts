@@ -17,3 +17,5 @@ export {reviewPolicySaveSchema,reviewUseConsent} from '@crm/contracts';
 export {qwenModel,qwenModelChoices} from '../../../runtime/qwen-models.cjs';
 export {validateChunk,checkpointHash,commentDigest} from '../../../apps/api/src/collection/comment-checkpoint';
 export {commentChunkSchema,commentCheckpointSchema} from '@crm/contracts';
+
+export {safeImageDiagnostics,safeBoundedReadReport} from '@crm/contracts';

@@ -20,6 +20,16 @@ class LocalService {
  constructor(store,vault,options={}){this.store=store;this.vault=vault;this.workflow=new LocalWorkflow(store,vault,options);this.accountService=options.accounts;this.evidence=options.evidence;this.automation=new (require('./automation.cjs').LocalAutomation)(store,{enabled:()=>!!this.workflow.capabilities().send});}
  previewRunReview(input){return new(require('./run-review.cjs').RunReview)(this.store).preview(input);}
  authorizeRunReview(input){if(!this.workflow.capabilities().review)throw new LocalError('MODEL_EXECUTOR_UNAVAILABLE');return new(require('./run-review.cjs').RunReview)(this.store).authorize(input);}
+ preferences(){return new(require('./preferences.cjs').LocalPreferences)(this.store);}
+ collectionPreferences(input){return this.preferences().get(input);}
+ saveCollectionPreferences(input){return this.preferences().save(input);}
+ workspaceSelection(){return this.preferences().selection();}
+ selectWorkspaceConfiguration(input){return this.preferences().select(input);}
+ reporting(){return new(require('./reporting.cjs').LocalReporting)(this.store);}
+ accountDiagnostics(input){return this.reporting().account(input);}
+ unreviewedComments(input){return this.reporting().unreviewed(input);}
+ modelHistory(input){return this.reporting().model(input);}
+ automationReport(input){return this.reporting().automation(input);}
  workspace(){return new(require('./workspace.cjs').LocalWorkspace)(this.store);}
  workspaceOverview(){return this.workspace().overview();}
  jobHistory(input){return this.workspace().jobs(input);}
@@ -56,7 +66,7 @@ class LocalService {
  conversation(input){return new LocalInbox(this.store).thread(input);}
  unread(){return new LocalInbox(this.store).unread();}
  markRead({id}){return new LocalInbox(this.store).markRead(id);}
- runs({page=1}={}){this.page(page);return {items:this.store.db.prepare('SELECT r.id,r.status,r.reason,r.created_at,r.finished_at,c.name,(SELECT count(*) FROM run_posts p WHERE p.run_id=r.id) posts,(SELECT count(*) FROM run_comments m WHERE m.run_id=r.id) comments FROM collection_runs r JOIN configurations c ON c.id=r.config_id ORDER BY r.created_at DESC,r.id LIMIT 30 OFFSET ?').all((page-1)*30),total:this.store.db.prepare('SELECT count(*) n FROM collection_runs').get().n,page};}
+ runs(input){return this.reporting().runs(input);}
  reviews(input){return this.workspace().reviews(input);}
  runProgress(input){return this.workspace().runProgress(input); }
  decideReview({id,version,status}){if(typeof id!=='string'||!Number.isInteger(version)||!['APPROVED','REJECTED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_DECISION');return this.store.transaction(()=>{const n=this.store.db.prepare('UPDATE review_results SET review_status=?,version=version+1 WHERE id=? AND version=?').run(status,id,version).changes;if(n!==1)throw new LocalError('REVIEW_CHANGED');this.store.audit('LOCAL_USER','REVIEW_DECISION',id,{status,previousVersion:version});return {updated:true};});}
@@ -67,7 +77,7 @@ class LocalService {
  previewEvidence(input){return this.evidence.preview(input);}
  verifyEvidence(input){return this.evidence.verify(input);}
  cancelEvidence(){return this.evidence.cancel();}
- postHistory({postId,page=1}){this.page(page);const p=this.store.db.prepare('SELECT p.*,r.finished_at,r.status run_status FROM run_posts p JOIN collection_runs r ON r.id=p.run_id WHERE p.id=?').get(postId);if(!p)throw new LocalError('POST_NOT_FOUND');return {post:{id:p.id,runId:p.run_id,platformId:p.platform_id,title:JSON.parse(p.snapshot).title||'',body:JSON.parse(p.snapshot).body||'',coverage:p.coverage,observedAt:p.finished_at},comments:{items:this.store.db.prepare("SELECT c.id,c.body,c.parent_id,json_extract(c.snapshot,'$.authorNickname') nickname FROM run_comments c WHERE c.post_id=? ORDER BY ordinal LIMIT 30 OFFSET ?").all(postId,(page-1)*30),total:this.store.db.prepare('SELECT count(*) n FROM run_comments WHERE post_id=?').get(postId).n,page},versions:this.store.db.prepare('SELECT p.id,p.run_id,p.coverage,r.created_at,r.reason FROM run_posts p JOIN collection_runs r ON r.id=p.run_id WHERE p.platform_id=? ORDER BY r.created_at DESC,p.rowid DESC LIMIT 100').all(p.platform_id)};}
+ postHistory({postId,page=1}){this.page(page);const p=this.store.db.prepare('SELECT p.*,r.finished_at,r.status run_status FROM run_posts p JOIN collection_runs r ON r.id=p.run_id WHERE p.id=?').get(postId);if(!p)throw new LocalError('POST_NOT_FOUND');const snapshot=JSON.parse(p.snapshot),policy=require('./policy.cjs');return {post:{id:p.id,runId:p.run_id,platformId:p.platform_id,title:JSON.parse(p.snapshot).title||'',body:JSON.parse(p.snapshot).body||'',coverage:p.coverage,observedAt:p.finished_at,imageDiagnostics:policy.safeImageDiagnostics(snapshot.imageDiagnostics)??null,boundedRead:policy.safeBoundedReadReport(snapshot.boundedRead)??null,boundedReadWindows:Array.isArray(snapshot.boundedReadWindows)?snapshot.boundedReadWindows.slice(0,8).map(policy.safeBoundedReadReport).filter(Boolean):[]},comments:{items:this.store.db.prepare("SELECT c.id,c.body,c.parent_id,json_extract(c.snapshot,'$.authorNickname') nickname,json_extract(c.snapshot,'$.publishedAt') published_at,CASE WHEN json_type(c.snapshot,'$.imageDiagnostics')='object' THEN json_extract(c.snapshot,'$.imageDiagnostics') ELSE NULL END image_diagnostics FROM run_comments c WHERE c.post_id=? ORDER BY ordinal LIMIT 30 OFFSET ?").all(postId,(page-1)*30).map(c=>({...c,image_diagnostics:policy.safeImageDiagnostics(c.image_diagnostics?JSON.parse(c.image_diagnostics):null)??null})),total:this.store.db.prepare('SELECT count(*) n FROM run_comments WHERE post_id=?').get(postId).n,page},versions:this.store.db.prepare('SELECT p.id,p.run_id,p.coverage,r.created_at,r.reason FROM run_posts p JOIN collection_runs r ON r.id=p.run_id WHERE p.platform_id=? ORDER BY r.created_at DESC,p.rowid DESC LIMIT 100').all(p.platform_id)};}
  savedPosts(input){return this.workflow.savedPosts(input);}
  previewSavedPost(input){return this.workflow.previewSavedPost(input);}
  authorizeSavedPost(input){return this.workflow.authorizeSavedPost(input);}

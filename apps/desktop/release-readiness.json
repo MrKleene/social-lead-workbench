@@ -12,7 +12,7 @@
   "inboxAdapter": "registered-bounded-receiver-yield-resume-same-expiry-synthetic-tested-live-unverified",
   "windowsBrowserReview": "fixed-zip-hash-pe-version-and-files-static-checked-native-offline-gate-pending",
   "windowsDpapiAndLifecycle": "acl-resource-journal-and-job-code-connected-native-windows-unverified",
-  "windowsCleanMachineInstaller": "native-validation-before-nsis-pipeline-implemented-not-executed",
+  "windowsCleanMachineInstaller": "native-x64-validation-versioned-nsis-artifact-hash-receipt-pipeline-not-executed",
   "consistentBackupAndCopyRestore": "implemented-with-explicit-copy-activation-synthetic-tested",
   "offlineLegacyImport": "archive-safety-native-configs-preview-activation-synthetic-tested",
   "dependencySecurityReview": "desktop-build-fixed-legacy-server-advisories-remain",
@@ -26,5 +26,7 @@
   "legacyReadOnlyExport": "repeatable-read-readonly-synthetic-client-tested-live-export-unverified",
   "macosArm64Installer": "native-components-bundled-dmg-offline-self-test-passed-unsigned",
   "macosCredentialsAndLifecycle": "synthetic-os-encryption-and-owned-tree-cleanup-tested-upgrade-pending",
-  "windowsMcpBuild": "portable-native-build-environment-tested-mac-crosscompiled-pe-x64-not-run-on-windows"
+  "windowsMcpBuild": "portable-native-build-environment-tested-mac-crosscompiled-pe-x64-not-run-on-windows",
+  "executionPreferences": "per-config-autoapply-versioned-legacy-defaults-restored-backup-tested-no-grants",
+  "readOnlyDiagnosticsAndReports": "account-local-checks-model-rule-history-review-filters-and-original-read-image-components-synthetic-tested"
 }

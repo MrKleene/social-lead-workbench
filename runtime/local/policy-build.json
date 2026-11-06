@@ -39,8 +39,8 @@
     "packages/contracts/src/semantic-review.ts": "52a1cf4b5f1cfb962c8f939c4ebdd9cdda1dc965317eb090416343d35c61799c",
     "packages/contracts/src/xhs-reference-parameters.ts": "255a91480a80a1884178f0fe6cb2e637a845da2a420f98f7d9d4eaf7543cb9cf",
     "packages/local-policy/src/collection-barrier.ts": "f2c415c64067be9285ca195c9260fc70f31b4d85861065ff6fec5f5fc9598ced",
-    "packages/local-policy/src/index.ts": "5b146b94fef1f646f49d5692384e2e4148299b6db30d9f5fc334416ed0ee1bd5",
+    "packages/local-policy/src/index.ts": "8bf050b3ee10b100eaad9410e5ac1e23be796de8a8fa1eca1597cf1d6d73f46f",
     "runtime/qwen-models.cjs": "da900dedad87cbd626bf7eebadeb138e94876076b91290043b234de896cf9d0a"
   },
-  "outputSha256": "6fc0551b259af00789517f5e36b55ef6a5b4e6a21e82249d7f73382b72cd52bd"
+  "outputSha256": "519144b975808cb1c5d46d144f28670acb26d139a420de986f3a9cf0e9e68dac"
 }

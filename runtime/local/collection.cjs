@@ -59,7 +59,7 @@ class LocalCollection {
           const old=this.db.prepare('SELECT * FROM run_comments WHERE run_id=? AND platform_id=?').get(runId,c.id);
           if(old){if(old.post_id!==saved.id||old.user_id!==c.userId||old.body!==c.text||(old.parent_id||null)!==(c.parentId||null))conflict(c.id,'COMMENT_IDENTITY_OR_TEXT_CHANGED',c);continue;}
           const ordinal=this.db.prepare('SELECT count(*) n FROM run_comments WHERE post_id=?').get(saved.id).n+1;if(ordinal>800)throw new LocalError('CAPTURE_BOUND');
-          const snapshot={...policy.semanticSnapshot(post,c,undefined,false,false),authorNickname:c.nickname,...(c.replyTarget?{replyTarget:c.replyTarget}:{}),...(c.replyTargetConflict?{replyTargetConflict:true}:{})};
+          const snapshot={...policy.semanticSnapshot(post,c,undefined,false,false),authorNickname:c.nickname,...(c.publishedAt?{publishedAt:c.publishedAt}:{}),...(c.imageDiagnostics?{imageDiagnostics:c.imageDiagnostics}:{}),...(c.replyTarget?{replyTarget:c.replyTarget}:{}),...(c.replyTargetConflict?{replyTargetConflict:true}:{})};
           this.db.prepare('INSERT INTO run_comments(id,run_id,post_id,platform_id,user_id,parent_id,body,snapshot,source_hash,ordinal) VALUES(?,?,?,?,?,?,?,?,?,?)')
             .run(randomUUID(),runId,saved.id,c.id,c.userId,c.parentId||null,c.text,canonical(snapshot),hash(snapshot),ordinal);addedComments++;
         }
