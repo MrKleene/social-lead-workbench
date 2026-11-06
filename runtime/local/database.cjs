@@ -3,7 +3,7 @@ const {DatabaseSync,backup}=require('node:sqlite');
 const fs=require('node:fs');
 const path=require('node:path');
 const {createHash,randomUUID}=require('node:crypto');
-const SCHEMA_VERSION=1;
+const {migrations,SCHEMA_VERSION}=require('./migrations.cjs');
 class LocalError extends Error {constructor(code){super(code);this.code=code;}}
 function canonical(value){
  if(value===null||typeof value==='boolean'||typeof value==='string')return JSON.stringify(value);
@@ -23,24 +23,45 @@ function requireNewDestination(file){
 }
 function plainFile(file){const s=fs.lstatSync(file);if(!s.isFile()||s.isSymbolicLink()||s.nlink!==1||process.platform!=='win32'&&(s.uid!==process.getuid()||(s.mode&0o077)))throw new LocalError('UNSAFE_DATABASE_FILE');}
 class LocalDatabase {
- constructor(file,{clock=Date.now,checkPrivateFile=()=>{}}={}){
+ constructor(file,{clock=Date.now,checkPrivateFile=()=>{},migrationBackup=true}={}){
   if(!path.isAbsolute(file))throw new LocalError('ABSOLUTE_DATABASE_PATH_REQUIRED');
   const parent=path.dirname(file),ps=fs.lstatSync(parent);if(fs.realpathSync(parent)!==parent||!ps.isDirectory()||process.platform!=='win32'&&(ps.uid!==process.getuid()||(ps.mode&0o077)))throw new LocalError('UNSAFE_DATABASE_DIRECTORY');
   if(entryExists(file)){plainFile(file);checkPrivateFile(file);}else requireNewDestination(file);
   for(const suffix of ['-wal','-shm','-journal'])if(entryExists(file+suffix)){plainFile(file+suffix);checkPrivateFile(file+suffix);}
   this.file=file;this.clock=clock;this.closed=false;this.inTransaction=false;this.maintenance=false;
   this.db=new DatabaseSync(file,{timeout:5000,enableForeignKeyConstraints:true,enableDoubleQuotedStringLiterals:false,allowExtension:false});
-  try{fs.chmodSync(file,0o600);checkPrivateFile(file);this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF;');this.migrate();}
+  try{fs.chmodSync(file,0o600);checkPrivateFile(file);this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF;');this.migrate(migrationBackup);}
   catch(e){this.db.close();throw e;}
  }
- migrate(){
+ migrate(makeBackup){
   const version=Number(this.db.prepare('PRAGMA user_version').get().user_version);
   if(version>SCHEMA_VERSION)throw new LocalError('DATABASE_FROM_NEWER_APP');
-  const sql=fs.readFileSync(path.join(__dirname,'schema.sql'),'utf8'),checksum=createHash('sha256').update(sql).digest('hex');
-  if(version===SCHEMA_VERSION){const row=this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=?').get(version);if(row?.checksum!==checksum)throw new LocalError('MIGRATION_CHECKSUM_MISMATCH');return;}
-  // A nonempty unversioned database is never adopted as a new installation.
-  if(this.db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1").get())throw new LocalError('UNRECOGNIZED_DATABASE');
-  this.transaction(()=>{this.db.exec(sql);this.db.prepare('INSERT INTO schema_migrations VALUES(?,?,?)').run(SCHEMA_VERSION,checksum,this.clock());this.db.prepare('INSERT INTO installation VALUES(?,?)').run(randomUUID(),this.clock());this.db.exec('PRAGMA user_version=1');});
+  if(!Number.isInteger(version)||version<0)throw new LocalError('UNRECOGNIZED_DATABASE');
+  if(!version&&this.db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1").get())throw new LocalError('UNRECOGNIZED_DATABASE');
+  for(const m of migrations.filter(m=>m.version<=version)){
+   if(this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=?').get(m.version)?.checksum!==m.checksum)throw new LocalError('MIGRATION_CHECKSUM_MISMATCH');
+  }
+  if(version===SCHEMA_VERSION)return;
+  if(version&&makeBackup){
+   const destination=this.file+'.pre-migration-v'+version+'-'+randomUUID()+'.sqlite';requireNewDestination(destination);
+   this.db.prepare('VACUUM INTO ?').run(destination);fs.chmodSync(destination,0o600);this.migrationBackup=destination;
+  }
+  // All pending migrations and their version records commit together.
+  this.transaction(()=>{
+   // A different local connection may finish an upgrade while this connection
+   // waits for the write lock. Never replay CREATE/ALTER against its new schema.
+   const current=Number(this.db.prepare('PRAGMA user_version').get().user_version);
+   if(current!==version){
+    if(current!==SCHEMA_VERSION)throw new LocalError('CONCURRENT_MIGRATION_CHANGED');
+    for(const m of migrations)if(this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=?').get(m.version)?.checksum!==m.checksum)throw new LocalError('MIGRATION_CHECKSUM_MISMATCH');
+    return;
+   }
+   for(const m of migrations.filter(m=>m.version>version)){
+    this.db.exec(m.sql);this.db.prepare('INSERT INTO schema_migrations VALUES(?,?,?)').run(m.version,m.checksum,this.clock());
+    if(m.version===1)this.db.prepare('INSERT INTO installation VALUES(?,?)').run(randomUUID(),this.clock());
+    this.db.exec('PRAGMA user_version='+m.version);
+   }
+  });
  }
  transaction(work){
   if(this.closed||this.maintenance)throw new LocalError('DATABASE_UNAVAILABLE');
@@ -51,7 +72,7 @@ class LocalDatabase {
   catch(e){try{this.db.exec('ROLLBACK');}catch{}throw e;}finally{this.inTransaction=false;}
  }
  audit(source,action,entityId,details={}){const eventId=randomUUID();this.db.prepare('INSERT INTO audit_events(event_id,source,action,entity_id,details,created_at) VALUES(?,?,?,?,?,?)').run(eventId,source,action,entityId,canonical(details),this.clock());return eventId;}
- active(){return this.db.prepare("SELECT (SELECT count(*) FROM jobs WHERE state IN('QUEUED','RUNNING'))+(SELECT count(*) FROM send_attempts WHERE state IN('RESERVED','DISPATCHED'))+(SELECT count(*) FROM account_leases WHERE expires_at>?) AS n").get(this.clock()).n>0;}
+ active(){return this.db.prepare("SELECT (SELECT count(*) FROM jobs WHERE state IN('QUEUED','RUNNING'))+(SELECT count(*) FROM send_attempts WHERE state IN('RESERVED','DISPATCHED'))+(SELECT count(*) FROM review_batches WHERE state IN('RESERVED','DISPATCHED'))+(SELECT count(*) FROM account_leases WHERE expires_at>?) AS n").get(this.clock()).n>0;}
  async snapshot(destination){
   if(this.active()||this.inTransaction||this.maintenance)throw new LocalError('BACKUP_REQUIRES_IDLE');
   if(!path.isAbsolute(destination)||path.resolve(destination)===this.file||fs.existsSync(destination))throw new LocalError('BACKUP_DESTINATION_EXISTS_OR_INVALID');

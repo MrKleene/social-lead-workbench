@@ -75,7 +75,7 @@
     "test:auto-contact:ui": "npm run build -w @crm/web && node scripts/test-auto-contact-ui.mjs",
     "test:auth": "node scripts/test-remember-login.mjs",
     "build:inbox": "node scripts/inbox/build.mjs",
-    "desktop:build": "npm run build -w @crm/contracts && npm run typecheck -w @crm/web && npm exec --workspace @crm/web -- vite build --config vite.desktop.config.ts",
+    "desktop:build": "npm run local:policy && npm run build -w @crm/contracts && npm run typecheck -w @crm/web && npm exec --workspace @crm/web -- vite build --config vite.desktop.config.ts",
     "desktop:test": "npm run local:test && node --test apps/desktop/test/*.test.cjs",
     "desktop:start": "electron apps/desktop/src/main.cjs",
     "desktop:release-check": "node scripts/desktop/release-check.mjs",
@@ -84,7 +84,9 @@
     "desktop:stage": "node scripts/desktop/stage.mjs",
     "desktop:test:ui": "npm run desktop:build && node scripts/desktop/test-ui.cjs",
     "local:test": "node --test tests/local/*.test.cjs",
-    "local:import:offline": "node scripts/local/import-offline.mjs"
+    "local:import:offline": "node scripts/local/import-offline.mjs",
+    "local:policy": "node scripts/local/build-policy.mjs",
+    "desktop:verify-package": "node scripts/desktop/verify-package.cjs"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
@@ -94,7 +96,8 @@
     "playwright": "1.65.0",
     "prisma": "6.19.0",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "esbuild": "0.28.2"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.9.0",
@@ -104,6 +107,7 @@
   },
   "overrides": {
     "deepmerge-ts": "^8.0.0",
-    "effect": "^3.20.0"
+    "effect": "^3.20.0",
+    "minimatch": "11.0.1"
   }
 }

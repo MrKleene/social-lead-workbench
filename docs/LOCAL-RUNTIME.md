@@ -1,14 +1,14 @@
 # 可独立测试的本地运行时
 
-`runtime/local` 只使用 Node 内置模块，不导入 Electron、React、Prisma、PostgreSQL 或 Redis。Node 24.11+ 可直接运行：
+`runtime/local` 使用 Node 内置模块和已生成的纯业务规则包（内含 Zod），不导入 Electron、React、Prisma、PostgreSQL 或 Redis。Node 24.11+ 可直接运行：
 
 ```sh
 node --test tests/local/*.test.cjs
 ```
 
-当前 34 项合成测试通过。所有测试创建自己的临时目录，未访问真实账号、数据库、模型或平台。迁移工具在 `scripts/local/import-offline.mjs`，只读显式指定的离线 JSON，不连接原数据库。
+当前 90 项合成测试通过。所有测试创建自己的临时目录，未访问真实账号、数据库、模型或平台。迁移工具在 `scripts/local/import-offline.mjs`，只读显式指定的离线 JSON，不连接原数据库。
 
-该实现为 Node CommonJS，**不等于语言无关的可直接复用库**。Electron 可在 main process 中直接使用；Tauri/Flutter 需选择随包 Node sidecar，或按相同表结构、状态机和测试契约移植为 Rust/Dart。安装用户不应承担运行时安装。桌面框架选型尚未锁定。
+该实现为 Node CommonJS，**不等于语言无关的可直接复用库**。Electron 可在 main process 中直接使用；Tauri/Flutter 需选择随包 Node sidecar，或按相同表结构、状态机和测试契约移植为 Rust/Dart。安装用户不应承担运行时安装。用户已确认 Electron 桌面方案。
 
 关键边界：
 
@@ -18,8 +18,8 @@ node --test tests/local/*.test.cjs
 - RESERVED/DISPATCHED/UNKNOWN 阻止同对象跨渠道重复触达；CONFIRMED 阻止同渠道跨账号重复触达。UNKNOWN 保留额度并暂停，不当作失败退款。只有可信执行器证明零次提交且已停止才能释放占用。
 - 首次备份/恢复/新库拒绝任何已存在的目标及 WAL/SHM/journal；一致性备份使用 SQLite backup API。恢复只生成新的独立副本，验证 schema/完整性，撤销活动授权，重新要求平台身份，保留历史证据。无自动激活。
 - 凭据存储接受系统 protector 接口；没有可用系统加密时拒绝保存，不生成明文主密钥或退回明文。通用核心本身不提供操作系统加密实现。
-- schema v1 尚属预览。发布后必须冻结 migration 并新增版本，不得编辑旧校验和接管旧数据库。
+- schema v1 已冻结，v2–v5 分别迁入收件、采集审核和自动联系；升级前生成一致性备份，后续必须新增迁移，不修改旧校验和。
 
-本运行时尚未实现全部原业务仓储、平台登录/采集/收件、模型、精确回复、整轮屏障和历史回显。没有默认真实执行器、没有自动启动的后台循环、没有对外管理 API。直接使用 LocalQueue 内部方法不构成用户授权；将来桌面桥接必须验证调用来源并执行完整业务资格判断。`accounts` 的 VERIFIED 状态也只能由可信的平台身份验证流程产生。
+已迁入采集/审核/收件仓储、整轮屏障、原纯模型证据规则、精确回执和冻结规则发送资格；完整原业务、平台登录及外部执行器仍待实现。没有默认真实执行器、没有自动启动的后台循环、没有对外管理 API。直接使用 LocalQueue 内部方法不构成用户授权；将来桌面桥接必须验证调用来源并执行完整业务资格判断。`accounts` 的 VERIFIED 状态也只能由可信的平台身份验证流程产生。
 
 离线导入只完成业务原始行存档、部分配置/账号映射和接触风险/额度保护；缺少一致性旧库导出、完整原生映射与切换 UI。不得把 legacy_records 数量完整误认为业务功能已迁移完成。

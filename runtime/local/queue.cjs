@@ -7,7 +7,7 @@ class LocalQueue {
  authorize(purpose,scope,ttlMs=900000){
   if(!kinds.has(purpose)||!Number.isInteger(ttlMs)||ttlMs<1000||ttlMs>900000)throw new LocalError('INVALID_AUTHORIZATION');
   const body=canonical(scope);if(Buffer.byteLength(body)>128000)throw new LocalError('SCOPE_TOO_LARGE');
-  return this.store.transaction(()=>{const id=randomUUID(),now=this.store.clock();this.db.prepare("INSERT INTO authorizations VALUES(?,?,?,?,'ACTIVE',?,?)").run(id,purpose,body,hash(scope),now,now+ttlMs);this.store.audit('LOCAL_USER','AUTHORIZE',id,{purpose,scopeHash:hash(scope)});return id;});
+  return this.store.transaction(()=>{const id=randomUUID(),now=this.store.clock();this.db.prepare("INSERT INTO authorizations(id,purpose,scope,scope_hash,state,created_at,expires_at) VALUES(?,?,?,?,'ACTIVE',?,?)").run(id,purpose,body,hash(scope),now,now+ttlMs);this.store.audit('LOCAL_USER','AUTHORIZE',id,{purpose,scopeHash:hash(scope)});return id;});
  }
  revoke(id){this.store.transaction(()=>{this.db.prepare("UPDATE authorizations SET state='REVOKED' WHERE id=? AND state='ACTIVE'").run(id);this.db.prepare("UPDATE jobs SET cancel_requested=1,state=CASE WHEN state='QUEUED' THEN 'CANCELLED' ELSE state END,updated_at=? WHERE authorization_id=? AND state IN('QUEUED','RUNNING')").run(this.store.clock(),id);this.store.audit('LOCAL_USER','REVOKE',id);});}
  enqueue(kind,payload,authorizationId,requestKey){

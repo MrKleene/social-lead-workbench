@@ -7,7 +7,7 @@
   "existingBusinessRepositoryParity": "pending",
   "legacyFullDataMigration": "pending",
   "platformCollectionAdapter": "pending",
-  "modelReviewAdapter": "pending",
+  "modelReviewAdapter": "implemented-synthetic-transport-tested-not-enabled",
   "exactReplyAndDmAdapters": "pending",
   "inboxAdapter": "pending",
   "windowsBrowserReview": "pending",
@@ -15,6 +15,12 @@
   "windowsCleanMachineInstaller": "pending-native-validation",
   "consistentBackupAndCopyRestore": "implemented-synthetic-tested",
   "offlineLegacyImport": "implemented-archive-and-safety-only",
-  "dependencySecurityReview": "pending-build-tool-advisories",
-  "desktopFrameworkDecision": "pending-user-comparison"
+  "dependencySecurityReview": "desktop-build-fixed-legacy-server-advisories-remain",
+  "desktopFrameworkDecision": "verified",
+  "collectionReviewAndInboxRepositories": "implemented-synthetic-tested",
+  "automaticContactEligibility": "implemented-synthetic-tested",
+  "strictReplyAndDmResultProtocols": "implemented-synthetic-tested",
+  "localBusinessHistoryUi": "implemented-macos-synthetic-ui-tested",
+  "versionedMigrations": "implemented-synthetic-tested",
+  "electronPackagingFuses": "verified-macos-preview-windows-pending"
 }

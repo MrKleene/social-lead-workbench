@@ -13,12 +13,10 @@ Implementation sequence:
 No production database, Cookie, model key, running service or platform operation may be touched.
 Do not promote or switch the real instance until repository parity and data migration validation pass.
 
-Implementation checkpoint: steps 1–3 have a tested local foundation; step 4 is
-pending, step 5 has a fixed-allowlist preview and a fail-closed release gate.
-Offline legacy import preserves business archives and contact/quota guards, but
-is not full native table/UI parity. See docs/DESKTOP-LOCAL.md for evidence,
-commands, platform limits, dependency advisories and the remaining release work.
-
-Framework decision is now deferred while Electron, Tauri and Flutter are compared.
-The Electron shell is a reversible isolated preview, not a committed product choice.
-Core runtime/tests/import CLI are independent of Electron APIs and committed separately.
+Implementation checkpoint: Electron is confirmed by the user. SQLite storage,
+queue, native collection/review/inbox repositories, frozen-rule automatic contact,
+strict receipt parsing and local history UI are implemented with synthetic tests.
+The old production instance is untouched. No real executor is registered yet.
+Windows packaging/lifecycle, full legacy native mapping, platform adapters and
+full UI parity remain unfinished; this is not a product release.
+See docs/DESKTOP-LOCAL.md and docs/LOCAL-BUSINESS-PARITY.md for current evidence.

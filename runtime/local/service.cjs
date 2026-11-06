@@ -1,6 +1,7 @@
 'use strict';
 const {randomUUID}=require('node:crypto');
 const {LocalError,canonical}=require('./database.cjs');
+const {LocalInbox}=require('./inbox.cjs');
 const KINDS=new Set(['KEYWORDS','MATCHING','COMMENT_TEMPLATE','DM_TEMPLATE']);
 function validateConfiguration(input){
  if(!input||!KINDS.has(input.kind)||typeof input.name!=='string'||!input.name.trim()||input.name.trim().length>100||!input.body||Object.getPrototypeOf(input.body)!==Object.prototype)throw new LocalError('INVALID_CONFIGURATION');
@@ -25,10 +26,22 @@ class LocalService {
   this.store.audit('LOCAL_USER','CONFIGURATION_SAVED',id,{kind:value.kind});return {id};
  });}
  archiveConfiguration({id,revision}){return this.store.transaction(()=>{const n=this.store.db.prepare('UPDATE configurations SET archived=1,revision=revision+1,updated_at=? WHERE id=? AND revision=? AND archived=0').run(this.store.clock(),id,revision).changes;if(n!==1)throw new LocalError('CONFIGURATION_CHANGED');this.store.audit('LOCAL_USER','CONFIGURATION_ARCHIVED',id);return {ok:true};});}
- saveModelKey({key}){if(typeof key!=='string'||! /^[\x21-\x7e]{16,512}$/.test(key))throw new LocalError('INVALID_MODEL_KEY');if(!this.vault)throw new LocalError('OS_CREDENTIAL_PROTECTION_UNAVAILABLE');this.vault.put('MODEL_KEY','qwen',key);this.store.audit('LOCAL_USER','MODEL_KEY_SAVED','qwen');return {configured:true};}
+ saveModelKey({key}){if(typeof key!=='string'||! /^[\x21-\x7e]{16,512}$/.test(key))throw new LocalError('INVALID_MODEL_KEY');if(!this.vault)throw new LocalError('OS_CREDENTIAL_PROTECTION_UNAVAILABLE');
+  // Revoke before replacing the secret: an interrupted write must not leave old
+  // grants authorizing a different provider account/workspace.
+  this.store.transaction(()=>{this.store.db.exec('UPDATE model_profile SET authorized=0,version=version+1; UPDATE review_policies SET enabled=0,version=version+1; UPDATE contact_rules SET enabled=0,version=version+1,authorization_hash=NULL');this.store.audit('LOCAL_USER','MODEL_AUTHORIZATION_REVOKED_FOR_KEY_CHANGE','qwen');});
+  this.vault.put('MODEL_KEY','qwen',key);this.store.audit('LOCAL_USER','MODEL_KEY_SAVED','qwen');return {configured:true};}
  jobs(){return this.store.db.prepare('SELECT id,kind,state,created_at,updated_at FROM jobs ORDER BY created_at DESC,id LIMIT 100').all();}
  accounts(){return this.store.db.prepare('SELECT id,platform,name,state,daily_limit FROM accounts ORDER BY name,id').all();}
- messages(){return this.store.db.prepare('SELECT id,account_id,channel,sender_id,body,received_at,read_at FROM inbox_messages ORDER BY received_at DESC,id LIMIT 100').all();}
- markRead({id}){return this.store.transaction(()=>{const r=this.store.db.prepare('UPDATE inbox_messages SET read_at=? WHERE id=?').run(this.store.clock(),id);return {updated:r.changes===1};});}
+ messages(){return new LocalInbox(this.store).list().items;}
+ inboxPage(input){return new LocalInbox(this.store).list(input);}
+ conversations(input){return new LocalInbox(this.store).threads(input);}
+ conversation(input){return new LocalInbox(this.store).thread(input);}
+ unread(){return new LocalInbox(this.store).unread();}
+ markRead({id}){return new LocalInbox(this.store).markRead(id);}
+ runs({page=1}={}){this.page(page);return {items:this.store.db.prepare('SELECT r.id,r.status,r.reason,r.created_at,r.finished_at,c.name,(SELECT count(*) FROM run_posts p WHERE p.run_id=r.id) posts,(SELECT count(*) FROM run_comments m WHERE m.run_id=r.id) comments FROM collection_runs r JOIN configurations c ON c.id=r.config_id ORDER BY r.created_at DESC,r.id LIMIT 30 OFFSET ?').all((page-1)*30),total:this.store.db.prepare('SELECT count(*) n FROM collection_runs').get().n,page};}
+ reviews({page=1}={}){this.page(page);return {items:this.store.db.prepare('SELECT r.id,r.score,r.context,r.decision,r.reason,r.review_status,r.version,r.created_at,c.body,p.name policy_name FROM review_results r JOIN run_comments c ON c.id=r.comment_id JOIN review_batches b ON b.id=r.batch_id JOIN review_policies p ON p.id=b.policy_id ORDER BY r.created_at DESC,r.id LIMIT 30 OFFSET ?').all((page-1)*30),total:this.store.db.prepare('SELECT count(*) n FROM review_results').get().n,page};}
+ decideReview({id,version,status}){if(typeof id!=='string'||!Number.isInteger(version)||!['APPROVED','REJECTED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_DECISION');return this.store.transaction(()=>{const n=this.store.db.prepare('UPDATE review_results SET review_status=?,version=version+1 WHERE id=? AND version=?').run(status,id,version).changes;if(n!==1)throw new LocalError('REVIEW_CHANGED');this.store.audit('LOCAL_USER','REVIEW_DECISION',id,{status,previousVersion:version});return {updated:true};});}
+ page(value){if(!Number.isInteger(value)||value<1||value>100000)throw new LocalError('INVALID_PAGE');}
 }
 module.exports={LocalService,validateConfiguration};

@@ -43,6 +43,9 @@ async function main(){
  window=new BrowserWindow({width:1180,height:820,minWidth:320,minHeight:520,show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:!app.isPackaged}});
  window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,value)=>{const u=new URL(value);if(u.protocol!=='workbench:'||u.hostname!=='app'||u.port||u.username||u.password)event.preventDefault();});
  window.webContents.session.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
+ window.webContents.session.setPermissionCheckHandler(()=>false);
+ window.webContents.on('will-attach-webview',event=>event.preventDefault());
+ window.webContents.session.on('will-download',event=>event.preventDefault());
  ipcMain.handle('workbench:call',async(event,method,input)=>{
   try{validateCall(event,window,method,input);if(closing)throw Error('APP_CLOSING');
    // Serialize renderer mutations with backup/restore. No token or secret is sent in URLs.
