@@ -39,8 +39,9 @@
     "packages/contracts/src/semantic-review.ts": "52a1cf4b5f1cfb962c8f939c4ebdd9cdda1dc965317eb090416343d35c61799c",
     "packages/contracts/src/xhs-reference-parameters.ts": "255a91480a80a1884178f0fe6cb2e637a845da2a420f98f7d9d4eaf7543cb9cf",
     "packages/local-policy/src/collection-barrier.ts": "f2c415c64067be9285ca195c9260fc70f31b4d85861065ff6fec5f5fc9598ced",
-    "packages/local-policy/src/index.ts": "8bf050b3ee10b100eaad9410e5ac1e23be796de8a8fa1eca1597cf1d6d73f46f",
+    "packages/local-policy/src/index.ts": "d34c643d68023894a0a40c7d6ae5ffd2398ba7b3ca945329b889fe4c218c90be",
+    "packages/local-policy/src/single-post.ts": "f3af509c4dcbeec4e2fe8115b9f7c573a380b95dc66fe7779c37da8f185649c5",
     "runtime/qwen-models.cjs": "da900dedad87cbd626bf7eebadeb138e94876076b91290043b234de896cf9d0a"
   },
-  "outputSha256": "519144b975808cb1c5d46d144f28670acb26d139a420de986f3a9cf0e9e68dac"
+  "outputSha256": "ffd52be54402d5579a1a7c831e03d7dc9cd889c10bc88152b52d2bb95b54865b"
 }

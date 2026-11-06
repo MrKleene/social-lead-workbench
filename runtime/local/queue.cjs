@@ -32,6 +32,7 @@ class LocalQueue {
    const now=this.store.clock();
    // An expired lease must be reconciled first, never stolen and blindly replayed.
    if(this.db.prepare("SELECT 1 FROM jobs WHERE state='RUNNING' LIMIT 1").get()||this.db.prepare("SELECT 1 FROM evidence_checks WHERE state='RUNNING'").get())return null;
+   if(this.db.prepare("SELECT 1 FROM post_diagnostics WHERE state='RUNNING'").get())return null;
    this.db.prepare("UPDATE jobs SET state='CANCELLED',updated_at=? WHERE state='QUEUED' AND (cancel_requested=1 OR NOT EXISTS(SELECT 1 FROM authorizations a WHERE a.id=jobs.authorization_id AND a.state='ACTIVE' AND a.expires_at>?))").run(now,now);
    let modelReady=true;
    if(this.db.prepare("SELECT 1 FROM model_profile WHERE id='qwen'").get()){try{new(require('./review.cjs').LocalReview)(this.store).budget();}catch(error){if(!(error instanceof LocalError))throw error;modelReady=false;}}

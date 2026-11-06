@@ -90,6 +90,7 @@ __export(index_exports, {
   modelCallWaitMs: () => modelCallWaitMs,
   observedReadCounts: () => observedReadCounts,
   parseDmExecution: () => parseDmExecution,
+  parsePostReference: () => parsePostReference,
   postSchema: () => postSchema,
   prepareOutbound: () => prepareOutbound,
   prepareXhsReply: () => prepareXhsReply,
@@ -103,6 +104,7 @@ __export(index_exports, {
   safeRunCoverage: () => safeRunCoverage,
   semanticInputPolicy: () => semanticInputPolicy,
   semanticSnapshot: () => semanticSnapshot,
+  singlePostSummary: () => singlePostSummary,
   stagePlanSchema: () => stagePlanSchema,
   validDmMessageId: () => validDmMessageId,
   validateChunk: () => validateChunk,
@@ -20301,6 +20303,15 @@ var commentCheckpointSchema = external_exports.object({ version: external_export
 var commentChunkRequestSchema = external_exports.discriminatedUnion("mode", [external_exports.object({ mode: external_exports.literal("START"), checkpoint: commentCheckpointSchema.optional() }).strict(), external_exports.object({ mode: external_exports.literal("RESUME"), token: hash3, ack: hash3 }).strict(), external_exports.object({ mode: external_exports.literal("FINISH"), token: hash3, ack: hash3 }).strict()]);
 var commentChunkSchema = external_exports.object({ version: external_exports.literal(1), rows: external_exports.array(external_exports.object({ comment: external_exports.unknown(), parent: external_exports.union([external_exports.literal(""), id]) }).strict()).max(100), checkpoint: commentCheckpointSchema, hash: hash3, replaying: external_exports.boolean(), remainingAnchors: external_exports.number().int().min(0).max(2e3), canContinue: external_exports.boolean(), token: hash3 }).strict();
 
+// packages/contracts/src/xhs-reference-parameters.ts
+var navigationParts = ["source=web_explore_feed", "source=web_search_result_notes", "source=web_note_detail_r10"];
+function hasSupportedXhsReferenceParameters(url2, raw) {
+  const keys = [...url2.searchParams.keys()];
+  if (new Set(keys).size !== keys.length || !keys.includes("xsec_token") || !keys.includes("xsec_source")) return false;
+  if (keys.length === 2) return true;
+  return keys.length === 3 && keys.includes("source") && raw.slice(raw.indexOf("?") + 1).split("&").some((part) => navigationParts.includes(part));
+}
+
 // packages/contracts/src/reply-target.ts
 var id2 = external_exports.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 var replyTargetSchema = external_exports.object({ source: external_exports.literal("targetComment"), commentId: id2, userId: id2.optional() }).strict();
@@ -20520,6 +20531,21 @@ function semanticSnapshot(post, c, parent, complete, isDemo) {
 
 // apps/api/src/collection/post-reference.ts
 var postReferenceSchema = external_exports.object({ postId: external_exports.string().regex(/^[a-f0-9]{24}$/), token: external_exports.string().min(1).max(4096).regex(/^[A-Za-z0-9_+\/=-]+$/), source: external_exports.enum(["pc_search", "pc_feed"]) }).strict();
+function savedPostReference(value, postId) {
+  const p = postReferenceSchema.safeParse(value);
+  return p.success && p.data.postId === postId ? p.data : void 0;
+}
+function parsePostReference(value) {
+  if (typeof value !== "string" || value.length > 8192 || /[\s\\]/.test(value) || !value.startsWith("https://www.xiaohongshu.com/explore/")) return;
+  try {
+    const u = new URL(value), m = /^\/explore\/([a-f0-9]{24})$/.exec(u.pathname);
+    if (u.origin !== "https://www.xiaohongshu.com" || u.username || u.password || u.port || u.hash || !m || value.split("?")[0] !== `https://www.xiaohongshu.com/explore/${m[1]}`) return;
+    if (!hasSupportedXhsReferenceParameters(u, value)) return;
+    return savedPostReference({ postId: m[1], token: u.searchParams.get("xsec_token"), source: u.searchParams.get("xsec_source") }, m[1]);
+  } catch {
+    return;
+  }
+}
 
 // apps/api/src/collection/contract.ts
 var normalize2 = (value) => value.normalize("NFKC").toLowerCase();
@@ -20744,6 +20770,18 @@ function validateChunk(previous, receipt2, post, comments) {
   if (receipt2.replaying && comments.length) throw new ReadFailure("INVALID_DATA");
   return next;
 }
+
+// packages/local-policy/src/single-post.ts
+function singlePostSummary(post, comments, mode = "INITIAL_WINDOW") {
+  const groups = (reply) => {
+    const selected = comments.filter((c) => !!c.parentId === reply), outcomes = /* @__PURE__ */ new Map();
+    for (const c of selected) for (const o of safeImageDiagnostics(c.imageDiagnostics)?.authorAvatar?.outcomes || []) outcomes.set(o.reason, (outcomes.get(o.reason) || 0) + o.count);
+    return { count: selected.length, displayableAvatars: selected.filter((c) => !!c.authorAvatarUrl).length, outcomes: [...outcomes].map(([reason, count5]) => ({ reason, count: count5 })) };
+  };
+  const boundedRead = mode === "BOUNDED_REPLIES" ? safeBoundedReadReport(post.boundedRead) : void 0;
+  if (mode === "BOUNDED_REPLIES" && !boundedRead) throw new Error("INVALID_DATA");
+  return { status: "CHECKED", mode, coverage: boundedRead?.state ?? "WINDOW_ONLY", boundedRead: boundedRead ?? null, coverageDiagnostic: safeCoverageDiagnostic(post.coverageDiagnostic) ?? null, roots: groups(false), replies: groups(true), imageDiagnostics: safeImageDiagnostics(post.imageDiagnostics) ?? null };
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   DM_SEND_PROTOCOL,
@@ -20766,6 +20804,7 @@ function validateChunk(previous, receipt2, post, comments) {
   modelCallWaitMs,
   observedReadCounts,
   parseDmExecution,
+  parsePostReference,
   postSchema,
   prepareOutbound,
   prepareXhsReply,
@@ -20779,6 +20818,7 @@ function validateChunk(previous, receipt2, post, comments) {
   safeRunCoverage,
   semanticInputPolicy,
   semanticSnapshot,
+  singlePostSummary,
   stagePlanSchema,
   validDmMessageId,
   validateChunk,

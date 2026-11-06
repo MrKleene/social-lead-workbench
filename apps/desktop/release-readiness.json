@@ -7,7 +7,7 @@
   "existingBusinessRepositoryParity": "original-navigation-and-reply-components-restored-page-audit-documents-remaining-gaps",
   "legacyFullDataMigration": "reliable-history-and-bound-unknown-mapped-ambiguous-archive-retained-live-migration-unverified",
   "platformCollectionAdapter": "registered-owned-mac-runtime-and-consent-offline-synthetic-tested-live-unverified",
-  "modelReviewAdapter": "registered-explicit-batch-and-new-run-batch-consent-paced-synthetic-tested-no-paid-calls",
+  "modelReviewAdapter": "standing-frozen-auto-consent-whole-round-and-optional-manual-review-synthetic-tested-no-paid-calls",
   "exactReplyAndDmAdapters": "registered-original-protocols-manual-ui-journal-and-stop-guarded-synthetic-tested",
   "inboxAdapter": "registered-bounded-receiver-yield-resume-same-expiry-synthetic-tested-live-unverified",
   "windowsBrowserReview": "fixed-zip-hash-pe-version-and-files-static-checked-native-offline-gate-pending",
@@ -21,12 +21,12 @@
   "automaticContactEligibility": "multiple-authorized-account-pool-first-allocation-quota-aware-no-failure-fallback-synthetic-tested",
   "strictReplyAndDmResultProtocols": "implemented-synthetic-tested",
   "localBusinessHistoryUi": "original-reply-table-and-detail-cross-round-review-inbox-comment-filters-macos-synthetic-tested",
-  "versionedMigrations": "v1-through-v9-synthetic-tested",
+  "versionedMigrations": "v1-through-v10-synthetic-tested",
   "electronPackagingFuses": "verified-macos-arm64-preview-windows-pending",
   "legacyReadOnlyExport": "repeatable-read-readonly-synthetic-client-tested-live-export-unverified",
   "macosArm64Installer": "native-components-bundled-dmg-offline-self-test-passed-unsigned",
   "macosCredentialsAndLifecycle": "synthetic-os-encryption-and-owned-tree-cleanup-tested-upgrade-pending",
   "windowsMcpBuild": "portable-native-build-environment-tested-mac-crosscompiled-pe-x64-not-run-on-windows",
   "executionPreferences": "per-config-autoapply-versioned-legacy-defaults-restored-backup-tested-no-grants",
-  "readOnlyDiagnosticsAndReports": "account-local-checks-model-rule-history-review-filters-and-original-read-image-components-synthetic-tested"
+  "readOnlyDiagnosticsAndReports": "new-link-owned-session-bounded-diagnostics-cross-version-comparison-and-reporting-synthetic-tested"
 }

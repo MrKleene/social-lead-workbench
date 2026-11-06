@@ -36,6 +36,7 @@ class LocalReview {
     return {ready:true,evidenceHash:hash({runId,postId,observedAt:run.finished_at,postHash:post.content_hash,coverage:member,report:report.data,sourceHashes:rows.map(c=>c.source_hash)})};
   }
   currentScope(job){
+    if(this.db.prepare("SELECT 1 FROM authorizations WHERE id=? AND issuer='AUTOMATION'").get(job.authorization_id))new(require('./automatic-review.cjs').AutomaticReview)(this.store).assertJob(job);
     const scope=JSON.parse(job.payload),plan=this.plan(scope.runId,scope.postId,scope.policyId,scope.reviewMode);
     if(hash(plan.scope)!==job.payload_hash)throw new LocalError('REVIEW_PREVIEW_CHANGED');
     return plan;

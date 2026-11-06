@@ -19,3 +19,6 @@ export {validateChunk,checkpointHash,commentDigest} from '../../../apps/api/src/
 export {commentChunkSchema,commentCheckpointSchema} from '@crm/contracts';
 
 export {safeImageDiagnostics,safeBoundedReadReport} from '@crm/contracts';
+
+export {parsePostReference} from '../../../apps/api/src/collection/post-reference';
+export {singlePostSummary} from './single-post';

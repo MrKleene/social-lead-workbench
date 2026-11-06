@@ -17,7 +17,9 @@ function validateConfiguration(input){
  return {kind:input.kind,name:input.name.trim(),body:input.body};
 }
 class LocalService {
- constructor(store,vault,options={}){this.store=store;this.vault=vault;this.workflow=new LocalWorkflow(store,vault,options);this.accountService=options.accounts;this.evidence=options.evidence;this.automation=new (require('./automation.cjs').LocalAutomation)(store,{enabled:()=>!!this.workflow.capabilities().send});}
+ constructor(store,vault,options={}){this.store=store;this.vault=vault;this.workflow=new LocalWorkflow(store,vault,options);this.accountService=options.accounts;this.evidence=options.evidence;this.diagnostic=options.diagnostic;this.automation=new (require('./automation.cjs').LocalAutomation)(store,{enabled:()=>!!this.workflow.capabilities().send});}
+ checkPostDiagnostic(input){if(!this.diagnostic)throw new LocalError('PLATFORM_COMPONENT_UNAVAILABLE');return this.diagnostic.check(input);}
+ cancelPostDiagnostic(){return this.diagnostic?.cancel()??{requested:true};}
  previewRunReview(input){return new(require('./run-review.cjs').RunReview)(this.store).preview(input);}
  authorizeRunReview(input){if(!this.workflow.capabilities().review)throw new LocalError('MODEL_EXECUTOR_UNAVAILABLE');return new(require('./run-review.cjs').RunReview)(this.store).authorize(input);}
  preferences(){return new(require('./preferences.cjs').LocalPreferences)(this.store);}
@@ -77,6 +79,7 @@ class LocalService {
  previewEvidence(input){return this.evidence.preview(input);}
  verifyEvidence(input){return this.evidence.verify(input);}
  cancelEvidence(){return this.evidence.cancel();}
+ comparePostVersions(input){return new(require('./post-versions.cjs').PostVersions)(this.store).compare(input);}
  postHistory({postId,page=1}){this.page(page);const p=this.store.db.prepare('SELECT p.*,r.finished_at,r.status run_status FROM run_posts p JOIN collection_runs r ON r.id=p.run_id WHERE p.id=?').get(postId);if(!p)throw new LocalError('POST_NOT_FOUND');const snapshot=JSON.parse(p.snapshot),policy=require('./policy.cjs');return {post:{id:p.id,runId:p.run_id,platformId:p.platform_id,title:JSON.parse(p.snapshot).title||'',body:JSON.parse(p.snapshot).body||'',coverage:p.coverage,observedAt:p.finished_at,imageDiagnostics:policy.safeImageDiagnostics(snapshot.imageDiagnostics)??null,boundedRead:policy.safeBoundedReadReport(snapshot.boundedRead)??null,boundedReadWindows:Array.isArray(snapshot.boundedReadWindows)?snapshot.boundedReadWindows.slice(0,8).map(policy.safeBoundedReadReport).filter(Boolean):[]},comments:{items:this.store.db.prepare("SELECT c.id,c.body,c.parent_id,json_extract(c.snapshot,'$.authorNickname') nickname,json_extract(c.snapshot,'$.publishedAt') published_at,CASE WHEN json_type(c.snapshot,'$.imageDiagnostics')='object' THEN json_extract(c.snapshot,'$.imageDiagnostics') ELSE NULL END image_diagnostics FROM run_comments c WHERE c.post_id=? ORDER BY ordinal LIMIT 30 OFFSET ?").all(postId,(page-1)*30).map(c=>({...c,image_diagnostics:policy.safeImageDiagnostics(c.image_diagnostics?JSON.parse(c.image_diagnostics):null)??null})),total:this.store.db.prepare('SELECT count(*) n FROM run_comments WHERE post_id=?').get(postId).n,page},versions:this.store.db.prepare('SELECT p.id,p.run_id,p.coverage,r.created_at,r.reason FROM run_posts p JOIN collection_runs r ON r.id=p.run_id WHERE p.platform_id=? ORDER BY r.created_at DESC,p.rowid DESC LIMIT 100').all(p.platform_id)};}
  savedPosts(input){return this.workflow.savedPosts(input);}
  previewSavedPost(input){return this.workflow.previewSavedPost(input);}
@@ -104,6 +107,7 @@ class LocalService {
  authorizeCollection(input){return this.workflow.authorizeCollection(input);}
  workflowOverview(){return this.workflow.overview();}
  saveModelProfile(input){return this.workflow.saveModel(input);}
+ setAutomaticReviewPolicy(input){return this.workflow.setAutomaticPolicy(input);}
  setReviewPolicy(input){return this.workflow.setPolicy(input);}
  postReviewOptions(input){return this.workflow.postReviewOptions(input);}
  previewReview(input){return this.workflow.previewReview(input);}

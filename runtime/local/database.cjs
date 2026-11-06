@@ -72,7 +72,7 @@ class LocalDatabase {
   catch(e){try{this.db.exec('ROLLBACK');}catch{}throw e;}finally{this.inTransaction=false;}
  }
  audit(source,action,entityId,details={}){const eventId=randomUUID();this.db.prepare('INSERT INTO audit_events(event_id,source,action,entity_id,details,created_at) VALUES(?,?,?,?,?,?)').run(eventId,source,action,entityId,canonical(details),this.clock());return eventId;}
- active(){return this.db.prepare("SELECT (SELECT count(*) FROM jobs WHERE state IN('QUEUED','RUNNING'))+(SELECT count(*) FROM send_attempts WHERE state IN('RESERVED','DISPATCHED'))+(SELECT count(*) FROM review_batches WHERE state IN('RESERVED','DISPATCHED'))+(SELECT count(*) FROM account_leases WHERE expires_at>?)+(SELECT count(*) FROM evidence_checks WHERE state='RUNNING') AS n").get(this.clock()).n>0;}
+ active(){return this.db.prepare("SELECT (SELECT count(*) FROM jobs WHERE state IN('QUEUED','RUNNING'))+(SELECT count(*) FROM send_attempts WHERE state IN('RESERVED','DISPATCHED'))+(SELECT count(*) FROM review_batches WHERE state IN('RESERVED','DISPATCHED'))+(SELECT count(*) FROM account_leases WHERE expires_at>?)+(SELECT count(*) FROM evidence_checks WHERE state='RUNNING')+(SELECT count(*) FROM post_diagnostics WHERE state='RUNNING') AS n").get(this.clock()).n>0;}
  async snapshot(destination){
   if(this.active()||this.inTransaction||this.maintenance)throw new LocalError('BACKUP_REQUIRES_IDLE');
   if(!path.isAbsolute(destination)||path.resolve(destination)===this.file||fs.existsSync(destination))throw new LocalError('BACKUP_DESTINATION_EXISTS_OR_INVALID');

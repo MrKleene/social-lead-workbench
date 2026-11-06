@@ -10,13 +10,15 @@ class LocalRunner {
  constructor(store,executors={}){this.store=store;this.queue=new LocalQueue(store);this.sends=new SendSafety(store);this.reviews=new LocalReview(store);this.collection=new LocalCollection(store);this.executors=executors;this.owner=randomUUID();this.pending=null;this.stopping=false;}
  tick(){if(this.pending||this.stopping)return this.pending??Promise.resolve(false);this.pending=this.runOne().finally(()=>{this.pending=null;});return this.pending;}
  recoverStartup(){
+  new(require('./automatic-review.cjs').AutomaticReview)(this.store).renewPending();
   // The application holds its exclusive instance lock. Never resume a previous
-  // desktop session's pending external actions merely because the app opened.
-  this.store.transaction(()=>{this.store.db.exec("UPDATE evidence_checks SET state='INTERRUPTED' WHERE state='RUNNING'; UPDATE authorizations SET state='REVOKED' WHERE state='ACTIVE'; UPDATE jobs SET state='INTERRUPTED',cancel_requested=1 WHERE state='QUEUED'; UPDATE jobs SET lease_until=0 WHERE state='RUNNING'; DELETE FROM account_leases WHERE owner LIKE 'login:%'");this.store.audit('RECOVERY','DESKTOP_SESSION_RECOVERED','installation');});
+  // desktop session's one-shot external actions merely because the app opened.
+  // Explicit standing automatic-review consent alone retains validated, never-started work.
+  this.store.transaction(()=>{this.store.db.exec("UPDATE evidence_checks SET state='INTERRUPTED' WHERE state='RUNNING'; UPDATE post_diagnostics SET state='INTERRUPTED' WHERE state='RUNNING'; UPDATE authorizations SET state='REVOKED' WHERE state='ACTIVE' AND id NOT IN(SELECT j.authorization_id FROM jobs j JOIN automatic_review_tasks t ON t.job_id=j.id WHERE j.state='QUEUED' AND j.dispatch_started=0 AND j.cancel_requested=0); UPDATE jobs SET state='INTERRUPTED',cancel_requested=1 WHERE state='QUEUED' AND id NOT IN(SELECT job_id FROM automatic_review_tasks WHERE job_id IS NOT NULL); UPDATE jobs SET lease_until=0 WHERE state='RUNNING'; DELETE FROM account_leases WHERE owner LIKE 'login:%'");this.store.audit('RECOVERY','DESKTOP_SESSION_RECOVERED','installation');});
   this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();
  }
  async runOne(){
-  this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();const lease=this.queue.claim(this.owner);if(!lease)return false;
+  this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();if(this.executors.REVIEW)new(require('./automatic-review.cjs').AutomaticReview)(this.store).reconcile();const lease=this.queue.claim(this.owner);if(!lease)return false;
   const executor=this.executors[lease.kind];if(!executor){this.queue.finish(lease,'FAILED',{code:'EXECUTOR_UNAVAILABLE'});return false;}
   const abort=new AbortController();this.abort=abort;let dispatched=false,attemptId,batchId,commentCommand;
   const heartbeat=setInterval(()=>{try{this.queue.heartbeat(lease);if(lease.kind==='INBOX'&&this.store.db.prepare("SELECT 1 FROM jobs WHERE kind='SEND' AND state='QUEUED' AND cancel_requested=0 AND available_at<=?").get(this.store.clock()))abort.abort('INBOX_YIELD_FOR_SEND');}catch{abort.abort();}},5000);heartbeat.unref();
