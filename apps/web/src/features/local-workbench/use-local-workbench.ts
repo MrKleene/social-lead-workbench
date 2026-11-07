@@ -4,8 +4,8 @@ import {localApi,type LocalConfiguration} from './local-api';
 export function useLocalWorkbench(){
  const client=useQueryClient(),[notice,setNotice]=useState('');
  const status=useQuery({queryKey:['local','status'],queryFn:()=>localApi('status')});
- const configs=useQuery({queryKey:['local','configurations'],queryFn:()=>localApi('configurations'),enabled:status.data?.initialized===true});
- const jobs=useQuery({queryKey:['local','jobs'],queryFn:()=>localApi('jobs'),refetchInterval:2000,enabled:status.data?.initialized===true});
+ const configs=useQuery({queryKey:['local','configurations'],queryFn:()=>localApi('configurations'),enabled:!!status.data});
+ const jobs=useQuery({queryKey:['local','jobs'],queryFn:()=>localApi('jobs'),refetchInterval:2000,enabled:!!status.data});
  const refresh=()=>client.invalidateQueries({queryKey:['local']});
  const initialize=useMutation({mutationFn:()=>localApi('initialize'),onSuccess:refresh});
  const save=useMutation({mutationFn:(input:Partial<LocalConfiguration>)=>localApi('saveConfiguration',input),onSuccess:()=>{setNotice('配置已保存在本机。');void refresh();}});

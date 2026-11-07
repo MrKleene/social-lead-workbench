@@ -12,7 +12,7 @@ const root=path.resolve(__dirname,'../..');
     seed.close();
  app=await _electron.launch({executablePath:require('electron'),args:[path.join(root,'apps/desktop/src/main.cjs'),'--test-fixture',fixture],timeout:30000});let page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));
  const nav=async name=>{await page.getByRole('navigation',{name:'主导航',exact:true}).getByRole('link',{name,exact:false}).click();};
- await page.getByRole('button',{name:'初始化并打开'}).click();await page.getByRole('heading',{name:'工作台',exact:true}).waitFor();
+ await page.getByRole('heading',{name:'工作台',exact:true}).waitFor();assert.equal(await page.getByRole('heading',{name:'开始使用',exact:true}).count(),0);
  await nav('配置管理');await page.getByRole('heading',{name:'关键词配置',exact:true}).waitFor();await page.getByRole('button',{name:'新增配置',exact:true}).click();await page.getByLabel('配置描述').fill('合成关键词配置');await page.getByLabel('关键词内容',{exact:true}).fill('合成词一，合成词二\n合成词三');await page.getByLabel('排除词',{exact:true}).fill('广告，推广');await page.getByRole('button',{name:'保存配置',exact:true}).click();await page.getByRole('button',{name:'编辑配置',exact:true}).waitFor();
  await page.getByRole('button',{name:'合成关键词配置',exact:false}).click();await page.getByText('广告、推广',{exact:true}).waitFor();
  await page.getByRole('button',{name:'编辑配置',exact:true}).click();await page.getByLabel('配置描述').fill('未保存草稿');await nav('账号中心');await page.getByRole('alertdialog').waitFor();await page.getByRole('button',{name:'继续编辑',exact:true}).click();assert.equal(await page.getByLabel('配置描述').inputValue(),'未保存草稿');await page.getByRole('button',{name:'取消编辑',exact:true}).click();await page.getByRole('button',{name:'放弃修改',exact:true}).click();
