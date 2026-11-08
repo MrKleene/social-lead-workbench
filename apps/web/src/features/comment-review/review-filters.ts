@@ -1,7 +1,0 @@
-import {reviewDefaults} from './review-scope';
-export const reviewSortOptions=[['comment-newest','评论时间：新到旧'],['comment-oldest','评论时间：旧到新'],['score-desc','相关度：高到低'],['score-asc','相关度：低到高'],['newest','审核记录：新到旧'],['review-oldest','审核记录：旧到新']] as const;
-export function readReviewFilters(params:URLSearchParams,scoped:boolean){const defaults=reviewDefaults(scoped);return Object.fromEntries(Object.entries(defaults).map(([k,v])=>[k,params.get('review_'+k)??v])) as typeof defaults;}
-/** Calendar day boundaries in the product's displayed timezone (Asia/Shanghai). */
-export function reviewDateBoundary(day:string,end=false){if(!/^\d{4}-\d{2}-\d{2}$/.test(day))return;const t=Date.parse(day+'T00:00:00+08:00');if(!Number.isFinite(t)||new Date(t+8*3600000).toISOString().slice(0,10)!==day)return;return new Date(t+(end?86400000:0)).toISOString();}
-export function reviewFilterQuery(filters:ReturnType<typeof reviewDefaults>){const {from,to,...rest}=filters;return {...rest,...(from?{publishedFrom:reviewDateBoundary(from)}:{}),...(to?{publishedTo:reviewDateBoundary(to,true)}:{})};}
-export function reviewFilterError(f:ReturnType<typeof reviewDefaults>){if(f.minScore!==''&&f.maxScore!==''&&Number(f.minScore)>Number(f.maxScore))return '最低相关度不能超过最高相关度。';if((f.from&&!reviewDateBoundary(f.from))||(f.to&&!reviewDateBoundary(f.to,true))||(f.from&&f.to&&f.from>f.to))return '请填写有效的评论日期范围。';if(f.publication==='unknown'&&(f.from||f.to))return '未知时间不能同时限定日期范围。';return '';}

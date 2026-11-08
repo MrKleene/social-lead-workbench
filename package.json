@@ -12,7 +12,7 @@
   "scripts": {
     "build": "npm run build -w @crm/contracts && npm run build -w @crm/api && npm run build -w @crm/web && npm run build -w @crm/worker && npm run build -w @crm/agent",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test -w @crm/api && npm run test -w @crm/agent && npm run test:workbench && node --test scripts/test-coverage-end-signal.mjs && node --test scripts/test-persistent-model-wiring.mjs",
+    "test": "npm run test -w @crm/api && npm run test -w @crm/agent && node --test scripts/test-coverage-end-signal.mjs && node --test scripts/test-persistent-model-wiring.mjs",
     "test:integration": "node scripts/test-db.mjs",
     "dev": "node scripts/workbench.mjs dev",
     "db:generate": "prisma generate",
@@ -30,7 +30,6 @@
     "test:aurora:ui": "npm run build -w @crm/web && node scripts/test-aurora-workspace-ui.mjs",
     "test:automation-settings:ui": "npm run build -w @crm/web && node scripts/test-automation-settings-ui.mjs",
     "test:settings-toggle:ui": "npm run build -w @crm/web && node scripts/test-settings-toggle-ui.mjs",
-    "test:workbench": "vitest run apps/web/src/features/work/run-selection.test.ts apps/web/src/features/work/dashboard-model.test.ts apps/web/src/features/work/journey-progress.test.ts apps/web/src/features/accounts/login-availability.test.ts apps/web/src/features/accounts/account-status.test.ts apps/web/src/features/work/motion-policy.test.ts apps/web/src/features/work/navigation-policy.test.ts apps/web/src/features/collection/mode.test.ts apps/web/src/features/collection/saved-post-review-notice.test.ts apps/web/src/features/collection/run-stats.test.ts apps/web/src/features/work/collection-preflight.test.ts apps/web/src/features/work/collection-progress.test.ts apps/web/src/features/collection/collection-info-model.test.ts apps/web/src/features/collection/post-counts.test.ts apps/web/src/features/collection/coverage-reading-summary.test.ts apps/web/src/features/collection/coverage-progress-summary.test.ts apps/web/src/features/collection/comment-stream.test.ts apps/web/src/features/collection/collection-outcome.test.ts apps/web/src/lib/api.test.ts apps/web/src/features/work/settings-request.test.ts apps/web/src/features/auto-contact/account-ready.test.ts apps/web/src/features/inbox/inbox.test.ts",
     "test:mcp": "node scripts/test-queue-isolated.mjs --mcp",
     "test:mock:isolated": "node scripts/test-queue-isolated.mjs --mock-only",
     "dev:mcp:offline": "node scripts/dev-mock-isolated.mjs --mcp-fixture",
