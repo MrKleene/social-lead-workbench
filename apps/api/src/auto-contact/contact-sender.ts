@@ -1,5 +1,10 @@
 import { z } from 'zod';
+import type { Role } from '@prisma/client';
 import type { ContactTarget } from './contact-policy';
+
+/** Mirrors the API actor shape. The desktop runtime has no session layer, so the
+ * type is declared here instead of pulling in auth/security. */
+export type Actor = { id: string; name: string; email: string; role: Role };
 export type SendRequest = ContactTarget & {
     accountId: string;
     platform: string;
@@ -25,7 +30,7 @@ export interface ContactSender {
     capability(platform: string, channel: string): boolean;
     healthy(accountId: string, channel?:string): Promise<boolean>;
     /** Bounded read-only qualification for an authorized rule, before reserving quota. */
-    prepare?(actor: import('../auth/security').Actor, accountId: string,channel?:string,onChecking?:()=>Promise<void>): Promise<boolean>;
+    prepare?(actor: Actor, accountId: string,channel?:string,onChecking?:()=>Promise<void>): Promise<boolean>;
     send(request: SendRequest, signal?: AbortSignal): Promise<SendResult>;
     reconcile?(request: SendRequest, receipt: string): Promise<SendResult>;
 }
