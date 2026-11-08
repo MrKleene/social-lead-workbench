@@ -8,7 +8,7 @@ import {collect} from '../src/collection/collector';
 import {checkpointCapture,finishCapture} from '../src/collection/capture-archive';
 import {semanticSnapshot,snapshotHash} from '../src/collection/semantic-evaluator';
 import * as policy from '../../../runtime/comment-read-policy.cjs';
-const sample=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/coverage-cases.json'),'utf8')).diagnostic.samples[0];
+const sample=JSON.parse(readFileSync(resolve(__dirname,'./fixtures/coverage-cases.json'),'utf8')).diagnostic.samples[0];
 const report=(reason='VISIBLE_WINDOW_READ')=>({version:1,state:'UNKNOWN',reason,rootStop:'ROOT_END',replyStop:'DECLARED_REPLIES_LOADED',rootActions:0,replyActions:1,excludedRoots:0,elapsedMs:750,initial:sample,final:sample,retained:sample});
 const cfg={...policy.readWindow},id='0123456789abcdef01234567',signal=()=>new AbortController().signal;
 function transport(extra:unknown=report(),cap=true){const call=vi.fn(async(name:string,_args:Record<string,unknown>)=>({content:[{type:'text',text:JSON.stringify(name==='search_feeds'?{feeds:[{id,xsecToken:'SYNTHETIC_ONLY'}]}:{feed_id:id,data:{note:{noteId:id,title:'synthetic'},comments:{list:[{id:'root',content:'synthetic',userInfo:{userId:'u'},subComments:[{id:'child',content:'reply',userInfo:{userId:'v'}}]}]},boundedRead:extra}})}]}));return {call,supportsBoundedComments:()=>cap};}

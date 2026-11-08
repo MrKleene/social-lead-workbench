@@ -42,7 +42,7 @@ describe('transaction acknowledged chunks / synthetic source only',()=>{
 });
 
 it('accepts the actual Go serialized synthetic packet, including its checkpoint hash',async()=>{
- const {readFileSync}=await import('node:fs'),{resolve}=await import('node:path'),wire=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/comment-chunk-wire.json'),'utf8'));
+ const {readFileSync}=await import('node:fs'),{resolve}=await import('node:path'),wire=JSON.parse(readFileSync(resolve(__dirname,'./fixtures/comment-chunk-wire.json'),'utf8'));
  const t={supportsBoundedComments:()=>true,supportsCommentChunks:()=>true,call:vi.fn(async(name:string)=>({content:[{type:'text',text:JSON.stringify(name==='search_feeds'?{feeds:[{id:'note',xsecToken:'SYNTHETIC'}]}:wire)}]}))};
  const a=new XhsMcpAdapter(t,true,'XHS_MCP',window);const found=await a.search('合成',undefined,new AbortController().signal);const post=await a.post(found.items[0],new AbortController().signal);
  expect(a.receivedComments(post)).toHaveLength(5);expect(a.chunkReceipt(post)?.checkpoint.marks).toHaveLength(5);
@@ -50,7 +50,7 @@ it('accepts the actual Go serialized synthetic packet, including its checkpoint 
 
 // Synthetic exact upstream target shape; separate enclosing discussion and direct reply.
 it('carries targetComment through the Go-shaped wire without changing checkpoint identity',async()=>{
- const {readFileSync}=await import('node:fs'),{resolve}=await import('node:path'),wire=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/comment-chunk-wire.json'),'utf8'));
+ const {readFileSync}=await import('node:fs'),{resolve}=await import('node:path'),wire=JSON.parse(readFileSync(resolve(__dirname,'./fixtures/comment-chunk-wire.json'),'utf8'));
  const reply=wire.data.chunk.rows.find((r:any)=>r.parent),root=wire.data.chunk.rows.find((r:any)=>!r.parent);
  reply.comment.targetComment={id:root.comment.id,userInfo:{userId:root.comment.userInfo.userId,nickname:'DO_NOT_COPY'},url:'SECRET_VALUE'};
  const t={supportsBoundedComments:()=>true,supportsCommentChunks:()=>true,call:vi.fn(async(name:string)=>({content:[{type:'text',text:JSON.stringify(name==='search_feeds'?{feeds:[{id:'note',xsecToken:'SYNTHETIC'}]}:wire)}]}))};
@@ -87,7 +87,7 @@ it('normal cancellation after durable first chunk does not send another read; de
 });
 
 it('accepts new Go root-scope evidence without changing leaf metadata or direct reply targets',async()=>{
- const {readFileSync}=await import('node:fs'),{resolve}=await import('node:path'),wire=JSON.parse(readFileSync(resolve(__dirname,'../../../scripts/mcp-avatar-diagnostics/root-scope-wire.json'),'utf8'));
+ const {readFileSync}=await import('node:fs'),{resolve}=await import('node:path'),wire=JSON.parse(readFileSync(resolve(__dirname,'./fixtures/root-scope-wire.json'),'utf8'));
  const t={supportsBoundedComments:()=>true,supportsCommentChunks:()=>true,call:vi.fn(async(name:string)=>({content:[{type:'text',text:JSON.stringify(name==='search_feeds'?{feeds:[{id:'synthetic-post',xsecToken:'SYNTHETIC'}]}:wire)}]}))};
  const a=new XhsMcpAdapter(t,true,'XHS_MCP',window),signal=new AbortController().signal,found=await a.search('synthetic',undefined,signal),post=await a.post(found.items[0],signal);
  expect(post.boundedRead?.state).toBe('COMPLETE');expect(post.boundedRead?.chunkSummary?.rootScopedLeafGroups).toBe(3);expect(post.boundedRead?.retained.groups[1].declared.state).toBe('MISSING');expect(a.receivedComments(post)).toHaveLength(6);expect(a.chunkReceipt(post)?.checkpoint.marks).toHaveLength(6);
