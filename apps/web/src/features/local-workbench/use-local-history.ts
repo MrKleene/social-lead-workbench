@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {useSearchParams} from 'react-router-dom';
+import {useSearchParams} from '@/lib/router-compat';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {localApi,type LocalThread,type LocalReview} from './local-api';
 export function useLocalHistory(initialTab:'conversations'|'reviews'|'runs'='conversations'){

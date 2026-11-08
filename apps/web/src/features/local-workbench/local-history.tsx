@@ -1,6 +1,6 @@
 import {LocalHistoryFilters,LocalUnreviewed} from './local-history-filters';
 import {useState} from 'react';
-import {Link} from 'react-router-dom';
+import {Link} from '@/lib/router-compat';
 import {LocalPosts} from './local-posts';
 import {LocalContact} from './local-contact';
 import {LocalReply} from './local-reply';

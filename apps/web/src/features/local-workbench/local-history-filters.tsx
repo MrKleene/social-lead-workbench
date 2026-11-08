@@ -1,4 +1,4 @@
-import {Link,useSearchParams} from 'react-router-dom';
+import {Link,useSearchParams} from '@/lib/router-compat';
 import {Button} from '@/components/ui/button';
 import {useLocalRecords} from './use-local-records';
 import {LocalPagination} from './local-record-pages';

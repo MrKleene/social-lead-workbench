@@ -1,5 +1,4 @@
-import { Outlet } from 'react-router-dom'
-import { LocalAppSidebar } from '@/components/layout/local-app-sidebar'
+import { Outlet } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -8,13 +7,15 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { DraftGuardProvider } from '@/features/work/draft-guard'
-import { useLocalWorkbench } from './use-local-workbench'
+import { useLocalWorkbench } from '@/features/local-workbench/use-local-workbench'
+import { AppSidebar } from './app-sidebar'
 
 /**
- * Desktop shell. The three bootstrap states are preserved from the graphite
- * shell — they are the only thing between an empty profile and the workbench.
+ * Workbench shell: the three local bootstrap states, then the sidebar layout.
+ * Authentication happens one level up in `routes/_authenticated/route.tsx`, so
+ * by the time this renders the user is already known.
  */
-export function LocalShell() {
+export function WorkbenchShell() {
   const w = useLocalWorkbench()
 
   if (w.status.isPending)
@@ -56,10 +57,11 @@ export function LocalShell() {
   return (
     <DraftGuardProvider>
       <SidebarProvider>
-        <LocalAppSidebar />
-        {/* Both classes are load-bearing: `graphite-workspace` scopes 539 page
-            rules, `local-desktop` scopes the local-workbench overrides. The
-            shell grid itself is neutralised in styles/desktop-bridge.css. */}
+        <AppSidebar />
+        {/* Both classes are load-bearing: `graphite-workspace` scopes the page
+            rules that have not been ported to Tailwind yet, `local-desktop`
+            scopes the local-workbench overrides. The old shell grid itself is
+            neutralised in styles/desktop-bridge.css. */}
         <SidebarInset className='graphite-workspace local-desktop'>
           <a
             href='#workspace-main'
@@ -68,7 +70,7 @@ export function LocalShell() {
             跳到工作内容
           </a>
           <header className='flex h-14 shrink-0 items-center gap-2 border-b px-4'>
-            <SidebarTrigger className='-ms-1' />
+            <SidebarTrigger className='-ms-1' aria-label='打开导航' />
             <Separator orientation='vertical' className='me-1 h-6' />
             <span className='text-sm text-muted-foreground'>本机工作台</span>
           </header>

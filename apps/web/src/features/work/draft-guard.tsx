@@ -1,6 +1,6 @@
 import {changingConfigurationTab} from '@/features/configuration/configuration-route';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useBlocker } from 'react-router-dom';
+import { useBlocker } from '@/lib/router-compat';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { shouldProtectDrafts } from './navigation-policy';
 type DraftKind = 'retained' | 'modal' | 'pending';

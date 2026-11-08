@@ -54,7 +54,7 @@ async function main(){
  protocol.handle('workbench',request=>{
   const url=new URL(request.url);if(url.hostname!=='app'||request.method!=='GET')return new Response('',{status:403});
   let rel;try{rel=decodeURIComponent(url.pathname);}catch{return new Response('',{status:400});}
-  const target=path.resolve(web,'.'+rel);if(!target.startsWith(web+path.sep))return new Response('',{status:403});
+  const target=path.resolve(web,'.'+rel);if(target!==web&&!target.startsWith(web+path.sep))return new Response('',{status:403});
   const file=fs.existsSync(target)&&fs.statSync(target).isFile()?target:path.join(web,'desktop.html');
   const contentType={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png'}[path.extname(file)]||'application/octet-stream';
   return new Response(fs.readFileSync(file),{headers:{'content-type':contentType,'content-security-policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'",'x-content-type-options':'nosniff','cache-control':'no-store'}});
@@ -92,7 +92,7 @@ async function main(){
    });operations=operation.catch(()=>{});return {ok:true,data:await operation};
   }catch(error){const code=typeof error?.code==='string'?error.code:'LOCAL_OPERATION_FAILED';return {ok:false,error:code};}
  });
- if(!smoke)window.once('ready-to-show',()=>window.show());await window.loadURL('workbench://app/desktop.html');
+ if(!smoke)window.once('ready-to-show',()=>window.show());await window.loadURL('workbench://app/');
  if(smoke){
   // Packaged self-test owns a newly created temp directory. It cannot select a
   // user path, read OS credentials, register paid/platform executors or resume work.

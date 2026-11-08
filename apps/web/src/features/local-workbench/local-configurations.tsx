@@ -1,5 +1,5 @@
 import {useEffect,useState,type FormEvent} from 'react';
-import {Link,useSearchParams} from 'react-router-dom';
+import {Link,useSearchParams} from '@/lib/router-compat';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {useDraftGuard,useConfirmDiscard} from '@/features/work/draft-guard';

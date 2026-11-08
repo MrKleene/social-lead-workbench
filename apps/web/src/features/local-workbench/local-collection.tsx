@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
-import {Link} from 'react-router-dom';
+import {Link} from '@/lib/router-compat';
 import {Button} from '@/components/ui/button';
 import {useAutoApply} from '@/features/work/use-auto-apply';
 import {AutoApplyStatus} from '@/features/work/auto-apply-status';
