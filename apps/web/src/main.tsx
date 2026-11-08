@@ -7,21 +7,17 @@ import { FontProvider } from './context/font-provider'
 import { ThemeProvider } from './context/theme-provider'
 // Generated Routes
 import { routeTree } from './routeTree.gen'
-// Legacy page styles, still load-bearing until each page is ported to Tailwind.
-// They must load BEFORE styles/index.css so the slate tokens in theme.css win
-// the `:root` cascade; desktop-bridge.css then neutralises the old shell grid.
-import './features/work/mist.css'
-import './features/work/ui-consistency.css'
-import './features/work/simple.css'
-import './design-system/foundation.css'
+// Page-level styles. The graphite design system (foundation/simple/mist) is
+// gone: every rule that survived is scoped to a class the pages actually use.
+// Feature stylesheets are imported by their own components; only the two that
+// the deleted router entry used to pull in are wired here.
 import './features/local-workbench/local-workbench.css'
 import './features/local-workbench/local-shell.css'
+import './styles/workbench.css'
 // Styles
 import './styles/index.css'
 import './styles/desktop-bridge.css'
 
-// The desktop renderer talks to the local runtime over IPC, never HTTP, so the
-// query client only needs cache policy — no status-code interception.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
