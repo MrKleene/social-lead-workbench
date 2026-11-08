@@ -42,7 +42,12 @@ async function main(){
  app.on('second-instance',()=>{window?.show();window?.focus();});
  await app.whenReady();
  const credentials=privateDirectory(path.join(data,'credentials'));privateDirectory(path.join(data,'backups'));privateDirectory(path.join(data,'restores'));privateDirectory(path.join(data,'imports'));
- const protector={available:()=>!fixture&&safeStorage.isEncryptionAvailable()&&(process.platform!=='linux'||safeStorage.getSelectedStorageBackend()!=='basic_text'),encrypt:s=>{if(fixture)throw Error('FIXTURE_NO_OS_SECRETS');return safeStorage.encryptString(s);},decrypt:b=>{if(fixture)throw Error('FIXTURE_NO_OS_SECRETS');return safeStorage.decryptString(b);}};
+ const osKeyring=()=>process.platform!=='linux'||safeStorage.getSelectedStorageBackend()!=='basic_text';
+ // `available()` touches the macOS Keychain, which raises a system password
+ // prompt. It must only run when a credential is actually read or written.
+ // `availableHint()` answers the same question for the status payload without
+ // any Keychain access, so opening the app never prompts.
+ const protector={available:()=>!fixture&&safeStorage.isEncryptionAvailable()&&osKeyring(),availableHint:()=>!fixture&&osKeyring(),encrypt:s=>{if(fixture)throw Error('FIXTURE_NO_OS_SECRETS');return safeStorage.encryptString(s);},decrypt:b=>{if(fixture)throw Error('FIXTURE_NO_OS_SECRETS');return safeStorage.decryptString(b);}};
  const checkPrivateFile=file=>{if(process.platform==='win32')windowsNative(app,{operation:'file',path:file});};
  const vault=new CredentialStore(credentials,protector,{checkPrivateFile}),dataManager=new LocalDataManager(data,{checkPrivateFile});store=new LocalDatabase(dataManager.activeFile(),{checkPrivateFile});
  const resources=new NativeResources(app.isPackaged?path.join(process.resourcesPath,'native',process.platform+'-'+process.arch):path.join(root,'apps/desktop/dist/native',process.platform+'-'+process.arch),{windowsCheck:(file,directory)=>windowsNative(app,{operation:directory?'resource-directory':'executable',path:file})});
