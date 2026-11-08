@@ -57,3 +57,6 @@ generated_images/
 .npmrc
 .ssh/
 .auth/
+
+# Agent workspace data (local memory/logs), not project source
+.workbuddy-ai/
