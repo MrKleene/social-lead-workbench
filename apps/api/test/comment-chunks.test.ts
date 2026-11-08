@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import {describe,it,expect,vi} from 'vitest';
 import {commentCheckpointSchema,type CommentCheckpoint} from '@crm/contracts';
 import {checkpointHash,commentDigest,validateChunk} from '../src/collection/comment-checkpoint';

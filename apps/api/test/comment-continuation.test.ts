@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import {describe,it,expect,vi} from 'vitest';
 import {XhsMcpAdapter} from '../src/collection/adapters/xhs-mcp';
 import {collect} from '../src/collection/collector';

@@ -1,10 +1,17 @@
-import { Global, Injectable, Module, OnModuleDestroy, Optional } from "@nestjs/common";
 import { PrismaClient, Prisma } from "@prisma/client";
-@Injectable()
-export class Db extends PrismaClient implements OnModuleDestroy {
+
+/**
+ * Prisma handle shared by the collection and checkpoint modules.
+ *
+ * The desktop runtime never instantiates this: it runs against node:sqlite and
+ * only reuses the pure functions in those modules. The class survives because
+ * their transaction callbacks are typed against it, and because the legacy
+ * read-only export path still builds a client from DATABASE_URL.
+ */
+export class Db extends PrismaClient {
   private displayClient?: PrismaClient;
   private readonly options?: Prisma.PrismaClientOptions;
-  constructor(@Optional() options?: Prisma.PrismaClientOptions) { super(options); this.options=options; }
+  constructor(options?: Prisma.PrismaClientOptions) { super(options); this.options=options; }
   /** Display-only schema. Authorization, budgets, identity and workers always use public. */
   historyDisplay(): Db {
     if(!this.displayClient){
@@ -24,11 +31,7 @@ export class Db extends PrismaClient implements OnModuleDestroy {
     await this.displayClient?.$disconnect();
     await super.$disconnect();
   }
-  async onModuleDestroy() { await this.$disconnect(); }
 }
-@Global()
-@Module({ providers: [Db], exports: [Db] })
-export class DatabaseModule {}
 
 /** Test doubles remain usable; real clients provide the explicit display connection. */
 export function historyDisplay(db:Db):Db{return typeof db.historyDisplay==='function'?db.historyDisplay():db;}
