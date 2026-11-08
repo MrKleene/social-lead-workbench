@@ -1,5 +1,10 @@
 # A 方案施工计划：整体采用 shadcn-admin 作底座
 
+> **执行状态（2026-11-08）**：P0–P3 已完成，提交 `7782ef7` / `1a9fa06`，分支 `feat/frontend-upstream-base`。
+> `desktop:build` 绿，`scripts/desktop/test-ui.cjs` 端到端全绿（含 390/320 与重启持久化）。
+> **剩余 P4b**（逐页 Tailwind 化）。P4a 未按原文执行：改由 `lib/router-compat.tsx` 兼容层迁移路由，
+> 页面逻辑零改动，文件重组顺延到 P4b。落地差异：`?tab=` 未拆成路径（页面仍读 search）。
+
 > 决策：2026-11-08，采用 A 方案（整体引入上游代码），保留 Clerk 脚手架，删除 demo feature。
 > 参照：`satnaing/shadcn-admin` `v2.2.1-77-ge16c87f`
 > 前序：`docs/FRONTEND-BASE-EVALUATION.md`（B 方案评估，已被本决策覆盖）
