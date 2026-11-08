@@ -16,6 +16,15 @@ import './features/work/ui-consistency.css';
 import './components/app-navigation/app-navigation.css';
 import './features/work/simple.css';
 import './design-system/foundation.css';
+// Local-workbench page styles. These were previously pulled in by LocalShell;
+// they are global, so the entry owns them now.
+import './features/local-workbench/local-workbench.css';
+import './features/local-workbench/local-shell.css';
+// Theme must load last: foundation.css declares its own :root palette, and the
+// slate tokens only win by source order. desktop-bridge.css then neutralises the
+// graphite shell grid while keeping its descendant scopes.
+import './styles/index.css';
+import './styles/desktop-bridge.css';
 const client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:10000}}});
 function WorkRoute(){const [params]=useSearchParams();return params.get('module')==='accounts'?<LocalAccountPage/>:params.get('module')==='archive'?<LocalHistory key="runs" tab="runs"/>:params.get('module')==='notices'?<LocalNotices/>:<LocalOverview/>;}
 function ContactRoute(){const [params]=useSearchParams();return params.get('view')==='pending'?<LocalPending/>:<><h1>自动回复与账号矩阵</h1><LocalAutomation/></>;}

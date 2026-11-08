@@ -1,0 +1,16 @@
+/*
+ * Bridge between the vendored shadcn-admin shell and the graphite page styles.
+ *
+ * `.graphite-workspace` used to own the two-column shell grid (208px sidebar +
+ * content). The Sidebar provider owns layout now, but 539 descendant rules
+ * (`.graphite-workspace .local-panel` and friends) still scope page styling, so
+ * the class stays on SidebarInset and only its layout properties are dropped.
+ *
+ * Loaded after design-system/foundation.css on purpose: same specificity would
+ * lose to the earlier rule.
+ */
+.graphite-workspace.local-desktop {
+  display: block;
+  min-height: 0;
+  background: transparent;
+}

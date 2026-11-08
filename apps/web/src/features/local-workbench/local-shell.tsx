@@ -1,14 +1,86 @@
-import {useEffect,useState} from 'react';
-import {Link,Outlet,useLocation} from 'react-router-dom';
-import {Layers,Menu} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
-import {primaryNavigation,secondaryNavigation,activeNavigation} from '@/components/app-navigation/navigation-model';
-import {DraftGuardProvider} from '@/features/work/draft-guard';
-import {useLocalWorkbench} from './use-local-workbench';
-import {useLocalRecords} from './use-local-records';
-import './local-workbench.css';
-import './local-shell.css';
-const groups=[{label:'工作区',ids:['overview','runs']},{label:'数据与审核',ids:['archive','review']},{label:'回复管理',ids:['auto-contact','pending-replies','reply-history','inbox']},{label:'管理',ids:['configuration','accounts','notices','platforms','data']}];
-function DesktopNavigation(){const location=useLocation(),active=location.pathname==='/data'?'data':activeNavigation(location.pathname,location.search,true),[mobile,setMobile]=useState(false),unread=useLocalRecords('unread'),items=[...primaryNavigation,...secondaryNavigation,{id:'data',label:'数据与恢复',path:'/data'}];useEffect(()=>{setMobile(false);requestAnimationFrame(()=>document.getElementById('workspace-main')?.focus({preventScroll:true}));},[location.key]);const nav=(name:string)=><nav className="graphite-navigation" aria-label={name}>{groups.map(g=><section key={g.label} className="graphite-nav-group"><h2>{g.label}</h2>{g.ids.flatMap(id=>items.filter(item=>item.id===id)).map(item=><Link key={item.id} to={item.path} aria-current={active===item.id?'page':undefined}><span>{item.id==='auto-contact'?'自动回复':item.label}</span>{item.id==='inbox'&&!!unread.data?.count&&<small>{unread.data.count}</small>}</Link>)}</section>)}</nav>;const brand=<Link className="graphite-brand" to="/work"><Layers aria-hidden="true"/><strong>Social Lead</strong></Link>;return <><aside className="graphite-sidebar">{brand}{nav('主导航')}<div className="graphite-profile"><strong>本机工作台</strong><small>单人使用 · 无工作台账号</small></div></aside><header className="graphite-mobile-bar"><Button variant="ghost" size="icon" aria-label="打开导航" onClick={()=>setMobile(true)}><Menu/></Button>{brand}</header><div className="graphite-breadcrumb"><span>{groups.find(g=>g.ids.includes(active||''))?.label||'工作区'}</span><span>/</span><span>{items.find(i=>i.id===active)?.label||'工作台'}</span><span className="local-storage-mark">本地存储</span></div><Sheet open={mobile} onOpenChange={setMobile}><SheetContent className="graphite-mobile-navigation"><SheetHeader><SheetTitle>导航</SheetTitle><SheetDescription className="sr-only">工作台页面</SheetDescription></SheetHeader>{nav('移动导航')}</SheetContent></Sheet></>;}
-export function LocalShell(){const w=useLocalWorkbench();if(w.status.isPending)return <main className="local-boot"><strong>Social Lead</strong><p>正在打开本地数据…</p></main>;if(!w.status.data)return <main className="local-boot"><p role="alert">{w.error?.message}</p><Button onClick={()=>void w.status.refetch()}>重试打开</Button></main>;return <DraftGuardProvider><div className="graphite-workspace local-desktop"><a className="aurora-skip" href="#workspace-main">跳到工作内容</a><DesktopNavigation/><main id="workspace-main" tabIndex={-1}><Outlet/></main></div></DraftGuardProvider>;}
+import { Outlet } from 'react-router-dom'
+import { LocalAppSidebar } from '@/components/layout/local-app-sidebar'
+import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar'
+import { DraftGuardProvider } from '@/features/work/draft-guard'
+import { useLocalWorkbench } from './use-local-workbench'
+
+/**
+ * Desktop shell. The three bootstrap states are preserved from the graphite
+ * shell — they are the only thing between an empty profile and the workbench.
+ */
+export function LocalShell() {
+  const w = useLocalWorkbench()
+
+  if (w.status.isPending)
+    return (
+      <main className='grid min-h-svh place-items-center text-sm text-muted-foreground'>
+        正在打开本地数据…
+      </main>
+    )
+
+  if (!w.status.data)
+    return (
+      <main className='grid min-h-svh place-items-center gap-3 p-6 text-center'>
+        <p role='alert' className='text-sm text-destructive'>
+          {w.error?.message}
+        </p>
+        <Button onClick={() => void w.status.refetch()}>重试打开</Button>
+      </main>
+    )
+
+  if (!w.status.data.initialized)
+    return (
+      <main className='grid min-h-svh place-items-center p-6'>
+        <div className='flex max-w-md flex-col gap-3 text-center'>
+          <h1 className='text-xl font-semibold'>首次使用</h1>
+          <p className='text-sm text-muted-foreground'>
+            初始化本机工作台，无需创建工作台账号。小红书账号另行扫码登录。
+          </p>
+          <Button
+            className='mx-auto'
+            pending={w.initialize.isPending}
+            onClick={() => w.initialize.mutate()}
+          >
+            初始化并打开
+          </Button>
+        </div>
+      </main>
+    )
+
+  return (
+    <DraftGuardProvider>
+      <SidebarProvider>
+        <LocalAppSidebar />
+        {/* Both classes are load-bearing: `graphite-workspace` scopes 539 page
+            rules, `local-desktop` scopes the local-workbench overrides. The
+            shell grid itself is neutralised in styles/desktop-bridge.css. */}
+        <SidebarInset className='graphite-workspace local-desktop'>
+          <a
+            href='#workspace-main'
+            className='sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm'
+          >
+            跳到工作内容
+          </a>
+          <header className='flex h-14 shrink-0 items-center gap-2 border-b px-4'>
+            <SidebarTrigger className='-ms-1' />
+            <Separator orientation='vertical' className='me-1 h-6' />
+            <span className='text-sm text-muted-foreground'>本机工作台</span>
+          </header>
+          <main
+            id='workspace-main'
+            tabIndex={-1}
+            className='flex flex-1 flex-col gap-4 p-4 outline-none md:p-6'
+          >
+            <Outlet />
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </DraftGuardProvider>
+  )
+}
