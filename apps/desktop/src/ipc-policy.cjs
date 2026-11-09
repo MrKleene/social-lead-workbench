@@ -1,9 +1,10 @@
 'use strict';
 const {LocalError}=require('../../../runtime/local/database.cjs');
 const methods=new Set(['unreviewedComments','collectionPreferences','saveCollectionPreferences','workspaceSelection','selectWorkspaceConfiguration','accountDiagnostics','modelHistory','automationReport','previewRunReview','authorizeRunReview','runProgress','workspaceOverview','jobHistory','replyHistory','accountDetails','updateAccount','disconnectAccount','notices','postHistory','checkPostDiagnostic','cancelPostDiagnostic','comparePostVersions','evidenceOverview','previewEvidence','verifyEvidence','cancelEvidence','savedPosts','previewSavedPost','authorizeSavedPost','recoveryPreview','resumeReviewedCopy','automationRules','saveAutomationRule','previewAutomationRule','authorizeAutomationRule','revokeAutomationRule','automationDecisions','inboxReceivers','accountOverview','beginLogin','pollLogin','cancelLogin','previewContact','authorizeContact','previewReply','authorizeReply','previewInbox','authorizeInbox','previewCollection','authorizeCollection','status','initialize','configurations','saveConfiguration','archiveConfiguration','saveModelKey','jobs','accounts','messages','inboxPage','conversations','conversation','unread','markRead','runs','reviews','decideReview','workflowOverview','saveModelProfile','setReviewPolicy','setAutomaticReviewPolicy','postReviewOptions','previewReview','authorizeReview','cancelJob','backup','restore','importLegacy','dataCopies','activateDataCopy','legacyOverview','legacyPage']);
-function validateCall(event,window,method,input){
+function validateCall(event,window,method,input,devOrigin){
  let url;try{url=new URL(event.senderFrame?.url);}catch{throw new LocalError('UNTRUSTED_DESKTOP_CALL');}
- if(!window||event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame||url.protocol!=='workbench:'||url.hostname!=='app'||url.port||url.username||url.password)throw new LocalError('UNTRUSTED_DESKTOP_CALL');
+ const trusted=devOrigin?url.origin===devOrigin:(url.protocol==='workbench:'&&url.hostname==='app'&&!url.port&&!url.username&&!url.password);
+ if(!window||event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame||!trusted)throw new LocalError('UNTRUSTED_DESKTOP_CALL');
  if(!methods.has(method)||input!==undefined&&(input===null||Object.getPrototypeOf(input)!==Object.prototype))throw new LocalError('INVALID_DESKTOP_CALL');
  if(Buffer.byteLength(JSON.stringify(input??{}))>65536)throw new LocalError('REQUEST_TOO_LARGE');
 }

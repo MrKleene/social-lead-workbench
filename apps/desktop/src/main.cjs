@@ -33,6 +33,8 @@ function privateDirectory(p){
 async function main(){
  if(!['darwin','win32'].includes(process.platform))throw Error('UNSUPPORTED_DESKTOP_PLATFORM');
  const smoke=process.argv.includes('--self-test'),fixtureFlag=process.argv.indexOf('--test-fixture');if(smoke&&fixtureFlag>=0)throw Error('CONFLICTING_TEST_ARGUMENTS');
+ const devFlag=process.argv.includes('--dev');if(devFlag&&app.isPackaged)throw Error('DEV_MODE_NOT_ALLOWED_IN_PACKAGED_BUILD');
+ const devUrl=devFlag?(process.env.WORKBENCH_DEV_URL||'http://127.0.0.1:5173/'):null,devOrigin=devUrl?new URL(devUrl).origin:null;
  if(smoke){smokeDirectory=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'social-lead-desktop-ui-')));fs.writeFileSync(path.join(smokeDirectory,'.fixture'),'synthetic-only',{mode:0o600});}
  const fixture=smokeDirectory||(fixtureFlag>=0?process.argv[fixtureFlag+1]:null);
  if(fixture&&(app.isPackaged&&!smoke||!path.isAbsolute(fixture)||fs.realpathSync(fixture)!==fixture||path.dirname(fixture)!==fs.realpathSync(os.tmpdir())||!path.basename(fixture).startsWith('social-lead-desktop-ui-')||fs.readFileSync(path.join(fixture,'.fixture'),'utf8')!=='synthetic-only'))throw Error('INVALID_TEST_FIXTURE');
@@ -70,13 +72,13 @@ async function main(){
  const width=Math.max(960,Math.min(saved?saved.width:1440,area.width-40)),height=Math.max(600,Math.min(saved?saved.height:900,area.height-40));
  window=new BrowserWindow({width,height,minWidth:320,minHeight:520,center:true,show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:!app.isPackaged}});
  window.on('close',()=>{if(window.isMinimized()||window.isMaximized()||window.isFullScreen())return;const b=window.getBounds();try{fs.writeFileSync(statePath,JSON.stringify({width:b.width,height:b.height}),{mode:0o600});}catch{}});
- window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,value)=>{const u=new URL(value);if(u.protocol!=='workbench:'||u.hostname!=='app'||u.port||u.username||u.password)event.preventDefault();});
+ window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,value)=>{const u=new URL(value);const allowed=devOrigin?u.origin===devOrigin:(u.protocol==='workbench:'&&u.hostname==='app'&&!u.port&&!u.username&&!u.password);if(!allowed)event.preventDefault();});
  window.webContents.session.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
  window.webContents.session.setPermissionCheckHandler(()=>false);
  window.webContents.on('will-attach-webview',event=>event.preventDefault());
  window.webContents.session.on('will-download',event=>event.preventDefault());
  ipcMain.handle('workbench:call',async(event,method,input)=>{
-  try{validateCall(event,window,method,input);if(closing)throw Error('APP_CLOSING');
+  try{validateCall(event,window,method,input,devOrigin);if(closing)throw Error('APP_CLOSING');
    if(method==='cancelPostDiagnostic')return {ok:true,data:service.cancelPostDiagnostic()};
    if(method==='cancelEvidence')return {ok:true,data:service.cancelEvidence()};
    if(method==='cancelLogin')return {ok:true,data:await service.cancelLogin(input)};
@@ -102,7 +104,7 @@ async function main(){
    });operations=operation.catch(()=>{});return {ok:true,data:await operation};
   }catch(error){const code=typeof error?.code==='string'?error.code:'LOCAL_OPERATION_FAILED';return {ok:false,error:code};}
  });
- if(!smoke)window.once('ready-to-show',()=>window.show());await window.loadURL('workbench://app/');
+ if(!smoke)window.once('ready-to-show',()=>window.show());await window.loadURL(devUrl||'workbench://app/');
  if(smoke){
   // Packaged self-test owns a newly created temp directory. It cannot select a
   // user path, read OS credentials, register paid/platform executors or resume work.
