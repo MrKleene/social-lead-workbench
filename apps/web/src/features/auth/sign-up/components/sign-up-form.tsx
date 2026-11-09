@@ -50,16 +50,16 @@ export function SignUpForm({
     },
   })
 
-  function onSubmit(data: z.infer<typeof formSchema>) {
+  function onSubmit() {
     setIsLoading(true)
 
-    toast.promise(sleep(2000), {
-      loading: 'Creating account...',
+    toast.promise(sleep(600), {
+      loading: '正在检查…',
       success: () => {
         setIsLoading(false)
-        return `Account created for ${data.email}.`
+        return '本机版本使用内置账号，无需注册。'
       },
-      error: 'Error',
+      error: '操作失败',
     })
   }
 
