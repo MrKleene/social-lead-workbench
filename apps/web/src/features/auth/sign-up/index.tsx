@@ -12,7 +12,7 @@ export function SignUp() {
     <AuthLayout>
       <Card className='max-w-sm gap-4'>
         <CardHeader>
-          <CardTitle className='text-lg tracking-tight'>注册</CardTitle>
+          <CardTitle className='text-section tracking-tight'>注册</CardTitle>
         </CardHeader>
         <CardContent>
           <SignUpForm />

@@ -12,7 +12,7 @@ export function ForgotPassword() {
     <AuthLayout>
       <Card className='max-w-sm gap-4 sm:min-w-sm'>
         <CardHeader>
-          <CardTitle className='text-lg tracking-tight'>找回密码</CardTitle>
+          <CardTitle className='text-section tracking-tight'>找回密码</CardTitle>
         </CardHeader>
         <CardContent>
           <ForgotPasswordForm />
