@@ -1,9 +1,0 @@
-{
-  "checks": [
-    "single scoped request, explicit consent, pending lock, active task / unverified account / missing source block, uncertain response retained, layout false",
-    "single scoped request, explicit consent, pending lock, active task / unverified account / missing source block, uncertain response retained, layout true"
-  ],
-  "errors": [],
-  "unexpected": [],
-  "submitted": 4
-}

@@ -1,9 +1,0 @@
-
- RUN  v5.0.5 /private/tmp/social-review-20261026
-
-
- Test Files  2 passed (2)
-      Tests  71 passed (71)
-   Start at  00:22:13
-   Duration  228ms (import 66%, transform 17%, tests 16%, worker 1%)
-

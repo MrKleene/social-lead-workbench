@@ -13,7 +13,7 @@ ambiguous evidence stays archived and blocked. Never restart old sending jobs.
 
 180 local tests and 22 desktop boundary/native tests passed. Mac synthetic GUI,
 packaged offline tests and native-browser evidence under .local/desktop-qa.
-Mac preview.6 is arm64, unsigned, live platform unverified. See docs/DESKTOP-LOCAL.md.
+Mac preview.6 is arm64, unsigned, live platform unverified. See docs/requirements/DESKTOP-LOCAL.md.
 Windows fixed browser statically checked, MCP crosscompiled; resource ACL/private
 journal code and native acceptance-to-NSIS route exist. No Windows machine:
 C#/ACL/DPAPI/Job/browser/installer acceptance remains pending, runtime gate retained.

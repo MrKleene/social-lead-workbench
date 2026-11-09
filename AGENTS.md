@@ -15,9 +15,6 @@
 
 **不要**从以下文档推导样式，它们是历史记录、归档或提案：
 
-- `docs/archive/ui-2026-10/`（雾白 + 海松绿审计、Spatial Lead Space，配色已 0 残留）
-- `docs/FRONTEND-A-MIGRATION-PLAN.md`（施工记录，不描述外观）
-- `docs/FRONTEND-BASE-EVALUATION.md`（已否决的 B 方案）
 - `VoltAgent/awesome-design-md` 的任何一份（外部参考，不是本项目规范）
 
 ---

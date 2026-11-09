@@ -9,7 +9,7 @@
 - 评论和私信分别选择模板、派生任务和记录结果；同渠道跨账号去重，额度与风险保护保持有效。
 - 待处理支持单条选择、指定兼容账号及渠道模板、预览确认；未知结果不能盲目重发。
 - 采集信息、评论审核、回复记录保留当前和历史任务的可靠关联。单帖重新读取仅更新采集与审核，不派生自动发送。
-- 接收消息通过项目受管 MCP 能力接入，按账号隔离及去重。平台是否推送、是否读全、是否已读均按实际证据显示，不能把历史读取当作新消息实时验收。平台内会话能力边界见 [接收说明](docs/inbox-reception.md)。
+- 接收消息通过项目受管 MCP 能力接入，按账号隔离及去重。平台是否推送、是否读全、是否已读均按实际证据显示，不能把历史读取当作新消息实时验收。平台内会话能力边界见 [接收说明](docs/requirements/inbox-reception.md)。
 - 配置管理集中关键词、匹配方案、评论模板、私信模板和模型；默认查看，显式新增或编辑。
 
 ## 本机使用
@@ -22,17 +22,19 @@ npm run status
 npm stop
 ```
 
-本机默认网页 `http://127.0.0.1:63968`，API仅本机访问。`npm start` 启动服务，不代表启动采集。不要用停止或重启命令中断正在执行的业务。详见 [命令](docs/COMMANDS.md)、[开发](docs/DEVELOPMENT.md)。
+本机默认网页 `http://127.0.0.1:63968`，API仅本机访问。`npm start` 启动服务，不代表启动采集。
+
+**不要直接 kill PID。** 进程持有受管设备租约、发送阶段日志和未完成的业务队列；强杀会留下无法判定归属的 UNKNOWN，并可能让额度与去重状态不一致。停止与重启一律用 `npm stop` / `npm start`，且不要在业务执行中操作。
 
 ## 工程与验收
 
 - `apps/web`：React/Vite + shadcn/ui 页面。
 - `apps/api`：鉴权、配置、采集、审核、发送、受管账号设备和收件服务。
-- `apps/api/src/collection/worker.ts`：业务队列执行；`apps/worker` 为独立内部任务 worker。
-- `packages/contracts`：前后端协议；`prisma`：持久模型与迁移；`scripts`：受管启动、隔离测试及本机诊断。
+- `apps/api/src/collection/worker.ts`：业务队列执行。
+- `packages/contracts`：前后端协议；`prisma/schema.prisma`：数据模型（桌面版运行时不使用，仅作类型与结构参考）；`scripts`：受管启动、隔离测试及本机诊断。
 
-[当前需求](docs/REQUIREMENTS.md) · [架构](docs/ARCHITECTURE.md) · [实现状态](docs/IMPLEMENTATION-STATUS.md) · [验收](docs/ACCEPTANCE.md)
+[当前需求](docs/requirements/REQUIREMENTS.md) · [模块说明](docs/requirements/MODULES.md) · [实现状态](docs/requirements/IMPLEMENTATION-STATUS.md) · [验收](docs/requirements/ACCEPTANCE.md)
 
-线索分配、销售跟进、人工 CRM 任务已退出产品，前后端入口及执行代码已移除。数据库中既有历史表和审计不物理删除；发送仍只读检查历史勿联系和已联系证据，防止升级造成重复联系。没有新的线索或跟进记录写入。带日期的旧交付报告仅为历史证据，不定义当前需求。
+线索分配、销售跟进、人工 CRM 任务已退出产品，前后端入口及执行代码已移除。数据库中既有历史表和审计不物理删除；发送仍只读检查历史勿联系和已联系证据，防止升级造成重复联系。没有新的线索或跟进记录写入。2026-10 之前的带日期交付报告已删除，只保留在 git 历史中，不定义当前需求。
 
 本仓库不包含登录凭据、Cookie、模型密钥或真实消息内容。模拟测试不等于最新版本真实全流程验收。部署服务器和桌面打包的能力需要单独核验，不因本机通过即承诺支持。
