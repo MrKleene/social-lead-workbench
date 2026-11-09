@@ -1,5 +1,9 @@
 # A 方案施工计划：整体采用 shadcn-admin 作底座
 
+> **施工记录，不是样式规范。** 本文描述"怎么迁"，不定义"长什么样"。
+> 样式规范见 [`apps/web/DESIGN.md`](../apps/web/DESIGN.md)。
+> 文中「样式已收敛到 6 个 feature 级文件并全部走主题变量」与现状不符——实测仍有 50 处硬编码 hex。
+
 > **执行状态（2026-11-08）**：P0–P5 已完成，分支 `feat/frontend-upstream-base`。
 > `desktop:build` 绿，`scripts/desktop/test-ui.cjs` 端到端全绿（含 390/320 与重启持久化）。
 > 构建 CSS **305KB → 91KB**（源样式 17 个文件 242KB → 11 个文件 29KB）。

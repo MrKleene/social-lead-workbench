@@ -1,5 +1,9 @@
 # Design QA — Spatial Lead Space
 
+> **历史记录，不是现行规范。** 本文描述的深色星空 + 香槟金视觉已从代码中移除
+> （全仓无 `spatial` / `champagne` 类名）。
+> 现行规范见 [`apps/web/DESIGN.md`](apps/web/DESIGN.md)。
+
 Status: passed for local simulated delivery (2026-10-20). No claim of pixel-identical reproduction or real platform readiness.
 
 ## Reference and comparison
