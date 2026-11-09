@@ -123,9 +123,6 @@ export function UserAuthForm({
           {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
           登录
         </Button>
-        <p className='text-center text-xs text-muted-foreground'>
-          本机演示账号已预填：{DEMO_ACCOUNT.email} / {DEMO_ACCOUNT.password}
-        </p>
       </form>
     </Form>
   )

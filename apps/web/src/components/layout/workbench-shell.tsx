@@ -39,10 +39,7 @@ export function WorkbenchShell() {
     return (
       <main className='grid min-h-svh place-items-center p-6'>
         <div className='flex max-w-md flex-col gap-3 text-center'>
-          <h1 className='text-xl font-semibold'>首次使用</h1>
-          <p className='text-sm text-muted-foreground'>
-            初始化本机工作台，无需创建工作台账号。小红书账号另行扫码登录。
-          </p>
+          <h1 className='text-xl font-semibold'>工作台</h1>
           <Button
             className='mx-auto'
             pending={w.initialize.isPending}

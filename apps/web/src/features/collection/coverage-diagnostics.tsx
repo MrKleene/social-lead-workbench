@@ -9,7 +9,7 @@ export function CoverageDiagnostics({value}:{value:unknown}){
  if(!d)return <p>此响应未提供可用的评论覆盖诊断。</p>;
  const s=d.samples[d.returnedSample];
  return <InfoSection  title={<>评论覆盖诊断</>}>
- <p>平台声明评论数：{amount(s.total)}（是否包含回复尚未确认）</p>
+ <p>平台声明评论数：{amount(s.total)}</p>
  <p>返回快照：{s.loaded?`${s.loaded.roots} 条主评论、${s.loaded.replies} 条回复；有效 ID 去重后 ${s.loaded.uniqueKnown} 条`:'评论列表未取得有效统计'}。</p>
  <p>还有下一页：{s.hasMore.state==='EXACT'?(s.hasMore.value?'是':'否'):missing[s.hasMore.state]}；游标：{{MISSING:'未返回',NULL:'空值',EMPTY:'为空',NONEMPTY:'存在',INVALID:'格式不支持'}[s.cursor]}。</p>
  <p>同页观察 {d.samples.length} 次，间隔共 {d.elapsedMs} 毫秒：{{COUNTS_UNCHANGED:'计数与结构暂未变化',CHANGED:'计数或结构发生变化',UNAVAILABLE:'不足以判断稳定性'}[d.observation]}。未滚动或展开；计数相同不代表完整采集。</p>

@@ -1,5 +1,5 @@
 'use strict';
-const {app,BrowserWindow,protocol,ipcMain,safeStorage,dialog}=require('electron');
+const {app,BrowserWindow,protocol,ipcMain,safeStorage,dialog,screen}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {LocalDatabase,LocalError}=require('../../../runtime/local/database.cjs');
 const {CredentialStore}=require('../../../runtime/local/credentials.cjs');
@@ -64,7 +64,12 @@ async function main(){
   const contentType={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png'}[path.extname(file)]||'application/octet-stream';
   return new Response(fs.readFileSync(file),{headers:{'content-type':contentType,'content-security-policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'",'x-content-type-options':'nosniff','cache-control':'no-store'}});
  });
- window=new BrowserWindow({width:1180,height:820,minWidth:320,minHeight:520,show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:!app.isPackaged}});
+ const area=screen.getPrimaryDisplay().workAreaSize;
+ const statePath=path.join(data,'window-state.json');
+ let saved=null;try{const s=JSON.parse(fs.readFileSync(statePath,'utf8'));if(Number.isInteger(s.width)&&Number.isInteger(s.height))saved=s;}catch{}
+ const width=Math.max(960,Math.min(saved?saved.width:1440,area.width-40)),height=Math.max(600,Math.min(saved?saved.height:900,area.height-40));
+ window=new BrowserWindow({width,height,minWidth:320,minHeight:520,center:true,show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:!app.isPackaged}});
+ window.on('close',()=>{if(window.isMinimized()||window.isMaximized()||window.isFullScreen())return;const b=window.getBounds();try{fs.writeFileSync(statePath,JSON.stringify({width:b.width,height:b.height}),{mode:0o600});}catch{}});
  window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,value)=>{const u=new URL(value);if(u.protocol!=='workbench:'||u.hostname!=='app'||u.port||u.username||u.password)event.preventDefault();});
  window.webContents.session.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
  window.webContents.session.setPermissionCheckHandler(()=>false);
@@ -108,4 +113,4 @@ async function main(){
 app.on('window-all-closed',()=>app.quit());
 app.on('quit',()=>{if(smokeDirectory)fs.rmSync(smokeDirectory,{recursive:true,force:true});});
 app.on('before-quit',event=>{if(closing||!store)return;event.preventDefault();closing=true;clearInterval(ticker);service?.cancelEvidence();service?.cancelPostDiagnostic();void Promise.allSettled([operations,accounts?.close()]).then(async()=>{await runner?.stop();store.close();store=null;if(smokeDirectory)fs.rmSync(smokeDirectory,{recursive:true,force:true});app.quit();});});
-main().catch(()=>{if(smokeDirectory){console.error('DESKTOP_SELF_TEST_FAILED');app.quit();return;}dialog.showErrorBox('工作台启动失败','本地数据目录、数据库或系统凭据保护不可用。没有连接或修改原工作台数据。');app.quit();});
+main().catch(error=>{console.error('DESKTOP_START_FAILED',error?.stack||error);if(smokeDirectory){console.error('DESKTOP_SELF_TEST_FAILED');app.quit();return;}if(process.argv.includes('--test-fixture')){app.quit();return;}dialog.showErrorBox('工作台启动失败','本地数据目录、数据库或系统凭据保护不可用。没有连接或修改原工作台数据。');app.quit();});
