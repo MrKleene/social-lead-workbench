@@ -13,12 +13,11 @@
 2. 本文件 — 强制规则与禁止项（指向 DESIGN.md，不另立标准）
 3. `apps/web/src/styles/theme.css` — 唯一的 token 定义处
 
-**不要**从以下文档推导样式，它们是历史记录或提案：
+**不要**从以下文档推导样式，它们是历史记录、归档或提案：
 
-- `docs/UI-CONSISTENCY-AUDIT-2026-10-26.md`（雾白 + 海松绿，配色已 0 残留）
+- `docs/archive/ui-2026-10/`（雾白 + 海松绿审计、Spatial Lead Space，配色已 0 残留）
 - `docs/FRONTEND-A-MIGRATION-PLAN.md`（施工记录，不描述外观）
-- `design-qa.md`（Spatial Lead Space，样式已删除）
-- `docs/UI-STYLE-DIRECTION.md`（目标提案，未定稿前不生效）
+- `docs/FRONTEND-BASE-EVALUATION.md`（已否决的 B 方案）
 - `VoltAgent/awesome-design-md` 的任何一份（外部参考，不是本项目规范）
 
 ---

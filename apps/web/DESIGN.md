@@ -162,14 +162,17 @@ components:
 | **`apps/web/DESIGN.md`（本文件）** | 唯一规范 | ✅ 是 |
 | `AGENTS.md`（仓库根） | 执行约束，规则层，指向本文件 | ✅ 是 |
 | `README.md` 的「紧凑石墨黑白风格」 | 一句话方向声明，无 token | ⚠️ 只作方向参考 |
-| `docs/UI-STYLE-DIRECTION.md` | 目标提案（石墨紧凑），**尚未定稿** | ⚠️ 提案，未并入前不生效 |
-| `docs/UI-CONSISTENCY-AUDIT-2026-10-26.md` | 历史交付记录（雾白 `#F6F8FB` + 海松绿 `#12856F`） | ❌ 该配色在代码中 **0 处残留** |
 | `docs/FRONTEND-A-MIGRATION-PLAN.md` | 施工记录（怎么迁到 shadcn-admin） | ❌ 不描述"长什么样" |
-| `design-qa.md`（仓库根） | 历史视觉验收（Spatial Lead Space） | ❌ 对应样式已从代码删除 |
+| `docs/FRONTEND-BASE-EVALUATION.md` | 方案评估（B 方案，已被 A 方案覆盖） | ❌ 已否决的方案 |
+| `docs/archive/ui-2026-10/` | 归档：雾白+海松绿审计、Spatial Lead Space 验收 | ❌ 配色在代码中 **0 处残留** |
 | `VoltAgent/awesome-design-md` 的 84 份 | 外部参考案例 | ❌ 永不作为本项目规范 |
 
 判断口径只有一条：**能不能被 `npm run design:lint` 或 `npm run ui:check` 校验**。
 不能校验的，是参考材料，不是规范。
+
+2026-11-09 已删除 `design-qa.md` 与 `docs/UI-STYLE-DIRECTION.md`（前者方向已废弃、后者内容已并入本文件），
+并把 2026-10-26 的旧配色审计连同其证据移入 `docs/archive/ui-2026-10/`。
+`docs/` 下不再有任何会被误当成 UI 规范的文件。
 
 ## 0.1 口径来源与收敛现状
 
@@ -420,6 +423,8 @@ components:
   并同样登记到 `ALLOWED`。
 - 不要引入第二套设计系统 / 图标库；图标统一 `lucide-react`。
 - 不要用 100px 胶囊做工具按钮、不要网格渐变——那是 vercel 营销面的语言，不适用于本工具。
+- **一个控件只允许一套焦点指示**：不要同时保留全局 `outline` 和组件自带的 `focus-visible:ring`，
+  否则会叠成双圈、且两圈颜色不一致（2026-10-26 那次审计的根因，归档在 `docs/archive/ui-2026-10/`）。
 
 ---
 
