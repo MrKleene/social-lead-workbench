@@ -7,6 +7,11 @@ import { FontProvider } from './context/font-provider'
 import { ThemeProvider } from './context/theme-provider'
 // Generated Routes
 import { routeTree } from './routeTree.gen'
+// Styles — index.css 必须第一个导入：它负责声明 Tailwind 的层顺序
+// (theme → base → components → utilities)。若先导入任何 @layer components
+// 的样式，该层会被注册在最前、优先级降到 preflight 之下，页面标题的字号
+// 和页头外边距会全部失效（2026-11-09 修过一次，ui:check 的 css-layer-order 会守）。
+import './styles/index.css'
 // Page-level styles. The graphite design system (foundation/simple/mist) is
 // gone: every rule that survived is scoped to a class the pages actually use.
 // Feature stylesheets are imported by their own components; only the two that
@@ -14,8 +19,6 @@ import { routeTree } from './routeTree.gen'
 import './features/local-workbench/local-workbench.css'
 import './features/local-workbench/local-shell.css'
 import './styles/workbench.css'
-// Styles
-import './styles/index.css'
 import './styles/desktop-bridge.css'
 
 const queryClient = new QueryClient({
