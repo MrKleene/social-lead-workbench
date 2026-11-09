@@ -1,63 +1,114 @@
-:root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+/*
+ * Design tokens — 口径来自 vercel DESIGN.md（awesome-design-md）。
+ * 只取它的色彩纪律、表面三层、圆角双尺度；营销语言（胶囊 CTA、网格渐变、大留白）全部剔除。
+ *
+ * 用 hex 而非 oklch：这些值直接取自规范原文，避免来回换算产生偏差。
+ * 规范说明见 apps/web/DESIGN.md。
+ */
 
-  --sidebar: var(--background);
+:root {
+  /* 基准 8px：控件 6px(md)、卡片 8px(lg) */
+  --radius: 0.5rem;
+
+  /* 表面三层：页底 canvas-soft / 卡片 canvas / 边框 hairline */
+  --background: #fafafa;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+
+  /* 墨黑是唯一强调色，视为稀缺 */
+  --primary: #171717;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f5;
+  --muted-foreground: #4d4d4d;
+  /* 占位符 / 最低强调，对应 vercel 的 mute */
+  --faint: #888888;
+  --accent: #f5f5f5;
+  --accent-foreground: #171717;
+
+  /* 语义色：只表达状态，不用于装饰 */
+  --destructive: #ee0000;
+  --destructive-soft: #f7d4d6;
+  --warning: #ab570a;
+  --warning-bg: #ffefcf;
+  --attention: #c50000;
+  /* vercel 规范未定义 success（它把 success 等同于链接蓝），
+     本项目通知语义需要三态，故补一组绿，取 vercel 色阶同饱和度。 */
+  --success: #0d7a3f;
+  --success-bg: #e8f5ee;
+  --success-foreground: #ffffff;
+  /* 二维码必须纯白底，两种模式都不变，否则扫不出来 */
+  --qr-surface: #ffffff;
+
+  --border: #ebebeb;
+  --input: #ebebeb;
+  --ring: #171717;
+
+  --chart-1: #f54900;
+  --chart-2: #009689;
+  --chart-3: #104e64;
+  --chart-4: #ffb900;
+  --chart-5: #fe9a00;
+
+  /* 侧边栏是独立表面，用白而不是页底色 */
+  --sidebar: var(--card);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: var(--accent);
-  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-accent: var(--muted);
+  --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 }
 
+/*
+ * 暗色：vercel 规范只覆盖浅色（它明确不发布浅色之外的模式，原文 "不记录浅色模式"
+ * 指其营销站为深色），因此这套值是按浅色阶反向推导的，不是规范原文。
+ * 推导规则：表面阶梯反向（页底最暗、卡片略亮）、边框改半透明白、语义色提亮。
+ */
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.14 0.04 259.21);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --card: #111111;
+  --card-foreground: #ededed;
+  --popover: #161616;
+  --popover-foreground: #ededed;
+
+  --primary: #ededed;
+  --primary-foreground: #0a0a0a;
+
+  --secondary: #1a1a1a;
+  --secondary-foreground: #ededed;
+  --muted: #1a1a1a;
+  --muted-foreground: #a1a1a1;
+  --faint: #6b6b6b;
+  --accent: #1f1f1f;
+  --accent-foreground: #ededed;
+
+  --destructive: #ff5c5c;
+  --destructive-soft: #2a1416;
+  --warning: #f5a623;
+  --warning-bg: #2a1f0f;
+  --attention: #ff8a8a;
+  --success: #3ddc84;
+  --success-bg: #0f2419;
+  --success-foreground: #0a0a0a;
+  --qr-surface: #ffffff;
+
+  --border: #262626;
+  --input: #2e2e2e;
+  --ring: #ededed;
+
+  --chart-1: #ff6b35;
+  --chart-2: #2dd4bf;
+  --chart-3: #38bdf8;
+  --chart-4: #fbbf24;
+  --chart-5: #fb923c;
 }
 
 @theme inline {
@@ -73,10 +124,21 @@
     'Manrope', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
     'Noto Sans SC', sans-serif;
 
+  /* 圆角双尺度：控件 sm 4 / md 6，卡片 lg 8 / xl 12。同一屏不混用。 */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* 字号阶梯：12 / 14 / 16 / 20 / 24 / 48。每档的行高与字距见 DESIGN.md 第 3 章。
+     hero(48) 对应 vercel 的 display-xl，只用于 404 这类整页大数字。 */
+  --text-caption: 12px;
+  --text-body: 14px;
+  --text-section: 16px;
+  --text-title: 20px;
+  --text-display: 24px;
+  --text-hero: 48px;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -89,9 +151,18 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-faint: var(--faint);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-attention: var(--attention);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-success-foreground: var(--success-foreground);
+  --color-qr-surface: var(--qr-surface);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

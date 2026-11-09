@@ -1,22 +1,22 @@
 :root .journey-progress-track{margin:4px 0 20px;min-width:0}
-:root .journey-progress-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));list-style:none;padding:0;margin:0 0 6px;gap:34px}
+:root .journey-progress-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));list-style:none;padding:0;margin:0 0 6px;gap:32px}
 .journey-progress-list>li{position:relative;min-width:0}
-.journey-progress-list>li:not(:last-child)::after{content:'';position:absolute;left:calc(100% + 6px);top:30px;width:22px;height:1px;background:#d4d4d8}
-.journey-progress-list>li[data-state=complete]:not(:last-child)::after{background:#15803d}
+.journey-progress-list>li:not(:last-child)::after{content:'';position:absolute;left:calc(100% + 6px);top:30px;width:22px;height:1px;background:var(--border)}
+.journey-progress-list>li[data-state=complete]:not(:last-child)::after{background:var(--success)}
 :root .journey-progress-list .journey-step-button{display:flex;align-items:center;justify-content:flex-start;width:100%;gap:10px;padding:12px;min-height:68px;color:var(--muted-foreground);border:1px solid transparent;border-radius:6px;background:transparent;box-shadow:none;text-align:left;white-space:normal}
-:root .journey-progress-list .journey-step-button[data-selected=true]{border-color:#d4d4d8;background:#fafafa;color:var(--foreground)}
-:root .journey-progress-list .journey-step-button:hover{background:#f4f4f5}
+:root .journey-progress-list .journey-step-button[data-selected=true]{border-color:var(--border);background:var(--muted);color:var(--foreground)}
+:root .journey-progress-list .journey-step-button:hover{background:var(--muted)}
 :root .journey-progress-list .journey-step-button:focus-visible{outline:2px solid var(--foreground);outline-offset:2px}
-.journey-step-marker{display:flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;border:1px solid #d4d4d8;border-radius:50%;font-size:12px;background:white}
+.journey-step-marker{display:flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;border:1px solid var(--border);border-radius:50%;font-size:12px;background:var(--card)}
 .journey-step-copy{min-width:0;display:grid;gap:4px}
-.journey-step-copy strong{font-size:13px;font-weight:600;line-height:1.5;color:var(--foreground)}
-.journey-step-copy small{font-size:11px;line-height:1.5;overflow-wrap:anywhere}
-.journey-progress-list [data-state=complete] .journey-step-marker{color:#fff;background:#15803d;border-color:#15803d}
-.journey-progress-list [data-state=complete] .journey-step-copy small{color:#166534}
-.journey-progress-list [data-state=running] .journey-step-marker{background:#18181b;border-color:#18181b;color:white}
+.journey-step-copy strong{font-size:14px;font-weight:600;line-height:1.5;color:var(--foreground)}
+.journey-step-copy small{font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.journey-progress-list [data-state=complete] .journey-step-marker{color:var(--success-foreground);background:var(--success);border-color:var(--success)}
+.journey-progress-list [data-state=complete] .journey-step-copy small{color:var(--success)}
+.journey-progress-list [data-state=running] .journey-step-marker{background:var(--primary);border-color:var(--primary);color:var(--primary-foreground)}
 .journey-progress-list [data-state=next] .journey-step-marker{border-style:dashed}
-.journey-progress-list :is([data-state=failed],[data-state=unknown],[data-state=partial],[data-state=unavailable]) .journey-step-marker{color:#9f3232;border-color:#ba7373}
+.journey-progress-list :is([data-state=failed],[data-state=unknown],[data-state=partial],[data-state=unavailable]) .journey-step-marker{color:var(--attention);border-color:var(--destructive)}
 .journey-step-spinner{animation:journey-step-spin 1.2s linear infinite}
 @keyframes journey-step-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.journey-step-spinner{animation:none}}
-@media(max-width:600px){:root .journey-progress-list{gap:16px}:root .journey-progress-list .journey-step-button{padding:10px 2px;gap:6px;flex-direction:column;min-height:102px;text-align:center}.journey-progress-list>li:not(:last-child)::after{left:calc(100% + 2px);width:12px;top:24px}.journey-step-copy{gap:4px}.journey-step-copy strong{font-size:12px}.journey-step-copy small{font-size:11px}.journey-step-marker{width:26px;height:26px}}
+@media(max-width:600px){:root .journey-progress-list{gap:16px}:root .journey-progress-list .journey-step-button{padding:10px 2px;gap:6px;flex-direction:column;min-height:102px;text-align:center}.journey-progress-list>li:not(:last-child)::after{left:calc(100% + 2px);width:12px;top:24px}.journey-step-copy{gap:4px}.journey-step-copy strong{font-size:12px}.journey-step-copy small{font-size:12px}.journey-step-marker{width:26px;height:26px}}

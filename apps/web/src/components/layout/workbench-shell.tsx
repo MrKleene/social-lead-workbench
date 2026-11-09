@@ -39,7 +39,7 @@ export function WorkbenchShell() {
     return (
       <main className='grid min-h-svh place-items-center p-6'>
         <div className='flex max-w-md flex-col gap-3 text-center'>
-          <h1 className='text-xl font-semibold'>工作台</h1>
+          <h1 className='text-title font-semibold'>工作台</h1>
           <Button
             className='mx-auto'
             pending={w.initialize.isPending}
