@@ -1,8 +1,0 @@
-node_modules
-**/node_modules
-**/dist
-.env*
-.git
-.qa
-generated_images
-docs

@@ -16,8 +16,6 @@
     "design:lint": "npx --yes @google/design.md@0.4.0 lint apps/web/DESIGN.md",
     "design:tokens": "npx --yes @google/design.md@0.4.0 export --format css-tailwind apps/web/DESIGN.md",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate deploy",
-    "local:env": "node scripts/local-env.mjs",
     "pretest": "npm run build -w @crm/contracts",
     "pretypecheck": "npm run build -w @crm/contracts",
     "test:real:preflight": "node --test scripts/real-mcp/core.test.mjs",

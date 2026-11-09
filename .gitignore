@@ -3,7 +3,6 @@ dist/
 apps/web/dist-desktop/
 .env
 .env.*
-!.env.example
 coverage/
 *.log
 .qa/
