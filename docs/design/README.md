@@ -11,7 +11,7 @@
 | [comment-reply-target.md](comment-reply-target.md) | 回复目标怎么选：直接目标取 `targetComment`，`subComments` 是讨论关系不是目标；嵌套语义仍待真实页面比对 |
 | [dm-templates-and-day-limit.md](dm-templates-and-day-limit.md) | 私信模板独立分类；`AccountDay.dailyLimitOverride` 只作用于 `REAL:Asia/Shanghai:YYYY-MM-DD` 单日桶，不动永久额度与占用数 |
 | [qwen-comment-matching.md](qwen-comment-matching.md) | 模型调用节奏：全局并发 1、两次开始至少间隔 1 秒、429 后退避 60 秒；脱敏、预算与证据守卫 |
-| [model-settings-security.md](model-settings-security.md) | 模型密钥库：主密钥位置、加密方式、部署与恢复步骤 |
+| [model-settings-security.md](model-settings-security.md) | 桌面模型凭据：系统保护、保存与授权边界、备份和跨设备恢复 |
 | [local-runtime.md](local-runtime.md) | `packages/local-runtime/src` 的结构：只用 Node 内置模块，不依赖 Electron / React / Prisma / PostgreSQL / Redis；测试入口 `npm run local:test` |
 | [conversation-replies.md](conversation-replies.md) | 收件会话与回复的边界 |
 

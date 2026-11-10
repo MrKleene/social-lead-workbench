@@ -67,3 +67,20 @@ Prisma 只保留在 `packages/legacy-migration`，用于旧模型类型与显式
 导出需显式提供只读来源和新目标路径，仍执行原有授权与文件保护检查。
 本地 JSON 导入、历史证据核对、发送限制、去重和 UNKNOWN 状态处理属于当前运行时能力，继续保留。
 没有调用方的旧审计写入函数、过期执行脚本和编辑备份已移除，历史由 Git 管理。
+
+
+## 前端入口与依赖维护
+
+业务路由放在 `apps/web/src/routes/_workbench`，首次使用界面放在 `features/onboarding`。
+不保留演示认证、模板社交图标、未接入的表格组件或仅供它们使用的依赖。
+新增共享组件时应有实际调用方；清理依赖时同时核对 CSS 导入、构建配置和类型扩展。
+
+UI 检查将文件 URL 转为本机路径；结构检查使用平台分隔符；ASAR 清单在比较前统一为 `/`。
+`tests/integration/tooling-regressions.test.cjs` 覆盖空格/中文路径、Windows/POSIX 边界判断、ASAR 通配与解包、跨平台清单和陈旧文件拒绝。
+
+`minimatch` 仅对 7–10 主版本范围覆盖到 11.0.1，保留 ASAR/glob 所需的 3.x 和 filelist 所需的 5.x API。
+该覆盖针对 [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)；不能重新改为所有版本的全局覆盖。
+升级打包依赖后同时运行安全扫描和归档回归测试，不能只凭 `npm audit` 判断兼容性。
+
+旧 `model:vault:init` 和无调用方的文件主密钥模块已退役；当前凭据使用桌面系统保护。
+保留只读旧库导出和历史导入兼容能力，不读取或删除旧设备上的密钥文件。

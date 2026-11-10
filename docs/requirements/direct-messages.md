@@ -1,87 +1,29 @@
-# Private messages: preparation only
+# 私信准备与桌面执行边界
 
-This module is a real local, read-only preparation service. It is **not a DM
-sender**, an authorization grant, a simulated success adapter, or a release of the
-existing pending comment jobs. No send route is registered. Neither platform is
-open for real DMs. The existing comment sender, quota reservations, rules and
-workers are unchanged.
+当前产品为本地 Electron 工作台，不提供旧 `/api/direct-messages/*` HTTP 端点或管理员登录页面。
+工作台首次引导、平台扫码、预览和实际发送分别处理，完成引导不授予私信权限。
 
-## Endpoints
+## 当前入口
 
-- `GET /api/direct-messages/capability?platform=XHS` (or DOUYIN): administrator
-  session required; reports send/conversation/inbox/read-receipt capabilities false.
-- `POST /api/direct-messages/preview`: administrator session, Origin and CSRF
-  required; exact `accountId/accountVersion`, `reviewId/reviewVersion`, and
-  `templateId/templateVersion`. Other fields are rejected. It performs only local
-  database reads in one repeatable-read snapshot.
+- 在「配置管理」维护独立的私信模板；模板保存不采集、不调用模型、不发送消息。
+- 待处理回复选择已保存的原文、匹配结果、兼容账号和渠道模板，先预览再显式授权。
+- 消息会话只能基于可靠入站身份回复；旧导入消息、昵称、标题或历史平台 ID 本身不授予回复资格。
+- 桌面主进程通过固定 IPC `previewContact` / `authorizeContact`、`previewReply` / `authorizeReply` 提供当前流程；来源、版本、可信窗口、账号资格和正文绑定均在运行时核验。
 
-The selected template must be DM. The recipient is the stable author of the exact
-stored review/captured comment/post, never a client-supplied ID or nickname.
-Missing bindings and stale versions fail. Nickname/title come from that source;
-missing keyword/profession are reported, never inferred from a later comment or
-current keyword group. The result shows final text, source, daily shared quota,
-no-contact/exclusion, existing cross-channel contact/UNKNOWN locks, account and
-platform risk, and missing fields. Historical comment restrictions are flagged
-as scope-unverified rather than treated as proof of DM permission or refusal.
-Cached login is not proof of current platform or DM availability.
+## 必须保持的限制
 
-Every result is `PREVIEW_ONLY`, `sent:false`, `canSend:false`,
-`authorizationCreated:false`, `conversation:null`, and `reservedByPreview:0`.
-The informational fingerprint is not a token and is never accepted for sending.
-No raw session credential, model setting, full snapshot or audit payload is
-returned. Preview does not mutate, queue, reserve, inspect the platform, render a
-real chat, or invoke a model. There is deliberately no production UI send button.
+预览只展示最终正文、来源、额度、排除/勿联系、风险和 UNKNOWN，不产生发送授权、队列任务或额度预留。
+实际提交需要独立确认，并重新核对预览范围及版本；数据变化不能沿用旧预览。
+评论与私信使用各自的模板、任务和结果，不能将旧评论任务改作私信。
+同渠道跨账号去重、共享额度、未知结果占用和禁止盲目重试继续生效。
 
-## External dependency and release gate
+执行器与精确收件人/回执协议已接入桌面本机托管链路，但能力取决于受验证的原生资源、平台账号和实际授权。
+原生资源缺失、账号受限或结果不确定时如实阻断，不以演示成功或缓存登录状态替代能力证明。
+真实私信、收件及时性、平台权限和长期运行仍需独立验收；离线合成测试不能作为真实平台成功证据。
 
-The pinned local MCP and its reviewed exact-reply protocol support COMMENT only.
-The upstream maintainer's documented tools likewise list comment/reply tools, not
-DM. Public official Marketing API docs inspected on 2026-11-02 describe advertising
-capabilities and OAuth onboarding; they did not establish a usable private-message
-send/conversation/receipt contract for this application. This is not a claim that
-no authorized private API exists.
+详细边界见 [接收消息](inbox-reception.md)、[会话回复](../design/conversation-replies.md)、[模块说明](MODULES.md) 和 [桌面版](DESKTOP-LOCAL.md)。
 
-Primary sources inspected:
-- https://github.com/xpzouying/xiaohongshu-mcp
-- https://ad.xiaohongshu.com/openApiDoc?articleId=3047
-- https://open.xiaohongshu.com/document/developer/file/4
+## 验证
 
-Before implementing the real transport, obtain a verified API/tool contract and
-its permitted account/recipient scope. In particular establish whether it allows
-first contact to a collected comment author or only replies to existing inbound
-conversations. Lead-export or ad-report APIs are not send APIs. Do not invent
-endpoints, obtain cookies/tokens through reverse engineering, or merely set the
-COMMENT sender's capability to true for DM. New provider credentials/OAuth require
-separate user approval; do not ask for secrets in chat.
-
-Remaining release work: real conversation binding and recipient verification;
-DM-specific platform eligibility and rate limits; reviewed send and message-ID
-receipt/readback mapping; durable explicit scope/preview confirmation and atomic
-shared quota/recipient reservations; single-use dispatch with UNKNOWN on uncertain
-submission and no retry; DM-only manual and automatic queue/records integration;
-post-preview revalidation and per-recipient final content binding. Inbox/replies/
-read indicators require distinct verified provider capabilities. Do not alter or
-convert existing comment jobs. Existing source field values alone grant nothing.
-
-After isolated tests, a real acceptance requires explicit sender account,
-recipient, content, and one-message authorization. Until then production DM sends
-stay unavailable. Deployment or restart of the shared worker must wait for a
-verified safe window and cannot advance existing jobs as a side effect.
-
-## Validation
-
-`npm run test -w @crm/domain` includes preparation and HTTP boundary tests. All data
-in the new tests are synthetic and the database fixture offers only read methods.
-They test capability denial, exact binding, stale versions, input injection,
-admin/CSRF, missing variables, no-contact/exclusion/risk/quota, cross-channel
-UNKNOWN, self-contact, and absence of send endpoints. These tests are not a real
-platform or persistent queue acceptance.
-
-## 本地预览入口
-
-配置管理 → 私信模板配置 → 选中已保存的私信模板 → 私信预览。
-选择已保存的来源方案/原评论及真实账号后，显式“生成本地预览”；不会运行模型、访问平台、保存配置或发送。源列表每页 20 条，切换账号/来源/评论会清空旧预览，版本变化后重新读取。正文、收件人来源、额度占用、UNKNOWN/勿联系/排除等问题如实显示，没有发送/确认授权按钮。仅管理员可访问，评论模板不显示私信预览入口。
-
-前端对未部署此 API 的旧服务关闭预览并显示“当前服务尚未启用私信预览”，不会回退为评论发送。能力接口、模板准备与真实发送是三个不同阶段：预览可用不表示 DM sender 已接通。
-
-官方私信通提供网页版入口 https://sxt.xiaohongshu.com/ ，正常网页 UI 是候选路线，不强制要求服务商 API。其官方应用说明面向商业化客户，当前账号的适用范围/会话身份/可靠回执未核验，不能据此开放生产 DM。
+`npm run check` 覆盖业务规则、模拟适配器、额度/去重/UNKNOWN、桌面 IPC 和队列恢复。
+`npm run desktop:test:ui` 使用临时 SQLite 与合成消息验证预览、只读历史、导航和恢复，不调用真实平台或付费模型。

@@ -135,7 +135,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 **职责**：在限时窗口内接收平台推送的评论通知与私信，落库去重，提供系统内未读。
 
-- 输入：管理员显式选账号 + 读确认
+- 输入：本机用户显式选账号 + 读确认
 - 输出：`InboxReceiver`、`InboxMessage`、`InboxRead`
 
 **关键约束**
@@ -262,7 +262,8 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 | 路由 | 组件 | 对应模块 |
 | --- | --- | --- |
-| `/` | 首页介绍 | — |
+| `/` | 跳转工作台概览；未初始化时显示首次使用引导 | — |
+| `/welcome` | 使用引导，可从侧栏底部菜单重新打开 | 本地初始化不授予平台或模型执行权限 |
 | `/automation` | `LocalTaskPage` | 1 / 2 / 3 三步自动化 |
 | `/comment-review` | `LocalHistory` | 2 评论匹配（历史与审核） |
 | `/auto-contact` | `LocalAutomation` | 3 自动回复 |

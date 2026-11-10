@@ -313,7 +313,7 @@ components:
 
 ## 4. 组件样式
 
-**基线**：shadcn/ui `new-york` 风格，baseColor `slate`，`cssVariables: true`，31 个组件在
+**基线**：shadcn/ui `new-york` 风格，baseColor `slate`，`cssVariables: true`，实际使用的组件位于
 `src/components/ui/`。所有变体通过 `class-variance-authority` 定义，**改样式改 CVA，不要在页面里覆写**。
 
 ### Button（`src/components/ui/button.tsx`）
@@ -512,3 +512,17 @@ warning 来自「token 已定义但没被 `components:` 表引用」——那些
 
 所以 `theme.css` 继续手写，导出仅用于**对照和排查**，不作为生成源。
 若将来把 DESIGN.md 定为唯一真相源，需要先解决上面两点。
+
+
+## 11. 首次使用引导
+
+引导页由 `src/features/onboarding/welcome.tsx` 实现，沿用本文 token，不另建视觉体系。
+桌面为居中品牌与标题、本地数据说明、三列步骤卡片和双操作按钮；窄屏收为单列。
+正文 14px、主标题 24px/600，卡片圆角 8px、控件 6px，卡片内边距移动端 16px、其余 24px。
+
+- 未初始化时由工作台外壳显示引导，不显示侧栏；数据读取失败显示重试，不伪装成首次使用。
+- 「连接账号」完成初始化后进入账号中心；「先进入工作台」完成初始化后进入概览。
+- 操作期间显示进度并阻止重复点击；初始化失败保留引导和错误，允许重试。
+- 初始化状态来自本地 SQLite，不使用演示登录、过期 token 或浏览器会话作为入口门槛。
+- 已初始化用户可通过侧栏底部菜单进入 `/welcome` 再看引导，不重复初始化。
+- 文案区分本地数据与联网操作，不宣称所有内容永不离开设备；引导本身不连接平台、不请求模型、不发送消息。
