@@ -32,3 +32,14 @@ test('staging refuses unexpected data and symlinked inputs',t=>{
  fs.symlinkSync(path.join(source,'package.json'),path.join(source,'apps/web/dist-desktop/linked.json'));
  assert.throws(()=>packageFiles(source),/Unsafe package input/);
 });
+
+test('full staged application survives ASAR glob packaging and byte verification',async t=>{
+ const stage=fs.mkdtempSync(path.join(os.tmpdir(),'workbench-archive-stage-'));
+ const output=fs.mkdtempSync(path.join(os.tmpdir(),'workbench-archive-output-'));
+ t.after(()=>{fs.rmSync(stage,{recursive:true,force:true});fs.rmSync(output,{recursive:true,force:true});});
+ const files=packageFiles(fixture(t));
+ for(const [name,bytes] of files){const target=path.join(stage,name);fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,bytes);}
+ const archive=path.join(output,'app.asar');
+ await require('@electron/asar').createPackage(stage,archive);
+ assert.equal(require('../../scripts/desktop/verify-package.cjs').verifyArchive(archive,files),files.size);
+});

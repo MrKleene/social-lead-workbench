@@ -17,11 +17,6 @@
       "types": "./dist/common/db.d.ts",
       "source": "./src/common/db.ts",
       "default": "./dist/common/db.js"
-    },
-    "./model-vault": {
-      "types": "./dist/model-vault.d.cts",
-      "source": "./src/model-vault.cjs",
-      "default": "./dist/model-vault.cjs"
     }
   },
   "scripts": {
@@ -29,7 +24,6 @@
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run test",
     "export:readonly": "node scripts/export.mjs",
-    "model:vault:init": "node scripts/init-model-vault.mjs",
     "build": "prisma generate && node ../../scripts/build-module.mjs legacy-migration"
   },
   "dependencies": {

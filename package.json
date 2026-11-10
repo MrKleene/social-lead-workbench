@@ -23,7 +23,6 @@
     "test:device:vault": "node scripts/build-device-vault.mjs && node scripts/test-device-vault.mjs",
     "test:platform": "node --test apps/desktop/test/platform.test.cjs",
     "test:windows:native": "node scripts/build-windows-host.mjs && node scripts/test-windows-native.mjs",
-    "model:vault:init": "npm run model:vault:init -w @crm/legacy-migration --",
     "build:inbox": "node scripts/inbox/build.mjs",
     "desktop:build": "npm run build",
     "desktop:test": "npm run build:core && node scripts/desktop/build-test-native.mjs && npm run test -w @crm/desktop",
@@ -33,7 +32,7 @@
     "desktop:package:preview": "npm run desktop:build && node scripts/build-windows-host.mjs && npm run desktop:stage && electron-builder --config apps/desktop/electron-builder.cjs --dir",
     "desktop:package:win": "npm run desktop:release-check && npm run desktop:build && node scripts/build-windows-host.mjs && npm run desktop:stage && electron-builder --config apps/desktop/electron-builder.cjs --win nsis --x64",
     "desktop:stage": "node scripts/desktop/stage.mjs",
-    "desktop:test:ui": "npm run desktop:build && node tests/e2e/desktop.test.cjs",
+    "desktop:test:ui": "npm run desktop:build && node tests/e2e/desktop.test.cjs && node tests/e2e/onboarding.test.cjs",
     "local:test": "npm run build:core && npm run test -w @crm/local-runtime",
     "local:import:offline": "node scripts/local/import-offline.mjs",
     "local:policy": "npm run build:core",
@@ -68,6 +67,6 @@
   "overrides": {
     "deepmerge-ts": "^8.0.0",
     "effect": "^3.20.0",
-    "minimatch": "11.0.1"
+    "minimatch@>=7 <11": "11.0.1"
   }
 }

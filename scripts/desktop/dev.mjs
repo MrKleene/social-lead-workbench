@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const electron = require('electron')
+const { npmCommand } = require('./platform-support/platform.cjs')
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const devUrl = process.env.WORKBENCH_DEV_URL || 'http://127.0.0.1:5173/'
 
@@ -32,17 +33,20 @@ function stop(code = 0) {
 process.on('SIGINT', () => stop(0))
 process.on('SIGTERM', () => stop(0))
 
-const vite = spawn('npm', ['run', 'dev', '-w', '@crm/web'], {
+const [npmBinary, npmArgs] = npmCommand(['run', 'dev', '-w', '@crm/web'])
+const vite = spawn(npmBinary, npmArgs, {
   cwd: root,
   stdio: 'inherit',
   env: process.env,
 })
 children.push(vite)
+vite.on('error', (error) => {
+  console.error(`[dev] Vite 启动失败：${error.message}`)
+  stop(1)
+})
 vite.on('exit', (code) => {
-  if (code) {
-    console.error(`[dev] Vite 退出（${code}）`)
-    stop(code)
-  }
+  console.error(`[dev] Vite 退出（${code}）`)
+  stop(code ?? 1)
 })
 
 async function waitForServer() {
@@ -80,4 +84,8 @@ const app = spawn(
   }
 )
 children.push(app)
+app.on('error', (error) => {
+  console.error(`[dev] Electron 启动失败：${error.message}`)
+  stop(1)
+})
 app.on('exit', (code) => stop(code ?? 0))

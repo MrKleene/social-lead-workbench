@@ -12,8 +12,9 @@
 
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, extname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = new URL('..', import.meta.url).pathname
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const SCAN_DIR = join(ROOT, 'apps/web/src')
 const STRICT = process.argv.includes('--strict')
 const JSON_OUT = process.argv.includes('--json')

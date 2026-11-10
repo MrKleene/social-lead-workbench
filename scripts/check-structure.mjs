@@ -25,7 +25,7 @@ function walk(directory){
 for(const [name,{directory,meta}] of packages){
  for(const dep of Object.keys(meta.dependencies||{}))if(dep.startsWith('@crm/')&&!allowed[name]?.includes(dep))fail(directory,`forbidden dependency ${dep}`);
  for(const file of walk(directory).filter(file=>/\.(?:[cm]?js|tsx?|cts)$/.test(file)&&!file.endsWith('.d.cts'))){
-  const source=fs.readFileSync(file,'utf8'),production=file.startsWith(directory+'/src/');
+  const source=fs.readFileSync(file,'utf8'),production=file.startsWith(path.join(directory,'src')+path.sep);
   if(file.endsWith('.cjs')){
    const result=spawnSync(process.execPath,['--check',file],{encoding:'utf8'});
    if(result.status!==0)fail(file,'CommonJS syntax check failed');

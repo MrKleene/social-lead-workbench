@@ -34,7 +34,7 @@ function minimalEnvironment(env=process.env){
 function npmCommand(args,env=process.env,platform=process.platform){
  if(platform!=='win32')return ['npm',args];
  // Run npm's JS entry directly: never interpolate paths into cmd.exe.
- const cli=env.npm_execpath;if(!cli||!path.win32.isAbsolute(cli)||!/[\\/]npm-cli\.js$/i.test(cli))throw Error('Start with npm run dev:persistent in native Windows Node');
+ const cli=env.npm_execpath;if(!cli||!path.win32.isAbsolute(cli)||!/[\\/]npm-cli\.js$/i.test(cli))throw Error('Start with npm run desktop:dev in native Windows Node');
  return [process.execPath,[cli,...args]];
 }
 function spawnOwned(binary,args,options={}){
