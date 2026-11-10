@@ -9,211 +9,167 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
-import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
-import { Route as authOtpRouteImport } from './routes/(auth)/otp'
-import { Route as authSignInRouteImport } from './routes/(auth)/sign-in'
-import { Route as authSignIn2RouteImport } from './routes/(auth)/sign-in-2'
-import { Route as authSignUpRouteImport } from './routes/(auth)/sign-up'
-import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
-import { Route as AuthenticatedAutoContactIndexRouteImport } from './routes/_authenticated/auto-contact/index'
-import { Route as AuthenticatedAutoContactPendingRouteImport } from './routes/_authenticated/auto-contact/pending'
-import { Route as AuthenticatedAutomationIndexRouteImport } from './routes/_authenticated/automation/index'
-import { Route as AuthenticatedCommentReviewIndexRouteImport } from './routes/_authenticated/comment-review/index'
-import { Route as AuthenticatedConfigurationIndexRouteImport } from './routes/_authenticated/configuration/index'
-import { Route as AuthenticatedDataIndexRouteImport } from './routes/_authenticated/data/index'
-import { Route as AuthenticatedInboxIndexRouteImport } from './routes/_authenticated/inbox/index'
-import { Route as AuthenticatedPlatformsIndexRouteImport } from './routes/_authenticated/platforms/index'
-import { Route as AuthenticatedReplyHistoryIndexRouteImport } from './routes/_authenticated/reply-history/index'
-import { Route as AuthenticatedWorkIndexRouteImport } from './routes/_authenticated/work/index'
-import { Route as AuthenticatedWorkAccountsRouteImport } from './routes/_authenticated/work/accounts'
-import { Route as AuthenticatedWorkArchiveRouteImport } from './routes/_authenticated/work/archive'
-import { Route as AuthenticatedWorkNoticesRouteImport } from './routes/_authenticated/work/notices'
+import { Route as WorkbenchRouteRouteImport } from './routes/_workbench/route'
+import { Route as WorkbenchIndexRouteImport } from './routes/_workbench/index'
+import { Route as WorkbenchWelcomeRouteImport } from './routes/_workbench/welcome'
+import { Route as WorkbenchAutoContactIndexRouteImport } from './routes/_workbench/auto-contact/index'
+import { Route as WorkbenchAutoContactPendingRouteImport } from './routes/_workbench/auto-contact/pending'
+import { Route as WorkbenchAutomationIndexRouteImport } from './routes/_workbench/automation/index'
+import { Route as WorkbenchCommentReviewIndexRouteImport } from './routes/_workbench/comment-review/index'
+import { Route as WorkbenchConfigurationIndexRouteImport } from './routes/_workbench/configuration/index'
+import { Route as WorkbenchDataIndexRouteImport } from './routes/_workbench/data/index'
+import { Route as WorkbenchInboxIndexRouteImport } from './routes/_workbench/inbox/index'
+import { Route as WorkbenchPlatformsIndexRouteImport } from './routes/_workbench/platforms/index'
+import { Route as WorkbenchReplyHistoryIndexRouteImport } from './routes/_workbench/reply-history/index'
+import { Route as WorkbenchWorkIndexRouteImport } from './routes/_workbench/work/index'
+import { Route as WorkbenchWorkAccountsRouteImport } from './routes/_workbench/work/accounts'
+import { Route as WorkbenchWorkArchiveRouteImport } from './routes/_workbench/work/archive'
+import { Route as WorkbenchWorkNoticesRouteImport } from './routes/_workbench/work/notices'
 
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
+const WorkbenchRouteRoute = WorkbenchRouteRouteImport.update({
+  id: '/_workbench',
   getParentRoute: () => rootRouteImport,
 } as any)
-const authForgotPasswordRoute = authForgotPasswordRouteImport.update({
-  id: '/(auth)/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const authOtpRoute = authOtpRouteImport.update({
-  id: '/(auth)/otp',
-  path: '/otp',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const authSignInRoute = authSignInRouteImport.update({
-  id: '/(auth)/sign-in',
-  path: '/sign-in',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const authSignIn2Route = authSignIn2RouteImport.update({
-  id: '/(auth)/sign-in-2',
-  path: '/sign-in-2',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const authSignUpRoute = authSignUpRouteImport.update({
-  id: '/(auth)/sign-up',
-  path: '/sign-up',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
+const WorkbenchIndexRoute = WorkbenchIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AuthenticatedRouteRoute,
+  getParentRoute: () => WorkbenchRouteRoute,
 } as any)
-const AuthenticatedAutoContactIndexRoute =
-  AuthenticatedAutoContactIndexRouteImport.update({
+const WorkbenchWelcomeRoute = WorkbenchWelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => WorkbenchRouteRoute,
+} as any)
+const WorkbenchAutoContactIndexRoute =
+  WorkbenchAutoContactIndexRouteImport.update({
     id: '/auto-contact/',
     path: '/auto-contact/',
-    getParentRoute: () => AuthenticatedRouteRoute,
+    getParentRoute: () => WorkbenchRouteRoute,
   } as any)
-const AuthenticatedAutoContactPendingRoute =
-  AuthenticatedAutoContactPendingRouteImport.update({
+const WorkbenchAutoContactPendingRoute =
+  WorkbenchAutoContactPendingRouteImport.update({
     id: '/auto-contact/pending',
     path: '/auto-contact/pending',
-    getParentRoute: () => AuthenticatedRouteRoute,
+    getParentRoute: () => WorkbenchRouteRoute,
   } as any)
-const AuthenticatedAutomationIndexRoute =
-  AuthenticatedAutomationIndexRouteImport.update({
+const WorkbenchAutomationIndexRoute =
+  WorkbenchAutomationIndexRouteImport.update({
     id: '/automation/',
     path: '/automation/',
-    getParentRoute: () => AuthenticatedRouteRoute,
+    getParentRoute: () => WorkbenchRouteRoute,
   } as any)
-const AuthenticatedCommentReviewIndexRoute =
-  AuthenticatedCommentReviewIndexRouteImport.update({
+const WorkbenchCommentReviewIndexRoute =
+  WorkbenchCommentReviewIndexRouteImport.update({
     id: '/comment-review/',
     path: '/comment-review/',
-    getParentRoute: () => AuthenticatedRouteRoute,
+    getParentRoute: () => WorkbenchRouteRoute,
   } as any)
-const AuthenticatedConfigurationIndexRoute =
-  AuthenticatedConfigurationIndexRouteImport.update({
+const WorkbenchConfigurationIndexRoute =
+  WorkbenchConfigurationIndexRouteImport.update({
     id: '/configuration/',
     path: '/configuration/',
-    getParentRoute: () => AuthenticatedRouteRoute,
+    getParentRoute: () => WorkbenchRouteRoute,
   } as any)
-const AuthenticatedDataIndexRoute = AuthenticatedDataIndexRouteImport.update({
+const WorkbenchDataIndexRoute = WorkbenchDataIndexRouteImport.update({
   id: '/data/',
   path: '/data/',
-  getParentRoute: () => AuthenticatedRouteRoute,
+  getParentRoute: () => WorkbenchRouteRoute,
 } as any)
-const AuthenticatedInboxIndexRoute = AuthenticatedInboxIndexRouteImport.update({
+const WorkbenchInboxIndexRoute = WorkbenchInboxIndexRouteImport.update({
   id: '/inbox/',
   path: '/inbox/',
-  getParentRoute: () => AuthenticatedRouteRoute,
+  getParentRoute: () => WorkbenchRouteRoute,
 } as any)
-const AuthenticatedPlatformsIndexRoute =
-  AuthenticatedPlatformsIndexRouteImport.update({
-    id: '/platforms/',
-    path: '/platforms/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedReplyHistoryIndexRoute =
-  AuthenticatedReplyHistoryIndexRouteImport.update({
+const WorkbenchPlatformsIndexRoute = WorkbenchPlatformsIndexRouteImport.update({
+  id: '/platforms/',
+  path: '/platforms/',
+  getParentRoute: () => WorkbenchRouteRoute,
+} as any)
+const WorkbenchReplyHistoryIndexRoute =
+  WorkbenchReplyHistoryIndexRouteImport.update({
     id: '/reply-history/',
     path: '/reply-history/',
-    getParentRoute: () => AuthenticatedRouteRoute,
+    getParentRoute: () => WorkbenchRouteRoute,
   } as any)
-const AuthenticatedWorkIndexRoute = AuthenticatedWorkIndexRouteImport.update({
+const WorkbenchWorkIndexRoute = WorkbenchWorkIndexRouteImport.update({
   id: '/work/',
   path: '/work/',
-  getParentRoute: () => AuthenticatedRouteRoute,
+  getParentRoute: () => WorkbenchRouteRoute,
 } as any)
-const AuthenticatedWorkAccountsRoute =
-  AuthenticatedWorkAccountsRouteImport.update({
-    id: '/work/accounts',
-    path: '/work/accounts',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedWorkArchiveRoute =
-  AuthenticatedWorkArchiveRouteImport.update({
-    id: '/work/archive',
-    path: '/work/archive',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedWorkNoticesRoute =
-  AuthenticatedWorkNoticesRouteImport.update({
-    id: '/work/notices',
-    path: '/work/notices',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
+const WorkbenchWorkAccountsRoute = WorkbenchWorkAccountsRouteImport.update({
+  id: '/work/accounts',
+  path: '/work/accounts',
+  getParentRoute: () => WorkbenchRouteRoute,
+} as any)
+const WorkbenchWorkArchiveRoute = WorkbenchWorkArchiveRouteImport.update({
+  id: '/work/archive',
+  path: '/work/archive',
+  getParentRoute: () => WorkbenchRouteRoute,
+} as any)
+const WorkbenchWorkNoticesRoute = WorkbenchWorkNoticesRouteImport.update({
+  id: '/work/notices',
+  path: '/work/notices',
+  getParentRoute: () => WorkbenchRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof AuthenticatedIndexRoute
-  '/forgot-password': typeof authForgotPasswordRoute
-  '/otp': typeof authOtpRoute
-  '/sign-in': typeof authSignInRoute
-  '/sign-in-2': typeof authSignIn2Route
-  '/sign-up': typeof authSignUpRoute
-  '/auto-contact/pending': typeof AuthenticatedAutoContactPendingRoute
-  '/work/accounts': typeof AuthenticatedWorkAccountsRoute
-  '/work/archive': typeof AuthenticatedWorkArchiveRoute
-  '/work/notices': typeof AuthenticatedWorkNoticesRoute
-  '/auto-contact/': typeof AuthenticatedAutoContactIndexRoute
-  '/automation/': typeof AuthenticatedAutomationIndexRoute
-  '/comment-review/': typeof AuthenticatedCommentReviewIndexRoute
-  '/configuration/': typeof AuthenticatedConfigurationIndexRoute
-  '/data/': typeof AuthenticatedDataIndexRoute
-  '/inbox/': typeof AuthenticatedInboxIndexRoute
-  '/platforms/': typeof AuthenticatedPlatformsIndexRoute
-  '/reply-history/': typeof AuthenticatedReplyHistoryIndexRoute
-  '/work/': typeof AuthenticatedWorkIndexRoute
+  '/': typeof WorkbenchIndexRoute
+  '/welcome': typeof WorkbenchWelcomeRoute
+  '/auto-contact/pending': typeof WorkbenchAutoContactPendingRoute
+  '/work/accounts': typeof WorkbenchWorkAccountsRoute
+  '/work/archive': typeof WorkbenchWorkArchiveRoute
+  '/work/notices': typeof WorkbenchWorkNoticesRoute
+  '/auto-contact/': typeof WorkbenchAutoContactIndexRoute
+  '/automation/': typeof WorkbenchAutomationIndexRoute
+  '/comment-review/': typeof WorkbenchCommentReviewIndexRoute
+  '/configuration/': typeof WorkbenchConfigurationIndexRoute
+  '/data/': typeof WorkbenchDataIndexRoute
+  '/inbox/': typeof WorkbenchInboxIndexRoute
+  '/platforms/': typeof WorkbenchPlatformsIndexRoute
+  '/reply-history/': typeof WorkbenchReplyHistoryIndexRoute
+  '/work/': typeof WorkbenchWorkIndexRoute
 }
 export interface FileRoutesByTo {
-  '/forgot-password': typeof authForgotPasswordRoute
-  '/otp': typeof authOtpRoute
-  '/sign-in': typeof authSignInRoute
-  '/sign-in-2': typeof authSignIn2Route
-  '/sign-up': typeof authSignUpRoute
-  '/': typeof AuthenticatedIndexRoute
-  '/auto-contact/pending': typeof AuthenticatedAutoContactPendingRoute
-  '/work/accounts': typeof AuthenticatedWorkAccountsRoute
-  '/work/archive': typeof AuthenticatedWorkArchiveRoute
-  '/work/notices': typeof AuthenticatedWorkNoticesRoute
-  '/auto-contact': typeof AuthenticatedAutoContactIndexRoute
-  '/automation': typeof AuthenticatedAutomationIndexRoute
-  '/comment-review': typeof AuthenticatedCommentReviewIndexRoute
-  '/configuration': typeof AuthenticatedConfigurationIndexRoute
-  '/data': typeof AuthenticatedDataIndexRoute
-  '/inbox': typeof AuthenticatedInboxIndexRoute
-  '/platforms': typeof AuthenticatedPlatformsIndexRoute
-  '/reply-history': typeof AuthenticatedReplyHistoryIndexRoute
-  '/work': typeof AuthenticatedWorkIndexRoute
+  '/welcome': typeof WorkbenchWelcomeRoute
+  '/': typeof WorkbenchIndexRoute
+  '/auto-contact/pending': typeof WorkbenchAutoContactPendingRoute
+  '/work/accounts': typeof WorkbenchWorkAccountsRoute
+  '/work/archive': typeof WorkbenchWorkArchiveRoute
+  '/work/notices': typeof WorkbenchWorkNoticesRoute
+  '/auto-contact': typeof WorkbenchAutoContactIndexRoute
+  '/automation': typeof WorkbenchAutomationIndexRoute
+  '/comment-review': typeof WorkbenchCommentReviewIndexRoute
+  '/configuration': typeof WorkbenchConfigurationIndexRoute
+  '/data': typeof WorkbenchDataIndexRoute
+  '/inbox': typeof WorkbenchInboxIndexRoute
+  '/platforms': typeof WorkbenchPlatformsIndexRoute
+  '/reply-history': typeof WorkbenchReplyHistoryIndexRoute
+  '/work': typeof WorkbenchWorkIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/(auth)/forgot-password': typeof authForgotPasswordRoute
-  '/(auth)/otp': typeof authOtpRoute
-  '/(auth)/sign-in': typeof authSignInRoute
-  '/(auth)/sign-in-2': typeof authSignIn2Route
-  '/(auth)/sign-up': typeof authSignUpRoute
-  '/_authenticated/': typeof AuthenticatedIndexRoute
-  '/_authenticated/auto-contact/pending': typeof AuthenticatedAutoContactPendingRoute
-  '/_authenticated/work/accounts': typeof AuthenticatedWorkAccountsRoute
-  '/_authenticated/work/archive': typeof AuthenticatedWorkArchiveRoute
-  '/_authenticated/work/notices': typeof AuthenticatedWorkNoticesRoute
-  '/_authenticated/auto-contact/': typeof AuthenticatedAutoContactIndexRoute
-  '/_authenticated/automation/': typeof AuthenticatedAutomationIndexRoute
-  '/_authenticated/comment-review/': typeof AuthenticatedCommentReviewIndexRoute
-  '/_authenticated/configuration/': typeof AuthenticatedConfigurationIndexRoute
-  '/_authenticated/data/': typeof AuthenticatedDataIndexRoute
-  '/_authenticated/inbox/': typeof AuthenticatedInboxIndexRoute
-  '/_authenticated/platforms/': typeof AuthenticatedPlatformsIndexRoute
-  '/_authenticated/reply-history/': typeof AuthenticatedReplyHistoryIndexRoute
-  '/_authenticated/work/': typeof AuthenticatedWorkIndexRoute
+  '/_workbench': typeof WorkbenchRouteRouteWithChildren
+  '/_workbench/welcome': typeof WorkbenchWelcomeRoute
+  '/_workbench/': typeof WorkbenchIndexRoute
+  '/_workbench/auto-contact/pending': typeof WorkbenchAutoContactPendingRoute
+  '/_workbench/work/accounts': typeof WorkbenchWorkAccountsRoute
+  '/_workbench/work/archive': typeof WorkbenchWorkArchiveRoute
+  '/_workbench/work/notices': typeof WorkbenchWorkNoticesRoute
+  '/_workbench/auto-contact/': typeof WorkbenchAutoContactIndexRoute
+  '/_workbench/automation/': typeof WorkbenchAutomationIndexRoute
+  '/_workbench/comment-review/': typeof WorkbenchCommentReviewIndexRoute
+  '/_workbench/configuration/': typeof WorkbenchConfigurationIndexRoute
+  '/_workbench/data/': typeof WorkbenchDataIndexRoute
+  '/_workbench/inbox/': typeof WorkbenchInboxIndexRoute
+  '/_workbench/platforms/': typeof WorkbenchPlatformsIndexRoute
+  '/_workbench/reply-history/': typeof WorkbenchReplyHistoryIndexRoute
+  '/_workbench/work/': typeof WorkbenchWorkIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/forgot-password'
-    | '/otp'
-    | '/sign-in'
-    | '/sign-in-2'
-    | '/sign-up'
+    | '/welcome'
     | '/auto-contact/pending'
     | '/work/accounts'
     | '/work/archive'
@@ -229,11 +185,7 @@ export interface FileRouteTypes {
     | '/work/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/forgot-password'
-    | '/otp'
-    | '/sign-in'
-    | '/sign-in-2'
-    | '/sign-up'
+    | '/welcome'
     | '/'
     | '/auto-contact/pending'
     | '/work/accounts'
@@ -250,226 +202,187 @@ export interface FileRouteTypes {
     | '/work'
   id:
     | '__root__'
-    | '/_authenticated'
-    | '/(auth)/forgot-password'
-    | '/(auth)/otp'
-    | '/(auth)/sign-in'
-    | '/(auth)/sign-in-2'
-    | '/(auth)/sign-up'
-    | '/_authenticated/'
-    | '/_authenticated/auto-contact/pending'
-    | '/_authenticated/work/accounts'
-    | '/_authenticated/work/archive'
-    | '/_authenticated/work/notices'
-    | '/_authenticated/auto-contact/'
-    | '/_authenticated/automation/'
-    | '/_authenticated/comment-review/'
-    | '/_authenticated/configuration/'
-    | '/_authenticated/data/'
-    | '/_authenticated/inbox/'
-    | '/_authenticated/platforms/'
-    | '/_authenticated/reply-history/'
-    | '/_authenticated/work/'
+    | '/_workbench'
+    | '/_workbench/welcome'
+    | '/_workbench/'
+    | '/_workbench/auto-contact/pending'
+    | '/_workbench/work/accounts'
+    | '/_workbench/work/archive'
+    | '/_workbench/work/notices'
+    | '/_workbench/auto-contact/'
+    | '/_workbench/automation/'
+    | '/_workbench/comment-review/'
+    | '/_workbench/configuration/'
+    | '/_workbench/data/'
+    | '/_workbench/inbox/'
+    | '/_workbench/platforms/'
+    | '/_workbench/reply-history/'
+    | '/_workbench/work/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  authForgotPasswordRoute: typeof authForgotPasswordRoute
-  authOtpRoute: typeof authOtpRoute
-  authSignInRoute: typeof authSignInRoute
-  authSignIn2Route: typeof authSignIn2Route
-  authSignUpRoute: typeof authSignUpRoute
+  WorkbenchRouteRoute: typeof WorkbenchRouteRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_authenticated': {
-      id: '/_authenticated'
+    '/_workbench': {
+      id: '/_workbench'
       path: ''
       fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      preLoaderRoute: typeof WorkbenchRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/(auth)/forgot-password': {
-      id: '/(auth)/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof authForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(auth)/otp': {
-      id: '/(auth)/otp'
-      path: '/otp'
-      fullPath: '/otp'
-      preLoaderRoute: typeof authOtpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(auth)/sign-in': {
-      id: '/(auth)/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof authSignInRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(auth)/sign-in-2': {
-      id: '/(auth)/sign-in-2'
-      path: '/sign-in-2'
-      fullPath: '/sign-in-2'
-      preLoaderRoute: typeof authSignIn2RouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(auth)/sign-up': {
-      id: '/(auth)/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof authSignUpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/': {
-      id: '/_authenticated/'
+    '/_workbench/': {
+      id: '/_workbench/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchIndexRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/auto-contact/': {
-      id: '/_authenticated/auto-contact/'
+    '/_workbench/welcome': {
+      id: '/_workbench/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WorkbenchWelcomeRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
+    }
+    '/_workbench/auto-contact/': {
+      id: '/_workbench/auto-contact/'
       path: '/auto-contact'
       fullPath: '/auto-contact/'
-      preLoaderRoute: typeof AuthenticatedAutoContactIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchAutoContactIndexRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/auto-contact/pending': {
-      id: '/_authenticated/auto-contact/pending'
+    '/_workbench/auto-contact/pending': {
+      id: '/_workbench/auto-contact/pending'
       path: '/auto-contact/pending'
       fullPath: '/auto-contact/pending'
-      preLoaderRoute: typeof AuthenticatedAutoContactPendingRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchAutoContactPendingRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/automation/': {
-      id: '/_authenticated/automation/'
+    '/_workbench/automation/': {
+      id: '/_workbench/automation/'
       path: '/automation'
       fullPath: '/automation/'
-      preLoaderRoute: typeof AuthenticatedAutomationIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchAutomationIndexRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/comment-review/': {
-      id: '/_authenticated/comment-review/'
+    '/_workbench/comment-review/': {
+      id: '/_workbench/comment-review/'
       path: '/comment-review'
       fullPath: '/comment-review/'
-      preLoaderRoute: typeof AuthenticatedCommentReviewIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchCommentReviewIndexRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/configuration/': {
-      id: '/_authenticated/configuration/'
+    '/_workbench/configuration/': {
+      id: '/_workbench/configuration/'
       path: '/configuration'
       fullPath: '/configuration/'
-      preLoaderRoute: typeof AuthenticatedConfigurationIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchConfigurationIndexRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/data/': {
-      id: '/_authenticated/data/'
+    '/_workbench/data/': {
+      id: '/_workbench/data/'
       path: '/data'
       fullPath: '/data/'
-      preLoaderRoute: typeof AuthenticatedDataIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchDataIndexRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/inbox/': {
-      id: '/_authenticated/inbox/'
+    '/_workbench/inbox/': {
+      id: '/_workbench/inbox/'
       path: '/inbox'
       fullPath: '/inbox/'
-      preLoaderRoute: typeof AuthenticatedInboxIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchInboxIndexRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/platforms/': {
-      id: '/_authenticated/platforms/'
+    '/_workbench/platforms/': {
+      id: '/_workbench/platforms/'
       path: '/platforms'
       fullPath: '/platforms/'
-      preLoaderRoute: typeof AuthenticatedPlatformsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchPlatformsIndexRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/reply-history/': {
-      id: '/_authenticated/reply-history/'
+    '/_workbench/reply-history/': {
+      id: '/_workbench/reply-history/'
       path: '/reply-history'
       fullPath: '/reply-history/'
-      preLoaderRoute: typeof AuthenticatedReplyHistoryIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchReplyHistoryIndexRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/work/': {
-      id: '/_authenticated/work/'
+    '/_workbench/work/': {
+      id: '/_workbench/work/'
       path: '/work'
       fullPath: '/work/'
-      preLoaderRoute: typeof AuthenticatedWorkIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchWorkIndexRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/work/accounts': {
-      id: '/_authenticated/work/accounts'
+    '/_workbench/work/accounts': {
+      id: '/_workbench/work/accounts'
       path: '/work/accounts'
       fullPath: '/work/accounts'
-      preLoaderRoute: typeof AuthenticatedWorkAccountsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchWorkAccountsRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/work/archive': {
-      id: '/_authenticated/work/archive'
+    '/_workbench/work/archive': {
+      id: '/_workbench/work/archive'
       path: '/work/archive'
       fullPath: '/work/archive'
-      preLoaderRoute: typeof AuthenticatedWorkArchiveRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchWorkArchiveRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
-    '/_authenticated/work/notices': {
-      id: '/_authenticated/work/notices'
+    '/_workbench/work/notices': {
+      id: '/_workbench/work/notices'
       path: '/work/notices'
       fullPath: '/work/notices'
-      preLoaderRoute: typeof AuthenticatedWorkNoticesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      preLoaderRoute: typeof WorkbenchWorkNoticesRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
     }
   }
 }
 
-interface AuthenticatedRouteRouteChildren {
-  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
-  AuthenticatedAutoContactPendingRoute: typeof AuthenticatedAutoContactPendingRoute
-  AuthenticatedWorkAccountsRoute: typeof AuthenticatedWorkAccountsRoute
-  AuthenticatedWorkArchiveRoute: typeof AuthenticatedWorkArchiveRoute
-  AuthenticatedWorkNoticesRoute: typeof AuthenticatedWorkNoticesRoute
-  AuthenticatedAutoContactIndexRoute: typeof AuthenticatedAutoContactIndexRoute
-  AuthenticatedAutomationIndexRoute: typeof AuthenticatedAutomationIndexRoute
-  AuthenticatedCommentReviewIndexRoute: typeof AuthenticatedCommentReviewIndexRoute
-  AuthenticatedConfigurationIndexRoute: typeof AuthenticatedConfigurationIndexRoute
-  AuthenticatedDataIndexRoute: typeof AuthenticatedDataIndexRoute
-  AuthenticatedInboxIndexRoute: typeof AuthenticatedInboxIndexRoute
-  AuthenticatedPlatformsIndexRoute: typeof AuthenticatedPlatformsIndexRoute
-  AuthenticatedReplyHistoryIndexRoute: typeof AuthenticatedReplyHistoryIndexRoute
-  AuthenticatedWorkIndexRoute: typeof AuthenticatedWorkIndexRoute
+interface WorkbenchRouteRouteChildren {
+  WorkbenchWelcomeRoute: typeof WorkbenchWelcomeRoute
+  WorkbenchIndexRoute: typeof WorkbenchIndexRoute
+  WorkbenchAutoContactPendingRoute: typeof WorkbenchAutoContactPendingRoute
+  WorkbenchWorkAccountsRoute: typeof WorkbenchWorkAccountsRoute
+  WorkbenchWorkArchiveRoute: typeof WorkbenchWorkArchiveRoute
+  WorkbenchWorkNoticesRoute: typeof WorkbenchWorkNoticesRoute
+  WorkbenchAutoContactIndexRoute: typeof WorkbenchAutoContactIndexRoute
+  WorkbenchAutomationIndexRoute: typeof WorkbenchAutomationIndexRoute
+  WorkbenchCommentReviewIndexRoute: typeof WorkbenchCommentReviewIndexRoute
+  WorkbenchConfigurationIndexRoute: typeof WorkbenchConfigurationIndexRoute
+  WorkbenchDataIndexRoute: typeof WorkbenchDataIndexRoute
+  WorkbenchInboxIndexRoute: typeof WorkbenchInboxIndexRoute
+  WorkbenchPlatformsIndexRoute: typeof WorkbenchPlatformsIndexRoute
+  WorkbenchReplyHistoryIndexRoute: typeof WorkbenchReplyHistoryIndexRoute
+  WorkbenchWorkIndexRoute: typeof WorkbenchWorkIndexRoute
 }
 
-const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
-  AuthenticatedAutoContactPendingRoute: AuthenticatedAutoContactPendingRoute,
-  AuthenticatedWorkAccountsRoute: AuthenticatedWorkAccountsRoute,
-  AuthenticatedWorkArchiveRoute: AuthenticatedWorkArchiveRoute,
-  AuthenticatedWorkNoticesRoute: AuthenticatedWorkNoticesRoute,
-  AuthenticatedAutoContactIndexRoute: AuthenticatedAutoContactIndexRoute,
-  AuthenticatedAutomationIndexRoute: AuthenticatedAutomationIndexRoute,
-  AuthenticatedCommentReviewIndexRoute: AuthenticatedCommentReviewIndexRoute,
-  AuthenticatedConfigurationIndexRoute: AuthenticatedConfigurationIndexRoute,
-  AuthenticatedDataIndexRoute: AuthenticatedDataIndexRoute,
-  AuthenticatedInboxIndexRoute: AuthenticatedInboxIndexRoute,
-  AuthenticatedPlatformsIndexRoute: AuthenticatedPlatformsIndexRoute,
-  AuthenticatedReplyHistoryIndexRoute: AuthenticatedReplyHistoryIndexRoute,
-  AuthenticatedWorkIndexRoute: AuthenticatedWorkIndexRoute,
+const WorkbenchRouteRouteChildren: WorkbenchRouteRouteChildren = {
+  WorkbenchWelcomeRoute: WorkbenchWelcomeRoute,
+  WorkbenchIndexRoute: WorkbenchIndexRoute,
+  WorkbenchAutoContactPendingRoute: WorkbenchAutoContactPendingRoute,
+  WorkbenchWorkAccountsRoute: WorkbenchWorkAccountsRoute,
+  WorkbenchWorkArchiveRoute: WorkbenchWorkArchiveRoute,
+  WorkbenchWorkNoticesRoute: WorkbenchWorkNoticesRoute,
+  WorkbenchAutoContactIndexRoute: WorkbenchAutoContactIndexRoute,
+  WorkbenchAutomationIndexRoute: WorkbenchAutomationIndexRoute,
+  WorkbenchCommentReviewIndexRoute: WorkbenchCommentReviewIndexRoute,
+  WorkbenchConfigurationIndexRoute: WorkbenchConfigurationIndexRoute,
+  WorkbenchDataIndexRoute: WorkbenchDataIndexRoute,
+  WorkbenchInboxIndexRoute: WorkbenchInboxIndexRoute,
+  WorkbenchPlatformsIndexRoute: WorkbenchPlatformsIndexRoute,
+  WorkbenchReplyHistoryIndexRoute: WorkbenchReplyHistoryIndexRoute,
+  WorkbenchWorkIndexRoute: WorkbenchWorkIndexRoute,
 }
 
-const AuthenticatedRouteRouteWithChildren =
-  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+const WorkbenchRouteRouteWithChildren = WorkbenchRouteRoute._addFileChildren(
+  WorkbenchRouteRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
-  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  authForgotPasswordRoute: authForgotPasswordRoute,
-  authOtpRoute: authOtpRoute,
-  authSignInRoute: authSignInRoute,
-  authSignIn2Route: authSignIn2Route,
-  authSignUpRoute: authSignUpRoute,
+  WorkbenchRouteRoute: WorkbenchRouteRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

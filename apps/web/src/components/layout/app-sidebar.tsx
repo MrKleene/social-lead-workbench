@@ -1,5 +1,4 @@
 import { Layers } from 'lucide-react'
-import { getSession } from '@/lib/session'
 import { useLocalRecords } from '@/features/local-workbench/use-local-records'
 import {
   Sidebar,
@@ -12,11 +11,10 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar'
 import { NavGroup } from './nav-group'
-import { NavUser } from './nav-user'
+import { NavWorkspace } from './nav-workspace'
 import { sidebarData } from './data/sidebar-data'
 
 export function AppSidebar() {
-  const session = getSession()
   const unread = useLocalRecords('unread')
 
   const navGroups = sidebarData.navGroups.map((group) => ({
@@ -60,13 +58,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser
-          user={{
-            name: session?.user.name ?? '未登录',
-            email: session?.user.email ?? '',
-            avatar: '',
-          }}
-        />
+        <NavWorkspace />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

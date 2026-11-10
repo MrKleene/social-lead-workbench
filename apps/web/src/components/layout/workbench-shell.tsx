@@ -1,4 +1,4 @@
-import { Outlet } from '@tanstack/react-router'
+import { Outlet, useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -8,15 +8,22 @@ import {
 } from '@/components/ui/sidebar'
 import { DraftGuardProvider } from '@/features/work/draft-guard'
 import { useLocalWorkbench } from '@/features/local-workbench/use-local-workbench'
+import { Welcome, type WelcomeDestination } from '@/features/onboarding/welcome'
 import { AppSidebar } from './app-sidebar'
 
-/**
- * Workbench shell: the three local bootstrap states, then the sidebar layout.
- * Authentication happens one level up in `routes/_authenticated/route.tsx`, so
- * by the time this renders the user is already known.
- */
+/** Opens local data before rendering the workbench; first use shows the welcome flow. */
 export function WorkbenchShell() {
   const w = useLocalWorkbench()
+  const navigate = useNavigate()
+
+  async function start(destination: WelcomeDestination) {
+    try {
+      await w.initialize.mutateAsync()
+      await navigate({ to: destination, replace: true })
+    } catch {
+      // Mutation errors are displayed on the welcome screen so the user can retry.
+    }
+  }
 
   if (w.status.isPending)
     return (
@@ -37,17 +44,12 @@ export function WorkbenchShell() {
 
   if (!w.status.data.initialized)
     return (
-      <main className='grid min-h-svh place-items-center p-6'>
-        <div className='flex max-w-md flex-col gap-3 text-center'>
-          <h1 className='text-title font-semibold'>工作台</h1>
-          <Button
-            className='mx-auto'
-            pending={w.initialize.isPending}
-            onClick={() => w.initialize.mutate()}
-          >
-            初始化并打开
-          </Button>
-        </div>
+      <main className='min-h-svh bg-background text-foreground'>
+        <Welcome
+          onContinue={(destination) => void start(destination)}
+          pending={w.initialize.isPending}
+          error={w.initialize.error?.message}
+        />
       </main>
     )
 

@@ -14,18 +14,6 @@ import {
 import { type SidebarData } from '../types'
 
 export const sidebarData: SidebarData = {
-  user: {
-    name: '本地演示用户',
-    email: 'demo@social-lead.app',
-    avatar: '',
-  },
-  teams: [
-    {
-      name: 'Social Lead',
-      logo: SquareStack,
-      plan: '本机工作台',
-    },
-  ],
   navGroups: [
     {
       title: '工作区',
