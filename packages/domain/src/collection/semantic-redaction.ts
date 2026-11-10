@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { modelOutputFailureCode, semanticInputPolicy, type SemanticOutbound, type SemanticOutput } from '@crm/contracts';
 import type { SemanticInput } from './semantic-evaluator';
-import { parseQwenResult, QwenError } from './qwen-provider';
+import { parseQwenResult, QwenError } from './qwen-result';
 export const REDACTION_VERSION='contact-redaction-v1';
 const marker='[已脱敏]';
 export function redactText(text:string,identifiers:string[]=[]){

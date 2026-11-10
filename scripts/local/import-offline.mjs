@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
-const require=createRequire(import.meta.url),{LocalDatabase,requireNewDestination}=require('../../runtime/local/database.cjs'),{prepareLegacySnapshot,importLegacySnapshot}=require('../../runtime/local/legacy-import.cjs');
+const require=createRequire(import.meta.url),{LocalDatabase,requireNewDestination}=require('@crm/local-runtime/database'),{prepareLegacySnapshot,importLegacySnapshot}=require('@crm/local-runtime/legacy-import');
 const [input,destination]=process.argv.slice(2);
 if(!input||!destination||!path.isAbsolute(input)||!path.isAbsolute(destination)||fs.existsSync(destination))throw Error('Usage: import-offline ABSOLUTE_EXPORT_JSON ABSOLUTE_NEW_SQLITE_FILE; existing destinations are refused');
 requireNewDestination(destination);

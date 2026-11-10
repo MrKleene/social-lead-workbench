@@ -1,7 +1,7 @@
 'use strict';
 const {randomUUID}=require('node:crypto');
-const {inspectExistingDm,Client,StreamableHTTPClientTransport,endpointUrl}=require('../../../runtime/local/platform-provider.cjs');
-const {hash,LocalError}=require('../../../runtime/local/database.cjs');
+const {inspectExistingDm,Client,StreamableHTTPClientTransport,endpointUrl}=require('@crm/local-runtime/platform-provider');
+const {hash,LocalError}=require('@crm/local-runtime/database');
 async function inspectDm(session,command,signal){return inspectExistingDm({...session.endpoint(),accountId:command.accountId,binarySha256:session.binaryHash,stop:()=>session.stop()},session.binaryHash,command,signal);}
 async function inspectComment(session,command,signal){
  const endpoint=session.endpoint(),url=endpointUrl(endpoint.url.href).href;if(!/^[a-f0-9]{64}$/.test(endpoint.token))throw new LocalError('EVIDENCE_ENDPOINT_INVALID');let calls=0,requests=0;

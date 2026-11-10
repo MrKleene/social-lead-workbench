@@ -1,5 +1,5 @@
 import type {SemanticOutbound} from '@crm/contracts';
-import {qwenModel} from '../../../../runtime/qwen-models.cjs';
+import {qwenModel} from './qwen-models.cjs';
 export const WHOLE_POST_TIMEOUT=300000;
 export const WHOLE_POST_LEASE=360000;
 export const WHOLE_POST_STALE=420000;

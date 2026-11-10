@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 const root=fileURLToPath(new URL('../',import.meta.url));
 if(process.platform==='darwin'&&process.arch==='arm64'){
- const directory=join(root,'packages/domain/dist/native');mkdirSync(directory,{recursive:true,mode:0o700});
+ const directory=join(root,'apps/desktop/dist/native');mkdirSync(directory,{recursive:true,mode:0o700});
  const source=join(root,'native/macos/device-vault.swift'),binary=join(directory,'device-vault'),stamp=join(directory,'build.json');
  const hash=path=>createHash('sha256').update(readFileSync(path)).digest('hex'),sourceHash=hash(source);
  let unchanged=false;

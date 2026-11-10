@@ -1,5 +1,5 @@
 import type {SemanticOutbound} from '@crm/contracts';
-import {qwenModel} from '../../../../runtime/qwen-models.cjs';
+import {qwenModel} from './qwen-models.cjs';
 import {wholePostCapacity} from './whole-post-capacity';
 /** Local conservative estimate, NOT a tokenizer or provider billing guarantee.
  * Never count free quotas/cache discounts. Values are pinned to the reviewed catalog. */

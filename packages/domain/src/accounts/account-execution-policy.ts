@@ -1,4 +1,3 @@
-import type {Prisma} from '@prisma/client';
 /** Legacy status is retained for history/simulation, never a real participation toggle.
  * Initial login holds meant "no automatic send authorization", not a bad session. */
 const loginOnlyReasons = new Set(['登录已验证；真实采集与发送仍禁用','登录已验证；只读采集须逐次确认，发送禁用','等待本人授权']);
@@ -18,11 +17,3 @@ export function accountReadBlock(a:AccountSafety):string|null {
  return null;
 }
 export function accountModeBlocked(a:AccountSafety,mode:string){return mode==='SIMULATION'?a.status!=='UNCONNECTED':!!accountSystemBlock(a);}
-
-/** Old transport versions could leave the initial login reason on a risk pause.
- * Retain their append-only restriction evidence independently of that legacy field. */
-export async function recordedAccountBlocks(tx:Pick<Prisma.TransactionClient,'auditLog'>,ids:string[]){
- if(!ids.length)return new Set<string>();
- const rows=await tx.auditLog.findMany({where:{entityId:{in:ids},action:'ACCOUNT_SEND_OBSERVATION',metadata:{path:['state'],not:'UNKNOWN'}},select:{entityId:true}});
- return new Set(rows.map(r=>r.entityId));
-}

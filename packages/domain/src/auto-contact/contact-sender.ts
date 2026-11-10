@@ -1,10 +1,9 @@
 import { z } from 'zod';
-import type { Role } from '@prisma/client';
 import type { ContactTarget } from './contact-policy';
 
 /** Mirrors the API actor shape. The desktop runtime has no session layer, so the
  * type is declared here instead of pulling in auth/security. */
-export type Actor = { id: string; name: string; email: string; role: Role };
+export type Actor = { id: string; name: string; email: string; role: 'ADMIN' | 'SALES' };
 export type SendRequest = ContactTarget & {
     accountId: string;
     platform: string;

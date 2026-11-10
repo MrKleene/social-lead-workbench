@@ -1,0 +1,16 @@
+{
+  "name": "@crm/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/main.cjs",
+  "scripts": {
+    "test": "node --test test/*.test.cjs",
+    "start": "electron src/main.cjs"
+  },
+  "dependencies": {
+    "@crm/local-runtime": "0.1.0"
+  },
+  "devDependencies": {
+    "electron": "45.2.3"
+  }
+}

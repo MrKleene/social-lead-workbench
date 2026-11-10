@@ -1,4 +1,4 @@
-import platform from '../../runtime/platform.cjs';
+import platform from '../desktop/platform-support/platform.cjs';
 import { access, lstat, readFile, realpath, mkdir, writeFile, unlink, chmod } from 'node:fs/promises';
 import { constants, createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -62,9 +62,10 @@ export async function inspectSession(plan, required = false) {
   return marker;
 }
 export async function localDependencies(root) {
-  if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('Node.js 22+ is required; no installation performed');
-  for (const name of ['prisma', 'tsx', 'tsc', 'vite']) {
-    const executable = process.platform==='win32'?join(root,'node_modules',({prisma:'prisma/build/index.js',tsx:'tsx/dist/cli.mjs',tsc:'typescript/bin/tsc',vite:'vite/bin/vite.js'})[name]):join(root, 'node_modules', '.bin', name);
+  const [major,minor]=process.versions.node.split('.').map(Number);
+  if (major<24||(major===24&&minor<11)) throw new Error('Node.js 24.11+ is required; no installation performed');
+  for (const name of ['tsx', 'tsc', 'vite']) {
+    const executable = process.platform==='win32'?join(root,'node_modules',({tsx:'tsx/dist/cli.mjs',tsc:'typescript/bin/tsc',vite:'vite/bin/vite.js'})[name]):join(root, 'node_modules', '.bin', name);
     try {
       await access(executable, constants.X_OK);
       if (!platform.isWithin(join(root,'node_modules'),await realpath(executable))) throw new Error('External executable');

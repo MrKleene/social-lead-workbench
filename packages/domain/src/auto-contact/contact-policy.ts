@@ -1,5 +1,13 @@
-import type { SemanticReview, CapturedComment, CapturedPost } from '@prisma/client';
-import { semanticHash } from '../collection/capture-archive';
+// Only evidence consumed by these rules belongs in the domain contract.
+export type ReviewEvidence = {
+ id:string; version:number; platformUserId:string; snapshot:unknown; isDemo:boolean;
+ state:string; score:number|null; context:string; result:unknown; reviewStatus:string;
+ modelVersion:string|null; selectedModel:string|null; policyId:string|null; policyRevision:number|null;
+ evaluationInput:unknown;
+};
+export type CapturedCommentEvidence = {snapshot:unknown;platformCommentId:string;isDemo:boolean};
+export type CapturedPostEvidence = {platformPostId:string};
+import { semanticHash } from '../common/semantic-hash';
 export const shanghaiDay = (now: Date) => new Date(now.getTime() + 8 * 3600000).toISOString().slice(0, 10);
 export const quotaBucket = (mode: string, now: Date) => `${mode}:Asia/Shanghai:${shanghaiDay(now)}`;
 export type ContactTarget = {
@@ -8,14 +16,14 @@ export type ContactTarget = {
     commentId: string;
 };
 /** Bind the author of the reviewed comment, never snapshot.targetComment (the old reply's target). */
-export function contactTarget(review: SemanticReview, capture: CapturedComment | null, post: CapturedPost | null): ContactTarget | null {
+export function contactTarget(review: ReviewEvidence, capture: CapturedCommentEvidence | null, post: CapturedPostEvidence | null): ContactTarget | null {
     const s = review.snapshot as Record<string, unknown>, c = capture?.snapshot as Record<string, unknown> | undefined;
     const id = (v: unknown) => typeof v === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(v);
     if (!capture || !post || !id(s.userId) || !id(s.postId) || !id(s.commentId) || review.platformUserId !== s.userId || capture.platformCommentId !== s.commentId || post.platformPostId !== s.postId || c?.userId !== s.userId || c?.commentId !== s.commentId || c?.postId !== s.postId || c?.comment !== s.comment || capture.isDemo !== review.isDemo)
         return null;
     return { recipientId: s.userId as string, postId: s.postId as string, commentId: s.commentId as string };
 }
-export function eligible(review: SemanticReview, threshold: number) { const result = review.result as {
+export function eligible(review: ReviewEvidence, threshold: number) { const result = review.result as {
     decision?: string;
     evidence?: {
         source?: string;
@@ -24,7 +32,7 @@ export function eligible(review: SemanticReview, threshold: number) { const resu
 } | null, s = review.snapshot as {
     comment?: string;
 }; return review.state === 'EVALUATED' && review.score !== null && review.score >= threshold && review.context === 'SUFFICIENT' && result?.decision === 'MATCH' && ['PENDING', 'APPROVED'].includes(review.reviewStatus) && !!result.evidence?.length && result.evidence.some(e => e.source === 'COMMENT' && typeof e.quote === 'string' && e.quote.length > 0 && s.comment?.includes(e.quote)); }
-export function eligibilityHash(r: SemanticReview) { return semanticHash({ id: r.id, version: r.version, score: r.score, context: r.context, result: r.result, model: r.modelVersion, selectedModel: r.selectedModel, policy: r.policyId, revision: r.policyRevision, snapshot: r.snapshot, input: r.evaluationInput, status: r.reviewStatus }); }
+export function eligibilityHash(r: ReviewEvidence) { return semanticHash({ id: r.id, version: r.version, score: r.score, context: r.context, result: r.result, model: r.modelVersion, selectedModel: r.selectedModel, policy: r.policyId, revision: r.policyRevision, snapshot: r.snapshot, input: r.evaluationInput, status: r.reviewStatus }); }
 export function ruleHash(r: {
     channelPlans?:unknown;
     channels?:string[];

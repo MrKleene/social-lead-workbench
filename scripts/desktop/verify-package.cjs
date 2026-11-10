@@ -5,10 +5,12 @@ const asar=require('@electron/asar'),{getCurrentFuseWire,FuseV1Options}=require(
  const app=process.argv[2];if(!app||!path.isAbsolute(app))throw Error('Pass an absolute packaged app/executable path');
  const resources=app.endsWith('.app')?path.join(app,'Contents/Resources'):path.join(path.dirname(app),'resources'),archive=path.join(resources,'app.asar');
  const entries=asar.listPackage(archive).map(s=>s.slice(1)),files=entries.filter(e=>!asar.statFile(archive,e).files);
- assert.equal(entries.some(e=>/node_modules|(^|\/)\.env|\.sqlite|\.sealed|cookies/i.test(e)),false,'Package contains runtime/dependency data');
+ assert.equal(entries.some(e=>/(^|\/)\.env|\.sqlite|\.sealed|cookies/i.test(e)),false,'Package contains runtime/dependency data');
  assert.equal(entries.some(e=>asar.statFile(archive,e).link),false,'Package contains a link');
  const root=path.resolve(__dirname,'../..');
- for(const file of files){if(file==='package.json')continue;assert.equal(['apps/desktop/src/','apps/web/dist-desktop/','runtime/local/'].some(prefix=>file.startsWith(prefix)),true,'File outside desktop allowlist');assert.equal(fs.existsSync(path.join(root,file)),true,'Unexpected package file');assert.equal(fs.readFileSync(path.join(root,file)).equals(asar.extractFile(archive,file)),true,'Package is stale: '+file);}
+ const expectedFiles=require('./stage-layout.cjs').packageFiles(root);
+ assert.deepEqual([...files].sort(),[...expectedFiles.keys()].sort(),'Package file set differs from allowlist');
+ for(const [file,bytes] of expectedFiles){const actual=asar.extractFile(archive,file);if(file==='package.json')assert.deepEqual(JSON.parse(actual),JSON.parse(bytes),'Package metadata differs');else assert.equal(bytes.equals(actual),true,'Package is stale: '+file);}
  if(!app.endsWith('.app')&&process.platform!=='win32')throw Error('Windows package verification requires native Windows execution');
  const windowsCheck=(file,directory)=>require('../../apps/desktop/src/windows-native.cjs').windowsNative({isPackaged:true,resourcesPath:resources},{operation:directory?'resource-directory':'executable',path:file});
  const nativeVerified=!!new (require('../../apps/desktop/src/native-resources.cjs').NativeResources)(path.join(resources,'native',process.platform+'-'+process.arch),{windowsCheck}).inspect();

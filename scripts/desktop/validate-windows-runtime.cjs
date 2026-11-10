@@ -1,7 +1,7 @@
 // Native Windows acceptance of packaged component mechanics using synthetic data.
 // This never grants real platform acceptance or performs any platform navigation.
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),assert=require('node:assert/strict'),{randomUUID,randomBytes,createHash}=require('node:crypto');
-const root=path.resolve(__dirname,'../..'),platform=require('../../runtime/platform.cjs'),{windowsNative}=require('../../apps/desktop/src/windows-native.cjs'),{NativeResources}=require('../../apps/desktop/src/native-resources.cjs'),{spawnOwned}=require('../../apps/desktop/src/owned-process.cjs');
+const root=path.resolve(__dirname,'../..'),platform=require('./platform-support/platform.cjs'),{windowsNative}=require('../../apps/desktop/src/windows-native.cjs'),{NativeResources}=require('../../apps/desktop/src/native-resources.cjs'),{spawnOwned}=require('../../apps/desktop/src/owned-process.cjs');
 const call=r=>windowsNative({isPackaged:false},r),sha=p=>createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 (async()=>{
  if(process.platform!=='win32'||!platform.platformCapability().supported)throw Error('Windows 11 x64 native execution required; no success recorded');

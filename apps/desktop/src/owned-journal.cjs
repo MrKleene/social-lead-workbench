@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path');
-const {readReplyJournal,journalRecordSchema}=require('../../../runtime/local/platform-provider.cjs');
+const {readReplyJournal,journalRecordSchema}=require('@crm/local-runtime/platform-provider');
 async function readOwnedJournal(directory,attemptId,{platform=process.platform,checkPrivateFile}={}){
  if(platform!=='win32')return readReplyJournal(directory,attemptId);
  if(typeof checkPrivateFile!=='function'||typeof attemptId!=='string'||! /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(attemptId))return {state:'INVALID',records:[]};

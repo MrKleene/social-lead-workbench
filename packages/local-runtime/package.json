@@ -1,0 +1,266 @@
+{
+  "name": "@crm/local-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./account-safety": {
+      "source": "./src/account-safety.cjs",
+      "default": "./dist/account-safety.cjs"
+    },
+    "./accounts": {
+      "source": "./src/accounts.cjs",
+      "default": "./dist/accounts.cjs"
+    },
+    "./adapters/auto-contact/live-journal-progress": {
+      "types": "./dist/adapters/auto-contact/live-journal-progress.d.ts",
+      "source": "./src/adapters/auto-contact/live-journal-progress.ts",
+      "default": "./dist/adapters/auto-contact/live-journal-progress.js"
+    },
+    "./adapters/auto-contact/reply-stage-journal": {
+      "types": "./dist/adapters/auto-contact/reply-stage-journal.d.ts",
+      "source": "./src/adapters/auto-contact/reply-stage-journal.ts",
+      "default": "./dist/adapters/auto-contact/reply-stage-journal.js"
+    },
+    "./adapters/auto-contact/xhs-preflight-transport": {
+      "types": "./dist/adapters/auto-contact/xhs-preflight-transport.d.ts",
+      "source": "./src/adapters/auto-contact/xhs-preflight-transport.ts",
+      "default": "./dist/adapters/auto-contact/xhs-preflight-transport.js"
+    },
+    "./adapters/auto-contact/xhs-reply-transport": {
+      "types": "./dist/adapters/auto-contact/xhs-reply-transport.d.ts",
+      "source": "./src/adapters/auto-contact/xhs-reply-transport.ts",
+      "default": "./dist/adapters/auto-contact/xhs-reply-transport.js"
+    },
+    "./adapters/auto-contact/xhs-restriction-transport": {
+      "types": "./dist/adapters/auto-contact/xhs-restriction-transport.d.ts",
+      "source": "./src/adapters/auto-contact/xhs-restriction-transport.ts",
+      "default": "./dist/adapters/auto-contact/xhs-restriction-transport.js"
+    },
+    "./adapters/collection/adapters/post-failure": {
+      "types": "./dist/adapters/collection/adapters/post-failure.d.ts",
+      "source": "./src/adapters/collection/adapters/post-failure.ts",
+      "default": "./dist/adapters/collection/adapters/post-failure.js"
+    },
+    "./adapters/collection/adapters/search-failure": {
+      "types": "./dist/adapters/collection/adapters/search-failure.d.ts",
+      "source": "./src/adapters/collection/adapters/search-failure.ts",
+      "default": "./dist/adapters/collection/adapters/search-failure.js"
+    },
+    "./adapters/collection/adapters/xhs-cover": {
+      "types": "./dist/adapters/collection/adapters/xhs-cover.d.ts",
+      "source": "./src/adapters/collection/adapters/xhs-cover.ts",
+      "default": "./dist/adapters/collection/adapters/xhs-cover.js"
+    },
+    "./adapters/collection/adapters/xhs-mcp": {
+      "types": "./dist/adapters/collection/adapters/xhs-mcp.d.ts",
+      "source": "./src/adapters/collection/adapters/xhs-mcp.ts",
+      "default": "./dist/adapters/collection/adapters/xhs-mcp.js"
+    },
+    "./adapters/collection/mcp/policy": {
+      "types": "./dist/adapters/collection/mcp/policy.d.ts",
+      "source": "./src/adapters/collection/mcp/policy.ts",
+      "default": "./dist/adapters/collection/mcp/policy.js"
+    },
+    "./adapters/collection/mcp/transport": {
+      "types": "./dist/adapters/collection/mcp/transport.d.ts",
+      "source": "./src/adapters/collection/mcp/transport.ts",
+      "default": "./dist/adapters/collection/mcp/transport.js"
+    },
+    "./adapters/collection/qwen-env": {
+      "types": "./dist/adapters/collection/qwen-env.d.cts",
+      "source": "./src/adapters/collection/qwen-env.cjs",
+      "default": "./dist/adapters/collection/qwen-env.cjs"
+    },
+    "./adapters/collection/qwen-provider": {
+      "types": "./dist/adapters/collection/qwen-provider.d.ts",
+      "source": "./src/adapters/collection/qwen-provider.ts",
+      "default": "./dist/adapters/collection/qwen-provider.js"
+    },
+    "./adapters/direct-messages/dm-readback": {
+      "types": "./dist/adapters/direct-messages/dm-readback.d.ts",
+      "source": "./src/adapters/direct-messages/dm-readback.ts",
+      "default": "./dist/adapters/direct-messages/dm-readback.js"
+    },
+    "./adapters/direct-messages/dm-transport": {
+      "types": "./dist/adapters/direct-messages/dm-transport.d.ts",
+      "source": "./src/adapters/direct-messages/dm-transport.ts",
+      "default": "./dist/adapters/direct-messages/dm-transport.js"
+    },
+    "./automatic-review": {
+      "source": "./src/automatic-review.cjs",
+      "default": "./dist/automatic-review.cjs"
+    },
+    "./automation": {
+      "source": "./src/automation.cjs",
+      "default": "./dist/automation.cjs"
+    },
+    "./backup": {
+      "source": "./src/backup.cjs",
+      "default": "./dist/backup.cjs"
+    },
+    "./bundles/collection-provider": {
+      "types": "./dist/bundles/collection-provider.d.ts",
+      "source": "./src/bundles/collection-provider.ts",
+      "default": "./dist/bundles/collection-provider.js"
+    },
+    "./bundles/model-provider": {
+      "types": "./dist/bundles/model-provider.d.ts",
+      "source": "./src/bundles/model-provider.ts",
+      "default": "./dist/bundles/model-provider.js"
+    },
+    "./bundles/platform-provider": {
+      "types": "./dist/bundles/platform-provider.d.ts",
+      "source": "./src/bundles/platform-provider.ts",
+      "default": "./dist/bundles/platform-provider.js"
+    },
+    "./bundles/policy": {
+      "types": "./dist/bundles/policy.d.ts",
+      "source": "./src/bundles/policy.ts",
+      "default": "./dist/bundles/policy.js"
+    },
+    "./collection-executor": {
+      "source": "./src/collection-executor.cjs",
+      "default": "./dist/collection-executor.cjs"
+    },
+    "./collection": {
+      "source": "./src/collection.cjs",
+      "default": "./dist/collection.cjs"
+    },
+    "./contact": {
+      "source": "./src/contact.cjs",
+      "default": "./dist/contact.cjs"
+    },
+    "./credentials": {
+      "source": "./src/credentials.cjs",
+      "default": "./dist/credentials.cjs"
+    },
+    "./data-manager": {
+      "source": "./src/data-manager.cjs",
+      "default": "./dist/data-manager.cjs"
+    },
+    "./database": {
+      "source": "./src/database.cjs",
+      "default": "./dist/database.cjs"
+    },
+    "./dm-protocol": {
+      "source": "./src/dm-protocol.cjs",
+      "default": "./dist/dm-protocol.cjs"
+    },
+    "./evidence": {
+      "source": "./src/evidence.cjs",
+      "default": "./dist/evidence.cjs"
+    },
+    "./history-recovery": {
+      "source": "./src/history-recovery.cjs",
+      "default": "./dist/history-recovery.cjs"
+    },
+    "./inbox-executor": {
+      "source": "./src/inbox-executor.cjs",
+      "default": "./dist/inbox-executor.cjs"
+    },
+    "./inbox": {
+      "source": "./src/inbox.cjs",
+      "default": "./dist/inbox.cjs"
+    },
+    "./legacy-evidence": {
+      "source": "./src/legacy-evidence.cjs",
+      "default": "./dist/legacy-evidence.cjs"
+    },
+    "./legacy-history": {
+      "source": "./src/legacy-history.cjs",
+      "default": "./dist/legacy-history.cjs"
+    },
+    "./legacy-import": {
+      "source": "./src/legacy-import.cjs",
+      "default": "./dist/legacy-import.cjs"
+    },
+    "./manual-contact": {
+      "source": "./src/manual-contact.cjs",
+      "default": "./dist/manual-contact.cjs"
+    },
+    "./migrations": {
+      "source": "./src/migrations.cjs",
+      "default": "./dist/migrations.cjs"
+    },
+    "./model-executor": {
+      "source": "./src/model-executor.cjs",
+      "default": "./dist/model-executor.cjs"
+    },
+    "./platform-protocol": {
+      "source": "./src/platform-protocol.cjs",
+      "default": "./dist/platform-protocol.cjs"
+    },
+    "./post-diagnostic": {
+      "source": "./src/post-diagnostic.cjs",
+      "default": "./dist/post-diagnostic.cjs"
+    },
+    "./post-versions": {
+      "source": "./src/post-versions.cjs",
+      "default": "./dist/post-versions.cjs"
+    },
+    "./preferences": {
+      "source": "./src/preferences.cjs",
+      "default": "./dist/preferences.cjs"
+    },
+    "./queue": {
+      "source": "./src/queue.cjs",
+      "default": "./dist/queue.cjs"
+    },
+    "./recovery": {
+      "source": "./src/recovery.cjs",
+      "default": "./dist/recovery.cjs"
+    },
+    "./reporting": {
+      "source": "./src/reporting.cjs",
+      "default": "./dist/reporting.cjs"
+    },
+    "./review": {
+      "source": "./src/review.cjs",
+      "default": "./dist/review.cjs"
+    },
+    "./run-review": {
+      "source": "./src/run-review.cjs",
+      "default": "./dist/run-review.cjs"
+    },
+    "./runner": {
+      "source": "./src/runner.cjs",
+      "default": "./dist/runner.cjs"
+    },
+    "./send-executor": {
+      "source": "./src/send-executor.cjs",
+      "default": "./dist/send-executor.cjs"
+    },
+    "./send-safety": {
+      "source": "./src/send-safety.cjs",
+      "default": "./dist/send-safety.cjs"
+    },
+    "./service": {
+      "source": "./src/service.cjs",
+      "default": "./dist/service.cjs"
+    },
+    "./workflow": {
+      "source": "./src/workflow.cjs",
+      "default": "./dist/workflow.cjs"
+    },
+    "./workspace": {
+      "source": "./src/workspace.cjs",
+      "default": "./dist/workspace.cjs"
+    },
+    "./policy": "./dist/policy.cjs",
+    "./collection-provider": "./dist/collection-provider.cjs",
+    "./platform-provider": "./dist/platform-provider.cjs",
+    "./model-provider": "./dist/model-provider.cjs",
+    "./historical-send-holds": "./dist/historical-send-holds.json"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-module.mjs local-runtime && node ../../scripts/local/build-policy.mjs",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test": "node --test test/*.test.cjs && vitest run test"
+  },
+  "dependencies": {
+    "@crm/contracts": "0.1.0",
+    "@crm/domain": "0.1.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "zod": "^4.3.6"
+  }
+}

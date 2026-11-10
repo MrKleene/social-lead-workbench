@@ -1,6 +1,6 @@
 // Run with Electron. Tests only a newly generated synthetic value in a private temp dir.
 const {app,safeStorage}=require('electron'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict'),{randomBytes}=require('node:crypto');
-const {CredentialStore}=require('../../runtime/local/credentials.cjs');
+const {CredentialStore}=require('@crm/local-runtime/credentials');
 const directory=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'desktop-credential-test-')));
 app.setName('SocialLeadDesktopCredentialTest');app.setPath('userData',directory);
 app.whenReady().then(()=>{

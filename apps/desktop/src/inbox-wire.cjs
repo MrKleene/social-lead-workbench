@@ -1,6 +1,6 @@
 'use strict';
-const {Client,StreamableHTTPClientTransport,endpointUrl}=require('../../../runtime/local/platform-provider.cjs');
-const {LocalError}=require('../../../runtime/local/database.cjs');
+const {Client,StreamableHTTPClientTransport,endpointUrl}=require('@crm/local-runtime/platform-provider');
+const {LocalError}=require('@crm/local-runtime/database');
 const names=['inbox_start','inbox_drain','inbox_snapshot','inbox_stop'];
 class DesktopInboxWire{
  constructor(endpoint,sender,signal){this.sender=sender;this.signal=signal;this.endpoint=endpoint;this.allowed=null;this.calls=0;if(!/^[a-f0-9]{24}$/.test(sender)||! /^[a-f0-9]{64}$/.test(endpoint.token))throw new LocalError('INVALID_INBOX_SESSION');const url=endpointUrl(endpoint.url.href).href;

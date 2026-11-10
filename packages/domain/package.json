@@ -1,17 +1,146 @@
 {
   "name": "@crm/domain",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./accounts/account-execution-policy": {
+      "types": "./dist/accounts/account-execution-policy.d.ts",
+      "source": "./src/accounts/account-execution-policy.ts",
+      "default": "./dist/accounts/account-execution-policy.js"
+    },
+    "./auto-contact/contact-policy": {
+      "types": "./dist/auto-contact/contact-policy.d.ts",
+      "source": "./src/auto-contact/contact-policy.ts",
+      "default": "./dist/auto-contact/contact-policy.js"
+    },
+    "./auto-contact/contact-sender": {
+      "types": "./dist/auto-contact/contact-sender.d.ts",
+      "source": "./src/auto-contact/contact-sender.ts",
+      "default": "./dist/auto-contact/contact-sender.js"
+    },
+    "./auto-contact/selection-evidence": {
+      "types": "./dist/auto-contact/selection-evidence.d.ts",
+      "source": "./src/auto-contact/selection-evidence.ts",
+      "default": "./dist/auto-contact/selection-evidence.js"
+    },
+    "./auto-contact/xhs-reply-protocol": {
+      "types": "./dist/auto-contact/xhs-reply-protocol.d.ts",
+      "source": "./src/auto-contact/xhs-reply-protocol.ts",
+      "default": "./dist/auto-contact/xhs-reply-protocol.js"
+    },
+    "./collection/collection-barrier": {
+      "types": "./dist/collection/collection-barrier.d.ts",
+      "source": "./src/collection/collection-barrier.ts",
+      "default": "./dist/collection/collection-barrier.js"
+    },
+    "./collection/collector": {
+      "types": "./dist/collection/collector.d.ts",
+      "source": "./src/collection/collector.ts",
+      "default": "./dist/collection/collector.js"
+    },
+    "./collection/comment-checkpoint": {
+      "types": "./dist/collection/comment-checkpoint.d.ts",
+      "source": "./src/collection/comment-checkpoint.ts",
+      "default": "./dist/collection/comment-checkpoint.js"
+    },
+    "./collection/comment-read-policy": {
+      "types": "./dist/collection/comment-read-policy.d.cts",
+      "source": "./src/collection/comment-read-policy.cjs",
+      "default": "./dist/collection/comment-read-policy.cjs"
+    },
+    "./collection/comment-rules": {
+      "types": "./dist/collection/comment-rules.d.ts",
+      "source": "./src/collection/comment-rules.ts",
+      "default": "./dist/collection/comment-rules.js"
+    },
+    "./collection/contract": {
+      "types": "./dist/collection/contract.d.ts",
+      "source": "./src/collection/contract.ts",
+      "default": "./dist/collection/contract.js"
+    },
+    "./collection/diagnostics": {
+      "types": "./dist/collection/diagnostics.d.ts",
+      "source": "./src/collection/diagnostics.ts",
+      "default": "./dist/collection/diagnostics.js"
+    },
+    "./collection/model-call-pacing": {
+      "types": "./dist/collection/model-call-pacing.d.ts",
+      "source": "./src/collection/model-call-pacing.ts",
+      "default": "./dist/collection/model-call-pacing.js"
+    },
+    "./collection/model-cost-estimate": {
+      "types": "./dist/collection/model-cost-estimate.d.ts",
+      "source": "./src/collection/model-cost-estimate.ts",
+      "default": "./dist/collection/model-cost-estimate.js"
+    },
+    "./collection/post-reference": {
+      "types": "./dist/collection/post-reference.d.ts",
+      "source": "./src/collection/post-reference.ts",
+      "default": "./dist/collection/post-reference.js"
+    },
+    "./collection/qwen-models": {
+      "types": "./dist/collection/qwen-models.d.cts",
+      "source": "./src/collection/qwen-models.cjs",
+      "default": "./dist/collection/qwen-models.cjs"
+    },
+    "./collection/qwen-result": {
+      "types": "./dist/collection/qwen-result.d.ts",
+      "source": "./src/collection/qwen-result.ts",
+      "default": "./dist/collection/qwen-result.js"
+    },
+    "./collection/run-coverage": {
+      "types": "./dist/collection/run-coverage.d.ts",
+      "source": "./src/collection/run-coverage.ts",
+      "default": "./dist/collection/run-coverage.js"
+    },
+    "./collection/semantic-evaluator": {
+      "types": "./dist/collection/semantic-evaluator.d.ts",
+      "source": "./src/collection/semantic-evaluator.ts",
+      "default": "./dist/collection/semantic-evaluator.js"
+    },
+    "./collection/semantic-redaction": {
+      "types": "./dist/collection/semantic-redaction.d.ts",
+      "source": "./src/collection/semantic-redaction.ts",
+      "default": "./dist/collection/semantic-redaction.js"
+    },
+    "./collection/single-post": {
+      "types": "./dist/collection/single-post.d.ts",
+      "source": "./src/collection/single-post.ts",
+      "default": "./dist/collection/single-post.js"
+    },
+    "./collection/whole-post-capacity": {
+      "types": "./dist/collection/whole-post-capacity.d.ts",
+      "source": "./src/collection/whole-post-capacity.ts",
+      "default": "./dist/collection/whole-post-capacity.js"
+    },
+    "./common/journey-live": {
+      "types": "./dist/common/journey-live.d.ts",
+      "source": "./src/common/journey-live.ts",
+      "default": "./dist/common/journey-live.js"
+    },
+    "./common/semantic-hash": {
+      "types": "./dist/common/semantic-hash.d.ts",
+      "source": "./src/common/semantic-hash.ts",
+      "default": "./dist/common/semantic-hash.js"
+    },
+    "./direct-messages/dm-send-protocol": {
+      "types": "./dist/direct-messages/dm-send-protocol.d.ts",
+      "source": "./src/direct-messages/dm-send-protocol.ts",
+      "default": "./dist/direct-messages/dm-send-protocol.js"
+    },
+    "./inbox/protocol": {
+      "types": "./dist/inbox/protocol.d.ts",
+      "source": "./src/inbox/protocol.ts",
+      "default": "./dist/inbox/protocol.js"
+    }
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node ../../scripts/build-device-vault.mjs && node ../../scripts/build-windows-host.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
-    "test": "vitest run test/auto-contact.test.ts test/bounded-read.test.ts test/comment-chunks.test.ts test/comment-continuation.test.ts test/comment-rules.test.ts test/dm-send-protocol.test.ts test/model-cost-estimate.test.ts test/qwen-provider.test.ts test/reply-stage-journal.test.ts test/root-reply-scope.test.ts test/xhs-reply-protocol.test.ts test/xhs-reply-transport.test.ts"
+    "build": "node ../../scripts/build-module.mjs domain",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.32.1",
-    "@prisma/client": "6.19.0"
-  },
-  "devDependencies": {
-    "vitest": "^5.0.5"
+    "@crm/contracts": "0.1.0",
+    "zod": "^4.3.6"
   }
 }

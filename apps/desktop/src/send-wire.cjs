@@ -1,6 +1,6 @@
 'use strict';
-const {Client,StreamableHTTPClientTransport,endpointUrl,sendExactDm,XhsExactPreflightTransport}=require('../../../runtime/local/platform-provider.cjs');
-const {LocalError,hash}=require('../../../runtime/local/database.cjs');
+const {Client,StreamableHTTPClientTransport,endpointUrl,sendExactDm,XhsExactPreflightTransport}=require('@crm/local-runtime/platform-provider');
+const {LocalError,hash}=require('@crm/local-runtime/database');
 function owned(session,accountId){return {...session.endpoint(),accountId,binarySha256:session.binaryHash,stop:()=>session.stop()};}
 async function inspectComment(session,target,signal){const endpoint=owned(session,target.accountId);return new XhsExactPreflightTransport(endpoint,{enabled:true,reviewedSha256:session.binaryHash}).inspect(target,signal);}
 async function submitDm(session,command,signal,beforeDispatch){return sendExactDm(owned(session,command.accountId),session.binaryHash,command,beforeDispatch,signal);}

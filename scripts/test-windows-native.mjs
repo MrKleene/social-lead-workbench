@@ -4,7 +4,7 @@ import {randomBytes,randomUUID} from 'node:crypto';
 import {writeFile,readFile,rm,lstat,symlink} from 'node:fs/promises';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
-import platform from '../runtime/platform.cjs';
+import platform from './desktop/platform-support/platform.cjs';
 if(process.platform!=='win32'){console.log('SKIP: Windows native DPAPI/ACL/Job tests require Windows 11 x64; no Windows success claimed.');process.exit(0);}
 const parent=platform.windowsDataRoot(),directory=join(parent,`crm-windows-test-${randomUUID()}`),deviceId=randomUUID(),keyId=randomUUID();
 const call=(operation,value)=>platform.windowsCall({operation,deviceId,keyId,value});

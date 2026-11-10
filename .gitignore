@@ -45,7 +45,8 @@ generated_images/
 /customer-data/
 /platform-data/
 *.sql
-!prisma/migrations/**/*.sql
+!packages/local-runtime/src/schema.sql
+!packages/local-runtime/src/migrations/*.sql
 *.csv
 *.xlsx
 *.har

@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),net=require('node:net'),{randomUUID,randomBytes}=require('node:crypto');
-const {spawnOwned}=require('./owned-process.cjs'),{LocalError}=require('../../../runtime/local/database.cjs'),protocol=require('../../../runtime/local/platform-protocol.cjs');
-const {XhsHttpTransport}=require('../../../runtime/local/platform-provider.cjs');
+const {spawnOwned}=require('./owned-process.cjs'),{LocalError}=require('@crm/local-runtime/database'),protocol=require('@crm/local-runtime/platform-protocol');
+const {XhsHttpTransport}=require('@crm/local-runtime/platform-provider');
 const {readOwnedJournal}=require('./owned-journal.cjs');
 async function freePort(){const server=net.createServer();await new Promise((ok,no)=>{server.once('error',no);server.listen(0,'127.0.0.1',ok);});const port=server.address().port;await new Promise(ok=>server.close(ok));return [18060,18061].includes(port)?freePort():port;}
 async function boundedJson(response){if(!response.ok)throw new LocalError(response.status===429?'PLATFORM_RATE_LIMITED':response.status===403?'PLATFORM_RESTRICTED':'PLATFORM_UNAVAILABLE');let size=0,parts=[];for await(const chunk of response.body){size+=chunk.length;if(size>1500000)throw new LocalError('PLATFORM_RESPONSE_TOO_LARGE');parts.push(chunk);}return JSON.parse(Buffer.concat(parts).toString('utf8'));}
