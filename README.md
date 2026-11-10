@@ -12,29 +12,51 @@
 - 接收消息通过项目受管 MCP 能力接入，按账号隔离及去重。平台是否推送、是否读全、是否已读均按实际证据显示，不能把历史读取当作新消息实时验收。平台内会话能力边界见 [接收说明](docs/requirements/inbox-reception.md)。
 - 配置管理集中关键词、匹配方案、评论模板、私信模板和模型；默认查看，显式新增或编辑。
 
-## 本机使用
+## 本机开发
 
-需要 Node.js 22+、已安装项目依赖、本机数据库/Redis及受管设备运行环境。首次初始化、平台登录与秘密配置按现有受管流程完成，不在此提供默认凭据。
+开发需要 Node.js 24.11+ 和 npm。当前产品入口是 Electron 桌面应用，数据库使用内置 SQLite；
+日常开发不需要 PostgreSQL 或 Redis。平台操作还需要经过验证的本机原生资源；构建成功不代表已接通真实平台。
 
 ```sh
-npm start
-npm run status
-npm stop
+npm ci
+npm run desktop:dev    # 构建核心模块，启动 Vite 和 Electron
 ```
 
-本机默认网页 `http://127.0.0.1:63968`，API仅本机访问。`npm start` 启动服务，不代表启动采集。
+开发模式在原终端按 Ctrl+C 退出。需要查看构建后的界面时使用 `npm start`，它会先构建再启动 Electron。
+应用正常退出时交还任务和进程所有权；不要直接强杀持有任务或设备租约的进程。
 
-**不要直接 kill PID。** 进程持有受管设备租约、发送阶段日志和未完成的业务队列；强杀会留下无法判定归属的 UNKNOWN，并可能让额度与去重状态不一致。停止与重启一律用 `npm stop` / `npm start`，且不要在业务执行中操作。
+## 工程目录
 
-## 工程与验收
+| 目录 | 职责 |
+| --- | --- |
+| `apps/web` | React 界面，通过桌面 IPC 使用本地能力 |
+| `apps/desktop` | Electron 主进程、受控 IPC、系统能力装配 |
+| `packages/contracts` | 跨模块协议、数据结构和校验 |
+| `packages/domain` | 业务规则、状态判断和纯计算，不依赖数据库或平台 SDK |
+| `packages/local-runtime` | SQLite、队列、业务服务与模型/平台适配 |
+| `packages/legacy-migration` | 隔离的旧 PostgreSQL 兼容实现与显式导出工具 |
+| `integrations` | Go MCP 实现及桌面源码适配 |
+| `native` | macOS / Windows 原生源码 |
+| `scripts` | 跨模块构建、检查、发布和迁移编排 |
+| `tests` | 跨模块集成与桌面端到端测试；模块测试留在各模块内 |
+| `docs` | 当前需求、实现说明与工程约定 |
 
-- `apps/web`：React/Vite + shadcn/ui 页面。
-- `apps/desktop`：Electron 主进程与本地调用边界（单通道 `workbench:call` + 方法白名单）。
-- `runtime/local`：本机后端（数据库、队列、审核、发送、收件、备份）。其中 `policy.cjs` 与
-  `{collection,platform,model}-provider.cjs` 是生成产物，改逻辑请改源码后重新打包。
-- `packages/domain`：业务逻辑源码库（采集、审核规则、回复与私信协议），由 `npm run local:policy`
-  打包进 `runtime/local`。
-- `packages/contracts`：前后端协议；`prisma/schema.prisma`：数据模型（桌面版运行时不使用，仅作类型与结构参考）；`scripts`：受管启动、隔离测试及本机诊断。
+源码位于各模块 `src/`，编译结果位于 `dist/`（网页为 `dist-desktop/`），均不提交 Git。
+`.local/` 存放本机临时构建和验证产物。目录与依赖规则见 [工程结构](docs/design/project-structure.md)。
+
+## 构建与检查
+
+```sh
+npm run build             # contracts → domain → local-runtime → web
+npm run check             # 结构、UI、设计文档、类型和离线测试
+npm run desktop:test:ui   # Electron 合成界面测试，禁用真实平台与模型执行
+npm run desktop:stage     # 已构建内容按白名单组装到 .local/desktop-stage
+npm run check:legacy      # 可选：生成旧 Prisma 客户端并检查兼容代码，不连接数据库
+```
+
+`npm run check` 包含本地数据库、队列恢复、桌面边界和合成 MCP 通信测试。
+原生平台测试按可用资源执行，跳过项不等于已验收。原生构建、系统凭据与安装包验证命令见
+[桌面说明](docs/requirements/DESKTOP-LOCAL.md)。Windows 真机、签名和真实平台验收仍须单独完成。
 
 [文档索引](docs/README.md) · [当前需求](docs/requirements/REQUIREMENTS.md) · [模块说明](docs/requirements/MODULES.md) · [实现状态](docs/requirements/IMPLEMENTATION-STATUS.md) · [验收](docs/requirements/ACCEPTANCE.md)
 

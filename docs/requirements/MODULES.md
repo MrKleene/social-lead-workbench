@@ -50,9 +50,9 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 历史查看不执行新任务；失败或部分读取照实显示，不算成功
 - 单帖重读只更新采集与审核，**不派生自动发送**
 
-**代码**：`packages/domain/src/collection`（`collector.ts`、`run-coverage.ts`、`capture-archive.ts`、
-`comment-checkpoint.ts`、`adapters/`、`mcp/`）；`runtime/local/collection-executor.cjs`、
-`collection-provider.cjs`
+**代码**：`packages/domain/src/collection`（`collector.ts`、`run-coverage.ts`、`comment-checkpoint.ts`）；
+`packages/local-runtime/src/adapters/collection`、`packages/local-runtime/src/collection-executor.cjs`；
+采集 bundle 入口为 `packages/local-runtime/src/bundles/collection-provider.ts`
 
 **状态**：已接入 + 合成验证；平台实际覆盖依赖可见数据，真实未验收
 
@@ -75,9 +75,10 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 模型失败与费用按实际调用记录，不用估算冒充账单
 - 审核目标带版本，目标版本变化后回复草稿必须显式确认
 
-**代码**：`packages/domain/src/collection`（`semantic-evaluator.ts`、`qwen-provider.ts`、`comment-rules.ts`、
+**代码**：`packages/domain/src/collection`（`semantic-evaluator.ts`、`qwen-result.ts`、`comment-rules.ts`、
 `whole-post-capacity.ts`、`model-cost-estimate.ts`、`semantic-redaction.ts`、`comment-checkpoint.ts`）；
-`runtime/local/automatic-review.cjs`、`review.cjs`、`run-review.cjs`
+`packages/local-runtime/src/adapters/collection/qwen-provider.ts`；
+`packages/local-runtime/src/automatic-review.cjs`、`review.cjs`、`run-review.cjs`
 
 **状态**：已接入 + 合成验证；付费模型调用需单独授权，未做真实付费验收
 
@@ -103,7 +104,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 **代码**：`packages/domain/src/auto-contact`（`contact-policy.ts`、`contact-sender.ts`、`reply-stage-journal.ts`、
 `live-journal-progress.ts`、`xhs-reply-protocol.ts`、`xhs-reply-transport.ts`、`xhs-restriction-transport.ts`）；
-`runtime/local/contact.cjs`、`send-safety.cjs`、`send-executor.cjs`
+`packages/local-runtime/src/contact.cjs`、`send-safety.cjs`、`send-executor.cjs`
 
 **状态**：评论回复已接入 + 合成验证；真实发送需逐次授权
 
@@ -148,7 +149,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 只做增量迁移，不动原业务记录与 UNKNOWN 证据
 
 **代码**：`integrations/inbox-mcp`（Go）；`packages/domain/src/inbox/protocol.ts`；
-`runtime/local/inbox-executor.cjs`、`inbox.cjs`；页面 `/inbox`
+`packages/local-runtime/src/inbox-executor.cjs`、`inbox.cjs`；页面 `/inbox`
 
 **状态**：合成验证；自然新消息及时性与长期低资源认证待真实验收
 
@@ -171,7 +172,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
   单次派发与 UNKNOWN、DM 专属队列与回执映射
 
 **代码**：`packages/domain/src/direct-messages`（`dm-send-protocol.ts`、`dm-transport.ts`、`dm-readback.ts`）；
-`runtime/local/dm-protocol.cjs`；入口：配置管理 → 私信模板 → 私信预览
+`packages/local-runtime/src/dm-protocol.cjs`；入口：配置管理 → 私信模板 → 私信预览
 
 **状态**：仅预览
 
@@ -215,30 +216,30 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 凭据、Cookie、二维码、设备私钥存受系统保护目录，不入 Git
 - 同机设备签名认证不等于远程执行、硬件证明或 Windows 实现
 
-**代码**：`packages/domain/src/accounts/account-execution-policy.ts`；`runtime/local/accounts.cjs`、
+**代码**：`packages/domain/src/accounts/account-execution-policy.ts`；`packages/local-runtime/src/accounts.cjs`、
 `account-safety.cjs`、`credentials.cjs`、`platform-protocol.cjs`；页面 `/platforms`、`/work/accounts`
 
 **状态**：已接入 + 合成验证
 
 ---
 
-## 9. 任务进度推送
+## 9. 任务进度显示
 
-**职责**：把任务阶段变化推到前端，让页面显示当前动作、完成、暂停、失败与未知。
+**职责**：读取持久化的任务与阶段状态，让页面显示当前动作、完成、暂停、失败与未知。
 
 **关键约束**
 
-- 走已鉴权的 SSE `/api/events`，数据库是权威源
-- 只推失效标识，不推帖子/评论文本、账号身份、凭据或执行权
-- 客户端先订阅再取快照；120ms 防抖；重复事件丢弃；乱序只触发重读
-- 15 秒心跳、60 秒快照修复、30 秒读兜底
-- **不是**持久事件日志，也不是执行队列；重载只恢复当前真值
+- 通过受限的 `workbench:call` IPC 读取本地服务，SQLite 是权威源
+- 任务列表每 2 秒刷新，通用记录查询每 5 秒刷新；不依赖旧 PostgreSQL SSE 服务
+- 历史查看与执行授权分离，刷新页面不能启动或重放任务
+- 失败、暂停、部分结果与 UNKNOWN 按实际持久化证据显示
 
-**代码**：`journey_push` 迁移 + `packages/domain` 事件层；前端 `lib/journey-event-sync.ts`
+**代码**：`apps/web/src/features/local-workbench/use-local-workbench.ts`、`use-local-records.ts`；
+`apps/desktop/src/preload.cjs`；`packages/local-runtime/src/workspace.cjs`
 
-**状态**：已接入
+**状态**：已接入 + 合成验证
 
-**延伸**：[journey-events.md](../design/journey-events.md)
+**延伸**：[local-runtime.md](../design/local-runtime.md)
 
 ---
 

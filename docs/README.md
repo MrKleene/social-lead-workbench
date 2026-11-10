@@ -3,10 +3,10 @@
 本项目文档只分两层：**做什么** 和 **怎么实现**。历史交付报告、验证证据、过期方案均已删除，
 需要追溯时查 git 历史。
 
-| 目录 | 回答的问题 | 份数 |
-| --- | --- | --- |
-| [`requirements/`](requirements/README.md) | 产品该做什么、边界在哪、现在做到哪 | 9 |
-| [`design/`](design/README.md) | 各模块怎么实现的、关键约束是什么 | 8 |
+| 目录 | 回答的问题 |
+| --- | --- |
+| [`requirements/`](requirements/README.md) | 产品该做什么、边界在哪、现在做到哪 |
+| [`design/`](design/README.md) | 各模块怎么实现的、关键约束是什么 |
 
 ## 阅读路径
 
@@ -16,7 +16,7 @@
 **想知道某个功能现在能不能用** → [requirements/IMPLEMENTATION-STATUS.md](requirements/IMPLEMENTATION-STATUS.md)
 → [requirements/ACCEPTANCE.md](requirements/ACCEPTANCE.md)
 
-**想改代码** → 先看 `design/` 里对应模块的说明，再看 `packages/domain` 的源码与测试
+**想改代码** → 先看 `design/` 里对应模块的说明，再按 [工程结构](design/project-structure.md) 找到对应模块的源码与测试
 
 ## 目录之外
 

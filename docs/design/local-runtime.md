@@ -1,12 +1,12 @@
 # 可独立测试的本地运行时
 
-`runtime/local` 使用 Node 内置模块和已生成的纯业务规则包（内含 Zod），不导入 Electron、React、Prisma、PostgreSQL 或 Redis。Node 24.11+ 可直接运行：
+`packages/local-runtime/src` 使用 Node 内置模块和已生成的纯业务规则包（内含 Zod），不导入 Electron、React、Prisma、PostgreSQL 或 Redis。Node 24.11+ 可直接运行：
 
 ```sh
-node --test tests/local/*.test.cjs
+npm run local:test
 ```
 
-当前 180 项合成测试通过。所有测试创建自己的临时目录，未访问真实账号、数据库、模型或平台。迁移工具在 `scripts/local/import-offline.mjs`，只读显式指定的离线 JSON，不连接原数据库。
+本地运行时测试由 `npm run local:test` 执行，以当前输出为准。所有测试创建自己的临时目录，未访问真实账号、数据库、模型或平台。迁移工具在 `scripts/local/import-offline.mjs`，只读显式指定的离线 JSON，不连接原数据库。
 
 该实现为 Node CommonJS，**不等于语言无关的可直接复用库**。Electron 可在 main process 中直接使用；Tauri/Flutter 需选择随包 Node sidecar，或按相同表结构、状态机和测试契约移植为 Rust/Dart。安装用户不应承担运行时安装。用户已确认 Electron 桌面方案。
 

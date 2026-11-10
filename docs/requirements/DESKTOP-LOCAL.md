@@ -80,3 +80,21 @@ Mac 未有 Developer ID 签名/公证，没有验收下载隔离/Gatekeeper、�
 Windows 可用 `scripts/desktop/windows-preview.ps1 -Go <绝对路径> -ModuleCache <绝对目录> -BrowserArchive <固定ZIP绝对路径>` 完整执行原生验证、NSIS 构建、最终资源验证和包内自检；该入口仍待 Windows 真机运行。
 
 本轮偏好按关键词组自动保存，并从旧档案恢复默认采集账号、笔记数及选中方案；不会恢复旧执行授权。账号中心新增只读本地资格检查，审核/存档增加状态、方案、评分和日期筛选及未评分原文；模型与规则运行记录区分占用、派生、失败、未知与实际任务结果。历史详情直接复用原读取和图片诊断组件。
+
+
+## 当前工程与验证入口
+
+桌面源码在 `apps/desktop/src`；本地服务在 `packages/local-runtime/src`，发布时只装配其
+`dist` 运行产物。规则源码在 `packages/domain/src`，平台/模型适配在
+`packages/local-runtime/src/adapters`。`packages/legacy-migration` 不进入桌面包，也不参与日常构建。
+
+- `npm run build`：构建核心模块和网页，不读取真实账号或调用平台。
+- `npm run check`：结构、样式、类型和离线测试；原生资源不足的项目明确跳过。
+- `npm run desktop:build:native`：在目标系统编译原生辅助程序；Go MCP 与固定浏览器资源仍按受管构建流程准备。
+- `npm run desktop:test:ui`：使用临时合成数据的实际 Electron 界面测试。
+- `npm run desktop:stage`：将已经构建的内容按固定白名单组装，保留许可证与构建清单。
+- `npm run desktop:verify-package -- /绝对路径/应用`：核对最终安装包内容、原生资源与 Electron fuses。
+
+前文带版本号、测试数量和 `.local` 证据路径的内容为历史验证记录，不证明当前检出已经完成同一验收。
+不完整的原始历史不能补造；旧发送任务不在启动时恢复。真实平台、Windows 真机、升级与签名等未完成项
+仍由 `apps/desktop/release-readiness.json` 阻止正式发布。

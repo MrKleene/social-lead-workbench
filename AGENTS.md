@@ -123,3 +123,19 @@ npm run typecheck -w @crm/web
 
 `ui:check` 的 error 级规则：硬编码颜色、任意值颜色/字号/字重、直接调色板、字号/字重/圆角越界、
 `!important`、`[data-slot]` 覆写。它不判断审美，也不能替代截图核对。
+
+---
+
+## 8. 工程目录与依赖约束
+
+工程结构以 `docs/design/project-structure.md` 为准。
+
+- `apps/*`、`packages/*` 必须是有 `package.json` 的工作区；跨包依赖必须显式声明并通过公开 `exports` 引用。
+- `packages/domain` 只放业务规则，不依赖 Electron、数据库客户端、文件/网络 I/O 或平台 SDK。
+- SQLite、队列和外部能力适配属于 `packages/local-runtime`；Electron 与系统装配属于 `apps/desktop`。
+- 旧 PostgreSQL 模型与兼容工具只放 `packages/legacy-migration`，不得进入桌面运行时依赖图。
+- 模块测试放在模块内；跨模块和端到端测试放在根 `tests/`。不跨包相对引用生产源码。
+- 手写源码放 `src/`；编译产物、bundle、原生二进制放模块 `dist/`，不提交 Git。
+- 目录调整必须同步构建脚本、测试、桌面装配白名单和文档，不能只移动文件。
+- 工程结构修改运行 `npm run check`；桌面装配修改额外运行 `npm run desktop:stage` 和相关集成测试。
+- 不把可跳过的原生测试或静态验证描述为目标平台完整验收。
