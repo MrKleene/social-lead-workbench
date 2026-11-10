@@ -7,7 +7,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startXhsFixture } from '../apps/api/test/fixtures/xhs-mcp-server.ts';
+import { startXhsFixture } from '../packages/domain/test/fixtures/xhs-mcp-server.ts';
 import { cleanEnvironment } from './real-mcp/core.mjs';
 const root = fileURLToPath(new URL('../',import.meta.url)).replace(/\/$/,'');
 const token = randomBytes(32).toString('hex');

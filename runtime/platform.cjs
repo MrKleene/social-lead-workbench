@@ -11,7 +11,7 @@ function windowsPath(value){
  if(typeof value!=='string'||value.length>240||! /^[A-Za-z]:\\/.test(value)||value.includes('/')||/[\x00-\x1f<>"|?*]/.test(value)||value.slice(2).includes(':'))throw Error('WINDOWS_LOCAL_PATH_REQUIRED');
  if(path.win32.normalize(value)!==value||value.slice(3).split('\\').some(x=>!x||/[. ]$/.test(x)||/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(x)))throw Error('WINDOWS_UNSAFE_PATH');return value;
 }
-const helper=()=>path.join(projectRoot,'apps/api/dist/native/windows-host.exe');
+const helper=()=>path.join(projectRoot,'packages/domain/dist/native/windows-host.exe');
 function windowsCall(request){
  if(process.platform!=='win32'||!platformCapability().supported)throw Error('WINDOWS_11_X64_REQUIRED');
  const binary=helper(),s=fs.lstatSync(binary);if(!s.isFile()||s.isSymbolicLink())throw Error('WINDOWS_HELPER_MISSING');
@@ -40,7 +40,7 @@ function npmCommand(args,env=process.env,platform=process.platform){
 function spawnOwned(binary,args,options={}){
  if(process.platform==='darwin'&&process.env.CRM_SUPERVISED_BOOT){
   const directory=process.env.CRM_INSTANCE_DIRECTORY;if(!directory||!path.isAbsolute(directory))throw Error('SUPERVISED_INSTANCE_REQUIRED');
-  const child=cp.spawn(path.join(projectRoot,'apps/api/dist/native/persistent-supervisor'),[path.join(directory,'.operation.guard'),binary,...args],{...options,env:{...options.env,CRM_SUPERVISED_BOOT:process.env.CRM_SUPERVISED_BOOT},detached:true,stdio:['ignore','ignore','ignore','pipe',4]});
+  const child=cp.spawn(path.join(projectRoot,'packages/domain/dist/native/persistent-supervisor'),[path.join(directory,'.operation.guard'),binary,...args],{...options,env:{...options.env,CRM_SUPERVISED_BOOT:process.env.CRM_SUPERVISED_BOOT},detached:true,stdio:['ignore','ignore','ignore','pipe',4]});
   child.supervised=true;child.stdio[3].on('error',()=>{});return child;
  }
  if(process.platform!=='win32')return cp.spawn(binary,args,{...options,detached:true});

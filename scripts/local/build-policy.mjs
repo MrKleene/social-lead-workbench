@@ -13,7 +13,7 @@ writeFileSync(path.join(root,'runtime/local/policy.cjs'),output);
 writeFileSync(path.join(root,'runtime/local/policy-build.json'),JSON.stringify({sourceHashes:Object.fromEntries(sources.map(p=>[p,createHash('sha256').update(readFileSync(path.join(root,p))).digest('hex')])),outputSha256:createHash('sha256').update(output).digest('hex')},null,2)+'\n');
 // Preserve explicit historical send holds without copying platform identities
 // into runtime code, diagnostic output or generated reports.
-const accountPolicy=readFileSync(path.join(root,'apps/api/src/accounts/account-execution-policy.ts'),'utf8');
+const accountPolicy=readFileSync(path.join(root,'packages/domain/src/accounts/account-execution-policy.ts'),'utf8');
 const holds=[...accountPolicy.matchAll(/a\.loginPlatformUserId==='([a-f0-9]{24})'/g)].map(m=>createHash('sha256').update(m[1]).digest('hex'));
 if(holds.length!==1)throw Error('Historical account hold mapping requires review');
 writeFileSync(path.join(root,'runtime/local/historical-send-holds.json'),JSON.stringify({version:1,sha256:holds},null,2)+'\n');

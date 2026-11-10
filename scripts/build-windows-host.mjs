@@ -10,7 +10,7 @@ if(process.platform==='win32'){
  const system=process.env.SystemRoot||process.env.SYSTEMROOT;if(!system)throw Error('Missing Windows system directory');
  const compiler=join(system,'Microsoft.NET','Framework64','v4.0.30319','csc.exe');
  if(!lstatSync(compiler).isFile())throw Error('Built-in .NET Framework compiler unavailable; nothing installed');
- const directory=join(root,'apps/api/dist/native'),source=join(root,'native/windows/WindowsHost.cs'),desktopSource=join(root,'native/windows/WindowsDesktop.cs'),binary=join(directory,'windows-host.exe'),stamp=join(directory,'windows-build.json');
+ const directory=join(root,'packages/domain/dist/native'),source=join(root,'native/windows/WindowsHost.cs'),desktopSource=join(root,'native/windows/WindowsDesktop.cs'),binary=join(directory,'windows-host.exe'),stamp=join(directory,'windows-build.json');
  mkdirSync(directory,{recursive:true});
  const hash=p=>createHash('sha256').update(readFileSync(p)).digest('hex');let unchanged=false;
  try{const saved=JSON.parse(readFileSync(stamp,'utf8'));unchanged=!lstatSync(binary).isSymbolicLink()&&saved.source===hash(source)&&saved.desktopSource===hash(desktopSource)&&saved.binary===hash(binary);}catch{}

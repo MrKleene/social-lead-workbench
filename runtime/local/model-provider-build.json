@@ -1,7 +1,5 @@
 {
   "sourceHashes": {
-    "apps/api/src/collection/qwen-provider.ts": "e94fc423f2acb861234524a2ddff3f8e28b0b862d4863bdabea30dbfc25141f5",
-    "apps/api/src/collection/whole-post-capacity.ts": "3ac8bd4dfed69cf8c36f7ecd2012ec0b0b57205fc008d36004943f435cdc31d7",
     "packages/contracts/src/auto-contact.ts": "0eab9e1a3be64441090b0aefa80602126aa043ee12a20604e7e0eff879b32895",
     "packages/contracts/src/avatar-query.ts": "e4e1103dc20ecf7ec061f062145f74db5d25a7c12bc0c30de33985769b0855bf",
     "packages/contracts/src/avatar-source-diagnostic.ts": "bc1a6c3a5b1d1800352506b155f681b40c8c6c93e418a41f8d300a1942542245",
@@ -27,8 +25,10 @@
     "packages/contracts/src/semantic-output-errors.ts": "76a53d54d528d187ef443d8d839b0c044a97aaad978a35069958a67b966e288c",
     "packages/contracts/src/semantic-review.ts": "52a1cf4b5f1cfb962c8f939c4ebdd9cdda1dc965317eb090416343d35c61799c",
     "packages/contracts/src/xhs-reference-parameters.ts": "255a91480a80a1884178f0fe6cb2e637a845da2a420f98f7d9d4eaf7543cb9cf",
-    "packages/local-policy/src/model-provider.ts": "b5d4b8d3f949323a8717d722cfcea689da44f3bd6c508ec5664dcb5c198b134a",
+    "packages/domain/src/collection/qwen-provider.ts": "e94fc423f2acb861234524a2ddff3f8e28b0b862d4863bdabea30dbfc25141f5",
+    "packages/domain/src/collection/whole-post-capacity.ts": "3ac8bd4dfed69cf8c36f7ecd2012ec0b0b57205fc008d36004943f435cdc31d7",
+    "packages/local-policy/src/model-provider.ts": "fadabfd2de92ec114a1b36eb3ca28247bd123078b7c126d30984124191525bbc",
     "runtime/qwen-models.cjs": "da900dedad87cbd626bf7eebadeb138e94876076b91290043b234de896cf9d0a"
   },
-  "outputSha256": "b66f36208ce20424ef3d58b22bd39c2f652ca08b0135b994d1e322cb031122e0"
+  "outputSha256": "adfc8d18fd4a082f83cf002625658be75fd56c75f96b25bac0eb9fe623f1b239"
 }

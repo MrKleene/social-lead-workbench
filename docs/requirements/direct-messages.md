@@ -70,7 +70,7 @@ verified safe window and cannot advance existing jobs as a side effect.
 
 ## Validation
 
-`npm run test -w @crm/api` includes preparation and HTTP boundary tests. All data
+`npm run test -w @crm/domain` includes preparation and HTTP boundary tests. All data
 in the new tests are synthetic and the database fixture offers only read methods.
 They test capability denial, exact binding, stale versions, input injection,
 admin/CSRF, missing variables, no-contact/exclusion/risk/quota, cross-channel

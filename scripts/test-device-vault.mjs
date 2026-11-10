@@ -10,7 +10,7 @@ if(process.platform!=='darwin'||process.arch!=='arm64'){console.log('SKIP: macOS
 const root=fileURLToPath(new URL('../',import.meta.url)),directory=await realpath(await mkdtemp(join(tmpdir(),'crm-vault-test-')));
 const testPath=join(directory,'fixture.keychain-db'),testPassword=randomBytes(32).toString('hex');
 const deviceId=randomUUID(),keyId=randomUUID(),value=randomBytes(64).toString('base64');
-const run=(operation,extra={})=>spawnSync(join(root,'apps/api/dist/native/device-vault'),['--isolated-test'],{input:JSON.stringify({operation,testPath,deviceId,keyId,...extra}),encoding:'utf8',timeout:15000});
+const run=(operation,extra={})=>spawnSync(join(root,'packages/domain/dist/native/device-vault'),['--isolated-test'],{input:JSON.stringify({operation,testPath,deviceId,keyId,...extra}),encoding:'utf8',timeout:15000});
 let created=false;
 try{
  const init=run('init-test',{testPassword});assert.equal(init.status,0,'isolated keychain creation: '+init.stderr);created=true;

@@ -20224,7 +20224,7 @@ function previewReply(body, context) {
 }
 var replyDraft = external_exports.object({ name: external_exports.string().trim().min(1).max(80), channel: external_exports.enum(["COMMENT", "DM"]), body: external_exports.string().trim().min(1).max(2e3) }).strict().refine((v) => previewReply(v.body, {}).unknown.length === 0, "\u8BDD\u672F\u5305\u542B\u672A\u77E5\u5360\u4F4D\u7B26\uFF1B\u4EC5\u652F\u6301\u6635\u79F0\u3001\u5173\u952E\u8BCD\u3001\u5E16\u5B50\u6807\u9898\u3001\u5E73\u53F0\u3001\u4E13\u4E1A").refine((v) => !/[{}]/.test(v.body.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, "")), "\u5360\u4F4D\u7B26\u5FC5\u987B\u4F7F\u7528 {{\u5B57\u6BB5}} \u683C\u5F0F");
 
-// apps/api/src/collection/run-coverage.ts
+// packages/domain/src/collection/run-coverage.ts
 function runCoverage(result) {
   const reasons2 = /* @__PURE__ */ new Set();
   const search = result.searchIncomplete === void 0 ? "UNKNOWN" : result.searchIncomplete ? "PARTIAL" : "COMPLETE";
@@ -20250,14 +20250,14 @@ function summarizePartial(result) {
   }
 }
 
-// apps/api/src/collection/post-reference.ts
+// packages/domain/src/collection/post-reference.ts
 var postReferenceSchema = external_exports.object({ postId: external_exports.string().regex(/^[a-f0-9]{24}$/), token: external_exports.string().min(1).max(4096).regex(/^[A-Za-z0-9_+\/=-]+$/), source: external_exports.enum(["pc_search", "pc_feed"]) }).strict();
 function savedPostReference(value, postId) {
   const p = postReferenceSchema.safeParse(value);
   return p.success && p.data.postId === postId ? p.data : void 0;
 }
 
-// apps/api/src/collection/contract.ts
+// packages/domain/src/collection/contract.ts
 var normalize = (value) => value.normalize("NFKC").toLowerCase();
 var word = external_exports.string().trim().min(1).max(40);
 var configInput = external_exports.object({
@@ -20305,7 +20305,7 @@ var commentSchema = external_exports.object({
 });
 var limits = { requests: 32, pagesPerStream: 4, comments: 100, callMs: 3e3, runMs: 2e4 };
 
-// apps/api/src/collection/diagnostics.ts
+// packages/domain/src/collection/diagnostics.ts
 function invalidSource(stage, kind, field) {
   return new ReadFailure("INVALID_DATA", void 0, { version: 1, stage, kind, ...field ? { field } : {} });
 }
@@ -20335,7 +20335,7 @@ function parseSource(schema, input2, stage) {
   }
 }
 
-// apps/api/src/collection/collector.ts
+// packages/domain/src/collection/collector.ts
 async function collect(adapter, config2, cancelled, budget = limits, progress, selectedPost, beforePost, postFinished, selectPost, observe) {
   if (adapter.mode !== config2.mode || adapter.platform !== config2.platform)
     throw new ReadFailure("REAL_DISABLED");
@@ -20572,7 +20572,7 @@ async function collect(adapter, config2, cancelled, budget = limits, progress, s
   return result;
 }
 
-// apps/api/src/collection/adapters/post-failure.ts
+// packages/domain/src/collection/adapters/post-failure.ts
 function postFailure(text2) {
   if (text2.startsWith("\u83B7\u53D6Feed\u8BE6\u60C5\u5931\u8D25: \u7B14\u8BB0\u4E0D\u53EF\u8BBF\u95EE: ") && /未登录|登录失效|login|频繁|限流|rate.?limit|限制|封禁|验证码|restricted/i.test(text2)) return void 0;
   const body = text2.startsWith("\u83B7\u53D6Feed\u8BE6\u60C5\u5931\u8D25: ") ? text2.slice("\u83B7\u53D6Feed\u8BE6\u60C5\u5931\u8D25: ".length) : text2;
@@ -20620,7 +20620,7 @@ function postFailure(text2) {
   return postReason ? new ReadFailure(code, void 0, { version: 1, stage: "post", kind: "UPSTREAM_ERROR", postReason }) : void 0;
 }
 
-// apps/api/src/collection/comment-checkpoint.ts
+// packages/domain/src/collection/comment-checkpoint.ts
 var import_node_crypto = require("node:crypto");
 function checkpointHash(value) {
   return (0, import_node_crypto.createHash)("sha256").update(JSON.stringify(commentCheckpointSchema.parse(value))).digest("hex");
@@ -20643,7 +20643,7 @@ function validateChunk(previous, receipt, post, comments) {
   return next;
 }
 
-// apps/api/src/collection/adapters/search-failure.ts
+// packages/domain/src/collection/adapters/search-failure.ts
 function searchFailureReason(text2) {
   try {
     const p = searchFailureEnvelopeSchema.safeParse(JSON.parse(text2));
@@ -20664,10 +20664,10 @@ function searchFailureObservation(text2) {
   }
 }
 
-// apps/api/src/collection/adapters/xhs-mcp.ts
+// packages/domain/src/collection/adapters/xhs-mcp.ts
 var commentPolicy = __toESM(require_comment_read_policy());
 
-// apps/api/src/collection/adapters/xhs-cover.ts
+// packages/domain/src/collection/adapters/xhs-cover.ts
 var record2 = (v) => v && typeof v === "object" && !Array.isArray(v) ? v : void 0;
 function diagnose2(value, values, fieldCount, kind, supported, truncated = false) {
   const counts = /* @__PURE__ */ new Map(), classes = /* @__PURE__ */ new Map();
@@ -20719,7 +20719,7 @@ function inspectXhsAvatar(value, sourceField) {
   return result;
 }
 
-// apps/api/src/collection/adapters/xhs-mcp.ts
+// packages/domain/src/collection/adapters/xhs-mcp.ts
 var envelope = external_exports.object({ isError: external_exports.boolean().optional(), content: external_exports.array(external_exports.object({ type: external_exports.string(), text: external_exports.string().max(2 * 1024 * 1024).optional() })).max(8) });
 function text(input2, stage) {
   const value = parseSource(envelope, input2, stage);

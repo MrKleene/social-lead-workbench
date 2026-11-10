@@ -13,4 +13,4 @@ Re-observation in a genuinely new, unarchived collection run makes saved capture
 
 Schema maintenance: PostgreSQL views freeze their column lists. Future migrations adding/removing/renaming columns or enum values in visible models must update the corresponding `history_display` views/types in the same migration. Do not drop the archive tables or safety guards as a rollback after an archive. Prefer forward fixes; use normal display restoration for user recovery. A code downgrade needs a separate safety review to prevent old jobs being reconsidered.
 
-Tests: `apps/api/test/history-archive-postgres.test.ts` must run against a dedicated disposable local `crm_test`; it deliberately retains its fixture records for post-test inspection. No platform/model sender is used. Existing API integration tests cover the unchanged safety contracts.
+Tests: `packages/domain/test/history-archive-postgres.test.ts` must run against a dedicated disposable local `crm_test`; it deliberately retains its fixture records for post-test inspection. No platform/model sender is used. Existing API integration tests cover the unchanged safety contracts.

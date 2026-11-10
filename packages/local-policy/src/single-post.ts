@@ -1,5 +1,5 @@
 import {safeBoundedReadReport,safeCoverageDiagnostic,safeImageDiagnostics} from '@crm/contracts';
-import type {Post,Comment} from '../../../apps/api/src/collection/contract';
+import type {Post,Comment} from '../../../packages/domain/src/collection/contract';
 export function singlePostSummary(post:Post,comments:Comment[],mode:'INITIAL_WINDOW'|'BOUNDED_REPLIES'='INITIAL_WINDOW'){
  const groups=(reply:boolean)=>{const selected=comments.filter(c=>!!c.parentId===reply),outcomes=new Map<string,number>();
   for(const c of selected)for(const o of safeImageDiagnostics(c.imageDiagnostics)?.authorAvatar?.outcomes||[])outcomes.set(o.reason,(outcomes.get(o.reason)||0)+o.count);

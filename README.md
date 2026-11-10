@@ -29,8 +29,11 @@ npm stop
 ## 工程与验收
 
 - `apps/web`：React/Vite + shadcn/ui 页面。
-- `apps/api`：鉴权、配置、采集、审核、发送、受管账号设备和收件服务。
-- `apps/api/src/collection/worker.ts`：业务队列执行。
+- `apps/desktop`：Electron 主进程与本地调用边界（单通道 `workbench:call` + 方法白名单）。
+- `runtime/local`：本机后端（数据库、队列、审核、发送、收件、备份）。其中 `policy.cjs` 与
+  `{collection,platform,model}-provider.cjs` 是生成产物，改逻辑请改源码后重新打包。
+- `packages/domain`：业务逻辑源码库（采集、审核规则、回复与私信协议），由 `npm run local:policy`
+  打包进 `runtime/local`。
 - `packages/contracts`：前后端协议；`prisma/schema.prisma`：数据模型（桌面版运行时不使用，仅作类型与结构参考）；`scripts`：受管启动、隔离测试及本机诊断。
 
 [当前需求](docs/requirements/REQUIREMENTS.md) · [模块说明](docs/requirements/MODULES.md) · [实现状态](docs/requirements/IMPLEMENTATION-STATUS.md) · [验收](docs/requirements/ACCEPTANCE.md)

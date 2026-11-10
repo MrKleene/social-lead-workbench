@@ -1,6 +1,6 @@
 import {safeRunCoverage} from '@crm/contracts';
 import {z} from 'zod';
-// Pure projection of apps/api/src/collection/stage-barrier.ts; no database adapter.
+// Pure projection of packages/domain/src/collection/stage-barrier.ts; no database adapter.
 export const stagePlanSchema=z.object({version:z.literal(1),policies:z.array(z.object({id:z.string(),version:z.number().int(),revision:z.number().int(),modelVersion:z.number().int().nullable()})).max(100)});
 export function collectionBarrier(run:{snapshot:unknown;cancelRequested:boolean;status:string;finishedAt:unknown;reason:string|null;capturedPosts:number;capturedCommentsCount:number;metrics:unknown}){
  const blocked=(reason:string)=>({ready:false,reason});

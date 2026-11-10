@@ -1,15 +1,5 @@
 {
   "sourceHashes": {
-    "apps/api/src/collection/adapters/post-failure.ts": "b63a73a43f4b09c2e67d07da75e69645a5d5129655f5b6c5338040ba2749cecc",
-    "apps/api/src/collection/adapters/search-failure.ts": "e1bdd4bf8dbf0d1fd1181f8581ca16d28c825fdd451b63c7a3aa9f1e40ed04af",
-    "apps/api/src/collection/adapters/xhs-cover.ts": "564d0ad1cc404d2a820b684154ca353441aa36c5c3b09853ebee374f4bb505a6",
-    "apps/api/src/collection/adapters/xhs-mcp.ts": "36fc01dacbfb320b6414fe606c98bd214e7a42370499fe499cdc5756ce97e346",
-    "apps/api/src/collection/collector.ts": "71ac9c4e5459780168f6a08410283dee655646e8827bb4c6395edb31bdc0a103",
-    "apps/api/src/collection/comment-checkpoint.ts": "2de7d8b8e24413527b9552e4e58f60e2af07bc8917df5aa735b57cbfef9ae003",
-    "apps/api/src/collection/contract.ts": "25685263ec4b03c58d4ed6bb86ff587d4026f8e7585964e42a402fbc847e1b11",
-    "apps/api/src/collection/diagnostics.ts": "4ffddb51c19bf3441132c92af58c22754615f744e7f2a1750914d03ce07e2eaa",
-    "apps/api/src/collection/post-reference.ts": "98fd9fa48d0dfb9628e9a38e151610cd19b62f6be79ebec673c9366a474a6a23",
-    "apps/api/src/collection/run-coverage.ts": "4a5e98d762ba4228c625a441b43d3ee3faf770d20c4dec7f71a701e414aed93e",
     "packages/contracts/src/auto-contact.ts": "0eab9e1a3be64441090b0aefa80602126aa043ee12a20604e7e0eff879b32895",
     "packages/contracts/src/avatar-query.ts": "e4e1103dc20ecf7ec061f062145f74db5d25a7c12bc0c30de33985769b0855bf",
     "packages/contracts/src/avatar-source-diagnostic.ts": "bc1a6c3a5b1d1800352506b155f681b40c8c6c93e418a41f8d300a1942542245",
@@ -35,8 +25,18 @@
     "packages/contracts/src/semantic-output-errors.ts": "76a53d54d528d187ef443d8d839b0c044a97aaad978a35069958a67b966e288c",
     "packages/contracts/src/semantic-review.ts": "52a1cf4b5f1cfb962c8f939c4ebdd9cdda1dc965317eb090416343d35c61799c",
     "packages/contracts/src/xhs-reference-parameters.ts": "255a91480a80a1884178f0fe6cb2e637a845da2a420f98f7d9d4eaf7543cb9cf",
-    "packages/local-policy/src/collection-provider.ts": "286aa6843024b01a9b265e99ac5f76c9c28a678f81828faf153f6ecf53fa5a1e",
+    "packages/domain/src/collection/adapters/post-failure.ts": "b63a73a43f4b09c2e67d07da75e69645a5d5129655f5b6c5338040ba2749cecc",
+    "packages/domain/src/collection/adapters/search-failure.ts": "e1bdd4bf8dbf0d1fd1181f8581ca16d28c825fdd451b63c7a3aa9f1e40ed04af",
+    "packages/domain/src/collection/adapters/xhs-cover.ts": "564d0ad1cc404d2a820b684154ca353441aa36c5c3b09853ebee374f4bb505a6",
+    "packages/domain/src/collection/adapters/xhs-mcp.ts": "36fc01dacbfb320b6414fe606c98bd214e7a42370499fe499cdc5756ce97e346",
+    "packages/domain/src/collection/collector.ts": "71ac9c4e5459780168f6a08410283dee655646e8827bb4c6395edb31bdc0a103",
+    "packages/domain/src/collection/comment-checkpoint.ts": "2de7d8b8e24413527b9552e4e58f60e2af07bc8917df5aa735b57cbfef9ae003",
+    "packages/domain/src/collection/contract.ts": "25685263ec4b03c58d4ed6bb86ff587d4026f8e7585964e42a402fbc847e1b11",
+    "packages/domain/src/collection/diagnostics.ts": "4ffddb51c19bf3441132c92af58c22754615f744e7f2a1750914d03ce07e2eaa",
+    "packages/domain/src/collection/post-reference.ts": "98fd9fa48d0dfb9628e9a38e151610cd19b62f6be79ebec673c9366a474a6a23",
+    "packages/domain/src/collection/run-coverage.ts": "4a5e98d762ba4228c625a441b43d3ee3faf770d20c4dec7f71a701e414aed93e",
+    "packages/local-policy/src/collection-provider.ts": "c84f30712c5e55d6d491f54f2a778ee78fc5d20c66492c6b2bae17f9e158170f",
     "runtime/comment-read-policy.cjs": "521832d8720ff9ccd2783761e2b0825bd35ed6cb532f43be5454f8a547b346b6"
   },
-  "outputSha256": "4c5695aee0f7cbb7d623b2a0026cf22df69048a2da6b755f07b94cf975cdb554"
+  "outputSha256": "d7f840de6109c74d8268294c5ff585c8b96e34445ab45eec31d0dab5c4d3a5d3"
 }

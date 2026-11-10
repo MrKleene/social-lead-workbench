@@ -50,7 +50,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 历史查看不执行新任务；失败或部分读取照实显示，不算成功
 - 单帖重读只更新采集与审核，**不派生自动发送**
 
-**代码**：`apps/api/src/collection`（`collector.ts`、`run-coverage.ts`、`capture-archive.ts`、
+**代码**：`packages/domain/src/collection`（`collector.ts`、`run-coverage.ts`、`capture-archive.ts`、
 `comment-checkpoint.ts`、`adapters/`、`mcp/`）；`runtime/local/collection-executor.cjs`、
 `collection-provider.cjs`
 
@@ -75,7 +75,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 模型失败与费用按实际调用记录，不用估算冒充账单
 - 审核目标带版本，目标版本变化后回复草稿必须显式确认
 
-**代码**：`apps/api/src/collection`（`semantic-evaluator.ts`、`qwen-provider.ts`、`comment-rules.ts`、
+**代码**：`packages/domain/src/collection`（`semantic-evaluator.ts`、`qwen-provider.ts`、`comment-rules.ts`、
 `whole-post-capacity.ts`、`model-cost-estimate.ts`、`semantic-redaction.ts`、`comment-checkpoint.ts`）；
 `runtime/local/automatic-review.cjs`、`review.cjs`、`run-review.cjs`
 
@@ -101,7 +101,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 平台限流、验证、封禁后即停，不自动换号绕验证
 - 保存规则保持关闭；发送需独立授权
 
-**代码**：`apps/api/src/auto-contact`（`contact-policy.ts`、`contact-sender.ts`、`reply-stage-journal.ts`、
+**代码**：`packages/domain/src/auto-contact`（`contact-policy.ts`、`contact-sender.ts`、`reply-stage-journal.ts`、
 `live-journal-progress.ts`、`xhs-reply-protocol.ts`、`xhs-reply-transport.ts`、`xhs-restriction-transport.ts`）；
 `runtime/local/contact.cjs`、`send-safety.cjs`、`send-executor.cjs`
 
@@ -147,7 +147,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 读取会改变平台未读状态；系统未读是独立的一套
 - 只做增量迁移，不动原业务记录与 UNKNOWN 证据
 
-**代码**：`integrations/inbox-mcp`（Go）；`apps/api/src/inbox/protocol.ts`；
+**代码**：`integrations/inbox-mcp`（Go）；`packages/domain/src/inbox/protocol.ts`；
 `runtime/local/inbox-executor.cjs`、`inbox.cjs`；页面 `/inbox`
 
 **状态**：合成验证；自然新消息及时性与长期低资源认证待真实验收
@@ -170,7 +170,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 放开真实发送的前置：可验证的 API/工具契约、真实会话绑定、收件人校验、额度原子预留、
   单次派发与 UNKNOWN、DM 专属队列与回执映射
 
-**代码**：`apps/api/src/direct-messages`（`dm-send-protocol.ts`、`dm-transport.ts`、`dm-readback.ts`）；
+**代码**：`packages/domain/src/direct-messages`（`dm-send-protocol.ts`、`dm-transport.ts`、`dm-readback.ts`）；
 `runtime/local/dm-protocol.cjs`；入口：配置管理 → 私信模板 → 私信预览
 
 **状态**：仅预览
@@ -215,7 +215,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 凭据、Cookie、二维码、设备私钥存受系统保护目录，不入 Git
 - 同机设备签名认证不等于远程执行、硬件证明或 Windows 实现
 
-**代码**：`apps/api/src/accounts/account-execution-policy.ts`；`runtime/local/accounts.cjs`、
+**代码**：`packages/domain/src/accounts/account-execution-policy.ts`；`runtime/local/accounts.cjs`、
 `account-safety.cjs`、`credentials.cjs`、`platform-protocol.cjs`；页面 `/platforms`、`/work/accounts`
 
 **状态**：已接入 + 合成验证
@@ -234,7 +234,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 15 秒心跳、60 秒快照修复、30 秒读兜底
 - **不是**持久事件日志，也不是执行队列；重载只恢复当前真值
 
-**代码**：`journey_push` 迁移 + `apps/api` 事件层；前端 `lib/journey-event-sync.ts`
+**代码**：`journey_push` 迁移 + `packages/domain` 事件层；前端 `lib/journey-event-sync.ts`
 
 **状态**：已接入
 
@@ -279,7 +279,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 ## 已知不一致（待处理）
 
 1. `README.md` 提到 `apps/worker`，该目录不存在。
-2. `docs/ARCHITECTURE.md` 提到 `apps/api/src/replies`，该目录不存在；`auth`、`audit`、`agents`、
+2. `docs/ARCHITECTURE.md` 提到 `packages/domain/src/replies`，该目录不存在；`auth`、`audit`、`agents`、
    `leads`、`followups`、`sources`、`tasks` 是空目录。
 3. `REQUIREMENTS.md` 写"评论与私信可分别选择"，但私信实际只有本地预览，没有发送通道。
    按模块 6 理解，不要据需求文档认为 DM 已可发。

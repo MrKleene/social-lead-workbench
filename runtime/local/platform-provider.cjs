@@ -32492,10 +32492,10 @@ function previewReply(body, context) {
 }
 var replyDraft = external_exports.object({ name: external_exports.string().trim().min(1).max(80), channel: external_exports.enum(["COMMENT", "DM"]), body: external_exports.string().trim().min(1).max(2e3) }).strict().refine((v) => previewReply(v.body, {}).unknown.length === 0, "\u8BDD\u672F\u5305\u542B\u672A\u77E5\u5360\u4F4D\u7B26\uFF1B\u4EC5\u652F\u6301\u6635\u79F0\u3001\u5173\u952E\u8BCD\u3001\u5E16\u5B50\u6807\u9898\u3001\u5E73\u53F0\u3001\u4E13\u4E1A").refine((v) => !/[{}]/.test(v.body.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, "")), "\u5360\u4F4D\u7B26\u5FC5\u987B\u4F7F\u7528 {{\u5B57\u6BB5}} \u683C\u5F0F");
 
-// apps/api/src/collection/post-reference.ts
+// packages/domain/src/collection/post-reference.ts
 var postReferenceSchema = external_exports.object({ postId: external_exports.string().regex(/^[a-f0-9]{24}$/), token: external_exports.string().min(1).max(4096).regex(/^[A-Za-z0-9_+\/=-]+$/), source: external_exports.enum(["pc_search", "pc_feed"]) }).strict();
 
-// apps/api/src/collection/contract.ts
+// packages/domain/src/collection/contract.ts
 var normalize = (value) => value.normalize("NFKC").toLowerCase();
 var word = external_exports.string().trim().min(1).max(40);
 var configInput = external_exports.object({
@@ -32542,7 +32542,7 @@ var commentSchema = external_exports.object({
   hasReplies: external_exports.boolean().default(false)
 });
 
-// apps/api/src/collection/mcp/policy.ts
+// packages/domain/src/collection/mcp/policy.ts
 var toolArguments = {
   check_login_status: external_exports.object({}).strict(),
   search_feeds: external_exports.object({ keyword: external_exports.string().trim().min(1).max(40) }).strict(),
@@ -32558,7 +32558,7 @@ function loginCheckOnly(env = process.env) {
   return env.XHS_MCP_LOGIN_ONLY === "1";
 }
 
-// apps/api/src/collection/mcp/transport.ts
+// packages/domain/src/collection/mcp/transport.ts
 var XhsHttpTransport = class {
   constructor(url2, mode, owned) {
     this.mode = mode;
@@ -32692,7 +32692,7 @@ var XhsHttpTransport = class {
   }
 };
 
-// apps/api/src/auto-contact/live-journal-progress.ts
+// packages/domain/src/auto-contact/live-journal-progress.ts
 function journalPhase(stage) {
   if (stage === "RESTRICTION_CHECK") return "CHECKING_ACCOUNT";
   if (["STARTED", "INSPECTED"].includes(stage)) return "LOCATING_TARGET";
@@ -32734,7 +32734,7 @@ function watchJournalProgress(owned, id5, live) {
   };
 }
 
-// apps/api/src/direct-messages/dm-send-protocol.ts
+// packages/domain/src/direct-messages/dm-send-protocol.ts
 var import_node_crypto = require("node:crypto");
 var DM_SEND_PROTOCOL = "workbench.xhs.exact-dm.v1";
 var dmDigest = (s) => (0, import_node_crypto.createHash)("sha256").update(s).digest("hex");
@@ -32756,7 +32756,7 @@ function parseDmExecution(raw, c) {
   return r;
 }
 
-// apps/api/src/direct-messages/dm-transport.ts
+// packages/domain/src/direct-messages/dm-transport.ts
 async function sendExactDm(owned, expectedHash, command, beforeDispatch, signal, live) {
   const c = dmCommandSchema.parse(command), endpoint = owned.url.href, u = new URL(endpoint);
   if (owned.binarySha256 !== expectedHash || owned.accountId !== c.accountId || !/^[a-f0-9]{64}$/.test(owned.token) || u.hostname !== "127.0.0.1" || u.protocol !== "http:" || u.pathname !== "/mcp" || u.username || u.password || u.search || u.hash) throw Error("DM_OWNED_ENDPOINT_MISMATCH");
@@ -32802,7 +32802,7 @@ async function sendExactDm(owned, expectedHash, command, beforeDispatch, signal,
   }
 }
 
-// apps/api/src/auto-contact/selection-evidence.ts
+// packages/domain/src/auto-contact/selection-evidence.ts
 var selectionEvidenceSchema = external_exports.object({
   viewport: external_exports.object({ width: external_exports.number().int().min(1).max(32768), height: external_exports.number().int().min(1).max(32768), scrollX: external_exports.number().int().min(0).max(1e8), scrollY: external_exports.number().int().min(0).max(1e8) }).strict().optional(),
   frame: external_exports.enum(["TOP", "SUBFRAME"]),
@@ -32819,7 +32819,7 @@ var selectionEvidenceSchema = external_exports.object({
   focused: external_exports.boolean()
 }).strict();
 
-// apps/api/src/auto-contact/xhs-preflight-transport.ts
+// packages/domain/src/auto-contact/xhs-preflight-transport.ts
 var XHS_PREFLIGHT_PROTOCOL = "workbench.xhs.exact-preflight.v2";
 var id3 = external_exports.string().regex(/^[a-f0-9]{24}$/);
 var preflightTargetSchema = external_exports.object({ protocol: external_exports.literal(XHS_PREFLIGHT_PROTOCOL), accountId: external_exports.string().regex(/^[A-Za-z0-9_-]{1,128}$/), senderId: id3, postId: id3, targetCommentId: id3, recipientId: id3, postReference: external_exports.object({ postId: id3, token: external_exports.string().min(1).max(4096).regex(/^[A-Za-z0-9_+\/=-]+$/), source: external_exports.enum(["pc_feed", "pc_search"]) }).strict() }).strict().refine((t) => t.postId === t.postReference.postId);
@@ -32931,7 +32931,7 @@ var XhsExactPreflightTransport = class {
   }
 };
 
-// apps/api/src/auto-contact/xhs-restriction-transport.ts
+// packages/domain/src/auto-contact/xhs-restriction-transport.ts
 var XHS_RESTRICTION_PROTOCOL = "workbench.xhs.restriction-inspection.v1";
 var XHS_PROFILE_RESTRICTION_PROTOCOL = "workbench.xhs.account-profile-inspection.v1";
 var id4 = external_exports.string().regex(/^[a-f0-9]{24}$/);
@@ -32955,7 +32955,7 @@ var restrictionResultSchema = external_exports.object({
   writeOperations: external_exports.literal(0)
 }).strict();
 
-// apps/api/src/auto-contact/xhs-reply-protocol.ts
+// packages/domain/src/auto-contact/xhs-reply-protocol.ts
 var XHS_REPLY_PROTOCOL = "workbench.xhs.exact-reply.v1";
 var platformId = external_exports.string().regex(/^[a-f0-9]{24}$/);
 var opaqueId = external_exports.string().min(1).max(200).regex(/^[A-Za-z0-9:_-]+$/);
@@ -33024,7 +33024,7 @@ var resultSchema2 = external_exports.discriminatedUnion("kind", [
   }).strict()
 ]);
 
-// apps/api/src/auto-contact/reply-stage-journal.ts
+// packages/domain/src/auto-contact/reply-stage-journal.ts
 var import_promises = require("node:fs/promises");
 var import_node_fs = require("node:fs");
 var import_node_path = require("node:path");
@@ -33072,7 +33072,7 @@ var executionEventSchema = external_exports.discriminatedUnion("stage", [
   external_exports.object({ stage: external_exports.literal("TRANSPORT_STOP"), processDiagnostics: external_exports.object({ categories: external_exports.array(external_exports.enum(["PANIC", "TIMEOUT", "BROWSER_DISCONNECTED", "OTHER"])).max(4), truncated: external_exports.boolean() }).strict().optional(), protocolAttemptId: external_exports.string().uuid(), stopped: external_exports.boolean(), journal: external_exports.object({ state: external_exports.enum(["AVAILABLE", "MISSING", "INVALID", "TRUNCATED"]), records: external_exports.array(journalRecordSchema).max(64) }).strict() }).strict()
 ]);
 
-// apps/api/src/direct-messages/dm-readback.ts
+// packages/domain/src/direct-messages/dm-readback.ts
 var import_node_crypto2 = require("node:crypto");
 var DM_OBSERVE_PROTOCOL = "workbench.xhs.dm-conversation-inspection.v1";
 function parseExistingDm(raw, c) {

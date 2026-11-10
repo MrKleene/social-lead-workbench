@@ -115,7 +115,7 @@ __export(index_exports, {
 });
 module.exports = __toCommonJS(index_exports);
 
-// apps/api/src/inbox/protocol.ts
+// packages/domain/src/inbox/protocol.ts
 var json = (s) => {
   if (typeof s !== "string" || s.length > 262144) throw Error("BOUND");
   return JSON.parse(s);
@@ -204,7 +204,7 @@ function decodeFrame(raw) {
   return { kind: "batch", id: typeof f.m === "string" ? f.m : null, events };
 }
 
-// apps/api/src/direct-messages/dm-send-protocol.ts
+// packages/domain/src/direct-messages/dm-send-protocol.ts
 var import_node_crypto = require("node:crypto");
 
 // node_modules/zod/v4/classic/external.js
@@ -19924,7 +19924,7 @@ function date4(params) {
   return _coercedDate(ZodDate, params);
 }
 
-// apps/api/src/direct-messages/dm-send-protocol.ts
+// packages/domain/src/direct-messages/dm-send-protocol.ts
 var DM_SEND_PROTOCOL = "workbench.xhs.exact-dm.v1";
 var dmDigest = (s) => (0, import_node_crypto.createHash)("sha256").update(s).digest("hex");
 var pid = external_exports.string().regex(/^[a-f0-9]{24}$/);
@@ -20393,10 +20393,10 @@ function previewReply(body, context) {
 }
 var replyDraft = external_exports.object({ name: external_exports.string().trim().min(1).max(80), channel: external_exports.enum(["COMMENT", "DM"]), body: external_exports.string().trim().min(1).max(2e3) }).strict().refine((v) => previewReply(v.body, {}).unknown.length === 0, "\u8BDD\u672F\u5305\u542B\u672A\u77E5\u5360\u4F4D\u7B26\uFF1B\u4EC5\u652F\u6301\u6635\u79F0\u3001\u5173\u952E\u8BCD\u3001\u5E16\u5B50\u6807\u9898\u3001\u5E73\u53F0\u3001\u4E13\u4E1A").refine((v) => !/[{}]/.test(v.body.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, "")), "\u5360\u4F4D\u7B26\u5FC5\u987B\u4F7F\u7528 {{\u5B57\u6BB5}} \u683C\u5F0F");
 
-// apps/api/src/collection/qwen-provider.ts
+// packages/domain/src/collection/qwen-provider.ts
 var import_qwen_models2 = __toESM(require_qwen_models());
 
-// apps/api/src/collection/whole-post-capacity.ts
+// packages/domain/src/collection/whole-post-capacity.ts
 var import_qwen_models = __toESM(require_qwen_models());
 var WHOLE_POST_TIMEOUT = 3e5;
 var WHOLE_POST_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -20407,7 +20407,7 @@ function wholePostCapacity(payload, modelId) {
   return { fits, inputTokensUpper, outputTokens, timeoutMs: WHOLE_POST_TIMEOUT };
 }
 
-// apps/api/src/collection/qwen-provider.ts
+// packages/domain/src/collection/qwen-provider.ts
 var QwenError = class extends Error {
   constructor(code) {
     super(code);
@@ -20428,7 +20428,7 @@ function parseQwenResult(raw) {
   throw new QwenError(modelOutputFailureCode(code, index));
 }
 
-// apps/api/src/collection/semantic-redaction.ts
+// packages/domain/src/collection/semantic-redaction.ts
 var REDACTION_VERSION = "contact-redaction-v1";
 var marker = "[\u5DF2\u8131\u654F]";
 function redactText(text, identifiers = []) {
@@ -20482,7 +20482,7 @@ function validateQwenEvidence(raw, payload, inputs, contextOptional = false) {
   });
 }
 
-// apps/api/src/collection/comment-rules.ts
+// packages/domain/src/collection/comment-rules.ts
 var normalize = (s) => s.normalize("NFKC").toLowerCase();
 function contains(text, term2) {
   const t = normalize(term2), s = normalize(text);
@@ -20524,12 +20524,12 @@ function assessComment(comment, post, parent, rules, exclude) {
   return { ...result2, classification: "HIGH_RELEVANT", reason: professions.length ? "PROFESSION_CONTEXT" : "HELP_CONTEXT" };
 }
 
-// apps/api/src/collection/semantic-evaluator.ts
+// packages/domain/src/collection/semantic-evaluator.ts
 function semanticSnapshot(post, c, parent, complete, isDemo) {
   return { postId: post.id, commentId: c.id, userId: c.userId, title: post.title, body: post.body || "", comment: c.text, parentId: c.parentId || null, parent: parent?.text ?? null, coverage: complete ? "COMPLETE" : "PARTIAL", isDemo };
 }
 
-// apps/api/src/collection/post-reference.ts
+// packages/domain/src/collection/post-reference.ts
 var postReferenceSchema = external_exports.object({ postId: external_exports.string().regex(/^[a-f0-9]{24}$/), token: external_exports.string().min(1).max(4096).regex(/^[A-Za-z0-9_+\/=-]+$/), source: external_exports.enum(["pc_search", "pc_feed"]) }).strict();
 function savedPostReference(value, postId) {
   const p = postReferenceSchema.safeParse(value);
@@ -20547,7 +20547,7 @@ function parsePostReference(value) {
   }
 }
 
-// apps/api/src/collection/contract.ts
+// packages/domain/src/collection/contract.ts
 var normalize2 = (value) => value.normalize("NFKC").toLowerCase();
 var word = external_exports.string().trim().min(1).max(40);
 var configInput = external_exports.object({
@@ -20594,7 +20594,7 @@ var commentSchema = external_exports.object({
   hasReplies: external_exports.boolean().default(false)
 });
 
-// apps/api/src/collection/model-cost-estimate.ts
+// packages/domain/src/collection/model-cost-estimate.ts
 var import_qwen_models3 = __toESM(require_qwen_models());
 function estimateWholePostCost(payload, modelId) {
   const capacity = wholePostCapacity(payload, modelId), model = (0, import_qwen_models3.qwenModel)(modelId);
@@ -20609,7 +20609,7 @@ function estimateWholePostCost(payload, modelId) {
   };
 }
 
-// apps/api/src/collection/model-call-pacing.ts
+// packages/domain/src/collection/model-call-pacing.ts
 function modelCallWaitMs(last, now = Date.now()) {
   if (!last) return 0;
   const success2 = last.status === "COMPLETED" && !last.errorCode;
@@ -20636,7 +20636,7 @@ function collectionBarrier(run) {
   return { ready: true, reason: "\u6574\u8F6E\u91C7\u96C6\u5DF2\u7ED3\u675F" };
 }
 
-// apps/api/src/auto-contact/xhs-reply-protocol.ts
+// packages/domain/src/auto-contact/xhs-reply-protocol.ts
 var import_node_crypto2 = require("node:crypto");
 var XHS_REPLY_PROTOCOL = "workbench.xhs.exact-reply.v1";
 var platformId = external_exports.string().regex(/^[a-f0-9]{24}$/);
@@ -20748,7 +20748,7 @@ function verifyXhsReplyResult(command, raw) {
 // packages/local-policy/src/index.ts
 var import_qwen_models4 = __toESM(require_qwen_models());
 
-// apps/api/src/collection/comment-checkpoint.ts
+// packages/domain/src/collection/comment-checkpoint.ts
 var import_node_crypto3 = require("node:crypto");
 function checkpointHash(value) {
   return (0, import_node_crypto3.createHash)("sha256").update(JSON.stringify(commentCheckpointSchema.parse(value))).digest("hex");

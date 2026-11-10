@@ -20133,10 +20133,10 @@ function previewReply(body, context) {
 }
 var replyDraft = external_exports.object({ name: external_exports.string().trim().min(1).max(80), channel: external_exports.enum(["COMMENT", "DM"]), body: external_exports.string().trim().min(1).max(2e3) }).strict().refine((v) => previewReply(v.body, {}).unknown.length === 0, "\u8BDD\u672F\u5305\u542B\u672A\u77E5\u5360\u4F4D\u7B26\uFF1B\u4EC5\u652F\u6301\u6635\u79F0\u3001\u5173\u952E\u8BCD\u3001\u5E16\u5B50\u6807\u9898\u3001\u5E73\u53F0\u3001\u4E13\u4E1A").refine((v) => !/[{}]/.test(v.body.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, "")), "\u5360\u4F4D\u7B26\u5FC5\u987B\u4F7F\u7528 {{\u5B57\u6BB5}} \u683C\u5F0F");
 
-// apps/api/src/collection/qwen-provider.ts
+// packages/domain/src/collection/qwen-provider.ts
 var import_qwen_models2 = __toESM(require_qwen_models());
 
-// apps/api/src/collection/whole-post-capacity.ts
+// packages/domain/src/collection/whole-post-capacity.ts
 var import_qwen_models = __toESM(require_qwen_models());
 var WHOLE_POST_TIMEOUT = 3e5;
 var WHOLE_POST_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -20147,7 +20147,7 @@ function wholePostCapacity(payload, modelId) {
   return { fits, inputTokensUpper, outputTokens, timeoutMs: WHOLE_POST_TIMEOUT };
 }
 
-// apps/api/src/collection/qwen-provider.ts
+// packages/domain/src/collection/qwen-provider.ts
 var QWEN_MODEL = import_qwen_models2.DEFAULT_QWEN_MODEL;
 var QWEN_CONSENT = "beijing-original-comments-v2";
 var QWEN_TIMEOUT = 2e4;
