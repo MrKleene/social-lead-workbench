@@ -43,7 +43,7 @@
     "desktop:validate:win": "node scripts/build-windows-host.mjs && node scripts/desktop/build-mcp.mjs && node scripts/desktop/validate-windows-runtime.cjs",
     "desktop:package:win:preview": "npm run desktop:validate:win && npm run desktop:build && npm run desktop:stage && electron-builder --config apps/desktop/electron-builder.cjs --win nsis --x64",
     "build": "npm run build:core && npm run build -w @crm/web",
-    "test": "npm run test -w @crm/domain -w @crm/local-runtime -w @crm/desktop -w @crm/legacy-migration && npm run test:real:preflight && npm run test:real:offline && node --test tests/integration/*.test.cjs",
+    "test": "node scripts/test-all.mjs",
     "start": "npm run desktop:start",
     "build:core": "npm run build -w @crm/contracts && npm run build -w @crm/domain && npm run build -w @crm/local-runtime",
     "check": "npm run structure:check && npm run ui:check && npm run ui:check:strict && npm run design:lint && npm run typecheck && npm test",

@@ -62,8 +62,16 @@ test('session candidate is metadata-only and never considered authenticated', as
   await chmod(plan.cookies,0o644); await assert.rejects(sessionCandidate(plan), /permissions/);
 });
 
+test('unsupported Node.js version stops before dependency inspection', async t => {
+  const { input } = await fixture(t);
+  for (const nodeVersion of ['22.22.2', '23.9.0', '24.10.0']) {
+    await assert.rejects(localDependencies(input.root, nodeVersion), /Node\.js 24\.11\+ is required/);
+  }
+  assert.deepEqual(await readdir(input.root), []);
+});
+
 test('missing local dependencies stop without automatic install or global fallback', async t => {
   const { input } = await fixture(t);
-  await assert.rejects(localDependencies(input.root), /Missing or external project dependency/);
+  await assert.rejects(localDependencies(input.root, '24.11.0'), /Missing or external project dependency/);
   assert.deepEqual(await readdir(input.root), []);
 });

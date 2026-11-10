@@ -61,8 +61,8 @@ export async function inspectSession(plan, required = false) {
   if (await stat(join(plan.directory, 'operation.lock'))) throw new Error('Session locked; do not delete the lock or kill an unknown process. Inspect its original terminal.');
   return marker;
 }
-export async function localDependencies(root) {
-  const [major,minor]=process.versions.node.split('.').map(Number);
+export async function localDependencies(root, nodeVersion = process.versions.node) {
+  const [major,minor]=nodeVersion.split('.').map(Number);
   if (major<24||(major===24&&minor<11)) throw new Error('Node.js 24.11+ is required; no installation performed');
   for (const name of ['tsx', 'tsc', 'vite']) {
     const executable = process.platform==='win32'?join(root,'node_modules',({tsx:'tsx/dist/cli.mjs',tsc:'typescript/bin/tsc',vite:'vite/bin/vite.js'})[name]):join(root, 'node_modules', '.bin', name);
