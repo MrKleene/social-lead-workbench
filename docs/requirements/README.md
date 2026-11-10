@@ -29,8 +29,8 @@
 
 ## 不在本目录的
 
-- 模块技术设计：`docs/*.md`（如 `COMMENT-CHUNKS.md`、`QWEN-COMMENT-MATCHING.md`、`journey-events.md`）
-- 证据材料：`docs/inbox/`
+- 模块技术设计：`docs/design/`（采集窗口、回复目标、私信额度、模型、进度推送、本地运行时）
+- 文档总索引：[../README.md](../README.md)
 
 ## 维护规则
 

@@ -36,7 +36,7 @@ npm stop
   打包进 `runtime/local`。
 - `packages/contracts`：前后端协议；`prisma/schema.prisma`：数据模型（桌面版运行时不使用，仅作类型与结构参考）；`scripts`：受管启动、隔离测试及本机诊断。
 
-[当前需求](docs/requirements/REQUIREMENTS.md) · [模块说明](docs/requirements/MODULES.md) · [实现状态](docs/requirements/IMPLEMENTATION-STATUS.md) · [验收](docs/requirements/ACCEPTANCE.md)
+[文档索引](docs/README.md) · [当前需求](docs/requirements/REQUIREMENTS.md) · [模块说明](docs/requirements/MODULES.md) · [实现状态](docs/requirements/IMPLEMENTATION-STATUS.md) · [验收](docs/requirements/ACCEPTANCE.md)
 
 线索分配、销售跟进、人工 CRM 任务已退出产品，前后端入口及执行代码已移除。数据库中既有历史表和审计不物理删除；发送仍只读检查历史勿联系和已联系证据，防止升级造成重复联系。没有新的线索或跟进记录写入。2026-10 之前的带日期交付报告已删除，只保留在 git 历史中，不定义当前需求。
 

@@ -7,5 +7,3 @@ The configuration center has a separate `dm-templates` category. It reuses the e
 A one-day operational change must be audited, locked and checked against the intended account/date/previous usage. No public unauthenticated quota setter was introduced. Retaining the nullable column is backward compatible if rolling application code back; never reset occupied or remove sending audit records.
 
 DM preparation remains preview-only. The installed MCP binary's actual `tools/list` on 2026-11-02 exposed no DM tool and advertised only COMMENT. Login/session reuse is provided by the owned MCP/Rod runtime; any future DM implementation must use that runtime, not a user's ordinary browser. No DM platform acceptance, conversation lookup, inbox or delivery/read receipt support is claimed.
-
-Validation: 532 frontend tests, 1088 API tests, 603 isolated PostgreSQL tests; workspace typecheck/build. Isolated desktop/320 UI tested category filtering, explicit create, fixed DM channel, cancel and dirty navigation. Tests used synthetic data and no platform/model/send calls.

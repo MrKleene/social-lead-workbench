@@ -56,7 +56,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 **状态**：已接入 + 合成验证；平台实际覆盖依赖可见数据，真实未验收
 
-**延伸**：[BOUNDED-COMMENT-READ.md](../BOUNDED-COMMENT-READ.md)、[COMMENT-CHUNKS.md](../COMMENT-CHUNKS.md)、[COMMENT-CONTINUATION.md](../COMMENT-CONTINUATION.md)、[COMMENT-READ-THROUGH.md](../COMMENT-READ-THROUGH.md)
+**延伸**：[comment-read-through.md](../design/comment-read-through.md)（有限读取窗口的实际预算）
 
 ---
 
@@ -81,7 +81,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 **状态**：已接入 + 合成验证；付费模型调用需单独授权，未做真实付费验收
 
-**延伸**：[QWEN-COMMENT-MATCHING.md](../QWEN-COMMENT-MATCHING.md)、[MODEL-SETTINGS-SECURITY.md](../MODEL-SETTINGS-SECURITY.md)
+**延伸**：[qwen-comment-matching.md](../design/qwen-comment-matching.md)、[model-settings-security.md](../design/model-settings-security.md)
 
 ---
 
@@ -109,7 +109,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 **注意**：私信渠道在本机只有协议定义与本地预览，**没有接通发送**，见模块 6
 
-**延伸**：[COMMENT-REPLY-TARGET.md](../COMMENT-REPLY-TARGET.md)、[DM-TEMPLATES-AND-DAY-LIMIT.md](../DM-TEMPLATES-AND-DAY-LIMIT.md)
+**延伸**：[comment-reply-target.md](../design/comment-reply-target.md)、[dm-templates-and-day-limit.md](../design/dm-templates-and-day-limit.md)
 
 ---
 
@@ -238,7 +238,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 **状态**：已接入
 
-**延伸**：[journey-events.md](../journey-events.md)
+**延伸**：[journey-events.md](../design/journey-events.md)
 
 ---
 
