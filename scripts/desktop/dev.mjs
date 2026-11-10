@@ -54,7 +54,9 @@ async function waitForServer() {
   while (Date.now() < deadline) {
     if (vite.exitCode !== null) throw new Error('Vite 启动失败')
     try {
-      const response = await fetch(devUrl)
+      // The desktop-entry plugin only rewrites requests that ask for HTML, and
+      // there is no index.html — a bare fetch() sends `accept: */*` and gets 404.
+      const response = await fetch(devUrl, { headers: { accept: 'text/html' } })
       if (response.ok) return
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 300))
@@ -74,13 +76,18 @@ const extraArgs = (process.env.WORKBENCH_DEV_ELECTRON_ARGS || '')
   .split(' ')
   .filter(Boolean)
 
+// Electron-based IDE terminals export ELECTRON_RUN_AS_NODE=1, which turns the
+// Electron binary into plain Node; drop it so the app gets the real runtime.
+const appEnv = { ...process.env, WORKBENCH_DEV_URL: devUrl }
+delete appEnv.ELECTRON_RUN_AS_NODE
+
 const app = spawn(
   electron,
   [path.join(root, 'apps/desktop/src/main.cjs'), '--dev', ...extraArgs],
   {
     cwd: root,
     stdio: 'inherit',
-    env: { ...process.env, WORKBENCH_DEV_URL: devUrl },
+    env: appEnv,
   }
 )
 children.push(app)

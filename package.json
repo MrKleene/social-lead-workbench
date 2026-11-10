@@ -21,7 +21,7 @@
     "test:real:preflight": "node --test scripts/real-mcp/core.test.mjs",
     "test:real:offline": "node --import tsx tests/integration/real-mcp-offline.mjs",
     "test:device:vault": "node scripts/build-device-vault.mjs && node scripts/test-device-vault.mjs",
-    "desktop:start": "electron apps/desktop/src/main.cjs",
+    "desktop:start": "node scripts/desktop/launch.mjs",
     "desktop:dev": "node scripts/desktop/dev.mjs",
     "desktop:release-check": "node scripts/desktop/release-check.mjs",
     "desktop:package:win": "npm run desktop:release-check && npm run build && node scripts/build-windows-host.mjs && npm run desktop:stage && electron-builder --config apps/desktop/electron-builder.cjs --win nsis --x64",
