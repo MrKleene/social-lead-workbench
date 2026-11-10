@@ -26,6 +26,9 @@ npm run desktop:dev    # 构建核心模块，启动 Vite 和 Electron
 开发模式在原终端按 Ctrl+C 退出。需要查看构建后的界面时使用 `npm start`，它会先构建再启动 Electron。
 应用正常退出时交还任务和进程所有权；不要直接强杀持有任务或设备租约的进程。
 
+界面能打开不等于平台能力可用：缺原生资源时采集、收件、发送会被禁用。
+`npm run desktop:native:check` 报告缺项和对应的生成命令。
+
 ## 工程目录
 
 | 目录 | 职责 |

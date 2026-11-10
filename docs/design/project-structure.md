@@ -49,8 +49,7 @@
 | --- | --- |
 | `npm run build` | 核心模块和网页构建 |
 | `npm run check` | 结构、UI、设计文档、类型及全部默认离线测试 |
-| `npm run local:test` | 本地运行时、适配器与队列恢复测试 |
-| `npm run desktop:test` | 桌面边界和具备资源的原生测试 |
+| `npm test` | 各模块测试（含本地运行时与桌面边界）、合成 MCP 会话与跨模块集成 |
 | `npm run test:real:offline` | 合成 loopback MCP 会话，拒绝发送并验证清理 |
 | `npm run desktop:test:ui` | 使用临时数据的 Electron 界面流程 |
 | `npm run check:legacy` | 可选旧系统 Prisma 生成、类型检查和兼容测试；不连接数据库 |

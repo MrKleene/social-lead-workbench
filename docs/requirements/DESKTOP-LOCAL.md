@@ -67,7 +67,7 @@ npm run desktop:package:win:preview
 
 ## Mac 测试与产物
 
-本轮 `desktop:build` 通过，180 项本地核心测试、22 项桌面 IPC/原生/SDK 边界测试通过。实际 Electron 合成 UI 覆盖首次引导、账号入口、重看引导、重启直达、多关键词、多目标、多规则、恢复核对、跨轮原文/独立审核预览、旧未知记录登录限制、导入切换/重启、备份和窄屏。模型/平台执行在该测试被禁用。
+本轮 `npm run build` 通过，180 项本地核心测试、22 项桌面 IPC/原生/SDK 边界测试通过。实际 Electron 合成 UI 覆盖首次引导、账号入口、重看引导、重启直达、多关键词、多目标、多规则、恢复核对、跨轮原文/独立审核预览、旧未知记录登录限制、导入切换/重启、备份和窄屏。模型/平台执行在该测试被禁用。
 
 Mac 包含固定浏览器、Go MCP 与监督器，许可证随包提供。测试版：`.local/desktop-packages/Social-Lead-Desktop-0.1.0-preview.6-mac-arm64.dmg`。最终包证据见 `.local/desktop-qa/package-verification.json`、`packaged-smoke.json`、`mac-artifact.json`、`result.json` 和测试日志。包内本地自检与 Go→浏览器离线渲染只证明安装组件可启动，不证明真实平台成功。
 
@@ -90,7 +90,10 @@ Windows 可用 `scripts/desktop/windows-preview.ps1 -Go <绝对路径> -ModuleCa
 
 - `npm run build`：构建核心模块和网页，不读取真实账号或调用平台。
 - `npm run check`：结构、样式、类型和离线测试；原生资源不足的项目明确跳过。
-- `npm run desktop:build:native`：在目标系统编译原生辅助程序；Go MCP 与固定浏览器资源仍按受管构建流程准备。
+- `npm run desktop:build:native`：在目标系统编译原生辅助程序（macOS 为 device-vault 与监督器）。
+- `npm run desktop:prepare:mcp`：用显式 `DESKTOP_GO` / `DESKTOP_GO_MODCACHE` 编译 Go MCP，写入 `desktop-mcp` 与 `mcp-build.json`。
+- `npm run desktop:prepare:browser -- /绝对路径/Chromium.app`：校验架构、版本与逐文件权限后复制固定浏览器，写入 `browser-build.json`；不下载、不启动浏览器。
+- `npm run desktop:native:check`：只读报告原生资源是否齐备及缺项的生成命令；不齐备时退出码为 1，`desktop:package:mac:preview` 会先跑它。
 - `npm run desktop:test:ui`：使用临时合成数据的实际 Electron 界面测试。
 - `npm run desktop:stage`：将已经构建的内容按固定白名单组装，保留许可证与构建清单。
 - `npm run desktop:verify-package -- /绝对路径/应用`：核对最终安装包内容、原生资源与 Electron fuses。
