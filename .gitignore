@@ -60,3 +60,6 @@ generated_images/
 
 # Agent workspace data (local memory/logs), not project source
 .workbuddy-ai/
+
+# CodeGraph local index database (rebuild with `codegraph init -i`, never versioned)
+.codegraph/

@@ -1,0 +1,643 @@
+#AOCI-CODE-VOLUME: 1
+
+===/Users/kleene/projects/social-lead-workbench/===
+.gitattributes[FV4T]: F:声明全仓库行尾归一策略，文本一律 LF 检出 | R:- | A:- | S:`* text=auto eol=lf` 是 AOCI 原始字节基线成立的前提；去掉它会让 Windows 检出整棵树被判 stale，全部 Entry 失效
+.gitignore[FS6T]: F:排除构建产物、本机数据、凭据与客户导出，只放行 schema 与迁移 SQL | R:code:.gitattributes | A:- | S:`!packages/local-runtime/src/schema.sql` 与 `!packages/local-runtime/src/migrations/*.sql` 是 SQL 进 Git 的唯一通道；新迁移目录不在白名单内会被静默忽略
+AGENTS.md[SU9M]: F:前端 UI 落地的强制约束：颜色唯一来源、组件改法、六档字号、间距圆角刻度与响应式底线 | R:code:apps/web/DESIGN.md,code:scripts/check-ui-conventions.mjs | A:必读顺序,禁止项,提交前检查 | S:本文件只是约束层，样式真值在 DESIGN.md 与 theme.css；新增例外必须在 check-ui-conventions.mjs 的 ALLOWED 登记文件+规则+理由，否则 ui:check 判失败。尾部 aoci:begin 区块由 AOCI 维护，删标记会导致重复追加
+README.md[SG5T]: F:产品定位、当前功能边界、本机开发命令与工程目录职责表 | R:code:docs/design/project-structure.md,code:apps/web/DESIGN.md | A:- | S:线索分配、销售跟进、人工 CRM 已退出产品，但数据库历史表与审计不物理删除；发送仍只读检查历史勿联系证据，防止重复联系
+package-lock.json[FV9L]: F:npm 锁文件：锁定全部工作区与第三方依赖的解析结果与完整性哈希 | R:code:package.json | A:- | S:由 npm 生成，手改会让 CI 的 npm ci 直接失败；六个 workspace 的链接关系也记在这里，增删 workspace 必须重新生成
+package.json[FV8T]: F:根工作区清单：六个 workspace、Node ≥24.11、构建/检查/打包脚本入口 | R:code:packages/contracts/package.json,code:scripts/check-structure.mjs | A:- | S:日常只用 desktop:dev 与 start；pretest 会先 build:core 再编测试用原生件，跳过它会让测试跑旧产物；engines 低于 24.11 直接不满足
+tsconfig.base.json[FV6T]: F:全仓 TS 基础配置：ES2022 目标、strict、esModuleInterop 与 JSON 模块解析 | R:code:packages/contracts/tsconfig.json | A:- | S:strict 为真，关掉会让未定义访问与空值穿透进运行时代码；各包只覆盖 module/moduleResolution/outDir，不要在这里放路径别名
+vitest.config.ts[FQ7T]: F:根测试配置：把 contracts/domain/local-runtime 的 exports source 条件映射成别名，测试只收 test/**/*.test.ts | R:code:packages/domain/vitest.config.ts | A:- | S:别名必须指向 source 而不是 dist，否则测试与源码会各有一份错误类实例，instanceof 判断失效
+
+===/Users/kleene/projects/social-lead-workbench/apps/desktop/===
+electron-builder.cjs[FV6T]: F:Electron 打包配置：appId、asar、fuses、mac dmg 与 win nsis 目标、原生资源白名单 | R:code:apps/desktop/src/native-resources.cjs | A:beforePack | S:beforePack 拒绝跨 OS/架构打包；mac 签名走 CSC_NAME，写 identity:null 会连已提供的证书一起禁用签名，所以键是省略而不是置空
+package.json[FV3T]: F:桌面工作区清单，主入口 src/main.cjs，测试跑 test/*.test.cjs | R:code:apps/desktop/src/main.cjs | A:- | S:-
+release-readiness.json[OV6T]: F:发布就绪度台账：逐能力标注实测程度，如 synthetic-tested、live-unverified、not-executed | R:- | A:- | S:带 live-unverified 或 not-executed 的条目是真实未验收状态，不能当通过；改实现后必须同步这里，否则台账会掩盖缺口
+
+===/Users/kleene/projects/social-lead-workbench/apps/desktop/src/===
+evidence-wire.cjs[IN7T]: F:只读回读证据：用一次性 Bearer 访问本机 MCP，确认评论或私信确实存在且本次未重复提交 | R:code:apps/desktop/src/platform-runtime.cjs,code:apps/desktop/src/send-wire.cjs | A:inspectComment,inspectDm | S:该通道只允许 workbench_reply_verify 一个工具且必须 submissions===0；放宽工具集或调用次数会让已发送证据变成可伪造
+inbox-wire.cjs[IM7T]: F:收件箱 MCP 通道：固定四个 inbox_* 工具，逐次只放行一个调用名并锁死 senderId 与 maxSubmissions=0 | R:code:apps/desktop/src/platform-runtime.cjs | A:DesktopInboxWire.connect,DesktopInboxWire.call | S:call 前置 allowed 并在 finally 清空，放行第二个工具名或让渲染层传入参数即可越权调用其它 inbox 能力；响应上限 2MB
+ipc-policy.cjs[ES8T]: F:IPC 准入：只接受主窗口主框架的 workbench://app 来源与固定方法白名单 | R:code:apps/desktop/src/preload.cjs,code:apps/desktop/src/main.cjs | A:validateCall | S:来源必须是 workbench://app 且无端口、用户名、密码，开发态只放行 devOrigin；方法表与 preload 必须一致；请求体上限 65536 字节。放宽任一项等于开放任意 IPC
+main.cjs[AG9S]: F:Electron 主进程：私有数据目录、凭据库、数据库、执行器装配、workbench 协议与 IPC 总入口 | R:code:apps/desktop/src/ipc-policy.cjs,code:apps/desktop/src/platform-runtime.cjs,code:apps/desktop/src/native-resources.cjs | A:main,bindRuntime,protocol.handle | S:nativeReady 为假时 SEND/COLLECT/INBOX 执行器根本不注册，UI 只能显示禁用，不是运行时再判断。protector.available() 会触 Keychain 弹窗，状态接口必须只用 availableHint()。打包态禁止 --dev，--self-test 与 --test-fixture 互斥。写操作串行化在 operations 链上，与备份恢复互斥
+native-resources.cjs[RV8T]: F:原生资源完整性校验：按 build 清单逐文件比对哈希，并整树校验 Chromium 资源 | R:code:apps/desktop/src/owned-process.cjs | A:inspect,status | S:status() 吞掉异常只返回 ready:false，缺任一清单、版本或哈希不符即整体不可用，没有降级路径；Windows 还需 windows-validation.json 六项全为 true
+owned-journal.cjs[PR7T]: F:Windows 回复阶段日志读取：ACL 回调、单硬链接、打开前后双次 stat 比对，防符号链接与截断 | R:code:apps/desktop/src/platform-runtime.cjs | A:readOwnedJournal | S:读前后各调一次 checkPrivateFile 并比对 dev/ino/size，任一处不一致返回 INVALID；缺末尾换行返回 TRUNCATED；上限 128KB、64 条，序列号必须连续
+owned-process.cjs[RR8T]: F:受管子进程：校验 helper 与二进制哈希，必须收到 STOPPED 证明后才允许交接凭据 | R:code:apps/desktop/src/platform-runtime.cjs | A:spawnOwned,verified | S:stop() 先等 `STOPPED <code>` 再执行 afterStopped 回调，未确认即交接会把 cookie 留给存活进程；Windows 控制通道走 stdin JSON，mac 走 fd3
+platform-runtime.cjs[RR9T]: F:平台会话生命周期：独占目录、随机回环端口、一次性 token、重建环境变量、停止即删目录 | R:code:apps/desktop/src/owned-process.cjs,code:apps/desktop/src/owned-journal.cjs | A:open,openSaved,openLogin | S:子进程环境完全重建（PATH=/usr/bin:/bin、HOME=会话目录），不继承 API key、代理或 NODE_OPTIONS；18060/18061 被跳过；cookie 以 flag:wx 和 0o600 写入，停止时若无法证明已停则触发 onUnsafeStop 写 safety_state
+preload.cjs[ES8T]: F:预加载桥：把固定方法表冻结后暴露为 window.localWorkbench，全部走 workbench:call | R:code:apps/desktop/src/ipc-policy.cjs | A:contextBridge.exposeInMainWorld | S:方法表必须与 ipc-policy.cjs 的 methods 逐项一致；多出一个方法就多一个攻击面，且 ipc-policy 会直接拒绝该调用
+send-wire.cjs[IM9T]: F:精确发送通道：评论与私信各只提交一次，先校验 capabilities 再调用 workbench_reply_exact | R:code:apps/desktop/src/platform-runtime.cjs,code:apps/desktop/src/evidence-wire.cjs | A:submitComment,submitDm,inspectComment | S:提交前必须 await beforeDispatch()，失败即抛 SEND_AUTHORITY_CHANGED；同一 attempt 只允许一次 exact 调用，请求上限 16 次、响应 64KB；工具目录或 RPC 名不符一律拒绝
+windows-browser-source.json[FV5T]: F:Windows 打包用 Chromium 归档的来源、版本、归档哈希与静态校验状态 | R:code:apps/desktop/src/native-resources.cjs | A:- | S:windowsExecuted 与 publisherSignatureValidated 都是 false，说明只做过 PE 与文件清单静态校验，不代表 Windows 上真机跑通
+windows-native.cjs[IV6T]: F:调用 windows-host.exe 执行 ACL、目录与文件等受限操作，输入输出走单行 JSON | R:code:apps/desktop/src/native-resources.cjs | A:windowsNative | S:只接受 win32/x64；二进制哈希必须匹配 windows-build.json，否则 WINDOWS_HELPER_UNVERIFIED；调用超时 15s、输出上限 32KB
+
+===/Users/kleene/projects/social-lead-workbench/apps/desktop/test/===
+build-environment.test.cjs[TV5T]: F:校验 Windows 原生构建环境只暴露固定 PATH 与 TEMP、GOPROXY=off 且不继承密钥 | R:code:scripts/desktop/build-environment.cjs | A:- | S:断言 go1.24.13 windows/amd64 是唯一受审编译器；换 Go 版本必须同步 expectedCompiler，否则构建被判失败
+ipc-service.test.cjs[TS7T]: F:覆盖 IPC 来源校验：非 workbench://app 来源、未登记方法与超限请求体一律抛错 | R:code:apps/desktop/src/ipc-policy.cjs | A:- | S:-
+owned-journal.test.cjs[TR6T]: F:覆盖 Windows 日志读取的缺 ACL 回调、硬链接与写入中断三种失败路径 | R:code:apps/desktop/src/owned-journal.cjs | A:- | S:-
+owned-process.test.cjs[TR7T]: F:覆盖 supervisor 停止证明、并发 guard 拒绝、控制器崩溃后的凭据清理与迟到停止请求 | R:code:apps/desktop/src/owned-process.cjs | A:- | S:缺 dist/native/darwin-arm64/desktop-supervisor 时整组 skip，skip 不等于通过；该组测的是本机真实 helper
+platform-native.test.cjs[TN7T]: F:用真实原生 MCP 校验每种模式的工具目录固定，未授权请求返回 401 | R:code:apps/desktop/src/platform-runtime.cjs | A:- | S:依赖 darwin-arm64 已构建原生资源，否则 skip；它只验证目录与鉴权，不调用真实平台，不能当作平台能力验收
+platform-runtime-failure.test.cjs[TR7T]: F:用 vm 注入替身验证 open() 失败时释放 busy、只删自己创建的目录、不启动原生进程 | R:code:apps/desktop/src/platform-runtime.cjs | A:- | S:通过 vm.runInNewContext 替换 node:fs 与 spawnOwned，断言失败路径 spawns 恒为 0；真实实现里新增依赖必须同步这里的 shim
+platform.test.cjs[TV7T]: F:校验 Windows 11 x64 能力判定、路径拒绝规则、最小环境、npm shim 替换与 DPAPI/Job 约束 | R:code:scripts/desktop/platform-support/platform.cjs | A:- | S:直接读 native/windows/WindowsHost.cs 源码断言 CurrentUser 与 AssignProcessToJobObject 先于 ResumeThread；改实现顺序或换 LocalMachine 会红
+send-wire.test.cjs[TM8T]: F:用本机假 MCP 验证精确发送只调一次、回调否决即不发、评论通道要求完整能力集 | R:code:apps/desktop/src/send-wire.cjs | A:- | S:假 server 只给部分工具时 submitComment 必须在 capabilities 阶段就失败，boundary 回调一次都不执行
+windows-resources.test.cjs[TV7T]: F:校验 Windows 原生资源门：MCP、helper、browser 清单与许可证哈希必须与离线验证证明一致 | R:code:apps/desktop/src/native-resources.cjs | A:- | S:只改 windows-validation.json 的 platform 字段即被拒，证明该文件是绑定而非声明
+windows-static-check.test.cjs[TV5T]: F:校验 PE 头静态检查拒绝错架构、截断与伪造头，且全程不执行文件 | R:code:scripts/desktop/windows-static-check.cjs | A:- | S:-
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/===
+DESIGN.md[SU9L]: F:唯一样式规范：优先级、色彩板与角色、排版、组件、布局间距、深度、响应式与机器可读 token | R:code:apps/web/src/styles/theme.css,code:AGENTS.md | A:规范优先级,机器可读 token 与校验 | S:0.1 节声明口径已收敛，旧 proposal 不再作数；第 10 节导出到 CSS 有已知损失，不能把导出结果当唯一真值反向推导样式
+components.json[FV3T]: F:shadcn 配置：new-york 风格、cssVariables 开启、路径别名与 lucide 图标库 | R:code:apps/web/package.json | A:- | S:-
+desktop.html[EU4T]: F:桌面端 HTML 入口，挂载 #root 并加载 src/main.tsx | R:code:apps/web/src/main.tsx | A:- | S:-
+package.json[FV4T]: F:Web 工作区清单：Vite + TanStack Router/Query + Radix + Tailwind v4，只依赖 @crm/contracts | R:code:apps/web/vite.desktop.config.ts | A:- | S:dev 与 build 都显式指定 vite.desktop.config.ts，用默认 vite 配置会产出错入口
+tsconfig.json[FC5T]: F:web 工作区编译配置：继承根 base，Bundler 解析、react-jsx、noEmit 与 @/* 路径别名 | R:code:tsconfig.base.json,code:apps/web/vite.config.ts | A:- | S:@/* 别名必须与 vite.config.ts 的 resolve.alias 一致，两边不同步会让 tsc 过而运行时解析失败；include 含 vite.config.ts 才能在编辑器里识别 defineConfig 类型
+vite.config.ts[FV6T]: F:渲染层构建配置：TanStack Router 插件生成路由树、React、Tailwind，别名 @ 指向 src，固定 5173 端口 | R:code:apps/web/src/routeTree.gen.ts,code:apps/web/src/styles/index.css | A:- | S:strictPort 与 host 127.0.0.1 是 dev.mjs 探活的前提，改成自动换端口会让桌面外壳连到错误端口；tanstackRouter 的 target:'react' 与 autoCodeSplitting 决定 routeTree.gen.ts 的形状
+vite.desktop.config.ts[FV6T]: F:桌面渲染层构建变体：合并 base 配置，加 desktop-entry-fallback 中间件把 HTML 请求重写到 desktop.html，产物出 dist-desktop | R:code:apps/web/vite.config.ts,code:apps/desktop/src/main.cjs | A:desktopEntry | S:打包态走 workbench://app/ 且路由期望文档在 /，而 vite 只在 /desktop.html 提供入口，没有这个重写所有路由都会落到 not found；中间件只放行 text/html 且跳过 /@、/src/ 与带扩展名的请求
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/===
+configuration-browser.css[CU5T]: F:配置管理两栅布局：左侧条目列表、右侧详情，767px 以下堆叠为单列 | R:code:apps/web/src/features/configuration/configuration.css | A:- | S:末段 `:root .graphite-workspace` 覆盖是有效作用域而非死规则，删它会破坏配置表单的纵向排列
+disclosure.tsx[CU4T]: F:折叠披露组件：ghost 按钮加 ChevronDown 触发 Collapsible | R:code:apps/web/src/components/ui/collapsible.tsx | A:Disclosure | S:-
+feedback.tsx[CU6T]: F:通用错误提示与加载骨架，分别带 role=alert 与 role=status 加 aria-live | R:code:apps/web/src/components/ui/alert.tsx | A:ErrorNotice,Loading | S:Loading 用 aria-live=polite 且带 aria-label，去掉后屏幕阅读器读不到加载态
+information-section.tsx[CU4T]: F:信息分区卡片：Card 加 h3 标题，useId 绑定 aria-labelledby 并声明 role=region | R:code:apps/web/src/components/ui/card.tsx | A:InfoSection | S:-
+navigation-progress.tsx[CU3T]: F:路由切换顶部进度条，pending 时 continuousStart，其余 complete | R:code:apps/web/src/routes/__root.tsx | A:NavigationProgress | S:-
+status-notice.css[CU5T]: F:紧凑状态条与详情抽屉样式，含 480px 以下触控尺寸调整 | R:code:apps/web/src/components/status-notice.tsx | A:- | S:-
+status-notice.tsx[CU7T]: F:紧凑状态条：风险标签常显，详情进 Sheet，关闭后焦点回到触发按钮 | R:code:apps/web/src/components/ui/sheet.tsx | A:StatusNotice,pauseDescription | S:pauseDescription 是发送暂停文案的唯一来源，新增 reason 必须在这里补文案，否则界面直接暴露原始代码
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/layout/===
+app-sidebar.tsx[CU7T]: F:侧栏骨架：品牌头、分组导航、底部本地工作台菜单；未读数取自 useLocalRecords('unread') | R:code:apps/web/src/components/layout/nav-group.tsx,code:apps/web/src/components/layout/data/sidebar-data.ts | A:AppSidebar | S:未读数只在 item.url === '/inbox' 时注入，超过 99 显示 99+；改路由路径要同步这里，否则角标不会出现
+nav-group.tsx[CU6S]: F:导航组渲染：按有无子项分派为普通链接、折叠项或收起态下拉菜单 | R:code:apps/web/src/components/layout/types.ts | A:NavGroup | S:先判 item.items 再判 state==='collapsed'&&!isMobile，顺序倒置会让桌面收起态下子项无法展开
+nav-workspace.tsx[CU4T]: F:侧栏底部本地工作台菜单：账号中心与使用引导两个入口 | R:code:apps/web/src/routes/_workbench/welcome.tsx | A:NavWorkspace | S:-
+types.ts[FU3T]: F:侧栏导航类型：NavLink、NavCollapsible、NavItem、NavGroup、SidebarData | R:code:apps/web/src/components/layout/data/sidebar-data.ts | A:- | S:-
+workbench-shell.tsx[AU8T]: F:工作台外壳：先开本地数据再渲染，未初始化时进欢迎流程，之后挂侧栏与主区 | R:code:apps/web/src/features/local-workbench/use-local-workbench.ts,code:apps/web/src/components/layout/app-sidebar.tsx | A:WorkbenchShell | S:SidebarInset 上的 graphite-workspace 与 local-desktop 是有效作用域，不是历史类名；删掉会让未迁移到 Tailwind 的页面规则失效
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/layout/data/===
+sidebar-data.ts[FU6T]: F:侧栏导航数据：工作区、数据与审核、回复管理、管理四组共十四个条目 | R:code:apps/web/src/routes/_workbench/route.tsx | A:sidebarData | S:url 必须与 _workbench 下的路由文件一一对应，多一个孤儿条目会在点击时 404
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/ui/===
+alert-dialog.tsx[CU6S]: F:确认对话框：Radix 封装，支持 default 与 sm 两种尺寸 | R:code:apps/web/src/components/ui/button.tsx | A:AlertDialog,AlertDialogContent | S:打开时动态计算 zIndex 以压过已存在的 sheet-content，写死 z-50 会被抽屉盖住
+alert.tsx[CU5T]: F:提示条：default 与 destructive 两变体，grid 布局兼容有无图标 | R:code:apps/web/src/components/ui/button.tsx | A:Alert,AlertTitle,AlertDescription | S:-
+badge.tsx[CU4T]: F:标签胶囊：六个变体，圆角 full，支持 asChild | R:code:apps/web/src/components/ui/button.tsx | A:Badge,badgeVariants | S:-
+button.tsx[CU9T]: F:基础按钮：六变体乘八尺寸，cva 定义，支持 asChild 与 pending | R:code:AGENTS.md | A:Button,buttonVariants | S:pending 时必须在 onClick 里 preventDefault 加 stopPropagation 并 return，同时置 aria-busy 与 aria-disabled；只改视觉不阻断点击会把“暂不可点”变成重复提交。改按钮长相只能改 buttonVariants
+card.tsx[CU6T]: F:卡片基元：容器、头、标题、描述、动作、内容、脚七个子组件 | R:code:apps/web/src/components/ui/button.tsx | A:Card,CardHeader,CardContent | S:内边距写死在 px-6 / py-6（即 24px），AGENTS.md 的卡片内边距规则就靠这里；页面级改边距应该覆盖 className 而不是改基元
+collapsible.tsx[CU3T]: F:折叠基元：Root、Trigger、Content 三个 Radix 包装 | R:code:apps/web/src/components/disclosure.tsx | A:Collapsible | S:-
+dropdown-menu.tsx[CU5M]: F:下拉菜单基元：Radix 全量导出，含复选、单选、子菜单、快捷键 | R:code:apps/web/src/components/ui/button.tsx | A:DropdownMenu,DropdownMenuContent,DropdownMenuItem | S:-
+input.tsx[CU5T]: F:文本输入：h-9，移动端 text-base、md 以上 text-sm，无效态走 aria-invalid 边框 | R:code:apps/web/src/components/ui/button.tsx | A:Input | S:-
+separator.tsx[CU2T]: F:分隔线：默认 horizontal 且 decorative，靠 data-orientation 切尺寸 | R:code:apps/web/src/components/ui/sidebar.tsx | A:Separator | S:-
+sheet.tsx[CU6S]: F:侧边抽屉：四方向滑入，含遮罩、头、尾、关闭按钮 | R:code:apps/web/src/components/ui/button.tsx | A:Sheet,SheetContent | S:data-slot=sheet-content 被 alert-dialog 与 status-notice 依赖，改这个属性会同时弄坏抽屉层级计算和紧凑状态弹窗
+sidebar.tsx[CU7L]: F:侧栏基元：展开与收起两态、移动端改抽屉、键盘快捷键与 cookie 持久化 | R:code:apps/web/src/components/ui/sheet.tsx,code:apps/web/src/components/ui/tooltip.tsx | A:SidebarProvider,useSidebar,SidebarMenuButton | S:宽度常量 16rem / 18rem / 3rem，状态写 cookie sidebar_state 保留七天，快捷键固定为 b；useSidebar 必须在 SidebarProvider 内，否则直接抛错
+skeleton.tsx[CU2T]: F:骨架占位：animate-pulse 加 bg-accent 的方框 | R:code:apps/web/src/components/feedback.tsx | A:Skeleton | S:-
+sonner.tsx[CU3T]: F:全局 Toast 容器，主题跟随 useTheme，颜色变量指向 popover 系 | R:code:apps/web/src/context/theme-provider.tsx | A:Toaster | S:主题色走 --popover 系列变量而不是硬编码，换成固定色会在暗色模式下出现对比度问题
+spinner.tsx[CU3T]: F:加载图标：Loader2 旋转，自带 role=status 与 aria-label | R:code:apps/web/src/components/feedback.tsx | A:Spinner | S:-
+table.tsx[CU6S]: F:表格基元：容器、头、体、行、头单元格、单元格、标题 | R:code:apps/web/src/features/auto-contact/reply-history-content.tsx | A:Table,TableHeader,TableRow,TableCell | S:外层容器带 tabIndex=0、role=region 与“可左右滚动” aria-label，这是 320px 下不出现页面级横向滚动的实现手段；去掉后键盘用户无法横向滚动表格
+tooltip.tsx[CU4T]: F:提示气泡：Radix 封装，默认零延迟，箭头随内容 | R:code:apps/web/src/components/ui/sidebar.tsx | A:Tooltip,TooltipContent | S:Tooltip 组件自带 TooltipProvider，单独用 TooltipProvider 再包一层不会报错但会多一层上下文
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/config/===
+fonts.ts[FU4T]: F:可用字体名单：inter、manrope、system 三项 | R:code:apps/web/src/context/font-provider.tsx | A:fonts | S:AGENTS.md 限定只能 font-sans / font-inter / font-manrope，加第四种要同时改这里的数组、HTML 的 link 与 theme.css 的 --font-*
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/context/===
+direction-provider.tsx[CU3T]: F:文本方向上下文：ltr 与 rtl，同时设到 html 的 dir 属性 | R:code:apps/web/src/context/font-provider.tsx | A:DirectionProvider,useDirection | S:-
+font-provider.tsx[CU3T]: F:字体上下文：切 html 上的 font-* 类，持久化到偏好存储 | R:code:apps/web/src/config/fonts.ts | A:FontProvider,useFont | S:切换时先移除所有 font- 前缀类再加新的，不先清会多个字体类共存而按 CSS 顺序决胜
+theme-provider.tsx[CU5S]: F:主题上下文：light/dark/system 三态，system 跟随 prefers-color-scheme | R:code:apps/web/src/lib/preferences.ts | A:ThemeProvider,useTheme | S:类名加在 documentElement 上且先 remove('light','dark') 再加；持久化走 getPreference 而非直接 localStorage，换存储层要同步 preferences.ts
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/auto-contact/===
+graphite-reply-history.css[CB5T]: F:回复记录页的局部布局：工具栏、筛选宽度 216px、表格固定列宽与最小宽 1080px | R:code:apps/web/src/features/auto-contact/reply-history-content.tsx | A:- | S:所有选择器都带 :root .graphite-workspace 前缀，这是功能级作用域；去掉前缀会污染其他工作区的表格
+reply-history-content.tsx[CB6T]: F:回复历史表格与详情：状态映射、北京时间展示、计划态与执行证据折叠 | R:code:apps/web/src/components/ui/table.tsx,code:apps/web/src/components/disclosure.tsx | A:ReplyHistoryTable,ReplyHistoryDetail | S:UNKNOWN 状态必须同时出“结果未知，待核对”提示与“保留占用·勿重发”注释；只改标签文案会让用户误以为可以重发
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/collection/===
+bounded-check-result.tsx[CB6T]: F:展开诊断结果：展示展开次数、平台声明数、唯一评论数与节点缺口 | R:code:apps/web/src/features/collection/bounded-read-evidence.tsx | A:BoundedCheckResult | S:无诊断时直接渲染“不能确认展开结果”的 alert，不回退到乐观文案
+bounded-read-evidence.tsx[CB5T]: F:本轮读取范围详情：窗口、保留数量、各层声明与已加载对比、分窗记录 | R:code:apps/web/src/features/collection/coverage-progress-summary.ts | A:BoundedReadEvidence,BoundedReadWindows | S:分窗记录只接受 2 到 8 个窗口，超出或含无效报告整体不渲染，避免半截证据误导
+collection-outcome.ts[DB8T]: F:采集结果的覆盖判定：区分“执行中断”与“覆盖缺失”，输出标签、告警与差异数 | R:code:apps/web/src/features/collection/types.ts | A:commentCoverage,collectionOutcome,readingInterruption | S:interruptions 集合内的原因一律不算覆盖完整，且绝不回写持久化状态；visible 需同时满足终态、无中断、逐帖 visible、保存数等于采集数、无剩余锚点，任一不满足就降为“覆盖待确认”
+config-draft.ts[DB6T]: F:关键词组草稿与校验：拆分、上限、去重与默认值继承 | R:code:apps/web/src/features/collection/types.ts | A:keywordDraft,keywordValidation,keywordDefaults | S:草稿只拷贝输入契约字段，不得带入 runtime/history 字段；只改名称与关键词时 batchLimit、excludeWords、defaultExecutionAccountId 必须原样继承，否则编辑会重置隐藏设置
+coverage-diagnostics.tsx[CB6T]: F:评论覆盖诊断：平台声明数、快照计数、是否有下一页与同页稳定性观察 | R:code:apps/web/src/features/collection/coverage-progress-summary.ts | A:CoverageDiagnostics | S:未滚动也未展开时，“计数未变”不代表采集完整，文案必须保留这句限定
+coverage-progress-summary.ts[DB7T]: F:读取进度摘要：初始与保留计数对比、增长量、缺口与点击/滚动次数 | R:code:apps/web/src/features/collection/collection-outcome.ts | A:coverageProgressSummary | S:增长量必须标注“不是数据库新增条数”；只有 status=OK 且 list=EXACT 且无 invalidNodes/missingIds/duplicateIds 的样本才参与计数
+coverage-reading-summary.ts[DB8T]: F:把一次读取描述成一句人话：是否读尽、差额原因、哪些不能断言 | R:code:apps/web/src/features/collection/collection-outcome.ts | A:coverageReadingSummary | S:绝不得把 UNKNOWN 或 PARTIAL 升为 COMPLETE；计数与平台声明不一致时必须明说“差额原因未知”，不能推断为删除、隐藏或漏读
+image-diagnostics.tsx[CB5T]: F:图片与头像字段诊断：缺图原因、URL 协议域名白名单、HTTPS 升级与转换前后结构 | R:code:apps/web/src/features/collection/coverage-diagnostics.tsx | A:ImageDiagnostics | S:附加候选只检查前 8 个，界面必须标出“仅检查前 8 个”，否则会被当成全量结论
+types.ts[FB6T]: F:采集与配置的前端类型，以及运行状态、原因与场景的中文文案映射 | R:code:apps/web/src/features/collection/collection-outcome.ts | A:reasonLabels,runLabels,scenarios | S:reasonLabels 合并了 boundedReadLabels 并逐项覆盖平台/设备/身份类原因，新增原因码必须在这里补文案，否则界面直接显示原始代码
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/comment-review/===
+run-review-model.ts[DB6T]: F:评论匹配阶段文案：从 job 计数推导当前阶段、批进度与告警 | R:code:apps/web/src/features/collection/types.ts | A:runReviewStage,commentReviewLabel,reviewBatchProgress | S:job 状态属于本轮运行，首次采集的审核总数不是本轮执行总数；遇到未知状态必须输出“待核查”而不能归为已完成
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/configuration/===
+configuration-route.ts[FC5T]: F:配置页的五个分页定义、tab 解析与跳转路径构造 | R:code:apps/web/src/features/local-workbench/local-configurations.tsx | A:configurationTabs,configurationTab,configurationPath | S:切换路径时必须保留 config 与 policy 两个查询参数，否则切分页会丢掉当前选中项
+configuration.css[CC5T]: F:配置页三栅布局：左侧分类导航、中间条目、右侧详情，1100px 与 767px 两级降级 | R:code:apps/web/src/components/configuration-browser.css | A:- | S:767px 以下隐藏左侧导航改用下拉选择；`body:has(.configuration-page){min-width:0}` 是消除 320px 横向滚动的关键，删掉会溢出
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/errors/===
+general-error.tsx[CU3T]: F:500 错误页：可选 minimal 模式只留文案，否则带返回与回首页 | R:code:apps/web/src/features/errors/not-found-error.tsx | A:GeneralError | S:大数字用 text-hero，这是 AGENTS.md 里唯一允许该档位的场景
+not-found-error.tsx[CU3T]: F:404 页：整页大数字加返回上一页与回首页 | R:code:apps/web/src/features/errors/general-error.tsx | A:NotFoundError | S:-
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/local-workbench/===
+local-account-page.tsx[CU6T]: F:账号中心：账号列表、额度与风险记录、本地资格检查、编辑与断开会话 | R:code:apps/web/src/features/local-workbench/local-diagnostics.tsx | A:LocalAccountPage,AccountEditor | S:平台账号 ID 未知时必须显示“尚未取得可靠身份”，不能拿昵称代替；无风险记录时也要声明“不代表平台允许发送”
+local-api.ts[EG9T]: F:渲染层与桌面 IPC 的唯一客户端：完整方法表类型、错误码到中文文案映射与调用封装 | R:code:apps/web/src/features/local-workbench/local-evidence-messages.ts | A:localApi,LocalMethods,messages | S:localApi 遇 ok:false 直接 throw，调用方只能走 mutation error 路径；新增错误码必须同时在 messages 里给文案，否则用户看到的是原始码。方法名必须与 preload 和 ipc-policy 的方法表一致
+local-automation.tsx[CB6T]: F:自动联系规则编辑与授权：规则表单、账号池顺序、日额度与预览确认 | R:code:apps/web/src/features/local-workbench/use-local-automation.ts | A:LocalAutomation,RuleEditor | S:保存只生成草稿，必须走“预览规则授权 + 勾选同意”才会启用；账号池顺序即分配优先级，UI 里的“顺序 N”就是它
+local-collection.tsx[CB7T]: F:本轮采集设置：关键词组选择、账号、笔记数 1-10、匹配方案勾选与范围预览授权 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:LocalCollectionPanel,CollectionSetup | S:笔记数超出 1-10 即时报错并阻断预览；已选但未授权的方案不会被自动换掉，只能由用户取消；切换关键词组前若有未保存修改必须先确认放弃
+local-configurations.tsx[CC6T]: F:配置管理页：五个分页、条目列表、编辑器与归档，模型分页单独渲染密钥与活动 | R:code:apps/web/src/features/configuration/configuration-route.ts | A:LocalConfigurations,Editor,LocalModelKey | S:密钥输入框保存后立即清空且不回显；切分页时先清空 editor、dirty 与 archive 三个状态，否则会带着上一页的编辑态
+local-contact.tsx[CB6T]: F:对已审核评论作者发起一次性联系：选账号、渠道、模板、预览后勾选确认 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:LocalContact | S:预览结果携带 requestKey，改动任一输入都会重置 plan 与 consent；只有 VERIFIED 且有会话的账号可选
+local-data-management.tsx[CD6T]: F:迁移与数据副本：导入旧导出、核对副本、切换前确认、旧档案浏览与恢复后安全核对 | R:code:apps/web/src/features/local-workbench/use-local-data.ts | A:LocalDataManagement | S:切换副本前必先备份当前数据，且勾选确认才能执行；恢复后默认暂停发送与自动任务，需单独解除
+local-diagnostics.tsx[CO6T]: F:本地资格检查、模型运行记录与规则运行统计三个只读面板 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:LocalAccountDiagnostics,LocalModelActivity,LocalAutomationReport | S:模型面板必须声明“未保存供应商实际账单，不把估算显示为实际费用”；未知请求继续占用额度
+local-evidence-messages.ts[FB6T]: F:证据核对类错误码到可操作中文提示的映射 | R:code:apps/web/src/features/local-workbench/local-evidence.tsx | A:evidenceMessages,evidenceMessage | S:未命中时返回通用提示而不是抛错；所有提示都强调“继续保留未知结果”，不得暗示可以重发
+local-evidence.tsx[CB6T]: F:未知发送的证据核对：候选回复 ID 输入、只读两次读取授权与核对结果列表 | R:code:apps/web/src/features/local-workbench/local-evidence-messages.ts | A:LocalEvidence | S:打开私信会话可能把平台消息标为已读，授权文案必须提前告知；核对不会发送也不会解除账号限制
+local-history-filters.tsx[CB6T]: F:采集与审核两个列表的筛选栏：关键词、状态、配置、账号、日期、评分区间与排序 | R:code:apps/web/src/features/local-workbench/use-local-history.ts | A:LocalHistoryFilters,LocalUnreviewed | S:任何筛选变更都先删 page 参数再写入，否则改条件后会停在越界页码看到空列表
+local-history.tsx[CB7T]: F:历史页三视图：私信会话、评论审核、采集轮次，各自带筛选、分页与详情弹层 | R:code:apps/web/src/features/local-workbench/local-history-filters.tsx,code:apps/web/src/features/local-workbench/local-posts.tsx | A:LocalHistory | S:evaluation 筛选存在时整页切到未评分原文视图，此时不再渲染审核列表；会话只有 replyEvidence 为真才允许回复
+local-inbox-page.tsx[CM6T]: F:消息通知页：私信会话与评论通知两视图切换，按账号、关键词、未读过滤 | R:code:apps/web/src/features/local-workbench/local-history.tsx | A:LocalInboxPage,LocalCommentNotifications | S:非文本类型的消息只显示“当前不支持展示此消息类型”，不得回退到空字符串让用户以为是空消息
+local-model-settings.tsx[CA7T]: F:模型审核授权：选模型与日额度、逐目标开关、整轮自动审核开关 | R:code:apps/web/src/features/local-workbench/local-configurations.tsx | A:LocalModelSettings | S:modelPaused 为真时改配置不会解除暂停，界面必须明说；每次保存都携带 priceAck 与 consent 版本串，改动后需重新勾选同意
+local-overview.tsx[CG6T]: F:工作台首页指标格与暂停提示，另导出数据页、平台能力页 | R:code:apps/web/src/features/local-workbench/local-record-pages.tsx | A:LocalOverview,LocalDataPage,LocalCapabilities | S:每个指标都链到对应列表页且带筛选参数，改路由要同步这里；指标值为空时显示破折号而不是 0
+local-platform.tsx[CI7T]: F:账号登录（二维码）与限时收件两个面板，均需显式勾选授权 | R:code:apps/web/src/features/local-workbench/local-collection.tsx | A:LocalLoginPanel,LocalReceivePanel | S:收件授权文案必须提前告知“历史记录可能不完整、平台消息可能被标记为已读”；登录二维码按 expiresAt 显示有效期
+local-post-comparison.tsx[CB6T]: F:同一笔记两个历史快照的差异对比与各自审核版本 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:LocalPostComparison | S:单侧出现不得解读为平台新增或删除，界面必须保留这句；absenceIsDeletion 恒为 false
+local-post-diagnostic.tsx[CB6T]: F:新链接单帖只读诊断：选账号与链接，可选验证翻页与回复展开 | R:code:apps/web/src/features/collection/bounded-check-result.tsx | A:LocalPostDiagnostic | S:提交后输入框锁定，避免同一 requestKey 重复提交；检查结果不写入采集历史，失败也不自动重试
+local-posts.tsx[CB7T]: F:本轮笔记列表与历史恢复：查原文、独立审核、重新读取、按检查点续读 | R:code:apps/web/src/features/local-workbench/use-local-posts.ts | A:LocalPosts | S:重新读取只更新采集与审核，不派生自动发送；续读仅复制摘要与原文一致的历史记录，锚点缺失时不得声称完整
+local-record-pages.tsx[CO5T]: F:分页、任务记录、待处理回复、运行异常四个共用记录视图 | R:code:apps/web/src/features/local-workbench/local-evidence.tsx | A:LocalPagination,LocalJobs,LocalPending,LocalNotices | S:每页固定 30 条，改这个数字要同步所有手写的 page*30 判断，否则末页会多出空页
+local-reply.tsx[CM7T]: F:对单条私信的一次性回复：预览后勾选确认才发 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:LocalReply | S:正在收件时必须先在任务列表取消收件；结果未知不会自动重发，文案已写明
+local-review-dialog.tsx[CA7T]: F:按笔记或独立审核历史原文的付费审核授权弹层 | R:code:apps/web/src/features/local-workbench/local-run-review.tsx | A:LocalReviewDialog | S:本轮审核只接受完整采集轮次及当时冻结的目标；独立审核不重读平台、不计入原轮自动联系门槛。估算费用必须标注“不是费用上限”
+local-run-review.tsx[CA6T]: F:本轮剩余评论匹配的预览与授权入口 | R:code:apps/web/src/features/local-workbench/local-review-dialog.tsx | A:LocalRunReview | S:预览里 skipped 是已有或空批次的数量，不能计入本次请求数
+local-shell.css[CU5T]: F:本地工作台在 local-desktop 作用域内的排版微调：表单、指标格、详情抽屉宽度 | R:code:apps/web/src/features/local-workbench/local-workbench.css | A:- | S:选择器全部限定在 .local-desktop 下，去掉作用域会覆盖到普通页面
+local-task-page.tsx[CW7T]: F:自动化任务页：按轮次与阶段（采集、审核、回复）组织工作区 | R:code:apps/web/src/features/work/journey-stepper.tsx,code:apps/web/src/features/local-workbench/local-posts.tsx | A:LocalTaskPage,RunWorkspace | S:stage 只认 collect、review、contact 三个值，其余一律回退 collect；浏览页面不会触发任何执行，文案已明说
+local-workbench.css[CU5T]: F:本地工作台基础样式：面板、编辑器、列表、消息流与二维码 | R:code:apps/web/src/features/local-workbench/local-shell.css | A:- | S:600px 以下面板内边距从 24 降到 16，与 AGENTS.md 的移动端卡片规则一致；改这里要同步 DESIGN.md
+use-local-automation.ts[AB6T]: F:自动联系规则的数据编排：编辑态、预览、授权与停用，决策列表每 5 秒轮询 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:useLocalAutomation | S:授权必须带上 consent 版本串；save 成功后同时清空 editing 与 preview，否则界面会停在旧预览上
+use-local-data.ts[AD6T]: F:数据副本编排：导入旧导出、核对副本、激活切换、旧档案分页与恢复后解除暂停 | R:code:apps/web/src/features/local-workbench/local-data-management.tsx | A:useLocalData | S:activate 前必须已选副本并勾选同意，否则直接抛错；resume 只解除暂停，历史限制继续保留，新任务仍需重新授权
+use-local-evidence.ts[AB6T]: F:未知发送证据核对的编排：概览每 5 秒轮询、预览、只读核对与取消 | R:code:apps/web/src/features/local-workbench/local-evidence.tsx | A:useLocalEvidence | S:核对成功后额度仍保持占用，暂停必须在恢复核对里显式处理；失败时保留未知结果与禁止重发，不得自动重试
+use-local-history.ts[AB6T]: F:历史页数据编排：三视图各自查询、筛选从 URL 读、分页与审核决定 | R:code:apps/web/src/features/local-workbench/local-history.tsx | A:useLocalHistory | S:筛选全部从 URL 参数读取，不另存组件状态；每次改筛选都删 page 参数，否则页码与结果集错位
+use-local-platform.ts[AB7T]: F:平台账号登录、有界采集与限时收件三条流程的编排：查账号/工作流/配置/规则/收件人，二维码登录轮询，采集与收件预览授权 | R:code:apps/web/src/features/local-workbench/local-api.ts,code:apps/web/src/features/local-workbench/local-platform.tsx | A:useLocalPlatform | S:预览必须现生成 requestKey（crypto.randomUUID）随授权回传，否则 authorizeCollection 被拒；collect 的 consent 串由 automaticRules 决定，不接受调用方自选；轮询 VERIFIED 或出错都清空 login
+use-local-posts.ts[AB6T]: F:本轮笔记列表与单篇历史原文读取的编排：分页历史、保存笔记查询、预览后按检查点续读 | R:code:apps/web/src/features/local-workbench/local-api.ts,code:apps/web/src/features/local-workbench/local-posts.ts | A:useLocalPosts | S:consent 由 plan.scope.readPlan.resume 是否存在决定（resume-exact-checkpoint-in-new-run-v1 / reread-exact-saved-post-once-v1），不能前端自由选；预览成功必须重置 consent=false，否则上一次勾选被复用
+use-local-records.ts[AG5T]: F:本地只读记录与写操作的通用 hook 工厂，按 localApi 方法名生成查询与变更 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:useLocalRecords,useLocalAction | S:查询键固定为 ['local', method, input??null] 且每 5 秒轮询，写成功后 invalidate ['local'] 前缀；新方法必须先在 local-api.ts 的 LocalMethods 登记，否则 K 泛型约束不成立
+use-local-workbench.ts[AB7T]: F:工作台启动编排：读 status 后按需拉配置与任务、初始化本地数据、保存配置与模型密钥、备份恢复与取消任务 | R:code:apps/web/src/features/local-workbench/local-api.ts,code:apps/web/src/components/layout/workbench-shell.tsx | A:useLocalWorkbench | S:configs 与 jobs 都是 enabled:!!status.data，未初始化时不能发这两个请求；jobs 每 2 秒轮询；restore 只在 r.restored 为真时提示，且恢复出的独立副本不会自动切换
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/onboarding/===
+welcome.tsx[CU5T]: F:首次使用引导页：三步说明（连接账号、配置模型、创建采集任务）与两个入口按钮 | R:code:apps/web/src/routes/_workbench/welcome.tsx | A:Welcome,WelcomeDestination | S:onContinue 只接受 '/work/accounts' 与 '/work'，类型已收窄；页脚“无需注册工作台账号”与“数据保存在本机”是产品承诺，不是装饰文案
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/work/===
+auto-apply-status.tsx[CU3T]: F:自动保存失败时的行内重试提示，成功态只用 sr-only role=status 播报 | R:code:apps/web/src/features/work/use-auto-apply.ts,code:apps/web/src/components/feedback.tsx | A:AutoApplyStatus | S:成功不弹可见提示，避免每次改动都闪一次；错误分支才渲染“重试应用”，busy 时不要同时显示
+draft-guard.tsx[AU7T]: F:未保存草稿守卫：登记 retained/modal/pending 三类草稿，路由切换与关闭窗口前弹确认 | R:code:apps/web/src/lib/router-compat.tsx,code:apps/web/src/features/work/navigation-policy.ts,code:apps/web/src/features/configuration/configuration-route.ts | A:DraftGuardProvider,useDraftGuard,useConfirmWorkspaceLeave,useConfirmDiscard | S:confirm 同一时刻只允许一个待决问题，重入直接返回 false；pending 类草稿一律禁止离开，它代表已提交未完成的写操作；deciding 标志防 blocker 连环触发，去掉会重复弹窗
+journey-model.ts[AD6T]: F:任务三阶段定义（采集、评论匹配、自动回复）与阶段解析、轮次选择规则 | R:code:apps/web/src/features/work/journey-step-state.ts,code:apps/web/src/features/collection/types.ts | A:journeyStages,journeyStage,selectedJourneyRun | S:历史链接里的 handoff 是已删除的第四步，必须映射到 contact 而不是回退 collect；selectedJourneyRun 在 config 缺失时返回 undefined，不能跨配置推断轮次
+journey-step-state.ts[AD8T]: F:由轮次、JourneySummary 与开关推导三个步骤的状态、当前步、提示语与是否需要关注 | R:code:apps/web/src/features/work/journey-model.ts,code:apps/web/src/features/comment-review/run-review-model.ts,code:apps/web/src/features/collection/collection-outcome.ts | A:journeyStepState,JourneyStep,StepState | S:live 事件超过 15 秒或时间戳比现在早 5 秒以上即判 stale 并降级 unavailable；contacts.UNKNOWN 必须提示“勿重发”，不得回退成 failed；durable stages 的 ready 门禁优先于统计推断，否则排队中的审核会被显示成可执行
+journey-stepper.css[CU5T]: F:三步步进器样式：连接线、状态色、旋转图标与 600px 以下的竖排布局 | R:code:apps/web/src/features/work/journey-stepper.tsx | A:- | S:状态色只走 var(--success)/var(--primary)/var(--attention)/var(--destructive) 等 token，写字面色会绕过主题；完成态连接线用 success，其余用 border
+journey-stepper.tsx[CU5T]: F:步骤条组件：按 state 选图标、aria-pressed 标记当前查看步，必要时挂状态条 | R:code:apps/web/src/features/work/journey-step-state.ts,code:apps/web/src/components/status-notice.tsx | A:JourneyStepper | S:只有 running/loading 加旋转类，且 CSS 在 prefers-reduced-motion 下停动画；details 非空或存在 unknown 步都必须渲染 StatusNotice，否则失败信息无处显示
+navigation-policy.ts[AD6T]: F:判断 retained 类草稿是否会因为这次跳转真的丢失 | R:code:apps/web/src/features/work/draft-guard.tsx | A:shouldProtectDrafts | S:设置与模板页在工作区内保持挂载，只有离开 /work 才算风险；/configuration 单独按路径不等判断，不能套用 /work 前缀规则
+use-auto-apply.ts[AG6T]: F:单写者自动保存：最新值入队、失败即停不后台重试、按代次丢弃过期响应 | R:code:apps/web/src/features/work/auto-apply-status.tsx | A:useAutoApply | S:generation 比对决定是否采纳返回值，旧代次响应必须丢弃否则界面回退到旧值；失败后清空 pending 且不再重试，只有 retry 或 flush 能重新提交
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/hooks/===
+use-mobile.tsx[CG4T]: F:用 matchMedia 与 useSyncExternalStore 判断视口是否小于 768px | R:code:apps/web/src/components/ui/sidebar.tsx | A:useIsMobile | S:断点是 768，查询写成 max-width:767px；首帧快照固定返回 false，改成 true 会让首屏先渲染移动端布局再跳变
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/lib/===
+preferences.ts[CC6T]: F:UI 偏好（主题、文字方向、侧栏布局）的 localStorage 读写，异常一律吞掉 | R:code:apps/web/src/context/theme-provider.tsx,code:apps/web/src/context/font-provider.tsx,code:apps/web/src/context/direction-provider.tsx | A:getPreference,setPreference,removePreference | S:不能用 cookie 存偏好：打包版 Chromium 首次触碰 cookie 会读系统钥匙串，每次启动都弹 macOS 密码框；改回 cookie 会复现该弹窗
+router-compat.tsx[CG7S]: F:TanStack Router 的兼容层，模拟 react-router 的 Link、useLocation、useSearchParams 与 useBlocker | R:code:apps/web/src/routes/__root.tsx,code:apps/web/src/features/work/draft-guard.tsx | A:Link,Outlet,useLocation,useSearchParams,useBlocker | S:to 里的查询串会被拆成 to+search 两段，直接透传会丢参数；setParams 忽略 flushSync 只认 replace；useBlocker 关掉 enableBeforeUnload，卸载前确认由调用方自己加 beforeunload 监听
+types.ts[CG5T]: F:前端通用类型与格式化：User、Platform 标签表与日期格式化 | R:code:apps/web/src/features/collection/types.ts | A:User,Platform,platformLabel,formatDate | S:formatDate 对 null 返回“暂未安排”而不是空串，空值语义是未排期；新增平台必须同时补 platformLabel，否则界面直接显示枚举值
+utils.ts[CG4T]: F:className 合并工具：clsx 拼接后交给 tailwind-merge 去重 | R:- | A:cn | S:必须保留 twMerge 在后，交换顺序会让冲突的 Tailwind 类不再被后者覆盖
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/===
+main.tsx[EU9T]: F:渲染进程入口：建 QueryClient 与 Router，套主题/字体/方向三层 Provider 后挂载 | R:code:apps/web/src/routeTree.gen.ts,code:apps/web/src/styles/index.css,code:apps/web/src/routes/__root.tsx | A:- | S:index.css 必须第一个导入，它声明 Tailwind 的层顺序，晚于任何 @layer components 会让 components 层掉到 preflight 之下、标题字号与页头间距全失效（ui:check 的 css-layer-order 守这条）；queries 默认 retry:false 且不随窗口聚焦重取
+routeTree.gen.ts[FW7M]: F:TanStack Router 生成的路由树：17 个路由的导入、父子挂载与 FileRoutesByPath 类型映射 | R:code:apps/web/src/main.tsx,code:apps/web/src/routes/__root.tsx | A:routeTree,FileRoutesByPath | S:本文件由路由插件生成，手改会被下次构建覆盖；新增页面只需在 routes/ 下建文件，改这里无效。它同时被 lint 与格式化排除
+vite-env.d.ts[FC3T]: F:引入 vite/client 类型，提供 import.meta.env 与静态资源模块声明 | R:- | A:- | S:删掉后 import.meta.env 与 ?url 导入全失去类型，tsc 直接报错
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/===
+__root.tsx[EU8T]: F:根路由：挂导航进度条、Outlet 与 Toaster，指定 404 与错误组件，开发态才加载两个 devtools | R:code:apps/web/src/routes/_workbench/route.tsx,code:apps/web/src/components/navigation-progress.tsx | A:Route | S:devtools 由 import.meta.env.MODE==='development' 门控，条件放宽会把调试面板打进生产包；Toaster 固定在根，页面不要再自己挂一套
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/auto-contact/===
+index.tsx[EU5T]: F:自动回复与账号矩阵路由页，只渲染标题与 LocalAutomation | R:code:apps/web/src/features/local-workbench/local-automation.tsx | A:Route | S:路由路径由文件位置决定（/_workbench/auto-contact/），改文件名即改 URL，sidebar-data 里的 url 必须同步
+pending.tsx[EU3T]: F:待处理回复路由页，直接复用 LocalPending | R:code:apps/web/src/features/local-workbench/local-record-pages.tsx | A:Route | S:-
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/automation/===
+index.tsx[EU3T]: F:自动化任务页路由，挂 LocalTaskPage | R:code:apps/web/src/features/local-workbench/local-task-page.tsx | A:Route | S:-
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/comment-review/===
+index.tsx[EU3T]: F:评论审核路由页，固定以 reviews 视图渲染 LocalHistory | R:code:apps/web/src/features/local-workbench/local-history.tsx | A:Route | S:必须带 key='reviews' 强制重挂载，否则从采集轮次页切过来会复用旧视图状态
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/configuration/===
+index.tsx[EU3T]: F:配置管理路由页，挂 LocalConfigurations | R:code:apps/web/src/features/local-workbench/local-configurations.tsx | A:Route | S:-
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/data/===
+index.tsx[EU3T]: F:数据管理路由页，挂 LocalDataPage | R:code:apps/web/src/features/local-workbench/local-overview.tsx | A:Route | S:LocalDataPage 与首页 LocalOverview 同模块，改动会影响两页
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/inbox/===
+index.tsx[EU3T]: F:消息通知路由页，挂 LocalInboxPage | R:code:apps/web/src/features/local-workbench/local-inbox-page.tsx | A:Route | S:-
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/===
+index.tsx[EU4T]: F:工作区根路径重定向到 /work | R:code:apps/web/src/routes/_workbench/route.tsx | A:Route | S:必须在 beforeLoad 里 throw redirect 且带 replace:true，否则返回键会退回空转的根路径
+route.tsx[EU7T]: F:工作区布局路由，把全部子页包进 WorkbenchShell | R:code:apps/web/src/components/layout/workbench-shell.tsx | A:Route | S:_workbench 是无路径布局段，URL 不带这个前缀；改文件名会改变路由 id 并让 routeTree.gen.ts 与侧栏的 /work 路径对不上
+welcome.tsx[EU5T]: F:欢迎页路由，把 Welcome 的 onContinue 接到 navigate | R:code:apps/web/src/features/onboarding/welcome.tsx | A:Route,WelcomePage | S:onContinue 的目标受 WelcomeDestination 字面量约束（'/work/accounts'、'/work'），改路由路径必须同步改那个类型，否则 navigate 的 to 不成立
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/platforms/===
+index.tsx[EU3T]: F:平台能力路由页，挂 LocalCapabilities | R:code:apps/web/src/features/local-workbench/local-overview.tsx | A:Route | S:-
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/reply-history/===
+index.tsx[EU3T]: F:回复历史路由页，挂 LocalReplyHistory | R:code:apps/web/src/features/local-workbench/local-record-pages.tsx | A:Route | S:-
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/work/===
+accounts.tsx[EU3T]: F:账号中心路由页，挂 LocalAccountPage | R:code:apps/web/src/features/local-workbench/local-account-page.tsx | A:Route | S:-
+archive.tsx[EU3T]: F:采集轮次归档路由页，固定以 runs 视图渲染 LocalHistory | R:code:apps/web/src/features/local-workbench/local-history.tsx | A:Route | S:key='runs' 必须与评论审核的 key='reviews' 不同，否则复用对方状态
+index.tsx[EU4T]: F:工作台首页路由，挂 LocalOverview 指标格 | R:code:apps/web/src/features/local-workbench/local-overview.tsx | A:Route | S:-
+notices.tsx[EU3T]: F:运行异常通知路由页，挂 LocalNotices | R:code:apps/web/src/features/local-workbench/local-record-pages.tsx | A:Route | S:-
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/styles/===
+desktop-bridge.css[CU6T]: F:把 graphite 页面样式接到 shadcn 侧栏外壳：只去掉 .graphite-workspace 的布局属性，保留作用域类 | R:code:apps/web/src/main.tsx,code:apps/web/src/components/layout/workbench-shell.tsx | A:- | S:.graphite-workspace 仍是 539 条后代规则的作用域，类名必须留在 SidebarInset 上；本文件必须在 foundation 之后加载，同特异性下后加载才生效；删掉这条会让 display 回落成 grid，内容区错位
+index.css[CU7T]: F:Tailwind 入口：声明层顺序、导入 theme、base 重置、container/no-scrollbar/faded-bottom 三个 utility 与折叠动画 | R:code:apps/web/src/styles/theme.css,code:apps/web/src/main.tsx | A:- | S:必须第一个被导入，它决定 theme→base→components→utilities 的层顺序；body[data-scroll-locked] 的 overflow:unset !important 是为 sticky 页头解 Radix 滚动锁，去掉后弹层关闭会锁住页面；767px 以下输入框强制 16px 防 iOS 聚焦缩放
+theme.css[CC8S]: F:唯一的设计 token 定义处：浅色与暗色两套表面/文本/语义/图表色，以及 @theme inline 的字体、圆角、六档字号与 color 映射 | R:code:apps/web/src/styles/index.css,code:apps/web/DESIGN.md | A:- | S:这里用 hex 是刻意的（直接取自规范原文，避免换算偏差），也是全仓唯一允许写字面色值的地方；新增语义色必须同时改 :root、.dark 与 @theme inline 三处，少一处就只在单一模式生效或 Tailwind 类不生成；--qr-surface 两套都固定纯白，否则二维码扫不出来
+workbench.css[CU6T]: F:graphite 设计系统删除后仍被使用的页面级样式：page-heading 与 local-desktop 下的标题、段落、dt/dd、alert | R:code:apps/web/src/styles/desktop-bridge.css,code:apps/web/src/styles/theme.css | A:- | S:上一轮 155KB 的 [data-slot] 全量覆写已整体删除，不要在这里重建；规则一律限定在 .local-desktop 作用域，去掉会波及 shadcn 基元；字号字重已压到 20/16/600 档位，加新档位要先改 theme.css
+
+===/Users/kleene/projects/social-lead-workbench/docs/===
+README.md[SG5T]: F:文档总索引：requirements 回答做什么、design 回答怎么实现，以及三条阅读路径 | R:code:docs/requirements/README.md,code:docs/design/README.md | A:- | S:维护规则要求需求变更先改 requirements 再改 design；验证过程与一次性排查结论不单独建文档，只写提交说明
+
+===/Users/kleene/projects/social-lead-workbench/docs/design/===
+README.md[SG5T]: F:机制设计目录索引：七份设计文档各一行摘要，加写新文档的三条要求 | R:code:docs/design/comment-read-through.md,code:docs/design/project-structure.md | A:- | S:数字必须能对应到代码常量（如 comment-read-policy.cjs），只写在文档里的预算不算数；新文档要标注失效条件
+comment-read-through.md[SB6T]: F:评论连续读取的预算、完成语义与存档规则：主评滚动 3 次、回复尝试 12 次、40 根/100 唯一/15 秒 | R:code:packages/domain/src/collection/comment-read-policy.cjs,code:docs/design/comment-reply-target.md | A:- | S:预算由服务端常量固定，请求方不能扩大；COMPLETE 要求主评末页、每层计数一致且无排除或冲突节点，数量相等本身不充分；零条且总数缺失只能是 EMPTY_UNCONFIRMED，不能写成 0
+comment-reply-target.md[SB6T]: F:直接回复目标的证据来源与边界：只取 targetComment 的 id 与 userId，subComments 是讨论关系不是目标 | R:code:docs/design/comment-read-through.md | A:- | S:缺失或畸形的目标数据不能让整条评论失效；冲突证据保留并标记待核，不静默替换；checkpoint 续读默认不返回旧行，无法补全历史元数据
+conversation-replies.md[SB6T]: F:收件会话回复的权限模型：准备返回短期预览令牌、确认时原子预留额度与尝试、同一入站消息只允许一次回复 | R:code:docs/requirements/inbox-reception.md | A:- | S:UNKNOWN 保留额度与去重且永不自动重试；重放同一 submission key 只读回原尝试；已有未决回复的同一入站消息阻断新回复，更新的入站消息才允许
+dm-templates-and-day-limit.md[SB5T]: F:私信模板独立分类与 AccountDay.dailyLimitOverride 的单日额度语义 | R:code:docs/design/conversation-replies.md | A:- | S:override 只作用于 REAL:Asia/Shanghai:YYYY-MM-DD 单日桶，永久额度与占用数不变；已安装 MCP 的 tools/list 不暴露 DM 工具，私信只有预览，不得声称已接通
+local-runtime.md[SB7T]: F:本地运行时的边界：只用 Node 内置模块，不依赖 Electron/React/Prisma/PostgreSQL/Redis，测试入口 npm test | R:code:packages/local-runtime/src/service.cjs,code:docs/design/project-structure.md | A:- | S:决定授权、去重、配额或任务所有权的写入必须在同步 BEGIN IMMEDIATE 事务内，事务中禁止 await 与外部请求；schema v1 已冻结，后续只加迁移、不改旧校验和
+model-settings-security.md[SB7T]: F:模型凭据的保存与授权边界：safeStorage 加密成 .sealed 文件、无系统保护即拒绝保存、Key 与执行授权分开管理 | R:code:packages/local-runtime/src/credentials.cjs,code:apps/desktop/src/main.cjs | A:- | S:换 Key 前必须先撤销模型、目标与自动联系授权，写入失败授权也保持撤销；业务备份不含凭据，跨电脑必须重新输入；界面“已配置”只表示本地文件存在，不证明 Key 有效
+project-structure.md[SB7T]: F:工程结构与依赖方向：六个工作区的允许依赖、源码与 dist 归属、构建顺序与检查命令 | R:code:AGENTS.md,code:scripts/check-structure.mjs | A:- | S:domain 不能反向依赖运行时或 Electron；跨包必须走 package 名与 exports，不得相对穿透 src；staging 与最终包核对共用 stage-layout.cjs，避免两套白名单漂移
+qwen-comment-matching.md[SB7T]: F:模型评论匹配的调用节奏、受控型号与价格版本、脱敏与预算守卫 | R:code:packages/local-runtime/src/adapters/collection/qwen-provider.ts,code:packages/domain/src/collection/qwen-models.cjs | A:- | S:全局并发 1、两次开始间隔至少 1 秒、429 后退避 60 秒、失败不自动重试；改型号或调用上限必须重新勾选价格确认，服务端核对受控型号与价格版本；未知型号或价格直接阻断，不回退便宜型号
+
+===/Users/kleene/projects/social-lead-workbench/docs/requirements/===
+ACCEPTANCE.md[SB5T]: F:本轮验收范围：首次使用引导、业务与安全边界、工程验证命令 | R:code:docs/requirements/IMPLEMENTATION-STATUS.md | A:- | S:Windows 路径模拟不等于真机验收；原生资源缺失导致的跳过项、签名、安装升级与真实收发必须单独记录
+DESKTOP-LOCAL.md[SB7S]: F:单人本地桌面版的实现范围与验证状态：Electron+SQLite、执行器装配、迁移备份、Windows 构建进度 | R:code:apps/desktop/release-readiness.json,code:docs/requirements/MODULES.md | A:- | S:Mac 已有测试版但未签名公证，Windows 没有可交付安装包；文中带版本号与测试数量的段落是历史验证记录，不代表当前检出已通过同一验收
+IMPLEMENTATION-STATUS.md[SB5T]: F:当前实现范围与验证限制：入口引导、六个能力模块的现状与未验收项 | R:code:docs/requirements/MODULES.md | A:- | S:本文件只描述源码范围，不推断实时开关或账号状态；历史单次成功、mock 或 UI 开关都不能证明平台链路真实可用
+MODULES.md[SB7M]: F:十个模块的职责、输入输出、关键约束与代码入口，附状态词表与证据等级 | R:code:docs/requirements/REQUIREMENTS.md,code:docs/requirements/IMPLEMENTATION-STATUS.md | A:- | S:文档与代码冲突时以代码和测试为准并回头修本文；MOCK 与 XHS_FIXTURE 通过不代表平台可用，SIMULATED_SUCCESS 与真实回执是两种证据
+README.md[SB5T]: F:需求层索引与阅读顺序，以及四份主文档的维护时机 | R:code:docs/requirements/REQUIREMENTS.md,code:docs/README.md | A:- | S:需求与实现状态必须分开写，不能把“计划”写成“已支持”；新增需求先改 REQUIREMENTS 再改 MODULES，最后记 IMPLEMENTATION-STATUS
+REQUIREMENTS.md[SB6T]: F:产品范围与六项能力的验收边界，以及权限、数据与界面要求 | R:code:docs/requirements/MODULES.md | A:- | S:线索分配、销售跟进与人工 CRM 已不在范围内，但历史数据与风险证据不得删除；配置编辑、模型调用、采集与外发授权互不替代
+direct-messages.md[SB5T]: F:私信只有预览的原因与放开的前置条件：入口、必须保持的限制、验证方式 | R:code:docs/design/dm-templates-and-day-limit.md | A:- | S:旧导入消息、昵称、标题或历史平台 ID 本身不授予回复资格；预览不产生发送授权、队列任务或额度预留，数据变化后旧预览失效
+inbox-reception.md[SB5T]: F:只接收件：15 分钟窗口、四个固定工具、RWP 推送与历史上限 | R:code:docs/design/conversation-replies.md | A:- | S:安装、开页与重启都不会自动启动收件；每个浏览器在 5 分钟租约到期前轮换，整窗 15 分钟；读消息会改变平台未读状态，系统未读独立存储
+three-step-automation.md[SB5T]: F:采集→匹配→回复三阶段流程与统一自动化设置的三组配置 | R:code:docs/requirements/MODULES.md | A:- | S:三组分别保存，没有跨组原子提交，也不能提示“全部保存成功”；保存规则默认关闭，切页签保留草稿但关闭需确认丢弃；旧 stage=handoff 链接用 replace 转 contact
+
+===/Users/kleene/projects/social-lead-workbench/integrations/desktop-mcp/===
+browser_path.go[IR7T]: F:桌面模式下定位随包浏览器：必须是绝对路径的普通文件，并按平台与文件名白名单校验 | R:code:integrations/inbox-mcp/browser/browser.go | A:desktopBrowser | S:绝不回退到用户缓存、系统浏览器或自动下载；只接受 darwin/arm64 的 Chromium 与 windows/amd64 的 chrome.exe，其他组合返回 PACKAGED_BROWSER_PLATFORM_UNSUPPORTED
+desktop_boundary.go[ES8T]: F:桌面 MCP 的进程边界：按 CRM_DESKTOP_MODE 只注册该模式允许的工具，并拒绝任何继承的旧开关 | R:code:integrations/desktop-mcp/offline_probe.go | A:desktopValidateEnvironment,registerDesktopTools | S:八个模式之外一律 DESKTOP_MODE_REQUIRED；十个 CRM_*_ONLY/ENABLED 旧变量只要非空就报 LEGACY_MODE_OVERRIDE_FORBIDDEN，这是防止旧开关扩大工具面的唯一闸门；LOGIN 模式不注册任何工具
+offline_probe.go[IQ5T]: F:桌面离线自检：在 data: 页面上跑通浏览器启动、导航与截图，可选导出 chrome://credits 许可证文本 | R:code:integrations/desktop-mcp/desktop_boundary.go | A:desktopOfflineProbe | S:必须 CRM_DESKTOP_OFFLINE_TEST=1 才执行，否则直接 panic；credits 文本不足 10000 字符判 CREDITS_INCOMPLETE；stage 文件用于外部判定进度
+
+===/Users/kleene/projects/social-lead-workbench/integrations/inbox-mcp/===
+LICENSE[SZ4M]: F:上游 xiaohongshu-mcp 项目的开源许可证原文 | R:- | A:- | S:打包时必须随包分发，删掉会违反上游许可
+PREPARATION.json[FI6T]: F:声明上游来源、基线 revision 与本地变体名 workbench-receive-only-v1 | R:code:integrations/inbox-mcp/main.go | A:- | S:separateFromInstalledSender 为 true 是硬约束：收件二进制与已安装发送器是两套，替换任一方都不成立
+app_server.go[IN7T]: F:应用服务器装配：持有 xiaohongshuService 与 MCP server，起 gin HTTP 并在 SIGINT/SIGTERM 时优雅关闭 | R:code:integrations/inbox-mcp/mcp_server.go,code:integrations/inbox-mcp/routes.go | A:NewAppServer,Start | S:MCP server 必须在 AppServer 构造后初始化，因为工具注册要回指 appServer；关闭超时 5 秒，超时只告警不阻塞退出
+exact_reply_tools.go[IN8M]: F:评论精确回复的 MCP 工具注册：限制巡检、只读预检、能力声明、精确发送与状态查询 | R:code:integrations/inbox-mcp/exactreply/engine.go,code:integrations/inbox-mcp/desktop_boundary.go | A:registerExactReplyTools,registerExactPreflightTool,registerRestrictionInspectionTool | S:CRM_EXACT_REPLY_ENABLED 不为 1 时 workbench_reply_exact 直接返回 NOT_SENT/CANCELLED 且 Stopped=true，不启动浏览器；journal 目录取 os.Getwd() 而不是命令参数，拿不到就返回 UNKNOWN/JOURNAL_UNAVAILABLE
+go.mod[FV6T]: F:Go 模块定义：模块路径沿用上游、go 1.24.0，直接依赖 rod/gin/mcp-sdk/headless_browser 等 | R:code:integrations/inbox-mcp/go.sum | A:- | S:模块路径仍是 github.com/xpzouying/xiaohongshu-mcp，改名会让所有内部 import 与上游补丁链失效；go 版本必须与构建脚本的 Go 1.24.13 相容
+go.sum[FV5S]: F:Go 依赖校验和清单，锁定全部直接与间接模块的哈希 | R:code:integrations/inbox-mcp/go.mod | A:- | S:离线构建依赖此文件，手工删行或改版本会让构建直接失败；升级依赖必须整份重新生成
+handlers_api.go[IN8L]: F:HTTP API 处理器集合：登录、发布、搜索、详情、评论与通知等 gin handler | R:code:integrations/inbox-mcp/routes.go,code:integrations/inbox-mcp/service.go | A:respondError,respondSuccess | S:respondError 按 4xx/5xx 分日志级别，否则鉴权开启后 401 会把 ERROR 刷满；错误响应固定 ErrorResponse 结构（error/code/details），改字段会破坏客户端解析
+inbox_inspection.go[IM7S]: F:收件巡检的 MCP 工具注册：只读收件、本地排空、有界快照与停止 | R:code:integrations/inbox-mcp/desktop_boundary.go | A:registerInboxInspection,validInboxInput | S:协议必须是 workbench.inbox.v1 且 MaxSubmissions 恒为 0；inbox_start 只能成功一次（used 标志），第二次直接 USED；会话有 210 秒超时上限
+login_session.go[IR6T]: F:待扫码登录会话的登记：同一时刻只保留一个，开新的先关旧的 | R:code:integrations/inbox-mcp/handlers_api.go | A:loginSessions | S:finish 必须比对序号，只有仍是当前会话才清登记，否则会抹掉后来者导致其永不被关闭；prev() 必须在锁外调用避免相互等待
+main.go[EI8T]: F:收件 MCP 进程入口：强制只读模式、只接受带 token 的 127.0.0.1 回环地址，启动前备好内置浏览器 | R:code:integrations/inbox-mcp/app_server.go,code:integrations/inbox-mcp/browser/browser_download.go | A:main | S:CRM_INBOX_INSPECTION_ONLY 不为 1 直接 Fatal；host 必须是 127.0.0.1 且 token 非空，否则拒绝启动；浏览器缺失在启动时退出，不拖到首个请求才失败
+mcp_handlers.go[IN9L]: F:MCP 工具的请求参数结构与处理函数：发布、搜索、详情、评论与通知 | R:code:integrations/inbox-mcp/mcp_server.go,code:integrations/inbox-mcp/service.go | A:parseVisibility,PublishContentArgs,SearchFeedsArgs | S:jsonschema 标签直接决定模型看到的工具签名，改字段要同步契约与前端；本文件含发布、点赞等写工具，只在非只读模式下注册
+mcp_server.go[IN9L]: F:MCP 服务器装配：注册工具集、把工具调用映射到 service，并处理只读模式下的工具裁剪 | R:code:integrations/inbox-mcp/mcp_handlers.go,code:integrations/inbox-mcp/desktop_boundary.go | A:InitMCPServer,boolPtr | S:只读模式下必须先裁剪写工具再注册，否则工具目录本身就是越权面；boolPtr 只用于注解指针，不要共享同一变量地址
+middleware.go[MS7T]: F:gin 中间件：Bearer 常量时间鉴权、CORS 与 panic 恢复 | R:code:integrations/inbox-mcp/routes.go | A:authMiddleware,corsMiddleware,errorHandlingMiddleware | S:token 为空时鉴权直接放行，所以入口必须保证 token 非空；比较必须用 subtle.ConstantTimeCompare，换成 == 会引入时序侧信道
+read_chunks.go[IR8S]: F:分块详情读取：与 v1 共用按账号租约锁，校验 checkpoint 后按 START/CONTINUE 续读 | R:code:integrations/inbox-mcp/read_continuation.go | A:chunkedDetail | S:必须用 TryLock，拿不到即 CONTINUATION_BUSY；租约超过 2 分钟判 CONTINUATION_EXPIRED 并清租约；binding 由 id+NUL+ref 哈希，不一致即 CONTINUATION_MISMATCH；重复 ACK 返回缓存，绝不重复点击
+read_continuation.go[IR8S]: F:按账号的浏览器租约：单条内存租约、随机句柄、过期清理，使不确定请求不可重放 | R:code:integrations/inbox-mcp/read_chunks.go | A:readContinuations,readLease,handle | S:租约只在内存里，没有持久 cookie 或 token 存储；句柄用 crypto/rand 32 字节，不能用时间戳；clear 必须先停 timer 再关页面
+routes.go[ES8T]: F:路由装配：健康检查、带鉴权的 /mcp 端点，以及只读模式下被整段跳过的 /api/v1 业务路由 | R:code:integrations/inbox-mcp/middleware.go,code:integrations/inbox-mcp/app_server.go | A:setupRoutes | S:八个 CRM_*_ONLY 环境变量任一为真时直接返回，不注册任何 /api/v1 路由，这是只读收件的核心裁剪；/mcp 的 Stateless:true 让客户端跳过 initialize，代价是服务端无法反向请求客户端
+service.go[IN9L]: F:小红书业务服务：登录会话与读取租约的持有者，封装发布、搜索、详情、评论等业务方法 | R:code:integrations/inbox-mcp/mcp_server.go,code:integrations/inbox-mcp/read_continuation.go | A:XiaohongshuService,NewXiaohongshuService | S:服务实例只持有 logins 与 reads 两个内存状态，业务数据不落盘；新增方法要同时接入 MCP 工具与 HTTP handler 两套入口
+types.go[FG5S]: F:HTTP 与 MCP 的响应/请求类型：ErrorResponse、SuccessResponse、FeedDetailRequest 与评论加载配置 | R:code:integrations/inbox-mcp/handlers_api.go | A:ErrorResponse,SuccessResponse,CommentLoadConfig,FeedDetailRequest | S:FeedID 与 XsecToken 都是 binding:required，缺一即 400；CommentLoadConfig 的 MaxCommentItems 为 0 表示加载全部，不能当“不加载”
+
+===/Users/kleene/projects/social-lead-workbench/integrations/inbox-mcp/browser/===
+browser.go[IN8S]: F:浏览器工厂：固定内置 Chromium 路径、指纹与语言，加载 cookie 后返回 rod 浏览器 | R:code:integrations/inbox-mcp/browser/browser_download.go,code:integrations/inbox-mcp/cookies/cookies.go | A:NewBrowser,WithProxy,WithFingerprintSeed | S:必须把内置浏览器路径显式传给 go-rod，否则 rod 会自下载默认 Chromium 并静默忽略指纹 flag，属于无声降级，所以拿不到路径时直接 panic 不启动；代理日志必须经 maskProxyCredentials 脱敏
+browser_download.go[IN7M]: F:内置浏览器的下载与解压：按 OS/arch 选资产、校验 SHA-256、解出 Chromium 或 chrome.exe | R:code:integrations/inbox-mcp/browser/browser_version.txt,code:integrations/inbox-mcp/browser/browser.go | A:EnsureBrowser,platformAsset,browserURL | S:browserVersion 由 //go:embed 读 browser_version.txt，升级只改这一个文件，Go 与 Dockerfile 同读；平台白名单只有 darwin/arm64、linux/amd64、windows/amd64，其他平台直接不支持
+browser_version.txt[FI5T]: F:内置浏览器版本号的唯一来源，值为 148.0.7778.215 | R:code:integrations/inbox-mcp/browser/browser_download.go | A:- | S:被 //go:embed 编进二进制并拼进下载地址，改这一行等于换浏览器版本，必须同时更新 apps/desktop/src/windows-browser-source.json 的归档哈希
+
+===/Users/kleene/projects/social-lead-workbench/integrations/inbox-mcp/cmd/login/===
+main.go[EI6T]: F:交互式登录命令行：非无头启动浏览器，检查登录态、走扫码流程并把 cookie 写回会话文件 | R:code:integrations/inbox-mcp/browser/browser.go,code:integrations/inbox-mcp/cookies/cookies.go | A:main,saveCookies | S:登录必须开界面所以不能用无头模式；seed 与后续运行共用同一个（ResolveFingerprintSeed），换 seed 等于换指纹画像；登录后必须再查一次登录态才算成功
+
+===/Users/kleene/projects/social-lead-workbench/integrations/inbox-mcp/configs/===
+browser.go[FC6T]: F:浏览器运行配置：无头开关、指纹 seed 与代理，环境变量读取集中在此 | R:code:integrations/inbox-mcp/configs/seed.go | A:InitHeadless,IsHeadless,FingerprintSeedFromEnv,ProxyFromEnv | S:XHS_FP_SEED 非法或 ≤0 一律回落随机 seed 并只告警，不能报错退出；env 只在配置层读，浏览器工厂只收 Option
+image.go[FC4T]: F:图片临时目录名与路径构造（系统临时目录下的 xiaohongshu_images） | R:- | A:GetImagesPath | S:落在 os.TempDir() 下，重启后可能被系统清理，不能当持久存储
+seed.go[FC7T]: F:指纹 seed 解析：环境变量 > 会话文件已存 > 新生成并写回 | R:code:integrations/inbox-mcp/configs/browser.go,code:integrations/inbox-mcp/cookies/cookies.go | A:ResolveFingerprintSeed,newSeed | S:环境变量必须排第一，已用 env 钉死画像的部署不能被文件值顶掉；生成后必须写回会话文件，否则每次启动都是新画像等于没固定；写回失败只告警并按临时值继续
+
+===/Users/kleene/projects/social-lead-workbench/integrations/inbox-mcp/cookies/===
+cookies.go[CD8S]: F:会话文件读写：v2 外层对象（version/seed/saved_at/cookies）与 v1 裸数组兼容，cookies 用 RawMessage 原样透传 | R:code:integrations/inbox-mcp/configs/seed.go | A:NewLoadCookie,LoadCookies,SaveCookies,LoadSeed,SaveSeed,GetCookiesFilePath | S:SaveCookies 与 SaveSeed 必须各自保留文件里另一半，写任一半都不能丢掉 seed 或 cookies；路径优先级是 COOKIES_PATH > 当前目录 cookies.json > /tmp/cookies.json 兜底，环境变量无条件优先
+
+===/Users/kleene/projects/social-lead-workbench/integrations/inbox-mcp/errors/===
+errors.go[CG3T]: F:采集侧两个哨兵错误：未捕获 feeds 与未捕获 feed 详情 | R:- | A:ErrNoFeeds,ErrNoFeedDetail | S:-
+
+===/Users/kleene/projects/social-lead-workbench/integrations/inbox-mcp/exactreply/===
+dm_conversation.go[IN6S]: F:私信会话只读巡检的协议与观测结构：固定枚举、只开一次会话、零输入零提交 | R:code:integrations/inbox-mcp/exactreply/dm_entry.go | A:DMConversationTarget,DMConversationObservation,Valid | S:MaxOpenings 必须等于 1、MaxInputs 与 MaxSubmissions 必须为 0，任何放宽都会让只读巡检变成可写；消息正文不序列化（Text 标 json:"-"），只留 contentSha256
+dm_entry.go[IN5S]: F:私信入口巡检：观察图标控件、路由、登录挑战与风险标志，不打开会话 | R:code:integrations/inbox-mcp/exactreply/dm_conversation.go | A:DMEntryTarget,DMEntryInspector,Valid | S:RecipientID 可空但不能等于 SenderID；该协议只观察入口，ConversationOpened 必须保持 false
+dm_send.go[IN8M]: F:私信精确发送：命令校验、单次提交上限、回执与读回双证据 | R:code:integrations/inbox-mcp/exactreply/dm_conversation.go | A:DMCommand,DMReceipt,ValidDMMessageID,Matches | S:ExpiresAt 必须落在未来且不超过 5 分钟，MaxSubmissions 必须为 1；正文禁止 \r\n\x00 且不超过 1000 字；回执 ID 只认官方数字 ID 或 sender.recipient.hex 形式，本地时间戳随机 UUID 永不接受
+engine.go[IM9L]: F:评论回复的有限状态机：协议常量、命令校验、身份快照比对、诊断码与 Result 收敛 | R:code:integrations/inbox-mcp/exactreply/journal.go,code:integrations/inbox-mcp/exactreply/receipt.go | A:Valid,Matches,checks,diagnosticCode,Driver | S:包内不依赖网络或客户端，生产用 context 绑定的 Rod driver；四类风险 RATE_LIMITED/VERIFICATION/BANNED/PLATFORM_REFUSED 单独走 RiskError，不能当普通失败；CONTENT_CHANGED 与 SUBMIT_AMBIGUOUS 必须保持 UNKNOWN，不得回退为可重试
+journal.go[IR7S]: F:阶段日志：每个 attempt 一个独占创建的 JSONL，记录阶段、尝试与停止证明 | R:code:integrations/inbox-mcp/exactreply/selection.go | A:OpenJournal,WithJournal,JournalRecord | S:必须 O_EXCL 独占创建，不覆盖、不跟随符号链接、不复用；目录必须绝对路径且 EvalSymlinks 后与原值相同、权限掩码 0077 为 0，任一不满足返回 JOURNAL_UNAVAILABLE；阶段名是封闭白名单
+preflight.go[IN7S]: F:只读预检协议 v2：只观察精确目标，不含正文、授权、请求键或提交能力 | R:code:integrations/inbox-mcp/exactreply/preflight_page.go | A:PreflightTarget,Preflight,ReadOnlyInspector | S:ReadOnlyInspector 接口在编译期就没有 Select/Type/Submit，加回任一方法等于把预检变成发送；WriteOperations 必须恒为 0
+preflight_page.go[IN6S]: F:页面检查的固定枚举投影与只读等待：12 次采样内收敛，异常值一律归零或降级 | R:code:integrations/inbox-mcp/exactreply/preflight.go | A:SafePage,WaitForReadOnlyState,PageChecks | S:只序列化固定枚举，绝不落实际 URL、查询串、ID 或状态键；Samples 超出 0-12 归零；等待最多 12 次，超时归 EXHAUSTED 而不是继续重试
+receipt.go[IR8M]: F:回复回执捕获：只观察浏览器自身发出的请求，解析公开字段与失败分类 | R:code:integrations/inbox-mcp/exactreply/engine.go | A:ReceiptCaptureProtocol,ReceiptFailureProjection,CaptureOnce | S:绝不自己发或重放平台请求；失败投影只做精确白名单匹配（如“操作频繁，请稍后再试”→RATE_LIMITED），绝不持久化自由文本、子串、URL 或密钥；未知 schema 只提供证据，不代表未提交或可重试
+restriction.go[IS7M]: F:账号限制巡检：页面警告、身份来源、受限截图与控制台/网络失败计数 | R:code:integrations/inbox-mcp/exact_reply_tools.go | A:RestrictionTarget,RestrictionResult,RestrictionProtocol | S:Profile 协议必须不带 PostID 与 Reference，两者非空即非法；巡检是只读的，WriteOperations 必须为 0；截图带 scope 与 reasons，不能当无限制截图能力
+selection.go[IR6T]: F:选择阶段证据：视口与固定枚举字段，校验后写入阶段日志 | R:code:integrations/inbox-mcp/exactreply/journal.go | A:SelectionEvidence,RecordSelection | S:字段全是固定枚举，禁止出现正文、昵称、ID、URL、token 或函数源码；枚举任一越界或阶段名不在四个白名单内即返回 SELECTION_OBSERVATION_INVALID
+selection_diagnostic.go[IQ6S]: F:回复选择诊断协议：只允许一次回复选择、零输入零提交，记录点击前后的选择证据 | R:code:integrations/inbox-mcp/exactreply/selection.go,code:integrations/inbox-mcp/exactreply/preflight.go | A:SelectionTarget,SelectionTrace,SelectionInspector | S:MaxReplySelections 必须为 1、MaxInputs 与 MaxSubmissions 必须为 0；SelectionInspector 编译期就没有 Type/Submit/Readback，加回任一方法等于把诊断变成发送
+verify.go[IN7S]: F:回复只读核验协议：按回复 ID 与内容哈希核对已存在的回复，统计初始/最终匹配数与展开窗口 | R:code:integrations/inbox-mcp/exactreply/engine.go | A:VerifyTarget,Verify,ReplyVerifier | S:ReplyID 不能等于目标评论、帖子、发送方或接收方任一 ID；编译期接口只有 Verify/Close，没有选择、输入或提交；Submissions 必须恒为 0
+
+===/Users/kleene/projects/social-lead-workbench/integrations/inbox-mcp/humanize/===
+delay.go[IP5T]: F:按动作类型采样一次人类化延迟，并响应 context 取消 | R:code:integrations/inbox-mcp/humanize/provider.go | A:Delay | S:动作不在 TimingProfile 里时回落到 AfterClick，而不是零延迟
+input.go[IP6M]: F:人类化输入：鼠标按下/抬起时长、坐标抖动与点击点偏移 | R:code:integrations/inbox-mcp/humanize/mouse.go,code:integrations/inbox-mcp/humanize/provider.go | A:pressAndRelease,jitterOn,jitterOffset | S:抖动上限是元素尺寸的 15% 且不超过 8px，放大后可能点到相邻元素；ClickHold 时长必须走 TimingProfile 而不是固定值
+mouse.go[IP5S]: F:曲线鼠标移动：按距离分段插值，可限定在矩形内并做内缩 | R:code:integrations/inbox-mcp/humanize/input.go | A:moveMouseCurved,moveMouseCurvedWithin,Rect | S:距离小于 6px 直接直线移动；Inset 在边长不足 2d 时保持原样，不能出现负宽高
+provider.go[IP6T]: F:人类化节奏画像：11 个动作的对数正态分布参数与可替换 Provider | R:code:integrations/inbox-mcp/humanize/delay.go | A:TimingProfile,LogNormal,DefaultProvider,SetProvider | S:LogNormal.sample 必须先判 Max 再转 Duration，否则 secs 极大时 float64→Duration 溢出成负值；SetProvider 传 nil 时保留默认画像
+
+===/Users/kleene/projects/social-lead-workbench/integrations/inbox-mcp/pkg/downloader/===
+images.go[IN6S]: F:图片下载器：按 URL 下载到本地目录，限制 30 秒超时并校验文件类型 | R:code:integrations/inbox-mcp/configs/image.go | A:NewImageDownloader,DownloadImage | S:保存目录在构造时创建，创建失败直接 panic；下载有 30 秒超时，不能用于大文件
+processor.go[IN5T]: F:图片处理器：URL 自动下载、本地路径直接使用，保持原始顺序，任一失败即整体失败 | R:code:integrations/inbox-mcp/pkg/downloader/images.go | A:NewImageProcessor,ProcessImages | S:任一张下载失败就返回错误，不会跳过继续；输入既可是 http(s) 链接也可是本地绝对路径
+
+===/Users/kleene/projects/social-lead-workbench/integrations/inbox-mcp/pkg/xhsutil/===
+title.go[IG5T]: F:小红书标题长度计算：非 ASCII 记 2、ASCII 记 1，再向上取整除以 2 | R:- | A:CalcTitleLength | S:用 utf16.Encode 而非直接遍历 rune，emoji 等代理对按两个码元计数；返回的是字符数而非字节数
+
+===/Users/kleene/projects/social-lead-workbench/integrations/inbox-mcp/xiaohongshu/===
+avatar-query-cases.json[IQ5S]: F:头像 URL 与 imageView2 查询参数接受/拒绝的合成用例集 | R:code:integrations/inbox-mcp/xiaohongshu/avatar_query.go | A:- | S:全部是合成数据（synthetic:true），只用于离线回归，不能当真实平台样本；改用例必须与 avatarQueryPolicy 的判定同步
+avatar_diagnostic.go[IA7M]: F:头像来源诊断：只输出固定枚举与计数，统计候选、被过滤项与形态转换 | R:code:integrations/inbox-mcp/xiaohongshu/avatar_query.go | A:AvatarSourceDiagnostic,AvatarShapeCount,AvatarConversionCount | S:只输出枚举、计数与显式白名单的结构键，绝不含值、URL 或身份；truncated 为真时说明样本被截断，不能据此判断全量分布
+avatar_query.go[IS7T]: F:头像 URL 准入：限定 xhscdn 头像域与 imageView2 缩略图参数子集 | R:code:integrations/inbox-mcp/xiaohongshu/comment_avatar.go | A:avatarQueryPolicy,safeCommentImage | S:只接受 https://sns-avatar-qc.xhscdn.com/avatar/ 前缀且 host 精确匹配；query 超 128 字符、出现未知键、重复键或 w/h>1024、q>100 一律 UNSUPPORTED；路径含 . 或 .. 直接拒绝
+bounded_capture.go[IN8S]: F:有界采集的 Rod 驱动：只操作已知根容器与其回复按钮，先做平台限制守卫 | R:code:integrations/inbox-mcp/xiaohongshu/bounded_comments.go | A:boundedRodPage,guard | S:guard 命中 access-wrapper/error-wrapper/not-found/blocked/captcha/login 任一可见容器即返回 PLATFORM_LIMIT，不继续读；驱动不允许任意页面链接、API fetch 或 profile 查询
+bounded_comments.go[IN9L]: F:有界评论读取核心：独立强制预算（3 次根翻页、12 次回复点击、40 根、100 条、15 秒）与逐窗口证据 | R:code:integrations/inbox-mcp/xiaohongshu/bounded_session.go,code:integrations/inbox-mcp/xiaohongshu/bounded_capture.go | A:BoundedReadConfig,BoundedActionEvidence | S:Valid 把每个预算钉死上限（RootPages≤3、ReplyClicks≤12、MaxRoots≤40、MaxComments≤100、MaxRepliesPerRoot≤30、TimeoutMs≤15000），放宽任一即 INVALID；旧的全量加载开关不能与之组合
+bounded_session.go[IR7T]: F:有界读取会话：最多 8 个窗口，绑定同一 page 与 feed，跨页或换帖即失配 | R:code:integrations/inbox-mcp/xiaohongshu/bounded_comments.go | A:BoundedSession,CanContinueBounded,BoundedContinuationRequest | S:窗口数达 8、状态 COMPLETE、唯一数≥100 或根数≥40 时 CanContinueBounded 必须为 false；page 或 id 变化即 CONTINUATION_MISMATCH；续读令牌是 64 位十六进制，不持久化 URL 或凭据
+comment-chunk-wire.json[IQ5T]: F:分块评论线格式的合成样本：chunk.rows 每行含 comment 与 parent | R:code:integrations/inbox-mcp/xiaohongshu/comment_chunks.go | A:- | S:内容全是 synthetic 占位，只校准线格式；parent 为空表示根评论，非空表示挂在对应根下，不能反推平台层级语义
+comment_avatar.go[IA6T]: F:评论作者的头像解析：优先取 avatar 字符串，否则回退到 userInfo.image | R:code:integrations/inbox-mcp/xiaohongshu/avatar_query.go | A:CommentUser,UnmarshalJSON | S:只认已确认的 image 键，不做大小写折叠或别名猜测；非空 avatar 字符串原样保留（含不支持的 URL），合法性由工作台侧校验
+comment_chunks.go[IN9L]: F:分块遍历：只保留已确认记录的指纹，块在调用方确认事务前不可变，重放不拿数组偏移当游标 | R:code:integrations/inbox-mcp/xiaohongshu/comment_feed.go,code:integrations/inbox-mcp/xiaohongshu/bounded_comments.go | A:CommentCheckpoint,CommentMark | S:checkpoint 的 marks 上限 2000（chunkLedgerLimit），超出即不合法；sequence 范围 0-100000；重放不得重新发起外部请求或信任偏移量
+comment_feed.go[IN7M]: F:帖子评论动作：导航到详情页后发表评论，带 60 秒独立超时 | R:code:integrations/inbox-mcp/xiaohongshu/comment_chunks.go | A:CommentFeedAction,PostComment | S:PostComment 用 page.Timeout(60s) 而不是继承调用方 context，外部取消不会中止已开始的发表；该动作是写操作，只在非只读模式注册
+comment_reply_target.go[IN6T]: F:评论的直接回复目标：只透传 targetComment.id 与 userInfo.userId | R:code:integrations/inbox-mcp/xiaohongshu/comment_avatar.go | A:CommentReplyTarget,UnmarshalJSON | S:必须删掉大小写不同的 targetComment 别名，否则 encoding/json 会大小写不敏感地匹配到它；id 必须匹配 ^[A-Za-z0-9_-]{1,150}$ 且不等于自身 ID，否则整条 target 丢弃
+connection_observation.go[IO7M]: F:WebSocket 连接观测：按 host 与路径归类，统计收发帧数与载荷字符数 | R:code:integrations/inbox-mcp/xiaohongshu/inbox_receive.go | A:socketSummary,socketEndpoint | S:只接受 wss 协议，其他 scheme 一律归 OTHER；只留计数与帧类型，不保留载荷内容；路径要归类而不是原样输出
+coverage-cases.json[IQ5S]: F:覆盖诊断的合成样本集：ready 状态与样本序列 | R:code:integrations/inbox-mcp/xiaohongshu/coverage_diagnostic.go | A:- | S:synthetic:true，仅用于离线回归；totalScope 为 UNCONFIRMED 时不能解读为“已读全”
+coverage_capture.go[IR6T]: F:只读覆盖观测：在页面已有状态上采样三次（间隔 250ms），不滚动不点击 | R:code:integrations/inbox-mcp/xiaohongshu/coverage_diagnostic.go | A:captureCoveragePage,observeCoverage | S:页面脚本禁止 scroll/click/fetch/定时器/profile 请求/浏览器存储写入；elapsed 上限 60000ms；页面状态为 null 时判 page state unavailable，不能当空评论
+coverage_diagnostic.go[IA8M]: F:覆盖诊断：把页面状态折算成计数与枚举，节点上限 200 | R:code:integrations/inbox-mcp/xiaohongshu/coverage_capture.go | A:CoverageDiagnostic,CoverageReady,CoverageCount | S:只含计数与枚举，ID 只在内存比对，URL、文本、身份、游标与任意 source 键都不外泄；coverageNodeLimit=200，超出即截断并标记
+creator_session.go[II6T]: F:创作者中心会话检查：缺 galaxy_creator_session_id 时打开首页并轮询等待会话建立 | R:code:integrations/inbox-mcp/xiaohongshu/publish.go | A:ensureCreatorSession,hasCreatorSession | S:等待上限 15 秒，超时返回“登录失效，请重新扫码登录”；只认 cookie 名 galaxy_creator_session_id，不要改成其他会话名
+dm_conversation_driver.go[IN6S]: F:私信会话驱动：只在收件人主页点一次 IM 按钮，无输入与发送方法 | R:code:integrations/inbox-mcp/xiaohongshu/dm_entry_driver.go | A:DMConversationDriver | S:used 标志保证只开一次；identity 不是 MATCH、有 risk 或 loginChallenge、route 为 OTHER 时直接返回空观测；DOM 脚本只读可见节点，不写页面状态
+dm_entry_driver.go[IN6S]: F:私信入口巡检驱动：观察主页 IM 图标与路由，身份不一致即中止 | R:code:integrations/inbox-mcp/xiaohongshu/dm_conversation_driver.go | A:DMEntryDriver | S:身份判定要求 __INITIAL_STATE__ 的 userId 与“我”链接都指向 sender，出现多个或不一致即 MISMATCH；登录、弹窗、输入框或二维码可见时抑制截图
+dm_send_driver.go[IN8S]: F:私信发送驱动：在已绑定的 c2c 会话里输入并提交，只用官方可见控件 | R:code:integrations/inbox-mcp/xiaohongshu/dm_conversation_driver.go | A:DMSendDriver | S:必须恰好一个 .xhs-im-chat-window 与一个 contenteditable 编辑器，placeholder 必须是“发消息...”；identity 非 MATCH、route 非 CHAT、conversationKind 非 c2c 时 ready=false；绝不调用平台私有 API
+exact_preflight_driver.go[IN7T]: F:只读预检驱动：新命名类型而非内嵌发送驱动，对外只暴露 Inspect/Close | R:code:integrations/inbox-mcp/xiaohongshu/exact_preflight_page.go | A:ExactPreflightDriver | S:编译期断言 _ exactreply.ReadOnlyInspector，加回 Select/Submit 就编译失败；纯 DOM 读，无 click/focus/input/事件派发/fetch/状态写入/滚动
+exact_preflight_page.go[IN6T]: F:预检页面脚本：只读 __INITIAL_STATE__ 形状与 URL 参数，不导航不写状态 | R:code:integrations/inbox-mcp/xiaohongshu/exact_preflight_driver.go | A:- | S:导航枚举只认 https://www.xiaohongshu.com 与 /explore/<24位hex>；xsec_token 与 xsec_source 必须唯一且相等才 MATCH，重复即 AMBIGUOUS
+exact_reply_driver.go[IN9L]: F:精确回复的 Rod 驱动：只操作精确评论节点，含身份快照、选择点击、输入、提交与读回 | R:code:integrations/inbox-mcp/exactreply/engine.go,code:integrations/inbox-mcp/xiaohongshu/exact_reply_receipt.go | A:exactReplyPage | S:不做作者、昵称、正文或通知回退，缺失或无法识别的状态一律在提交前拒绝；选择能力路径不含输入、提交与回执方法；openUsed 保证只导航一次
+exact_reply_receipt.go[IR8M]: F:回复回执捕获：只在一次授权点击期间观察浏览器自身请求，凭据全程留在内存 | R:code:integrations/inbox-mcp/xiaohongshu/exact_reply_driver.go,code:integrations/inbox-mcp/exactreply/receipt.go | A:exactReceiptCapture | S:绝不拦截、重放网络或发推测性 API 请求；只捕获一次（active 与 count 互斥），broken 后不再采信；请求与响应体不落盘
+exact_verify_driver.go[IN5T]: F:回复核验驱动：非内嵌包装，只暴露 Verify 与 Close，复用同一 readback | R:code:integrations/inbox-mcp/xiaohongshu/exact_reply_driver.go | A:ExactReplyVerifier | S:不内嵌 exactReplyPage 而是持有字段，避免把发送方法一并暴露；计数来自同一 readbackCounts，不能另算
+feed_detail.go[IN9L]: F:帖子详情与评论加载：滚动翻页、展开回复、停滞判定与重试的完整读取流程 | R:code:integrations/inbox-mcp/xiaohongshu/comment_chunks.go,code:integrations/inbox-mcp/xiaohongshu/page_ready.go | A:FeedDetailAction,GetFeedDetailWithConfig | S:defaultMaxAttempts=500、stagnantLimit=20、minScrollDelta=10、maxClickPerRound=3 是旧全量读取的兜底常量，与有界读取的预算不是一套；停滞计数到上限必须结束而不是无限滚
+feeds.go[IN7T]: F:首页 feed 列表读取：构造时导航到 xiaohongshu.com 并等 DOM 稳定 | R:code:integrations/inbox-mcp/xiaohongshu/feed_detail.go | A:FeedsListAction,GetFeedsList | S:构造函数里就带 60 秒超时并执行导航，只 new 不读也会打开页面；未捕获到 feeds 返回 ErrNoFeeds
+inbox_inspection.go[IM8S]: F:收件箱元数据读取：只读会话列表与最近消息的方向、时间戳存在性 | R:code:integrations/inbox-mcp/xiaohongshu/inbox_receive.go | A:InboxMetadataDOM | S:identity 非 MATCH、有 risk/loginChallenge 或 route 非 CHAT 时返回空观测；只返回方向枚举与字段是否存在，最多取 5 个会话与 5 条消息；不输出会话名或 token
+inbox_receive.go[IM8M]: F:收件会话：持有页面与上下文，缓存帧并唤醒等待者，处理溢出与关闭 | R:code:integrations/inbox-mcp/xiaohongshu/inbox_inspection.go,code:integrations/inbox-mcp/xiaohongshu/live_observation.go | A:InboxSession | S:readMu 串行化读操作，溢出后置 overflow 不再累积；closed 后任何读都必须失败而不是返回空；会话只有内存帧缓冲，不落盘
+like_favorite.go[IN6M]: F:点赞与收藏动作：按固定选择器点击并等待状态生效 | R:code:integrations/inbox-mcp/xiaohongshu/feed_detail.go | A:ActionResult,Like,Collect | S:选择器固定为 .interact-container .left .like-lottie 与 .reds-icon.collect-icon，页面改版会直接失败而不是误点；这是写操作，只在非只读模式注册
+live_observation.go[IO7S]: F:WebSocket 帧的结构观测：只保留字段名、类型与小型数值判别位 | R:code:integrations/inbox-mcp/xiaohongshu/inbox_receive.go | A:frameSchema | S:非文本帧或超过 65536 字节只留长度与 opcode；绝不保留帧文本、字符串值、凭据、消息内容或 ID；只记结构不记语义
+login.go[II7S]: F:登录动作：检查登录态与扫码登录流程，检查态带 30 秒超时 | R:code:integrations/inbox-mcp/cmd/login/main.go | A:LoginAction,CheckLoginStatus,Login | S:CheckLoginStatus 会导航到 /explore 并硬等 1 秒，属于快速检查而非扫码等待；扫码等待在 Login/WaitForLogin 里，不要把超时加到那里
+navigate.go[IN5T]: F:导航动作：进入探索页并等待 #app 出现 | R:code:integrations/inbox-mcp/xiaohongshu/page_ready.go | A:NavigateAction,ToExplorePage | S:60 秒超时用于避免 MustNavigate/MustWaitStable 无限挂，去掉会让失败页面永久阻塞
+notification.go[IM7M]: F:通知页三分区（评论和@、赞和收藏、新增关注）的切换与列表读取 | R:code:integrations/inbox-mcp/xiaohongshu/notification_reply.go | A:NotificationAction,NotificationTab | S:分区靠中文标签文字定位（tabLabels），页面文案变化会直接定位失败；三个 tab 常量与标签必须成对维护
+notification_like.go[IM6S]: F:给通知里的评论点赞或取消点赞，已是目标状态则跳过 | R:code:integrations/inbox-mcp/xiaohongshu/notification.go | A:NotificationLikeResult,Like | S:likeSettleTimeout=15 秒是等待状态生效的上限；Skipped 表示调用前已是目标状态、本次未操作，不能当成功动作
+notification_reply.go[IM6S]: F:回复一条通知里的评论，commentID 必填 | R:code:integrations/inbox-mcp/xiaohongshu/notification.go | A:NotificationReplyResult,Reply | S:comment_id 去空白后为空直接报错，不猜目标；返回体带 FeedID 供调用方核对，缺失说明页面没给到所属笔记
+page_ready.go[IR5T]: F:等待详情页可用：等 load 事件与关键容器出现，不要求整页 DOM 静止 | R:code:integrations/inbox-mcp/xiaohongshu/feed_detail.go | A:waitFeedPageReady | S:8 秒没等到只告警并继续，因为后续 Element 各自带轮询；判据包含错误容器，所以“页面已出结果”不等于“笔记可读”
+publish.go[IN9L]: F:图文发布：进发布页、上传图片、填标题正文标签、可选定时与可见范围、绑定商品 | R:code:integrations/inbox-mcp/xiaohongshu/publish_video.go,code:integrations/inbox-mcp/xiaohongshu/creator_session.go | A:PublishImageContent,PublishImage | S:发布前必须先 ensureCreatorSession；定时时间必须在 1 小时至 14 天内；标题长度用 CalcTitleLength 判定；这是写操作，只在非只读模式注册
+publish_video.go[IN6S]: F:视频发布：进发布页切到“上传视频”标签后填写并提交 | R:code:integrations/inbox-mcp/xiaohongshu/publish.go | A:PublishVideoContent,PublishVideo | S:只支持单个本地视频文件；发布页默认是图文标签，不切换就会上传到错误的表单
+reply_relation.go[IA6S]: F:回复关系字段的发现式检查：只报告字段路径、形状与是否等于已加载 ID | R:code:integrations/inbox-mcp/xiaohongshu/comment_reply_target.go | A:ReplyRelationEvidence,RelationFieldEvidence | S:relationFields 里的拼写是假设而非别名映射，不能据此认定直接回复目标；绝不输出源值、任意键、用户名或 URL；Limited 为真表示扫描被截断
+restriction_inspection_driver.go[IS7M]: F:账号限制巡检驱动：只读帖子或自我主页，统计警告、控制台错误与网络失败 | R:code:integrations/inbox-mcp/exactreply/restriction.go | A:RestrictionInspectionDriver | S:只做读操作，没有任何编辑器或发送方法；textOnly 为真时不带图片字节，普通日志只留安全文本；只用 MCP 自有页面与会话，不用普通 Chrome
+root-scope-wire.json[IQ4T]: F:根级回复作用域的合成线格式样本：根评论与叶子回复的 parent 关系 | R:code:integrations/inbox-mcp/xiaohongshu/root_reply_scope.go | A:- | S:全部 synthetic；只用于校准 parent 指向根的线格式，不能当平台真实层级样本
+root_reply_scope.go[IA6T]: F:根级回复作用域的另一条闭合证明：要求 groups 数与唯一数一致、深度 0/1 且叶子计数可证 | R:code:integrations/inbox-mcp/xiaohongshu/coverage_diagnostic.go | A:rootScopedLeaves | S:缺叶子计数只能是 MISSING 或显式 0，其余一律返回 false 而不是猜测；该证明闭合的是根的扁平 subComments 列表，不等于回复的直接 targetComment
+search.go[IN8M]: F:关键词搜索：打开搜索页、应用筛选并读取搜索结果 feed 列表 | R:code:integrations/inbox-mcp/xiaohongshu/search_note.go,code:integrations/inbox-mcp/xiaohongshu/search_capture.go | A:SearchAction,SearchResult,FilterOption | S:筛选只接受综合/最新/最多点赞/最多评论/最多收藏等枚举，非法值不能静默忽略；搜索结果只是有限关键词窗口，不能当全量覆盖
+search_capture.go[IR6T]: F:搜索页轮询观测：只轮询已打开的页面，8 秒是截止时间不是就绪信号 | R:code:integrations/inbox-mcp/xiaohongshu/search_observation.go | A:observeSearch,observeSearchAtOrigin | S:不 reload、不重试搜索、不滚动、不展开；origin 只能由回环测试注入，生产固定为 https://www.xiaohongshu.com
+search_diagnostic.go[IO6T]: F:搜索阶段失败的分类：把底层错误包装成带 reason 的失败或观测错误 | R:code:packages/contracts/src/collection-diagnostic.ts | A:searchStageFailure,searchFailure,searchObservedError | S:reason 必须取自 searchFailureReasons 白名单，自由文本会污染落盘诊断；cause 用 Unwrap 保留但不外泄到用户文案
+search_note.go[IN6S]: F:搜索结果的笔记结构：只保留打开笔记与归一化封面所需字段 | R:code:integrations/inbox-mcp/xiaohongshu/search.go | A:SearchFeed,SearchNoteCard | S:封面用 RawMessage 原样保留交给严格图片归一化器，绝不进入诊断、日志或解析错误；首页 Feed 的计数器与视频结构不能塞进这里
+search_observation.go[IO6S]: F:搜索观测的封闭结构：只含状态枚举、计数与布尔，不含关键词、ID、URL 或正文 | R:code:integrations/inbox-mcp/xiaohongshu/search_capture.go | A:SearchObservation,SearchParseIssue | S:结构本身是封闭契约，加任何字符串值字段都会破坏“不含关键词/ID/URL/响应文本”的前提；计数用指针区分未知与 0
+selection_diagnostic_driver.go[IN5T]: F:选择诊断驱动：只持有共享选择页，不暴露输入、提交或读回 | R:code:integrations/inbox-mcp/xiaohongshu/exact_reply_driver.go | A:SelectionDiagnosticDriver | S:编译期断言 _ exactreply.SelectionInspector，公开面没有正文参数；加回 Submit 或 Readback 即越界
+types.go[FG7M]: F:小红书 Feed 的数据结构：__INITIAL_STATE__ 的 feed/feeds/_value 包裹与单条 Feed 字段 | R:code:integrations/inbox-mcp/xiaohongshu/feed_detail.go | A:FeedResponse,FeedData,FeedsValue,Feed | S:平台用 _value 包裹数组，直接 unmarshal 成切片会得到空；xsecToken 与 id 必须同时保留，缺一个就打不开笔记
+user_profile.go[IN6S]: F:用户主页读取：三个子 tab（笔记/收藏/点赞）解析与列表读取 | R:code:integrations/inbox-mcp/xiaohongshu/types.go | A:ProfileTab,ParseProfileTab,UserProfileAction | S:tab 空值默认 note，非法值必须报错而不是回落；三个常量 note/fav/liked 与页面 tab 文案要成对维护
+
+===/Users/kleene/projects/social-lead-workbench/native/macos/===
+desktop-supervisor.c[RR8T]: F:macOS 受管进程监督器：按操作持有进程组与文件锁，控制器 EOF 即杀掉子进程树 | R:code:apps/desktop/src/owned-process.cjs | A:- | S:清理全程持锁，且绝不向存盘的 PID 发信号；只有 D（交接完成）才授权清理，停止请求 T 不能当交接完成；handoff 等待上限 15 秒
+device-vault.swift[RS8T]: F:macOS 密钥库：用 Keychain 存取设备密钥，走窄化 stdin/stdout 协议 | R:code:apps/desktop/src/main.cjs | A:- | S:秘密值只能走 stdin/stdout，绝不进 argv 或错误输出；测试必须用独立临时钥匙串，不查询用户已有条目；路径先 realpath 归一
+
+===/Users/kleene/projects/social-lead-workbench/native/windows/===
+WindowsDesktop.cs[RR7T]: F:Windows 桌面操作的 Job Object 与私有操作树清理 | R:code:native/windows/WindowsHost.cs | A:DesktopSupervise,ClearDesktopTree,JobEmpty | S:清理时遇到重解析点直接删链接本身，绝不递归进去；Job 未空就不能认为子进程已结束；需 Windows 真机验收后才允许启用
+WindowsHost.cs[RS8S]: F:Windows 原生宿主：JSON 行协议、ACL 校验、路径规范化与 DPAPI | R:code:native/windows/WindowsDesktop.cs | A:WindowsHost | S:路径必须是 X:\ 形式且 GetFullPath 后完全一致，禁止 ..、尾部点/空格与通配字符；单行 JSON 上限 32768；不提权、不改 PowerShell 策略、不下载
+
+===/Users/kleene/projects/social-lead-workbench/packages/contracts/===
+package.json[FV6T]: F:契约包清单：仅依赖 zod，双入口（source 指 src、default 指 dist） | R:code:packages/contracts/src/index.ts | A:- | S:exports 同时给 types/source/default 三个条件，缺 source 会让测试与源码映射失效；新增公开入口必须同步这里，否则跳包引用不到
+tsconfig.json[FV4T]: F:契约包编译配置：CommonJS 加 Node 解析、输出 dist 并生成声明 | R:code:packages/contracts/package.json | A:- | S:产物格式是 CommonJS，改成 ESNext 会让桌面侧 require 失败；rootDir 固定 src，源码移出即编译报错
+
+===/Users/kleene/projects/social-lead-workbench/packages/contracts/src/===
+auto-contact.ts[DB7S]: F:自动联系规则的 zod 契约：渠道计划、规则输入、开关与状态文案 | R:code:packages/contracts/src/comment-rules.ts | A:autoContactRuleInput,autoContactToggleInput,contactStatusLabel,channelPlanSchema | S:channelPlans 最多 2 条且渠道不能重复；阈值 0-100、账号最多 100 个且 id 不能重复；状态文案里 UNKNOWN 必须保留“保留占用”，改成“失败”会误导重发
+avatar-query.ts[DB5T]: F:头像 imageView2 缩略图查询参数的纯函数校验（与 Go 侧同构） | R:code:integrations/inbox-mcp/xiaohongshu/avatar_query.go | A:avatarQueryPolicy | S:与 Go 的 avatarQueryPolicy 必须逐条同构，任一侧放宽就会出现前后端判定不一致；只接受 w/h/q 与 format 四类键且不可重复
+avatar-source-diagnostic.ts[DA6T]: F:头像来源诊断的 zod schema：v1/v2 两版、候选名清单与交叉校验 | R:code:packages/contracts/src/avatar-query.ts | A:avatarSourceDiagnosticSchema,avatarCandidateNames | S:avatarCandidateNames 是检查词表不是别名映射，不能据此认定头像来源；v2 的 fields 与 conversion 计数和必须等于 roots+replies，否则整份诊断判非法
+bounded-read.ts[DB8S]: F:有界读取的预算、停止原因与报告 schema，含 COMPLETE 的一致性交叉校验 | R:code:packages/contracts/src/comment-checkpoint.ts,code:packages/contracts/src/coverage-diagnostic.ts | A:boundedReadConfigSchema,boundedReadReportSchema,boundedReadReasons | S:预算上限与 Go 的 BoundedReadConfig 必须一致（3/12/40/100/30/15000）；state=COMPLETE 还需 hasMore=false、deficit 与 excess 为 0、scopeExact=true、replyControls=0，少一条即判非法
+capture-display.ts[DB5T]: F:可选展示元数据（昵称、头像、发布时间）的清洗函数 | R:code:packages/contracts/src/image-diagnostic.ts | A:CaptureDisplay,savedNickname,safeAvatarUrl,savedPublishedAt | S:展示元数据不得用于身份、内容版本或模型输入；发布时间接受秒/毫秒 epoch，早于 2000 年或晚于明天一律丢弃
+collection-diagnostic.ts[DO7T]: F:采集诊断的封闭词表：搜索/详情失败原因、中文字案与阶段枚举 | R:code:packages/contracts/src/search-observation.ts | A:collectionDiagnosticSchema,searchFailureLabels,postFailureLabels | S:只允许受控词表与有界序号跨持久化与日志边界；SEARCH_DATA_MISSING 必须保留“不等于没有匹配帖子”，PAGE_UNAVAILABLE 必须保留“不能据此判断删除”
+comment-checkpoint.ts[DB7T]: F:评论检查点与分块请求/响应的传输契约 | R:code:packages/contracts/src/bounded-read.ts | A:commentCheckpointSchema,commentChunkRequestSchema,commentChunkSchema | S:marks 上限 2000，且 parent 必须指向已出现的 id、id 不可重复，否则拓扑非法；检查点绝不能进入公开证据、语义输入、日志或内容哈希
+comment-review.ts[DB7T]: F:评论审核的契约：目标策略、手动/自动授权同意串、审核范围与结果视图类型 | R:code:packages/contracts/src/semantic-review.ts | A:reviewPolicySaveSchema,reviewAuthorizationSchema,reviewScopeSchema,reviewPrepareSchema | S:target 长度 10-1500；COMMENTS 范围最多 5 条、POSTS 最多 50 条且不能重复；自动与手动审核是两个独立同意串（v3 / v2），不能互相顶替
+comment-rules.ts[DB6T]: F:关键词规则：专业名与别名、求助表达、上下文词，附默认预设与评估文案 | R:code:packages/contracts/src/semantic-review.ts | A:commentRulesSchema,thesisRulePreset,assessmentLabels,assessmentReasons | S:词条按 NFKC 加小写去重，专业名与别名跨专业也不能重复；专业与求助表达至少填一个；assessmentReasons 的 key 是落盘枚举，改文案不能改 key
+coverage-diagnostic.ts[DO7T]: F:覆盖样本的封闭 schema：ready 状态、计数对、分组层级与关系字段白名单 | R:code:packages/contracts/src/root-reply-scope.ts | A:coverageSampleSchema | S:任意 source 键与值绝不能进诊断；关系字段路径用正则白名单限定；count 与 bool 的 state 与 value 必须同时为 EXACT 或同时为空
+image-diagnostic.ts[DA6T]: F:图片 URL 分类与诊断：封面与头像各自的白名单 host、协议分类与结果计数 | R:code:packages/contracts/src/avatar-query.ts,code:packages/contracts/src/post-cover.ts | A:imageUrlClass,inspectImageUrl,imageDiagnosticSchema,imageReasons | S:封面只认 sns-webpic-qc 与 sns-webpic-qn.xhscdn.com，头像只认 sns-avatar-qc；只输出枚举不输出 scheme/host 原文；URL 超 2048 字符直接判 INVALID
+index.ts[DB6T]: F:契约包公共出口：协议版本、健康任务、回复模板占位符校验，并汇总导出各契约模块 | R:code:packages/contracts/src/semantic-review.ts,code:packages/contracts/src/reply-target.ts | A:protocolVersion,healthTask,previewReply,replyDraft | S:replyFields 只允许昵称/关键词/帖子标题/平台/专业五个占位符，新增字段要同时改 previewReply 与 replyDraft 的 refine；未知占位符渲染成【未知字段】而不是报错
+observed-read.ts[DB6T]: F:已确认读取计数的取值：只有独立完成证据齐全才采用检查点范围 | R:code:packages/contracts/src/run-coverage.ts,code:packages/contracts/src/bounded-read.ts | A:observedReadCounts | S:要求 recovery 存在、complete 为真、state=COMPLETE、remainingAnchors=0 且 confirmedTotal 等于唯一数，缺一条就回落到 saved；绝不覆盖已落盘的增量计数
+post-availability.ts[DB5T]: F:帖子可用性状态与原因文案，以及带凭据检测的可用性录入校验 | R:code:packages/contracts/src/run-post-feed.ts | A:postStates,postStateLabels,postReasonLabels,availabilityInput | S:HTTP_404 的文案必须保留“不代表删除”；evidence 里出现 xsec_token/cookie/authorization 等键值即拒绝；MANUAL_DELETED 必须同时 confirmDeleted 才通过
+post-cover.ts[DB3T]: F:封面 URL 的唯一入口：走封面白名单的 inspectImageUrl | R:code:packages/contracts/src/image-diagnostic.ts | A:safePostCoverUrl | S:只接受 HTTPS 且无签名的白名单 CDN 路径，不做 URL 重建
+project-overview.ts[DB5T]: F:项目概览的只读视图类型：归档、发送、账号、任务与最近活动 | R:code:packages/contracts/src/run-coverage.ts | A:ProjectOverview | S:timezone 固定 Asia/Shanghai 且必须带 day 与 asOf；sends.unknown 与 archive.unscored 不能并入失败计数
+reply-target.ts[DB6T]: F:直接回复目标的规范化：从 targetComment 提取 id/userId，合并时保留冲突标记 | R:code:integrations/inbox-mcp/xiaohongshu/comment_reply_target.go | A:replyTargetSchema,sourceReplyTarget,mergeReplyTarget,savedReplyTarget | S:只认 source='targetComment'，绝不从作者或正文推断目标；id 等于自己时返回空；合并只能保留冲突标记，不能静默替换既有证据
+root-reply-scope.ts[DA6T]: F:根级回复是否读尽的判定：要求状态、计数、分组三者同时闭合 | R:code:packages/contracts/src/coverage-diagnostic.ts | A:rootScopedRepliesExhausted | S:缺叶子计数只能是 MISSING 或显式 0；groups 长度必须等于唯一数，depth 只允许 0/1 且 parent 必须指向已出现的根；任一不满足返回 false
+run-coverage.ts[DO7T]: F:单轮覆盖证据的不可变结构：搜索状态、逐帖计数与有界读取报告 | R:code:packages/contracts/src/bounded-read.ts | A:runCoverageSchema,safeRunCoverage | S:saved 必须等于 roots+replies；postRef 是公开帖子标识，绝不能放访问引用；posts 最多 10 条，reasons 最多 32 项
+run-post-feed.ts[DB5T]: F:轮次内帖子列表的视图契约：读取序号、计数、覆盖与停止原因 | R:code:packages/contracts/src/run-coverage.ts | A:runPostItemSchema,runPostFeedSchema | S:items 最多 100 条；availability 只有 AVAILABLE/SUPERSEDED 两态，“被后续轮次取代”不等于内容失效
+run-review.ts[DB5T]: F:本轮审核的查询参数与分页视图类型：帖子、评论、审核版本与范围 | R:code:packages/contracts/src/comment-review.ts | A:runReviewQuerySchema,RunReviewPage,RunReviewComment | S:offset 与 postOffset 用 coerce 转数字并限制 0-100000；scope 只有 EXACT/PARTIAL/UNAVAILABLE，不能把 PARTIAL 当完整
+search-observation.ts[DO5T]: F:搜索观测的 zod schema：状态枚举、计数与停止原因 | R:code:integrations/inbox-mcp/xiaohongshu/search_observation.go | A:searchObservationSchema | S:封闭结构，不含关键词、feed ID、URL 或响应文本；计数用可空区分未知与 0
+semantic-output-errors.ts[DA5T]: F:模型输出校验失败的安全文案表：只给固定中文提示，不回填模型文本 | R:code:packages/contracts/src/semantic-review.ts | A:- | S:文案里绝不能插值模型输出、ID、引文或 schema 细节；新增错误码必须同时补中文，否则界面直接暴露原始码
+semantic-review.ts[DB8T]: F:语义审核的核心 schema：规则、证据、模型输出与审核项/页的完整视图 | R:code:packages/contracts/src/comment-review.ts | A:semanticRulesSchema,semanticOutputSchema,semanticEvidenceSchema,semanticStateLabels | S:target 长度 10-1500、阈值 0-100；证据 1-8 条且 quote 1-500 字符；eligibility.canSend 恒为 false，模型评分不授予发送权限
+xhs-reference-parameters.ts[DB6T]: F:小红书访问引用的参数校验与导航标记剥离 | R:code:packages/contracts/src/post-availability.ts | A:hasSupportedXhsReferenceParameters,withoutXhsNavigationMarker | S:必须同时含 xsec_token 与 xsec_source 且键不重复；只有三种 source 导航标记可多带一个参数；标记不是访问引用，绝不持久化或写日志
+
+===/Users/kleene/projects/social-lead-workbench/packages/domain/===
+package.json[FV6S]: F:领域包清单：按文件粒度声明 exports，每个入口给 types/source/default 三条件 | R:code:packages/domain/tsconfig.json | A:- | S:exports 是逐文件白名单而不是通配，新增领域文件必须在两处登记（这里与结构检查），否则跨包引用直接解析失败
+tsconfig.json[FV4T]: F:领域包编译配置：Node16 模块、允许 JS、输出 dist 与声明 | R:code:packages/domain/package.json | A:- | S:allowJs 为真但 checkJs 关闭，cjs 文件只参与产物不参与类型检查；module 改成 CommonJS 会与 package.json 的 exports 条件不匹配
+tsconfig.test.json[FV4T]: F:测试用编译配置：继承主配置但 rootDir 改根、noEmit，包含 src 与 test | R:code:packages/domain/tsconfig.json | A:- | S:rootDir 必须是 "." 才能同时覆盖 src 与 test，保持 src 会让测试文件落在 rootDir 外报错
+vitest.config.ts[FV3T]: F:领域包测试配置，直接复用根 vitest 配置 | R:code:vitest.config.ts | A:- | S:只做转出，不要在本地覆盖根配置，否则覆盖率与别名会与其它包不一致
+
+===/Users/kleene/projects/social-lead-workbench/packages/domain/src/accounts/===
+account-execution-policy.ts[DB7T]: F:账号执行策略：区分历史回复限制、读取限制与暂停原因 | R:code:packages/contracts/src/auto-contact.ts | A:accountSystemBlock,accountReadBlock | S:历史回复限制只按 loginPlatformUserId 精确绑定，不得扩展到其他元数据或平台风险；三条“仅登录”暂停原因不算读取阻断；原因不明的 PAUSED 必须继续阻断
+
+===/Users/kleene/projects/social-lead-workbench/packages/domain/src/auto-contact/===
+contact-policy.ts[DB8T]: F:自动联系的判定证据与目标：审核证据、配额桶与上海日界 | R:code:packages/contracts/src/auto-contact.ts,code:packages/domain/src/common/semantic-hash.ts | A:quotaBucket,shanghaiDay,ContactTarget,ReviewEvidence | S:配额桶固定 REAL:Asia/Shanghai:YYYY-MM-DD 形式，日界按 UTC+8 计算；判定只吃这里声明的证据字段，不能额外读库
+contact-sender.ts[DB7T]: F:发送请求与结果类型，以及发送前重验的接口契约 | R:code:packages/domain/src/auto-contact/contact-policy.ts | A:Actor,SendRequest,SendResult | S:桌面运行时没有会话层，Actor 只在本文件声明，不能反向引入 auth；BLOCKED/STOP_UNCONFIRMED 与 CONFIRMED 必须区分，未知不能当成功
+selection-evidence.ts[DS6T]: F:选择证据的 zod schema：视口、框架、目标基数、绑定形态与编辑器状态等固定枚举 | R:code:integrations/inbox-mcp/exactreply/selection.go | A:selectionEvidenceSchema | S:这些字段只是诊断提示，绝不能用来授权输入、提交或确认；枚举值是封闭集合，加自由文本字段就破坏“不含正文/ID/URL”的前提
+xhs-reply-protocol.ts[DB8S]: F:小红书精确回复的纯协议校验：协议常量、ID 形态、请求与结果 schema | R:code:packages/domain/src/auto-contact/contact-sender.ts | A:XHS_REPLY_PROTOCOL | S:只做纯校验，信封只能由单独受审的传输层提供；platformId 必须是 24 位十六进制、digest 必须 64 位；协议常量改一个字符就等于换协议
+
+===/Users/kleene/projects/social-lead-workbench/packages/domain/src/collection/===
+collection-barrier.ts[DB7T]: F:整轮阶段屏障：采集结束且覆盖证据完整才允许进入审核 | R:code:packages/contracts/src/run-coverage.ts | A:collectionBarrier,stagePlanSchema | S:缺 strictStages 凭据的旧任务一律不自动继续；非 MOCK 模式要求覆盖证据帖子数与 capturedPosts 一致、每帖有 postRef 且无剩余锚点；PARTIAL 只在 SEARCH_PARTIAL 且达 batchLimit 时放行
+collector.ts[DB8M]: F:采集编排：按配置读取搜索与帖子、汇总诊断、产出带覆盖证据的读取结果 | R:code:packages/domain/src/collection/contract.ts,code:packages/domain/src/collection/run-coverage.ts | A:collect,ReadResult,PostRead | S:读取结果必须带 complete 与 stopReason，缺省会被当成未完成；chunk 只在有检查点回执时存在，不能凭空造
+comment-checkpoint.ts[DB7T]: F:评论检查点哈希与分块校验：逐条指纹、序号与增量一致性 | R:code:packages/contracts/src/comment-checkpoint.ts | A:checkpointHash,commentDigest,validateChunk | S:序号必须严格 +1、marks 只能追加且前缀完全一致，否则 INVALID_DATA；replaying 为真时不允许带新评论；digest 用长度前缀拼接，改拼接方式会让所有历史检查点失效
+comment-read-policy.cjs[DB8T]: F:有界评论读取的已批准部署常量：3 次根翻页、12 次回复点击、40 根、100 条、15 秒 | R:code:packages/contracts/src/bounded-read.ts | A:readWindow | S:这是冻结对象，值与 packages/contracts/src/bounded-read.ts 的上限必须逐项一致；改这里等于改生产读取预算，需重新审批
+comment-read-policy.d.cts[DB3T]: F:comment-read-policy.cjs 的类型声明 | R:code:packages/domain/src/collection/comment-read-policy.cjs | A:- | S:字段必须与 cjs 逐项同名同类型，否则 TS 侧读到 undefined 而运行时正常
+comment-rules.ts[DB7T]: F:关键词规则的纯判定：专业与求助表达命中、上下文证据与排除逻辑 | R:code:packages/contracts/src/comment-rules.ts | A:assessComment | S:英文词条按词边界匹配、中文按包含匹配；目标描述与搜索词绝不进入判定；evidence 摘录固定截 240 字符且带 70 字符前置上下文
+contract.ts[DB8T]: F:采集的领域契约：配置输入、帖子与评论 schema、读取适配器接口与限额 | R:code:packages/contracts/src/comment-rules.ts,code:packages/domain/src/collection/post-reference.ts | A:configInput,commentSchema,postSchema,limits | S:MOCK 之外只支持 XHS；关键词按 NFKC 去重、batchLimit 1-10；展示元数据必须经 safeNickname/safeAvatarUrl 清洗后才能进契约
+diagnostics.ts[DO7T]: F:采集诊断的构造：把 ZodError 与 ReadFailure 折叠成受控诊断码 | R:code:packages/contracts/src/collection-diagnostic.ts | A:diagnose,invalidSource | S:只读取失败字段的路径与长度，绝不保留字段值、issue message 或任意路径；postOrdinal 上限 10、requestStep 0-32，超出即丢弃
+model-call-pacing.ts[DR6T]: F:模型调用的全局准入间隔：成功 1 秒、限流 60 秒、其他失败 30 秒 | R:code:packages/domain/src/collection/qwen-models.cjs | A:modelCallWaitMs | S:这是准入间隔不是重试策略，失败批次绝不在这里重放；限流冷却跨凭据与业务空间生效，不能按 Key 分别计时
+model-cost-estimate.ts[DA5T]: F:整帖费用的本地保守估算：按 UTF-8 上界与请求的最大输出算 | R:code:packages/domain/src/collection/whole-post-capacity.ts | A:estimateWholePostCost | S:billingHardCap 恒为 false，估算不是账单上限；未知型号的 estimatedMicros 为 null，不得回退到便宜型号
+post-reference.ts[DS6T]: F:帖子访问引用的解析与校验：只接受官方 /explore/<24位> 且参数受支持的 URL | R:code:packages/contracts/src/xhs-reference-parameters.ts | A:postReferenceSchema,parsePostReference,savedPostReference | S:token 长度上限 4096 且字符集受限；URL 含空白或反斜杠、带端口/用户名/hash 一律拒绝；引用绝不进日志、模型输入、内容哈希或归档响应
+qwen-models.cjs[DA7T]: F:受控 Qwen 型号目录：分档价格、价格版本与 priceAck 串 | R:code:docs/design/qwen-comment-matching.md | A:qwenModel,qwenModelChoices,DEFAULT_QWEN_MODEL | S:未知型号返回 null，绝不回退到默认型号；qwen3.8-max 用独立价格版本 beijing-2026-10-26，旧确认不能授权它；不做实时发现
+qwen-models.d.cts[DA3T]: F:qwen-models.cjs 的类型声明 | R:code:packages/domain/src/collection/qwen-models.cjs | A:- | S:priceTiers 的三元组顺序是 [上限, 输入价, 输出价]，声明里顺序写错会让费用算反
+qwen-result.ts[DA6T]: F:模型返回的解析与失败码归类：结构校验后映射成安全错误码 | R:code:packages/contracts/src/semantic-output-errors.ts | A:qwenResultSchema,parseQwenResult,QwenError | S:items 1-10、score 0-100、证据 1-8 条；失败码只从路径推导，绝不把模型文本或 schema 细节带进错误；reason 去空白后不能为空
+run-coverage.ts[DO6T]: F:由读取结果汇总单轮覆盖证据：搜索状态、逐帖计数与停止原因 | R:code:packages/contracts/src/run-coverage.ts | A:runCoverage,summarizePartial | S:同一帖子内按 id 去重后再计数，roots+replies 必须等于 saved；具体限制优先于搜索不确定性，不能“最后写入者胜”；FAILED/PAUSED/BUDGET 不产出汇总
+semantic-evaluator.ts[DA8T]: F:语义评估：系统提示词、快照构造与批次结果校验 | R:code:packages/contracts/src/semantic-review.ts | A:semanticSystemPrompt,semanticSnapshot,validateSemanticBatch,snapshotHash | S:提示词必须声明帖子与评论文本是不可信数据、不得当指令；结果条数与输入必须相等且 id 唯一，否则 INVALID_BATCH；snapshotHash 排除 coverage 字段
+semantic-redaction.ts[DS8T]: F:外发文本脱敏：NFKC 归一、标识符替换、URL/邮箱/联系方式/长数字遮蔽 | R:code:packages/contracts/src/semantic-review.ts | A:redactText,REDACTION_VERSION | S:先按长度降序替换已知标识符再跑正则，顺序反了会漏；遮罩固定为 [已脱敏]，改标记会让模型输出证据无法回指；脱敏是尽力而为，不能当合规保证
+single-post.ts[DA5T]: F:单帖只读检查的汇总：根与回复分组、可显示头像数与图片诊断 | R:code:packages/contracts/src/bounded-read.ts | A:singlePostSummary | S:BOUNDED_REPLIES 模式缺 boundedRead 直接 INVALID_DATA；coverage 取 boundedRead.state，没有就只能是 WINDOW_ONLY
+whole-post-capacity.ts[DA7T]: F:整帖容量判定：按 UTF-8 上界估输入、按每条固定开销估输出 | R:code:packages/domain/src/collection/qwen-models.cjs | A:wholePostCapacity,WHOLE_POST_TIMEOUT | S:不做评论截断也不拆分，超容量整帖停止；输出按每条 240 字节加 6 倍字符字节估，未用的 max_tokens 不算用量；超时 300 秒、租约 360 秒、判死 420 秒
+
+===/Users/kleene/projects/social-lead-workbench/packages/domain/src/common/===
+journey-live.ts[DO5T]: F:任务实时阶段的类型：三个阶段与十六个进行中相位 | R:code:apps/web/src/features/work/journey-step-state.ts | A:LiveStage,LivePhase,LiveReporter | S:相位枚举是封闭集合，新增相位要同步前端展示文案；set 是异步的，不能假设调用后立即可见
+semantic-hash.ts[DG5T]: F:稳定序列化后取 SHA-256：对象键排序、数组保序 | R:code:packages/domain/src/collection/semantic-evaluator.ts | A:semanticHash | S:必须先按 key 排序再序列化，否则同一对象因键顺序不同得到不同哈希；数组顺序有意义不能排序
+
+===/Users/kleene/projects/social-lead-workbench/packages/domain/src/direct-messages/===
+dm-send-protocol.ts[DB7T]: F:私信精确发送的协议 schema：命令、回执、结果与消息 ID 校验 | R:code:integrations/inbox-mcp/exactreply/dm_send.go | A:DM_SEND_PROTOCOL,dmCommandSchema,validDmMessageId,dmDigest | S:content 必须 trim 后等于自身且不含 \r\n\0、上限 1000；maxSubmissions 恒为 1；expiresAt 必须是带时区的 ISO 时间；消息 ID 只认官方数字或 sender.recipient.hex
+
+===/Users/kleene/projects/social-lead-workbench/packages/domain/src/inbox/===
+protocol.ts[IM7T]: F:收件 WebSocket 帧解码：protobuf 字段遍历与 im/push 两类事件提取 | R:code:integrations/inbox-mcp/xiaohongshu/inbox_receive.go | A:decodeFrame,decodeDM | S:所有输入都有硬上限（字符串 262144、字段 100、批 100）；重复字段键报 AMBIGUOUS、varint 超 10 字节报 VARINT、wire type 非 0/1/2/5 报 WIRE；解码失败降级成 malformed 事件而不是抛错
+
+===/Users/kleene/projects/social-lead-workbench/packages/legacy-migration/===
+package.json[FV6T]: F:旧库迁移包清单：按文件导出 Prisma 兼容仓储与导出工具 | R:code:packages/legacy-migration/prisma/schema.prisma | A:- | S:该包不得进入桌面运行时依赖图；依赖 Prisma 与 @prisma/client，默认构建不需要生成客户端
+tsconfig.json[FV4T]: F:迁移包编译配置：Node16 模块、allowJs、输出 dist 与声明 | R:code:packages/legacy-migration/package.json | A:- | S:与 domain 配置同构；checkJs 关闭意味着 cjs 兼容代码不参与类型检查，改动要自己保证
+tsconfig.test.json[FV4T]: F:迁移包测试编译配置：rootDir 改根、noEmit，包含 src 与 test | R:code:packages/legacy-migration/tsconfig.json | A:- | S:rootDir 必须是 "." 才能同时覆盖 src 与 test
+vitest.config.ts[FV3T]: F:迁移包测试配置，直接复用根 vitest 配置 | R:code:vitest.config.ts | A:- | S:只做转出，本地覆盖会让覆盖率与别名与其它包不一致
+
+===/Users/kleene/projects/social-lead-workbench/packages/legacy-migration/prisma/===
+schema.prisma[PD9L]: F:旧 PostgreSQL 数据模型：线索、账号、采集、审核、发送、收件等表与枚举 | R:code:packages/legacy-migration/src/common/db.ts | A:- | S:只用于类型与显式导出，桌面写入路径不走这里；含已退出产品的 Lead 与跟进表，删表会丢失历史证据
+
+===/Users/kleene/projects/social-lead-workbench/packages/legacy-migration/scripts/===
+export.mjs[PO6T]: F:操作员专用的旧库导出：只读事务内逐表导出并受行数上限约束 | R:code:packages/legacy-migration/prisma/schema.prisma | A:exportLegacy | S:导入本模块不会连接数据库，必须显式传入 client；事务内先 SET TRANSACTION READ ONLY；默认行数上限 2000000
+
+===/Users/kleene/projects/social-lead-workbench/packages/legacy-migration/src/collection/===
+capture-archive.ts[PD7T]: F:旧采集档案的兼容写入：把读取结果落成旧 Prisma 模型并复用当前覆盖证据与语义快照 | R:code:packages/legacy-migration/src/collection/comment-checkpoint.ts | A:- | S:只服务兼容测试与显式导出，不是桌面写入路径；写入前必须走当前 contract 的校验与脱敏函数
+comment-checkpoint.ts[PD6T]: F:旧库侧检查点租约：按 run 与 post 获取 fence，提交时校验增量 | R:code:packages/domain/src/collection/comment-checkpoint.ts | A:acquireCheckpoint,commitCheckpoint,checkpointParents | S:缺 accountId 或 deviceId 直接 REAL_DISABLED；拿到新 fence 不等于获得平台请求授权，账号租约仍然有效
+
+===/Users/kleene/projects/social-lead-workbench/packages/legacy-migration/src/common/===
+db.ts[PD5T]: F:PostgreSQL 兼容适配器：Prisma 客户端加只读展示 schema 切换 | R:code:packages/legacy-migration/prisma/schema.prisma | A:Db,historyDisplay | S:historyDisplay 只用于展示，授权、预算、身份与 worker 必须用 public schema；桌面构建永不导入此包
+
+===/Users/kleene/projects/social-lead-workbench/packages/local-runtime/===
+package.json[FV7M]: F:本地运行时清单：逐文件 exports，cjs 与 ts 混排 | R:code:packages/local-runtime/src/service.cjs | A:- | S:cjs 入口只有 source/default 没有 types，ts 入口三条件齐全；新增文件必须同时登记这里与 staging 白名单，否则打包后 require 失败
+tsconfig.json[FV5T]: F:本地运行时编译配置：Node16、rootDir src、allowJs 关闭、排除 bundles | R:code:packages/local-runtime/package.json | A:- | S:exclude 掉 src/bundles 是刻意的，bundle 由单独脚本构建；allowJs 关闭意味着 cjs 不参与 tsc 类型检查
+tsconfig.test.json[FV4T]: F:本地运行时测试编译配置：rootDir 改根、noEmit，含 src 与 test | R:code:packages/local-runtime/tsconfig.json | A:- | S:rootDir 必须是 "." 才能同时覆盖 src 与 test；exclude 清空以便测试也能看到 bundles
+vitest.config.ts[FV3T]: F:本地运行时测试配置，直接复用根 vitest 配置 | R:code:vitest.config.ts | A:- | S:只做转出，本地覆盖会让覆盖率与别名与其它包不一致
+
+===/Users/kleene/projects/social-lead-workbench/packages/local-runtime/src/===
+account-safety.cjs[DS8T]: F:账号安全闸门：发送账号资格、历史发送限制与保留限制检查 | R:code:packages/local-runtime/src/accounts.cjs,code:packages/domain/src/accounts/account-execution-policy.ts | A:sendAccount,historicalSendHold | S:账号必须 state=VERIFIED 且 revision 一致、有 session_ref 与 platform_user_id，否则 ACCOUNT_IDENTITY_CHANGED；历史限制按平台用户 ID 的 SHA-256 白名单匹配，不能改成明文比对
+accounts.cjs[DI8T]: F:本地账号管理：二维码登录尝试、账号概览与凭据保管 | R:code:packages/local-runtime/src/account-safety.cjs,code:packages/local-runtime/src/credentials.cjs | A:LocalAccounts | S:begin 必须带 consent=login-this-account-on-this-device-v1，且已有尝试、活动任务或平台暂停时拒绝；二维码尝试只存在主进程内存，渲染层与模型都不能提供身份证明或 Cookie
+automatic-review.cjs[DB7T]: F:采集后自动审核的授权判定与批次派生 | R:code:packages/local-runtime/src/review.cjs,code:packages/contracts/src/comment-review.ts | A:AutomaticReview | S:授权必须同时满足策略、模型与自动授权三条记录版本一致且 priceAck 相同，任一不符即 AUTHORIZATION_CHANGED；同意串固定 comment-review-continuous-single-post-v3；已归档配置不得派生
+automation.cjs[DB7T]: F:自动联系规则的编排：保存、预览、授权、停用与按轮冻结 | R:code:packages/local-runtime/src/contact.cjs,code:packages/contracts/src/auto-contact.ts | A:LocalAutomation | S:授权必须带 automatic-contact-frozen-run-v1 且 previewHash 一致；停用要在同一事务里取消排队中的 SEND 任务并撤销授权；冻结时规则必须启用且策略 revision 匹配
+backup.cjs[PR7T]: F:SQLite 备份与恢复到新文件：哈希校验、独立副本与新目标强制 | R:code:packages/local-runtime/src/database.cjs | A:restoreToNewFile | S:源与目标必须都是绝对路径且不同，目标已存在即拒绝；源必须是普通文件、非符号链接且不超过 2GB；哈希不符即 BACKUP_HASH_MISMATCH，绝不覆盖原库
+collection-executor.cjs[DB8T]: F:采集执行器：校验队列任务与授权后调用适配器，并回写结果 | R:code:packages/local-runtime/src/collection-executor.cjs | A:LocalCollectionExecutor | S:prepare 必须比对 scope 哈希与 job.payload_hash、要求未派发未取消，平台暂停时要求先对账；适配器工厂默认走 XhsMcpAdapter，会话运行时绝不能由渲染层传 URL 或 Cookie
+collection.cjs[DB8S]: F:采集编排：按配置创建 run、校验账号身份、派发队列任务并落帖子与评论 | R:code:packages/local-runtime/src/collection-executor.cjs | A:LocalCollection | S:账号必须 state=VERIFIED 且 revision、session_ref、platform_user_id 齐全，否则 ACCOUNT_IDENTITY_CHANGED；配置哈希必须与 job.payload_hash 一致
+contact.cjs[DB7T]: F:联系规则与模板校验：正文与模板版本绑定、规则保存与授权 | R:code:packages/local-runtime/src/automation.cjs | A:LocalContact,definition | S:模板必须未归档、kind 等于渠道加 _TEMPLATE、revision 一致且正文与库中一致，否则 CONTACT_TEMPLATE_CHANGED；DM 正文禁止 \r\n\0 且不超过 1000
+credentials.cjs[DS8T]: F:凭据库：用主进程 protector 加密后落 .sealed 文件，三类凭据隔离 | R:code:apps/desktop/src/main.cjs | A:CredentialStore | S:根目录必须绕绝对路径、realpath 一致且权限掩码 0077 为 0；无 protector 时拒绝保存，绝不生成明文主密钥或回退明文；kinds 只有 MODEL_KEY/PLATFORM_SESSION/POST_REFERENCE
+data-manager.cjs[PD7T]: F:数据副本管理：导入、核对、切换到新库指针与恢复 | R:code:packages/local-runtime/src/backup.cjs,code:packages/local-runtime/src/legacy-import.cjs | A:LocalDataManager | S:所有目标目录由主进程创建且 0700、非符号链接；渲染层只能传 ID 与哈希，不能传路径或 SQL；导入文件必须是单硬链接普通文件
+database.cjs[PD9T]: F:SQLite 封装：同步连接、canonical 序列化、事务与迁移执行 | R:code:packages/local-runtime/src/migrations.cjs | A:LocalDatabase,LocalError,canonical,SCHEMA_VERSION | S:canonical 必须按键排序序列化，否则同一对象哈希不稳定；决定授权与配额的写入必须在 BEGIN IMMEDIATE 内完成且不允许 await
+dm-protocol.cjs[DB5T]: F:私信协议的薄封装：从策略 bundle 取常量、命令校验与结果解析 | R:code:packages/domain/src/direct-messages/dm-send-protocol.ts | A:PROTOCOL,validateCommand,parseDmExecution | S:只做转出，不要在本地复制校验逻辑，否则会与策略 bundle 漂移
+evidence.cjs[DR8T]: F:未知发送的只读证据核对：范围校验、两次独立会话与结果落库 | R:code:packages/local-runtime/src/evidence.cjs | A:LocalEvidence | S:只接受 state=UNKNOWN 的尝试；账号必须有 session_ref 且 platform_user_id 等于尝试的 sender_id；平台暂停时必须先对账，两次会话都要证明已停止
+history-recovery.cjs[DR7T]: F:历史检查点续读：校验源检查点与行指纹后，把旧评论复制进新 run | R:code:packages/local-runtime/src/collection.cjs | A:HistoryRecovery | S:行数上限 800，marks 数量必须等于行数且每个 digest 与当前内容一致，否则 HISTORY_CHECKPOINT_MISMATCH；身份冲突或旧只读历史一律拒绝
+inbox-executor.cjs[IM8T]: F:收件执行器：按授权窗口建会话、同步历史、监听并在发送排队时让出 | R:code:packages/local-runtime/src/inbox.cjs | A:LocalInboxExecutor | S:有排队中的 SEND 任务必须 INBOX_YIELD_FOR_SEND 让出；wire 返回必须 identity=MATCH 且 submissions=0；停止无法证明时写 platform 安全状态并抛错
+inbox.cjs[IM8T]: F:收件状态机：接收窗口、身份校验、去重落库与未读 | R:code:packages/local-runtime/src/inbox-executor.cjs | A:LocalInbox,validInbound | S:入站必须 DM、TEXT、有正文、identity_verified=1 且无冲突、receiver_id 等于本账号、sender 与 receiver 都是 24 位 ID 且不相等；平台消息 ID 必须过 validDmMessageId
+legacy-evidence.cjs[PR6T]: F:旧库 UNKNOWN 证据导入：把可精确绑定的旧尝试转成原生只读核对记录 | R:code:packages/local-runtime/src/legacy-import.cjs | A:importUnknownEvidence | S:必须在事务内调用；账号、发送人、接收人、目标、内容、时间必须全部精确绑定，任一缺失只保留档案并计入 uncertain；导入的是已撤销授权与不可执行任务
+legacy-history.cjs[PR6T]: F:旧历史导入：把旧 run、帖子、评论与审核转成原生只读历史，无法归属的保留计数 | R:code:packages/local-runtime/src/legacy-import.cjs | A:importHistory | S:旧历史一律不可执行，导入的 job 状态是 INTERRUPTED 且授权已撤销；配置缺失即 LEGACY_RUN_CONFIGURATION_MISSING，不能凭空造配置
+legacy-import.cjs[PR7T]: F:旧数据导入的白名单与清洗：允许表、排除表、凭据字段与 URL 脱参 | R:code:packages/local-runtime/src/account-safety.cjs | A:prepareLegacySnapshot,importLegacySnapshot,legacyEntities | S:User/Session/RefreshGrant 等会话与设备表明确排除；凭据字段名集合命中即丢弃；URL 里的 xsec_token 等参数必须删除后再入库
+manual-contact.cjs[DB7T]: F:人工审核后的单次联系：资格判定、正文校验与预览 | R:code:packages/local-runtime/src/review.cjs | A:ManualContact | S:审核必须 APPROVED、context=SUFFICIENT、decision=MATCH 且 source_hash 与当前一致；独立审核还要求批次 COMPLETED 与 scope_hash 匹配；冻结轮次要求屏障 ready
+migrations.cjs[PD8T]: F:迁移清单与校验和：按文件顺序生成 version，冻结 schema 版本号 | R:code:packages/local-runtime/src/schema.sql | A:migrations,SCHEMA_VERSION | S:version 由数组下标决定，插入文件会让所有后续版本号平移；checksum 是文件内容哈希，改历史迁移会导致升级校验失败
+model-executor.cjs[DA7T]: F:模型审核执行器：校验队列与授权后调用 Qwen，不重放已提交批次 | R:code:packages/local-runtime/src/review.cjs,code:packages/local-runtime/src/adapters/collection/qwen-provider.ts | A:LocalModelExecutor | S:不接受环境变量、调用方 URL、重试或降级型号；每批需要一次性同意或已验证的冻结持续同意；已提交（含 UNKNOWN）的批次永不重放
+platform-protocol.cjs[II7T]: F:登录协议校验：二维码格式与有效期、登录状态、会话 cookie 结构 | R:code:packages/domain/src/accounts/account-execution-policy.ts | A:qr,status,validSession | S:二维码必须是 data:image/png 或 jpeg 的 base64 且解码后魔数正确，有效期上限 240 秒；会话必须含至少一个 xiaohongshu.com 域 cookie，(name,domain,path) 不可重复
+post-diagnostic.cjs[IR6T]: F:单帖只读诊断：校验访问引用与同意串后跑一次有界读取 | R:code:packages/local-runtime/src/adapters/collection/adapters/xhs-mcp.ts | A:PostDiagnostic | S:同意串按模式区分（single-post-read-v1 / single-post-bounded-read-v1），不能混用；requestKey 必须是 UUID；只读，不派生采集、模型或发送
+post-versions.cjs[ID6T]: F:同一笔记多轮快照的查询与当前配置判定 | R:code:packages/contracts/src/run-post-feed.ts | A:PostVersions | S:current_configuration 要求策略与模型版本同时匹配且模型已授权，只匹配一半不算当前；legacy 标记来自 LEGACY_HISTORY_READ_ONLY 原因
+preferences.cjs[DC5T]: F:工作区偏好：当前配置选择与旧偏好的兜底读取 | R:code:packages/local-runtime/src/workspace.cjs | A:LocalPreferences | S:写入必须带 version 且与当前一致，否则 PREFERENCE_CHANGED；配置必须存在且未归档；旧偏好只读兜底，不回写
+queue.cjs[DR8T]: F:本地队列：授权签发、入队、领取租约、派发标记与完成 | R:code:packages/local-runtime/src/database.cjs | A:LocalQueue | S:授权 TTL 1 秒到 900 秒，scope 序列化上限 128000 字节；kind 只有 COLLECT/REVIEW/SEND/INBOX；领取用 owner/fence/expiry，过期工作必须先对账
+recovery.cjs[DR7T]: F:恢复预览：统计未决发送、旧库未核对、未知模型批次与安全状态 | R:code:packages/local-runtime/src/send-safety.cjs | A:LocalRecovery | S:RESERVED/DISPATCHED/UNKNOWN 一律计入未知，不能当失败；旧库未链接核对记录的尝试单独计数，不并入原生未知
+reporting.cjs[DO6T]: F:报表查询：分页、文本筛选与上海日界日期范围校验 | R:code:packages/local-runtime/src/send-safety.cjs | A:LocalReporting | S:日期必须是 YYYY-MM-DD 且按 +08:00 解析后再校验回读一致；起止倒置或同日即 INVALID_DATE_RANGE；页码 1-100000
+review.cjs[DB8S]: F:评论审核编排：策略计划、批次预留、派发与整轮屏障判定 | R:code:packages/local-runtime/src/automatic-review.cjs | A:LocalReview,dayAt | S:预留与派发分两步，派发前必须重验授权，否则停用后仍会发出请求；UNKNOWN 批次保留占用且不重放；日界按 UTC+8 计算
+run-review.cjs[DB6T]: F:整轮批量审核的预览：对每帖每策略去重后列出待建批次 | R:code:packages/local-runtime/src/review.cjs | A:RunReview | S:已有批次或已有 QUEUED/RUNNING/UNKNOWN 审核任务的组合一律跳过并计数，绝不重试已失败的模型批次
+runner.cjs[DR7T]: F:本地任务循环：按注入的执行器领取任务、执行并回写结果 | R:code:packages/local-runtime/src/queue.cjs | A:LocalRunner | S:执行器必须显式注入，打开桌面不会注册任何平台适配器，也不会恢复历史外部动作；owner 用随机 UUID 标识本次循环
+schema.sql[PD9T]: F:v1 基础库结构：安装、设置、配置、账号、授权、任务、账号租约、联系台账、发送尝试、日额度、安全状态、审计、采集与收件消息、旧库导入 | R:code:packages/local-runtime/src/migrations.cjs | A:- | S:jobs 的 request_key 唯一且授权与任务一对一；recipient_outstanding 与 recipient_uncertain 两个部分唯一索引是跨渠道去重与未知保护的物理保障，删掉即失去防重复联系；schema_migrations 记录 checksum，改历史迁移会让升级失败
+send-executor.cjs[DS9T]: F:发送执行器：校验发送范围与账号资格后调用精确发送通道 | R:code:packages/local-runtime/src/send-safety.cjs,code:packages/local-runtime/src/account-safety.cjs | A:LocalSendExecutor | S:scope 哈希必须等于 job.payload_hash 且未派发未取消，否则 SEND_AUTHORIZATION_REQUIRED；必须 assertSendAccount 并检查历史发送限制；提交前要再验一次资格
+send-safety.cjs[DS9S]: F:发送安全：范围校验、配额预留、账号日额度与跨渠道去重 | R:code:packages/local-runtime/src/send-executor.cjs | A:SendSafety,validateScope,dayAt | S:target 只允许 8 个已知键且值必须是非空字符串，否则 INVALID_TARGET_REFERENCE；日界按 Asia/Shanghai 计算；预留与消费必须在同一事务
+service.cjs[DC6S]: F:配置管理：四类配置的校验、保存、归档与列表 | R:code:packages/local-runtime/src/workflow.cjs | A:validateConfiguration | S:kind 只有 KEYWORDS/MATCHING/COMMENT_TEMPLATE/DM_TEMPLATE 四类；body 序列化上限 32768 字节；名称去空白后 1-100 字符
+workflow.cjs[DB8T]: F:工作流总览与模型设置：能力位、策略列表、模型保存与暂停 | R:code:packages/local-runtime/src/review.cjs | A:LocalWorkflow | S:能力位由注入函数决定，不能硬编码为可用；保存模型必须带 priceAck 与同意串，改型号或上限要重新确认；已归档配置不出现在策略列表
+workspace.cjs[DO6T]: F:工作台总览与任务列表：计数、安全状态与按条件筛选 | R:code:packages/local-runtime/src/send-safety.cjs | A:LocalWorkspace | S:每页固定 30 条；kind 与 state 只接受封闭枚举，runId 上限 100 字符；holds 必须原样透出，不能只显示“无异常”
+
+===/Users/kleene/projects/social-lead-workbench/packages/local-runtime/src/adapters/auto-contact/===
+live-journal-progress.ts[IO6T]: F:把阶段日志的阶段名映射成前端实时相位 | R:code:packages/domain/src/common/journey-live.ts | A:journalPhase,watchJournalProgress | S:只读自有私有日志；尾部被截断的行只用于展示，绝不能作为回执证据；未知阶段返回 undefined 而不是猜一个相位
+reply-stage-journal.ts[IO7T]: F:阶段日志的读取与校验：协议常量、回执证据 schema 与端点白名单 | R:code:integrations/inbox-mcp/exactreply/journal.go | A:replyJournalProtocol,ExecutionRecorder | S:endpointHost 只允许 edith 与 www.xiaohongshu.com，path 只允许 /api 下固定段；打开文件必须 O_EXCL 且目录私有；阶段与回执状态都是封闭枚举
+xhs-preflight-transport.ts[IN6T]: F:预检传输：把预检目标经受管 MCP 发到 workbench_reply_preflight 并校验返回 | R:code:integrations/inbox-mcp/exactreply/preflight.go | A:XHS_PREFLIGHT_PROTOCOL,preflightTargetSchema | S:postId 必须等于 postReference.postId；端点只能从 mcp/policy 的 endpointUrl 取，不能由调用方传 URL；预检是只读的，写操作计数必须为 0
+xhs-reply-transport.ts[IN8S]: F:回复传输：把发送请求封装成精确回复命令，经受管 MCP 提交并核对结果 | R:code:packages/domain/src/auto-contact/xhs-reply-protocol.ts,code:packages/local-runtime/src/adapters/auto-contact/reply-stage-journal.ts | A:OwnedReplyEndpoint | S:只允许一次 exact 调用，UNKNOWN 不得重试；端点只能来自 mcp/policy；结果必须经 verifyXhsReplyResult 核对，不能只看 MCP 返回的 kind
+xhs-restriction-transport.ts[IN7T]: F:限制巡检传输：两种协议（帖子级与主页级）的目标校验与安全文本过滤 | R:code:integrations/inbox-mcp/exactreply/restriction.go | A:XHS_RESTRICTION_PROTOCOL,XHS_PROFILE_RESTRICTION_PROTOCOL,restrictionTargetSchema | S:帖子级协议要求 postId 等于 postReference.postId，主页级协议不得带 postId；safeText 拒绝含 URL、邮箱、7 位以上数字或 24 字符以上令牌的文本
+
+===/Users/kleene/projects/social-lead-workbench/packages/local-runtime/src/adapters/collection/adapters/===
+post-failure.ts[IO5T]: F:把 MCP 详情失败文本映射成受控的 postReason 与 ReadFailure | R:code:packages/contracts/src/collection-diagnostic.ts | A:postFailure | S:登录、限流、验证码、封禁类包装必须放行给原有停止逻辑，不能吞成 PAGE_UNAVAILABLE；只匹配受审源码里出现的包装串，不猜关键词
+search-failure.ts[IO5T]: F:把搜索失败文本映射成受控 searchReason，并取出观测 | R:code:packages/contracts/src/collection-diagnostic.ts | A:searchFailureReason,searchFailureObservation | S:优先解析 crmSearchFailure 信封，旧版纯文本只做三条精确匹配；其余一律 UNKNOWN，绝不保留上游错误原文
+xhs-cover.ts[IN6T]: F:封面与头像的图片诊断：URL 分类、结果计数与唯一封面升级 | R:code:packages/contracts/src/image-diagnostic.ts | A:inspectXhsCover,inspectXhsDetailCover,inspectXhsAvatar | S:只对 sns-webpic-qc.xhscdn.com 的 http 封面做 HTTPS 升级，其他 host、带端口、带 query 的引用与头像一律不升级
+xhs-mcp.ts[IN9S]: F:小红书 MCP 读取适配器：把 MCP 工具返回转成领域 Post/Comment，并挂上覆盖、检查点与图片诊断 | R:code:packages/local-runtime/src/adapters/collection/mcp/transport.ts,code:packages/local-runtime/src/adapters/collection/adapters/post-failure.ts | A:XhsMcpAdapter | S:读取预算必须来自 comment-read-policy 的 readWindow，不能让调用方传更大值；load_all_comments 与 click_more_replies 恒为 false；分块回执必须经 validateChunk 才可采纳
+
+===/Users/kleene/projects/social-lead-workbench/packages/local-runtime/src/adapters/collection/mcp/===
+policy.ts[IN7T]: F:MCP 读取策略：两种模式的工具参数 schema 与端点校验 | R:code:packages/local-runtime/src/adapters/collection/mcp/transport.ts | A:endpointUrl,toolArguments,mcpModes | S:端点只接受 http://127.0.0.1:<4-5位端口>/mcp 的数字回环，禁止 DNS、凭据、其他 IP 写法与代理；工具参数是 strict，多传字段即拒绝
+transport.ts[IN7S]: F:只读 MCP 传输：单次有限会话、禁用重连与服务端推送 | R:code:packages/local-runtime/src/adapters/collection/mcp/policy.ts | A:ReadOnlyMcpTransport,XhsHttpTransport | S:每次 run 或探测一个会话，不做 OAuth、不读 cookie、不重连、不接受 HTTP 调用方传 URL；能力探测走 supports* 而不是猜工具是否存在
+
+===/Users/kleene/projects/social-lead-workbench/packages/local-runtime/src/adapters/collection/===
+qwen-env.cjs[CC6T]: F:后端环境的显式转交：只挑 QWEN_* 白名单变量，并按授权与预算决定是否带 Key | R:code:packages/local-runtime/src/adapters/collection/qwen-provider.ts | A:qwenEnvironment | S:只有 ENABLED=1、同意串匹配、日额度 1-100、型号受控且 priceAck 一致时才读 QWEN_API_KEY；不要枚举或检查无关密钥
+qwen-env.d.cts[CC3T]: F:qwen-env.cjs 的类型声明 | R:code:packages/local-runtime/src/adapters/collection/qwen-env.cjs | A:- | S:返回 Record 是刻意宽松，实际只含白名单键
+qwen-provider.ts[DA7T]: F:Qwen 审核调用：环境就绪判定、整帖容量校验与请求发出 | R:code:packages/local-runtime/src/adapters/collection/qwen-env.cjs | A:qwenSettings,requestQwen,QWEN_CONSENT | S:型号未验证时状态 INVALID_CONFIG 且禁止调用，绝不回退 Flash；同意串必须是 beijing-original-comments-v2；超时 20 秒、批 5 条、0 次自动重试
+
+===/Users/kleene/projects/social-lead-workbench/packages/local-runtime/src/adapters/direct-messages/===
+dm-readback.ts[IN7T]: F:私信只读回读：打开已尝试的精确会话，按内容哈希匹配唯一一条消息 | R:code:packages/domain/src/direct-messages/dm-send-protocol.ts | A:parseExistingDm,inspectExistingDm,DM_OBSERVE_PROTOCOL | S:返回必须是 inputs=0、submissions=0、openInvocations=1；匹配条数必须恰好 1 且不能 failed 或 pending，否则 DM_READBACK_UNVERIFIED；只注册无发送能力的工具
+dm-transport.ts[IN7T]: F:私信精确发送传输：单次有界 MCP 调用，端点与二进制哈希先校验 | R:code:packages/domain/src/direct-messages/dm-send-protocol.ts | A:sendExactDm | S:端点必须是 127.0.0.1 的 http /mcp 且无凭据、query、hash；请求总数上限 12、GET 直接 405；binarySha256 与 accountId 不符即 DM_OWNED_ENDPOINT_MISMATCH
+
+===/Users/kleene/projects/social-lead-workbench/packages/local-runtime/src/bundles/===
+collection-provider.ts[FV4T]: F:采集 bundle 出口：聚合采集器、覆盖汇总、MCP 适配器与读取窗口 | R:code:packages/domain/src/collection/collector.ts | A:- | S:这是打包入口，只做转出；加新依赖会进桌面运行包，必须确认不引入 Nest/Prisma 或进程启动器
+model-provider.ts[FV4T]: F:模型 bundle 出口：只转出 Qwen 请求与设置 | R:code:packages/local-runtime/src/adapters/collection/qwen-provider.ts | A:- | S:与纯策略 bundle 分开，只有显式注册的 REVIEW 执行器在授权与预算预留后才加载它
+platform-provider.ts[FV4T]: F:平台 bundle 出口：MCP 传输、精确发送、预检、日志与私信回读 | R:code:packages/local-runtime/src/adapters/collection/mcp/transport.ts | A:- | S:这里导出的都是能触达平台的组件，渲染层不得直接引用；加导出等于扩大桌面运行包的攻击面
+policy.ts[FV4T]: F:纯策略 bundle 出口：协议解码、脱敏、规则判定、容量与节奏，不含传输与密钥 | R:code:packages/domain/src/collection/collection-barrier.ts | A:- | S:该 bundle 刻意不包含可执行模型请求与传输，加进来会破坏“策略包不可发请求”的边界
+
+===/Users/kleene/projects/social-lead-workbench/packages/local-runtime/src/migrations/===
+002-inbox.sql[PM6T]: F:v2 迁移：收件人租约表与已收消息表 | R:code:packages/local-runtime/src/schema.sql | A:- | S:inbox_receivers 以 account_id 为主键，一个账号同时只能有一个收件会话；state 是封闭 CHECK 枚举，加状态必须改迁移
+003-collection-review.sql[PD7T]: F:v3 迁移：审核策略、模型档案、采集轮次与评论审核表 | R:code:packages/local-runtime/src/schema.sql | A:- | S:model_profile 的 id 被 CHECK 限定为 qwen，日额度 1-100；price_ack 与 consent 是授权判定的一部分，不能置空
+004-contact-rules.sql[PD6T]: F:v4 迁移：联系规则、账号保留限制与账号能力表 | R:code:packages/local-runtime/src/schema.sql | A:- | S:阈值 CHECK 0-100；plans 与 accounts 必须 json_valid；account_holds 对 (account_id, channel, source_hash) 唯一
+005-model-submission.sql[PD5T]: F:v5 迁移：模型提交批次表，用于幂等与在途判定 | R:code:packages/local-runtime/src/schema.sql | A:- | S:batch_id 直接引用 review_batches，一个批次只能提交一次
+006-collection-checkpoints.sql[PD5T]: F:v6 迁移：每帖检查点与剩余锚点 | R:code:packages/local-runtime/src/schema.sql | A:- | S:post_id 是主键，一帖只能有一个检查点；checkpoint 必须 json_valid 且带哈希与序号
+007-automation.sql[PD6T]: F:v7 迁移：自动化决策表，按轮、审核、规则、渠道幂等派生 | R:code:packages/local-runtime/src/schema.sql | A:- | S:UNIQUE(run_id,review_id,rule_id,channel) 是幂等派生的唯一保障，去掉会重复建任务
+008-independent-evidence.sql[PR6T]: F:v8 迁移：审核批次加 review_mode，并建证据核对表与单运行唯一索引 | R:code:packages/local-runtime/src/schema.sql | A:- | S:one_evidence_check 是部分唯一索引，保证同一时刻只有一条 RUNNING 核对；review_mode 默认 FROZEN_RUN，旧行不受影响
+009-legacy-evidence.sql[PR5T]: F:v9 迁移：旧证据链接表，把导入的旧尝试绑到原生核对记录 | R:code:packages/local-runtime/src/schema.sql | A:- | S:attempt_id 唯一，一条发送尝试只能被一次导入链接；主键是 (import_id, ordinal)，重复导入同一序位会冲突
+010-automatic-diagnostics.sql[PD6T]: F:v10 迁移：自动审核授权与任务表，以及单帖诊断表 | R:code:packages/local-runtime/src/schema.sql | A:- | S:automatic_review_tasks 主键 (run_id, post_id, policy_id) 保证每轮每帖每策略只派生一次；授权表把 price_ack 与 request_policy 一起落库，改价必须重新授权
+
+===/Users/kleene/projects/social-lead-workbench/packages/local-runtime/test/===
+accounts.test.cjs[TI5T]: F:账号登录流程的离线测试：同意、扫码、停止证明与身份唯一性 | R:code:packages/local-runtime/src/accounts.cjs | A:- | S:断言未确认停止时账号保持 UNVERIFIED 且写入 platform 安全状态；同一平台身份不能注册到第二个本地账号
+automatic-review.test.cjs[TB6T]: F:自动审核的离线测试：冻结同意、配额、重启恢复与价格变更失效 | R:code:packages/local-runtime/src/automatic-review.cjs | A:- | S:断言 UNKNOWN 批次重启后不复活且占用保留；改 price_ack 会让待发审核任务直接 CANCELLED
+automation.test.cjs[TB7T]: F:自动联系编排的离线测试：整轮屏障、账号池分配、风险不回落与收件让出 | R:code:packages/local-runtime/src/automation.cjs | A:- | S:断言账号池按剩余共享额度各分配一次且不重复；命中 account_holds 后不得换下一个账号继续发
+collection-executor.test.cjs[TB6T]: F:采集执行器的离线测试：任务哈希、派发标记与运行器装配 | R:code:packages/local-runtime/src/collection-executor.cjs | A:- | S:断言 scope 哈希必须等于 payload_hash，伪造或改过的 scope 直接 AUTHORIZATION_REQUIRED
+collection-review.test.cjs[TB7T]: F:采集与审核衔接的测试：同轮去重、跨轮不借历史、屏障未完成不放行 | R:code:packages/local-runtime/src/review.cjs | A:- | S:断言第二轮重复帖子新增评论为 0；采集未 finish 时 review.plan 必须抛 BARRIER
+contact.test.cjs[TB7T]: F:联系与发送安全的测试：模板绑定、额度、跨渠道去重与账号风险保留 | R:code:packages/local-runtime/src/contact.cjs | A:- | S:断言命中历史保留限制后不再发出任何 SEND；模板正文或版本变更必须 CONTACT_TEMPLATE_CHANGED
+data-manager.test.cjs[TD5T]: F:数据副本的测试：导入不改当前库、激活绑定预览哈希、指针持久化 | R:code:packages/local-runtime/src/data-manager.cjs | A:- | S:断言激活必须带同意串与精确预览哈希，缺一即拒绝；旧库文件保留且生成一致性备份
+evidence.test.cjs[TR6T]: F:未知发送核对的测试：两次独立回读、不一致保留未知、停止失败写安全状态 | R:code:packages/local-runtime/src/evidence.cjs | A:- | S:断言两次回读不一致时状态仍是 UNVERIFIED 且额度不退还；伪造 UI 观测会被 EVIDENCE_PREVIEW_CHANGED 拒绝
+flow-fixture.cjs[TQ6T]: F:流程测试的共用夹具：临时库、固定时钟、合成账号与采集审核辅助函数 | R:code:packages/local-runtime/test/flow-fixture.cjs | A:fixture,collect,evaluate,entry,output | S:时钟固定为 2026-11-06T04:00Z 并由 advance 推进，测试里不能依赖真实时间；每个夹具自建临时目录并在 after 中清理
+inbox-executor.test.cjs[TM6T]: F:收件执行器的测试：历史导入、身份不符不落库、停止失败保留平台暂停 | R:code:packages/local-runtime/src/inbox-executor.cjs | A:- | S:断言 identity=MISMATCH 时 received_messages 为 0；停止失败要写 PLATFORM_PROCESS_STOP_UNCONFIRMED
+inbox.test.cjs[TM6T]: F:收件状态机的测试：入站过滤、去重与回复资格 | R:code:packages/local-runtime/src/inbox.cjs | A:- | S:断言 validInbound 对非 DM、非 TEXT、身份冲突、sender 等于 receiver 一律返回 false
+independent-review.test.cjs[TB6T]: F:独立历史审核的测试：用当前策略、不满足自动屏障、来源不完整即拒绝 | R:code:packages/local-runtime/src/review.cjs | A:- | S:断言搜索部分完成但单帖完整时可独立审核；来源不完整时 independentSource 必须 ready=false
+legacy-import.test.cjs[TP6T]: F:旧库导入的测试：业务历史保留、认证表排除、缺接收人身份即整体中止 | R:code:packages/local-runtime/src/legacy-import.cjs | A:- | S:断言 User 与 ModelSettings 被整体排除；缺 PlatformIdentity 时抛 IDENTITY_MISSING 且不落任何记录
+local-runtime.test.cjs[TR6T]: F:运行时基础能力的测试：库、队列、发送安全与运行器 | R:code:packages/local-runtime/src/database.cjs | A:- | S:断言队列领取的 owner/fence 语义与发送预留的额度占用，是运行时最基本的回归面
+manual-contact.test.cjs[TB5T]: F:人工联系的测试：必须已批准、精确预览与一次性同意 | R:code:packages/local-runtime/src/manual-contact.cjs | A:- | S:断言审核被改成 REJECTED 后已排队的发送立即失效；归档或导入的审核不能通过人工批准获得发送权
+migrations.test.cjs[TP6T]: F:迁移的测试：v1 升级到最新、校验和不符拒绝、备份恢复 | R:code:packages/local-runtime/src/migrations.cjs | A:- | S:断言改过的历史迁移会因 checksum 不符被拒绝；升级前必须生成一致性副本
+model-executor.test.cjs[TA6T]: F:模型执行器的测试：密钥保护、同意与批次提交 | R:code:packages/local-runtime/src/model-executor.cjs | A:- | S:断言模型 Key 只经 vault 读写；未授权或额度用尽时不发请求，已提交批次不重放
+post-diagnostic.test.cjs[TR5T]: F:单帖诊断的测试：受管会话、只读、不落原文与访问引用 | R:code:packages/local-runtime/src/post-diagnostic.cjs | A:- | S:断言诊断后 run_posts 为 0 且不保留访问引用；BOUNDED_REPLIES 模式必须把 mode 透传给适配器
+post-versions.test.cjs[TD5T]: F:笔记版本对比的测试：同 ID 文本变化、单侧观测与跨帖拒绝 | R:code:packages/local-runtime/src/post-versions.cjs | A:- | S:断言单侧缺失不得推断为删除；不同帖子比较必须 VERSION_POST_MISMATCH
+preferences-reporting.test.cjs[TO6T]: F:偏好、报表与工作台的测试：版本化写入、日期范围与分页筛选 | R:code:packages/local-runtime/src/reporting.cjs | A:- | S:断言偏好写入要带版本，日期范围非法即拒绝，分页固定 30 条
+process-recovery.test.cjs[TR6T]: F:进程级恢复的测试：子进程写入后崩溃，重启能对账未决工作 | R:code:packages/local-runtime/src/queue.cjs | A:- | S:用 child_process 起独立进程写入再杀掉，验证 fence 与过期租约的对账；不依赖同一进程内的状态
+recovery.test.cjs[TR6T]: F:恢复预览与恢复的测试：保留账号与联系限制、变更后预览失效 | R:code:packages/local-runtime/src/recovery.cjs | A:- | S:断言恢复只解除暂停、不清除 account_holds 与勿联系台账；新任务出现后旧 previewHash 必须失效
+run-review.test.cjs[TB6T]: F:整轮批量审核的测试：授权绑定、预算原子拒绝与未知阻断 | R:code:packages/local-runtime/src/run-review.cjs | A:- | S:断言预算不足时在任何请求入队前就拒绝；出现 UNKNOWN 后剩余新请求全部阻断
+send-executor.test.cjs[TS6T]: F:发送执行器的测试：评论与私信两条路径、回执校验与停止证明 | R:code:packages/local-runtime/src/send-executor.cjs | A:- | S:断言回执不匹配时不标记成功；停止未确认时不得交接凭据
+service.test.cjs[TD5T]: F:配置服务的测试：本地初始化、关键词保存与审核决定不产生发送授权 | R:code:packages/local-runtime/src/service.cjs | A:- | S:断言初始化后 initialized 为真且无需登录身份；审核决定必须带版本且不新增任何授权记录
+workflow.test.cjs[TB6T]: F:工作流与模型设置的测试：能力位、价格确认与暂停 | R:code:packages/local-runtime/src/workflow.cjs | A:- | S:断言未授权模型时能力位为 false；改型号或价格后必须重新确认，旧 priceAck 不能沿用
+workspace.test.cjs[TD5T]: F:工作台读取的测试：作用域历史、未知结果权威性与账号修改拒绝在途任务 | R:code:packages/local-runtime/src/workspace.cjs | A:- | S:断言有排队任务时改账号会抛错而不是静默改范围；断开账号不删除身份与历史
+
+===/Users/kleene/projects/social-lead-workbench/scripts/===
+build-device-vault.mjs[XV6T]: F:编译 macOS device-vault：swiftc 编译后写构建清单与源码哈希 | R:code:native/macos/device-vault.swift | A:- | S:只在 darwin/arm64 执行，其他平台静默跳过；产物目录 0700，构建清单记录源码哈希，改源码必须重编
+build-module.mjs[XV6T]: F:按名字构建 domain / local-runtime / legacy-migration 并补拷非 TS 产物 | R:code:packages/local-runtime/package.json | A:- | S:名字只允许三个，拼错直接抛错；先 rmSync dist 再编译，拷贝只针对源码目录里的非编译文件
+build-windows-host.mjs[XV6T]: F:在 Windows 上编译 .NET helper 并校验平台能力 | R:code:native/windows/WindowsHost.cs | A:- | S:只在 win32 执行且要求 Windows 11 x64，ARM64/WSL/Server 一律拒绝；缺 SystemRoot 直接失败
+check-structure.mjs[XV5T]: F:结构检查：每个 workspace 必须有 package.json，依赖与 exports 必须显式声明 | R:code:docs/design/project-structure.md | A:- | S:apps 与 packages 下每个目录都要有清单，缺一个就失败；跳包相对穿透 src 会被判违规
+check-ui-conventions.mjs[XQ8L]: F:UI 规范检查：字号、圆角、字重、间距档位，硬编码颜色、任意值、!important 与 data-slot 覆写 | R:code:AGENTS.md,code:apps/web/DESIGN.md | A:- | S:FONT_SIZE_SCALE、RADIUS_SCALE、FONT_WEIGHT_SCALE 是白名单，加档位要同步 DESIGN.md；--strict 让 warning 也算失败；ALLOWED 例外必须写文件加规则加理由
+test-all.mjs[XQ7T]: F:统一测试入口：逐组跑完所有测试，前一组失败不掩盖后面的组 | R:code:package.json | A:- | S:不能用 && 串起来，否则第一个红就吞掉后续组；集成测试按 tests/integration 目录自动发现
+test-device-vault.mjs[OQ6T]: F:在新建临时钥匙串上用假数据实测 macOS Keychain 往返 | R:code:native/macos/device-vault.swift | A:- | S:非 darwin/arm64 直接 SKIP 退出 0，并明说其他执行器未验证；绝不碰用户已有钥匙串条目
+test-windows-native.mjs[OQ6T]: F:Windows 真机测试 DPAPI、ACL 与 Job Object，用全新测试目录与假密钥 | R:code:native/windows/WindowsDesktop.cs | A:- | S:非 win32 直接 SKIP 并声明不主张 Windows 成功；测试目录与 deviceId/keyId 都随机生成，不复用已有数据
+
+===/Users/kleene/projects/social-lead-workbench/scripts/desktop/===
+build-environment.cjs[XV6T]: F:构建环境隔离：只暴露固定 PATH、GOPROXY=off 与独立缓存目录 | R:code:scripts/desktop/build-mcp.mjs | A:buildEnvironment | S:只允许 darwin/arm64 与 win32/x64；编译器、输出、模块缓存必须都是绝对路径；GOPROXY 与 GOSUMDB 关闭，绝不继承模型 Key 或代理凭据
+build-mcp.mjs[XV7T]: F:构建桌面 MCP：拷上游源码后打补丁换掉只读入口并按模式裁剪工具注册 | R:code:integrations/desktop-mcp/desktop_boundary.go | A:- | S:补丁锚点必须唯一，锚点变了直接抛 Source overlay anchor changed；交叉编译 Windows 要显式传 --windows-x64；不在构建期跑浏览器或平台调用
+build-native.mjs[XV5T]: F:按宿主平台分派原生构建：mac 编 vault 与监督器，win 编 host | R:code:scripts/build-device-vault.mjs | A:- | S:其他平台直接 UNREVIEWED_NATIVE_BUILD_HOST，不做静默降级
+build-supervisor.mjs[XV5T]: F:用 clang 以 -Wall -Wextra -Werror 编译 macOS 监督器 | R:code:native/macos/desktop-supervisor.c | A:- | S:只允许 darwin/arm64；警告即错误，编译器告警会让构建失败
+build-test-native.mjs[XV4T]: F:为测试准备原生件：只在 mac arm64 上编监督器 | R:code:scripts/desktop/build-supervisor.mjs | A:- | S:其他平台什么都不做，依赖原生件的测试需自行跳过而不是假通过
+dev.mjs[XV7T]: F:开发态启动：起 Vite 后用真实 Electron 主进程连 127.0.0.1:5173 | R:code:scripts/desktop/launch.mjs | A:- | S:窗口、preload、IPC 白名单与本地库和打包态完全一致，只有渲染地址不同；app.isPackaged 时 --dev 会被拒绝
+launch.mjs[XV6T]: F:启动 Electron：为子进程剔除 ELECTRON_RUN_AS_NODE 后拉起真实运行时 | R:code:apps/desktop/src/main.cjs | A:- | S:必须只对子进程删除该变量，否则 require('electron') 返回路径字符串而不是运行时 API；不能全局改宿主环境
+native-status.mjs[XV7T]: F:只读原生资源报告：缺哪些、以及生成它们的确切命令 | R:code:apps/desktop/src/native-resources.cjs | A:- | S:不构建、不启动、不复制浏览器；资源不齐时退出码 1，打包前必须先跑它
+prepare-browser.mjs[XV6T]: F:把已选定的 Chromium.app 复制进原生资源目录并写 browser-build.json | R:code:integrations/inbox-mcp/browser/browser_download.go | A:- | S:只复制不可变资源，不含 profile/cache/cookie；不下载任何东西；复制前校验架构、版本与每个文件的权限
+prepare-windows-browser.mjs[XV6T]: F:Windows 浏览器归档的静态准备：校验固定哈希、ZIP 结构与文件清单 | R:code:apps/desktop/src/windows-browser-source.json | A:- | S:必须传绝对路径与已审哈希，且哈希要等于 windows-browser-source.json 的 archiveSha256；ZIP 条目 1-5000，不支持分卷与异常结构
+release-check.mjs[XV7T]: F:发布门禁：release-readiness.json 里任一项不是 verified 就阻断 | R:code:apps/desktop/release-readiness.json | A:- | S:判定是严格等于 verified，其他任何值（含 live-unverified）都算阻断；失败只设 exitCode 并列出全部阻断项
+stage-layout.cjs[OV8T]: F:装配白名单：逐文件校验类型与扩展名后产出目标字节映射 | R:code:scripts/desktop/stage.mjs | A:packageFiles | S:符号链接与非普通文件直接拒绝；.env、sqlite、db、sealed 一律拒绝；扩展名白名单之外的文件也会被拒
+stage.mjs[OV7T]: F:把已构建内容按白名单组装进 .local/desktop-stage | R:code:scripts/desktop/stage-layout.cjs | A:- | S:替换前必须确认目标是自有目录（有 .owned-stage 标记），否则拒绝删除；先校验全部输入再替换
+test-os-credentials.cjs[OS6T]: F:用 Electron 实测系统凭据往返：只在私有临时目录用合成值 | R:code:packages/local-runtime/src/credentials.cjs | A:- | S:必须断言 safeStorage 可用；只用新生成的合成值，绝不读取用户已有条目
+test-package.cjs[OV6T]: F:运行打包产物的离线自检并核对回执字段 | R:code:apps/desktop/src/main.cjs | A:- | S:必须传绝对路径的 .app 或 .exe；只透传最小环境变量；回执必须严格等于预期对象（含 packaged:true 与 externalExecutors:false）
+validate-windows-runtime.cjs[OQ6T]: F:Windows 真机的组件机制验收：用合成数据跑 helper、ACL 与受管进程 | R:code:native/windows/WindowsHost.cs | A:- | S:只在 win32 且平台能力支持时执行，否则直接抛错不留“成功”记录；先删旧 windows-validation.json，验收通过才写回
+verify-package.cjs[OV7T]: F:只读校验最终包：ASAR 文件集与白名单一致、无链接、无运行时数据 | R:code:scripts/desktop/stage-layout.cjs | A:verifyArchive | S:包里出现 .env、sqlite、sealed、cookies 即失败；出现符号链接即失败；文件集必须与白名单完全相同，多一个少一个都算陈旧
+windows-preview.ps1[OV6T]: F:Windows 上一条命令跑完原生验证、NSIS 构建与包内自检 | R:code:scripts/desktop/validate-windows-runtime.cjs | A:- | S:三个参数都必填（Go、模块缓存、浏览器归档）；必须是原生 win32:x64 的 Node，跳宿主结果不能算 Windows 认证
+windows-static-check.cjs[OQ6T]: F:任意宿主上只读检查 Windows 构建产物：PE 头、清单与浏览器文件树 | R:code:apps/desktop/src/windows-browser-source.json | A:- | S:PE 必须是 MZ 加 x64 机器码；浏览器清单的平台、架构、版本与归档哈希必须与 pin 完全一致；不能生成真机验证戳，也不能授权打包
+
+===/Users/kleene/projects/social-lead-workbench/scripts/desktop/platform-support/===
+platform.cjs[XV7T]: F:平台能力判定与 Windows 路径、工具链约束 | R:code:scripts/desktop/build-environment.cjs | A:platformCapability,windowsPath,isWithin | S:Windows 必须 NTFS 且 release 10.0.22000 以上；路径必须是盘符绝对路径且规范化后不变，拒绝 ..、尾部点或空格与设备名
+windows-tools.json[XV5T]: F:Windows 工具链固定来源：上游 commit、MCP 哈希、浏览器版本与浏览器审阅状态 | R:code:apps/desktop/src/windows-browser-source.json | A:- | S:browserReview.state 为 pending 且 archiveSha256 为 null，说明归档尚未审阅，不能当已验证；改版本要同时改 MCP 哈希与浏览器版本
+
+===/Users/kleene/projects/social-lead-workbench/scripts/local/===
+build-policy.mjs[XV7T]: F:用 esbuild 构建纯策略 bundle 并拷贝 schema 与迁移 SQL | R:code:packages/local-runtime/src/bundles/policy.ts | A:- | S:只打包策略入口，不能把传输、模型请求或 Prisma 打进来；schema.sql 与 migrations 必须跟着拷，否则运行期找不到迁移
+import-offline.mjs[XO6T]: F:命令行导入离线导出：目标必须是新的绝对路径，先建空文件再导入 | R:code:packages/local-runtime/src/legacy-import.cjs | A:- | S:目标已存在即拒绝；输入必须是普通文件、非符号链接且不超过 512MB；用 wx 模式建文件抢占所有权，失败时清理
+
+===/Users/kleene/projects/social-lead-workbench/scripts/real-mcp/===
+core.mjs[XQ7T]: F:真实 MCP 预检：锁定已审二进制哈希、干净环境、回环端口与单会话检查 | R:code:integrations/inbox-mcp/main.go | A:reviewed,cleanEnvironment,preflight,createSession | S:已审构建哈希是硬编码白名单，升级必须重新审阅而不是回退到任意二进制或自动下载；端口必须回环且可用
+core.test.mjs[XQ6T]: F:真实 MCP 预检的离线测试：干净环境、端口占用与符号链接拒绝 | R:code:scripts/real-mcp/core.mjs | A:- | S:断言符号链接与会话目录越界被拒；只测预检逻辑，不启动真实平台
