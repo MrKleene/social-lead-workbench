@@ -216,9 +216,9 @@ function CollectionSetup({
         </Select>
       </FormField>
 
-      <FormField label="本次最多笔记数" error={numberError}>
+      <FormField label="一轮采集笔记帖子数量" error={numberError}>
         <Input
-          aria-label="本次最多笔记数"
+          aria-label="一轮采集笔记帖子数量"
           type="number"
           min={1}
           max={10}

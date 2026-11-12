@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkbenchRouteRouteImport } from './routes/_workbench/route'
 import { Route as WorkbenchIndexRouteImport } from './routes/_workbench/index'
 import { Route as WorkbenchWelcomeRouteImport } from './routes/_workbench/welcome'
-import { Route as WorkbenchAutoContactIndexRouteImport } from './routes/_workbench/auto-contact/index'
 import { Route as WorkbenchAutoContactPendingRouteImport } from './routes/_workbench/auto-contact/pending'
 import { Route as WorkbenchAutomationIndexRouteImport } from './routes/_workbench/automation/index'
 import { Route as WorkbenchCommentReviewIndexRouteImport } from './routes/_workbench/comment-review/index'
@@ -40,12 +39,6 @@ const WorkbenchWelcomeRoute = WorkbenchWelcomeRouteImport.update({
   path: '/welcome',
   getParentRoute: () => WorkbenchRouteRoute,
 } as any)
-const WorkbenchAutoContactIndexRoute =
-  WorkbenchAutoContactIndexRouteImport.update({
-    id: '/auto-contact/',
-    path: '/auto-contact/',
-    getParentRoute: () => WorkbenchRouteRoute,
-  } as any)
 const WorkbenchAutoContactPendingRoute =
   WorkbenchAutoContactPendingRouteImport.update({
     id: '/auto-contact/pending',
@@ -119,7 +112,6 @@ export interface FileRoutesByFullPath {
   '/work/accounts': typeof WorkbenchWorkAccountsRoute
   '/work/archive': typeof WorkbenchWorkArchiveRoute
   '/work/notices': typeof WorkbenchWorkNoticesRoute
-  '/auto-contact/': typeof WorkbenchAutoContactIndexRoute
   '/automation/': typeof WorkbenchAutomationIndexRoute
   '/comment-review/': typeof WorkbenchCommentReviewIndexRoute
   '/configuration/': typeof WorkbenchConfigurationIndexRoute
@@ -136,7 +128,6 @@ export interface FileRoutesByTo {
   '/work/accounts': typeof WorkbenchWorkAccountsRoute
   '/work/archive': typeof WorkbenchWorkArchiveRoute
   '/work/notices': typeof WorkbenchWorkNoticesRoute
-  '/auto-contact': typeof WorkbenchAutoContactIndexRoute
   '/automation': typeof WorkbenchAutomationIndexRoute
   '/comment-review': typeof WorkbenchCommentReviewIndexRoute
   '/configuration': typeof WorkbenchConfigurationIndexRoute
@@ -155,7 +146,6 @@ export interface FileRoutesById {
   '/_workbench/work/accounts': typeof WorkbenchWorkAccountsRoute
   '/_workbench/work/archive': typeof WorkbenchWorkArchiveRoute
   '/_workbench/work/notices': typeof WorkbenchWorkNoticesRoute
-  '/_workbench/auto-contact/': typeof WorkbenchAutoContactIndexRoute
   '/_workbench/automation/': typeof WorkbenchAutomationIndexRoute
   '/_workbench/comment-review/': typeof WorkbenchCommentReviewIndexRoute
   '/_workbench/configuration/': typeof WorkbenchConfigurationIndexRoute
@@ -174,7 +164,6 @@ export interface FileRouteTypes {
     | '/work/accounts'
     | '/work/archive'
     | '/work/notices'
-    | '/auto-contact/'
     | '/automation/'
     | '/comment-review/'
     | '/configuration/'
@@ -191,7 +180,6 @@ export interface FileRouteTypes {
     | '/work/accounts'
     | '/work/archive'
     | '/work/notices'
-    | '/auto-contact'
     | '/automation'
     | '/comment-review'
     | '/configuration'
@@ -209,7 +197,6 @@ export interface FileRouteTypes {
     | '/_workbench/work/accounts'
     | '/_workbench/work/archive'
     | '/_workbench/work/notices'
-    | '/_workbench/auto-contact/'
     | '/_workbench/automation/'
     | '/_workbench/comment-review/'
     | '/_workbench/configuration/'
@@ -245,13 +232,6 @@ declare module '@tanstack/react-router' {
       path: '/welcome'
       fullPath: '/welcome'
       preLoaderRoute: typeof WorkbenchWelcomeRouteImport
-      parentRoute: typeof WorkbenchRouteRoute
-    }
-    '/_workbench/auto-contact/': {
-      id: '/_workbench/auto-contact/'
-      path: '/auto-contact'
-      fullPath: '/auto-contact/'
-      preLoaderRoute: typeof WorkbenchAutoContactIndexRouteImport
       parentRoute: typeof WorkbenchRouteRoute
     }
     '/_workbench/auto-contact/pending': {
@@ -348,7 +328,6 @@ interface WorkbenchRouteRouteChildren {
   WorkbenchWorkAccountsRoute: typeof WorkbenchWorkAccountsRoute
   WorkbenchWorkArchiveRoute: typeof WorkbenchWorkArchiveRoute
   WorkbenchWorkNoticesRoute: typeof WorkbenchWorkNoticesRoute
-  WorkbenchAutoContactIndexRoute: typeof WorkbenchAutoContactIndexRoute
   WorkbenchAutomationIndexRoute: typeof WorkbenchAutomationIndexRoute
   WorkbenchCommentReviewIndexRoute: typeof WorkbenchCommentReviewIndexRoute
   WorkbenchConfigurationIndexRoute: typeof WorkbenchConfigurationIndexRoute
@@ -366,7 +345,6 @@ const WorkbenchRouteRouteChildren: WorkbenchRouteRouteChildren = {
   WorkbenchWorkAccountsRoute: WorkbenchWorkAccountsRoute,
   WorkbenchWorkArchiveRoute: WorkbenchWorkArchiveRoute,
   WorkbenchWorkNoticesRoute: WorkbenchWorkNoticesRoute,
-  WorkbenchAutoContactIndexRoute: WorkbenchAutoContactIndexRoute,
   WorkbenchAutomationIndexRoute: WorkbenchAutomationIndexRoute,
   WorkbenchCommentReviewIndexRoute: WorkbenchCommentReviewIndexRoute,
   WorkbenchConfigurationIndexRoute: WorkbenchConfigurationIndexRoute,

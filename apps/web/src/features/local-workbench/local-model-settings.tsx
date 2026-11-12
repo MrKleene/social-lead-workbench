@@ -63,7 +63,7 @@ export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }
   };
 
   return (
-    <ContentSection title="模型审核授权">
+    <ContentSection title="评论审核模型配置">
       {error ? <ErrorNotice error={error} /> : null}
 
       {data?.modelPaused ? (
@@ -75,9 +75,9 @@ export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }
       ) : null}
 
       <form className="flex max-w-xl flex-col gap-3" onSubmit={submit}>
-        <FormField label="审核模型">
+        <FormField label="模型选择">
           <Select value={selected?.id ?? ""} onValueChange={setModel}>
-            <SelectTrigger aria-label="审核模型">
+            <SelectTrigger aria-label="模型选择">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,18 +8,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckboxField } from "@/components/patterns/checkbox-field";
 import { ErrorNotice } from "@/components/feedback";
-import { localApi } from "./local-api";
-import { useLocalPlatform } from "./use-local-platform";
+import {
+  localApi,
+  type AutomationSteps,
+  type LocalConfiguration,
+} from "./local-api";
 import { useLocalRecords } from "./use-local-records";
 
 /**
  * 「开始自动化采集」的确认弹窗。
  *
- * 采集是有副作用的外部读取，必须经过「预览范围 → 勾选授权 → 提交」三步，
- * 不能点一下页头按钮就直接跑。范围来自已保存的本组偏好，不在这里改设置
- * （改设置去「采集设置」，避免两个地方各存一份）。
+ * 一次提交完成「预览范围 + 授权入队」：预览只是内部拿 scope 和哈希，不该让用户先点一次
+ * 「预览」再点一次「开始」。范围来自已保存的本组偏好，要改去「采集设置」。
  */
 export function StartCollectionDialog({
   open,
@@ -33,7 +33,7 @@ export function StartCollectionDialog({
   credentialsAvailable: boolean;
   onStarted: () => void;
 }) {
-  const platform = useLocalPlatform();
+  const client = useQueryClient();
   const selection = useLocalRecords("workspaceSelection", undefined, {
     enabled: open,
   });
@@ -47,73 +47,77 @@ export function StartCollectionDialog({
     enabled: open && !!configId,
   });
   const steps = useLocalRecords("automationSteps", undefined, { enabled: open });
-  const policies = useLocalRecords("workflowOverview", undefined, {
+  const accounts = useLocalRecords("accountOverview", undefined, {
     enabled: open,
   });
-  const rules = useLocalRecords("automationRules", undefined, { enabled: open });
+  const workflow = useLocalRecords("workflowOverview", undefined, {
+    enabled: open,
+  });
 
-  const [consent, setConsent] = useState(false);
-  const handled = useRef<string | null>(null);
-  const { setPlan } = platform;
-  const resetCollect = platform.collect.reset;
-
-  useEffect(() => {
-    if (!open) return;
-    handled.current = null;
-    setConsent(false);
-    setPlan(null);
-    resetCollect();
-  }, [open, setPlan, resetCollect]);
-
-  const queuedJob = platform.collect.data?.id;
-  useEffect(() => {
-    if (!queuedJob || handled.current === queuedJob) return;
-    handled.current = queuedJob;
-    onStarted();
-    onOpenChange(false);
-  }, [queuedJob, onStarted, onOpenChange]);
+  const start = useMutation({
+    mutationFn: async (input: {
+      accountId: string;
+      accountVersion: number;
+      accountDailyLimit: number;
+      batchLimit: number;
+      policyId: string | null;
+      policyRevision: number;
+      threshold: number;
+      plans: { channel: "DM" | "COMMENT"; content: string; templateId: string; templateVersion: number }[];
+    }) => {
+      const ruleIds = input.plans.length
+        ? [await syncReplyRule(input)]
+        : [];
+      const preview = await localApi("previewCollection", {
+        configId,
+        accountId: input.accountId,
+        batchLimit: input.batchLimit,
+        policyIds: input.policyId ? [input.policyId] : [],
+        ruleIds,
+      });
+      return localApi("authorizeCollection", {
+        scope: preview.scope,
+        previewHash: preview.previewHash,
+        requestKey: crypto.randomUUID(),
+        consent: preview.automaticRules
+          ? "bounded-read-with-frozen-contact-v1"
+          : "bounded-platform-read-once-v1",
+      });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["local"] });
+      onStarted();
+      onOpenChange(false);
+    },
+  });
 
   const config = configs.data?.find((item) => item.id === configId);
-  const account = platform.accounts.data?.accounts.find(
+  const account = accounts.data?.accounts.find(
     (item) => item.id === preferences.data?.accountId,
   );
   const policyId = steps.data?.policyId ?? null;
-  const ruleId = steps.data?.autoReply ? (steps.data?.ruleId ?? null) : null;
-  const policy = policies.data?.policies.find((item) => item.id === policyId);
-  const rule = rules.data?.find((item) => item.id === ruleId);
-  const missing = !policyId
-    ? steps.data?.autoReview
-      ? "需要配置匹配目标"
-      : ""
-    : !policy?.enabled
-      ? "匹配目标未授权"
-      : steps.data?.autoReply && !ruleId
-        ? steps.data?.channel === "COMMENT"
-          ? "需要配置评论规则"
-          : "需要配置私信规则"
-        : "";
-  const ready =
-    !!platform.accounts.data?.runtime.ready &&
-    credentialsAvailable &&
-    account?.state === "VERIFIED" &&
-    !!account.hasSession &&
-    !missing;
+  const policy = workflow.data?.policies.find((item) => item.id === policyId);
+  const plans = replyPlans(configs.data, steps.data);
+  const verified = account?.state === "VERIFIED" && !!account.hasSession;
+
+  /** 缺配置由页面统一拦在「需要先完成配置」弹窗里，这里只做确认。 */
+  const ready = !!preferences.data;
 
   const failure =
-    platform.error ?? selection.error ?? preferences.error ?? configs.error;
+    selection.error ?? preferences.error ?? configs.error ?? start.error;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>确认本轮采集范围</DialogTitle>
+          <DialogTitle>开始自动化采集</DialogTitle>
         </DialogHeader>
 
         {failure ? <ErrorNotice error={failure} /> : null}
 
         {!configId ? (
           <div className="flex flex-col gap-3">
-            <p className="text-body text-muted-foreground">未选择关键词组</p>
+            <p className="text-body text-destructive">未选择关键词组</p>
             <div>
               <Button variant="outline" asChild>
                 <Link to="/configuration?tab=keywords">采集设置</Link>
@@ -130,10 +134,7 @@ export function StartCollectionDialog({
                 label="采集账号"
                 value={
                   account
-                    ? account.name +
-                      (account.state === "VERIFIED" && account.hasSession
-                        ? " · 已验证"
-                        : " · 需重新登录")
+                    ? account.name + (verified ? "" : " · 未验证")
                     : "未选择"
                 }
               />
@@ -145,40 +146,15 @@ export function StartCollectionDialog({
                 label="后续步骤"
                 value={[
                   policy ? `评论匹配（${policy.name}）` : "仅采集",
-                  rule ? `自动回复（${rule.name}）` : null,
+                  plans.length
+                    ? `自动回复（${plans.map((plan) => (plan.channel === "DM" ? "私信" : "评论")).join("、")}）`
+                    : null,
                 ]
                   .filter(Boolean)
                   .join(" · ")}
               />
             </dl>
 
-            {missing ? (
-              <p role="alert" className="text-body text-destructive break-words">
-                {missing}
-              </p>
-            ) : null}
-
-            {platform.plan ? (
-              <div className="flex flex-col gap-3 border-t pt-4">
-                <p className="text-body break-words">
-                  {platform.plan.accountName} · {platform.plan.configurationName} ·
-                  最多 {platform.plan.batchLimit} 篇笔记 ·{" "}
-                  {platform.plan.reviewTargets} 个匹配目标
-                </p>
-                <p className="text-body text-muted-foreground break-words">
-                  关键词：{platform.plan.keywords.join("、")}
-                </p>
-                <CheckboxField checked={consent} onCheckedChange={setConsent}>
-                  {platform.plan.automaticRules
-                    ? `授权读取以上范围一次，并冻结 ${platform.plan.automaticRules} 条联系规则。`
-                    : `授权读取以上范围一次，并付费审核 ${platform.plan.automaticReviews} 个匹配目标。`}
-                </CheckboxField>
-              </div>
-            ) : null}
-
-            {account?.state !== "VERIFIED" || !account?.hasSession ? (
-              <p className="text-body text-muted-foreground">采集账号未验证</p>
-            ) : null}
           </>
         )}
 
@@ -186,37 +162,105 @@ export function StartCollectionDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          {configId && preferences.data ? (
-            platform.plan ? (
-              <Button
-                disabled={!consent || !ready}
-                pending={platform.collect.isPending}
-                onClick={() => platform.collect.mutate()}
-              >
-                授权并开始采集
-              </Button>
-            ) : (
-              <Button
-                disabled={!ready}
-                pending={platform.preview.isPending}
-                onClick={() =>
-                  platform.preview.mutate({
-                    configId,
-                    accountId: preferences.data.accountId,
-                    batchLimit: preferences.data.batchLimit,
-                    policyIds: policyId ? [policyId] : [],
-                    ruleIds: ruleId ? [ruleId] : [],
-                  })
-                }
-              >
-                预览采集范围
-              </Button>
-            )
-          ) : null}
+          <Button
+            disabled={!ready}
+            pending={start.isPending}
+            onClick={() =>
+              start.mutate({
+                accountId: preferences.data!.accountId!,
+                accountVersion: account?.revision ?? 1,
+                accountDailyLimit: account?.daily_limit ?? 10,
+                batchLimit: preferences.data!.batchLimit,
+                policyId,
+                policyRevision: policy?.revision ?? 1,
+                threshold: steps.data?.threshold ?? 80,
+                plans,
+              })
+            }
+          >
+            开始采集
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+/** 本轮要用的回复模板：选了哪个渠道就用哪个模板。 */
+function replyPlans(
+  configs: LocalConfiguration[] | undefined,
+  steps: AutomationSteps | undefined,
+) {
+  if (!steps?.autoReply) return [];
+  const pairs = [
+    ["COMMENT_TEMPLATE", steps.commentTemplateId, "COMMENT"],
+    ["DM_TEMPLATE", steps.dmTemplateId, "DM"],
+  ] as const;
+  return pairs.flatMap(([kind, id, channel]) => {
+    if (!id) return [];
+    const item = configs?.find((config) => config.id === id && config.kind === kind);
+    const content = item?.body.text ?? "";
+    if (!item || !content) return [];
+    return [
+      {
+        channel,
+        content,
+        templateId: item.id,
+        templateVersion: item.revision,
+      },
+    ];
+  });
+}
+
+/**
+ * 把三步设置翻译成一条自动联系规则并授权。
+ * 界面上不再暴露「规则」，所以每次开始前按当前设置同步一次，id 固定为 auto-reply。
+ */
+async function syncReplyRule(input: {
+  accountId: string;
+  accountVersion: number;
+  accountDailyLimit: number;
+  policyId: string | null;
+  policyRevision: number;
+  threshold: number;
+  plans: { channel: "DM" | "COMMENT"; content: string; templateId: string; templateVersion: number }[];
+}) {
+  if (!input.policyId) throw new Error("未选择评论匹配规则");
+  const existing = (await localApi("automationRules")).find(
+    (rule) => rule.id === "auto-reply",
+  );
+  const saved = await localApi("saveAutomationRule", {
+    id: "auto-reply",
+    name: "自动回复",
+    input: {
+      version: existing?.version ?? 0,
+      platform: "XHS",
+      policyId: input.policyId,
+      policyRevision: input.policyRevision,
+      threshold: input.threshold,
+      channel: input.plans[0].channel,
+      content: input.plans[0].content,
+      channelPlans: input.plans,
+      accounts: [
+        {
+          id: input.accountId,
+          version: input.accountVersion,
+          dailyLimit: input.accountDailyLimit,
+        },
+      ],
+    },
+  });
+  const preview = await localApi("previewAutomationRule", {
+    id: "auto-reply",
+    version: saved.version,
+  });
+  await localApi("authorizeAutomationRule", {
+    id: "auto-reply",
+    version: saved.version,
+    previewHash: preview.previewHash,
+    consent: "automatic-contact-frozen-run-v1",
+  });
+  return "auto-reply";
 }
 
 function ScopeRow({ label, value }: { label: string; value: string }) {

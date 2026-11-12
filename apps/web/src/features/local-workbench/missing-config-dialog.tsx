@@ -8,11 +8,14 @@ import {
 import { Button } from "@/components/ui/button";
 import type { JourneyStage } from "@/features/work/journey-model";
 
-export type MissingItem = { tab: JourneyStage; text: string };
+/** `tab` 为 null 表示环境问题（平台组件/凭据），没有可跳转的设置页。 */
+export type MissingItem = { tab: JourneyStage | null; text: string };
 
 /**
  * 开始采集前的缺配置清单。
- * 每一项都能直接跳到对应页签去补，不需要用户自己找。
+ *
+ * 所有前置条件都走这一个弹窗：能定位的带「去设置」，环境类只列文字。
+ * 不再出现「有时弹这个、有时在开始弹窗里显示红字」两种样式。
  */
 export function MissingConfigDialog({
   open,
@@ -35,20 +38,22 @@ export function MissingConfigDialog({
         <ul className="flex flex-col divide-y border-t">
           {items.map((item) => (
             <li
-              key={item.tab}
+              key={item.text}
               className="flex items-center justify-between gap-3 py-3"
             >
               <span className="text-body break-words">{item.text}</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  onOpenChange(false);
-                  onLocate(item.tab);
-                }}
-              >
-                去设置
-              </Button>
+              {item.tab ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onLocate(item.tab as JourneyStage);
+                  }}
+                >
+                  去设置
+                </Button>
+              ) : null}
             </li>
           ))}
         </ul>

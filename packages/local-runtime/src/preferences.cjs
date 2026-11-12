@@ -31,21 +31,23 @@ class LocalPreferences{
    autoReview:saved.autoReview===true,
    policyId:validId(saved.policyId)&&this.policy(saved.policyId)?saved.policyId:null,
    autoReply:saved.autoReply===true,
-   channel:saved.channel==='COMMENT'?'COMMENT':'DM',
-   ruleId:validId(saved.ruleId)&&this.rule(saved.ruleId,saved.channel==='COMMENT'?'COMMENT':'DM')?saved.ruleId:null};
+   commentTemplateId:validId(saved.commentTemplateId)&&this.template(saved.commentTemplateId,'COMMENT')?saved.commentTemplateId:null,
+   dmTemplateId:validId(saved.dmTemplateId)&&this.template(saved.dmTemplateId,'DM')?saved.dmTemplateId:null,
+   threshold:Number.isInteger(saved.threshold)&&saved.threshold>=0&&saved.threshold<=100?saved.threshold:80};
  }
- saveSteps({version,autoReview,policyId,autoReply,channel,ruleId}){
-  if(!Number.isInteger(version)||version<0||typeof autoReview!=='boolean'||typeof autoReply!=='boolean'||!['DM','COMMENT'].includes(channel)||policyId!==null&&!validId(policyId)||ruleId!==null&&!validId(ruleId))throw new LocalError('INVALID_LOCAL_PREFERENCE');
+ saveSteps({version,autoReview,policyId,autoReply,commentTemplateId,dmTemplateId,threshold}){
+  if(!Number.isInteger(version)||version<0||typeof autoReview!=='boolean'||typeof autoReply!=='boolean'||policyId!==null&&!validId(policyId)||commentTemplateId!==null&&!validId(commentTemplateId)||dmTemplateId!==null&&!validId(dmTemplateId)||!Number.isInteger(threshold)||threshold<0||threshold>100)throw new LocalError('INVALID_AUTOMATION_STEPS');
   return this.store.transaction(()=>{
    if(this.steps().version!==version)throw new LocalError('PREFERENCE_CHANGED');
    if(policyId&&!this.policy(policyId))throw new LocalError('REVIEW_POLICY_CHANGED');
-   if(ruleId&&!this.rule(ruleId,channel))throw new LocalError('CONTACT_RULE_CHANGED');
-   this.put('automation-steps',{autoReview,policyId,autoReply,channel,ruleId},version+1);
-   this.store.audit('LOCAL_USER','AUTOMATION_STEPS_SAVED',policyId??ruleId??'none',{version:version+1,autoReview,policyId,autoReply,channel,ruleId});
+   if(commentTemplateId&&!this.template(commentTemplateId,'COMMENT'))throw new LocalError('CONTACT_TEMPLATE_CHANGED');
+   if(dmTemplateId&&!this.template(dmTemplateId,'DM'))throw new LocalError('CONTACT_TEMPLATE_CHANGED');
+   this.put('automation-steps',{autoReview,policyId,autoReply,commentTemplateId,dmTemplateId,threshold},version+1);
+   this.store.audit('LOCAL_USER','AUTOMATION_STEPS_SAVED',policyId??'none',{version:version+1,autoReview,policyId,autoReply,commentTemplateId,dmTemplateId,threshold});
    return this.steps();
   });
  }
  policy(id){return this.db.prepare('SELECT id FROM review_policies WHERE id=? AND NOT EXISTS(SELECT 1 FROM configurations c WHERE c.id=review_policies.id AND c.archived=1)').get(id);}
- rule(id,channel){return this.db.prepare("SELECT id FROM contact_rules WHERE id=? AND EXISTS(SELECT 1 FROM json_each(contact_rules.plans) WHERE json_extract(value,'$.channel')=?)").get(id,channel);}
+ template(id,channel){return this.db.prepare('SELECT id FROM configurations WHERE id=? AND kind=? AND archived=0').get(id,channel+'_TEMPLATE');}
 }
 module.exports={LocalPreferences};

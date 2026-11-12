@@ -6,7 +6,6 @@ import {
   ListChecks,
   PlayCircle,
   ScanLine,
-  Send,
   Settings2,
   ShieldCheck,
   SquareStack,
@@ -51,7 +50,6 @@ export const sidebarData: SidebarData = {
     {
       title: '回复管理',
       items: [
-        { title: '自动回复', url: '/auto-contact', icon: Send },
         { title: '待处理回复', url: '/auto-contact/pending', icon: ListChecks },
         { title: '回复记录', url: '/reply-history', icon: Archive },
         { title: '消息通知', url: '/inbox', icon: Inbox },

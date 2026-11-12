@@ -302,7 +302,7 @@ export function LocalPosts({
             <div className="flex flex-col gap-3 border-t pt-4">
               <p className="text-body leading-relaxed break-words">
                 {posts.plan.title} · {posts.plan.accountName} ·{" "}
-                {posts.plan.reviewTargets} 个匹配目标
+                {posts.plan.reviewTargets} 个评论匹配规则
               </p>
               <CheckboxField
                 checked={posts.consent}

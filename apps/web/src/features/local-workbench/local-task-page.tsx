@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/patterns/page-header";
@@ -17,7 +18,7 @@ import { LocalPosts } from "./local-posts";
 import { LocalReviewDialog } from "./local-review-dialog";
 import { LocalRunReview } from "./local-run-review";
 import { StartCollectionDialog } from "./start-collection-dialog";
-import type { LocalMethods } from "./local-api";
+import { localApi, type LocalMethods } from "./local-api";
 import { useLocalRecords } from "./use-local-records";
 
 const STAGES = ["collect", "review", "contact"] as const;
@@ -73,18 +74,43 @@ export function LocalTaskPage() {
   const viewingHistory = !!runId && !!latestId && runId !== latestId;
 
   /** 开始采集前必须配好的东西。缺几项就列几项，点「开始自动化采集」时弹出来。 */
+  const configId = selection.data?.configId ?? "";
+  const preferences = useQuery({
+    queryKey: ["local", "collectionPreferences", configId],
+    queryFn: () => localApi("collectionPreferences", { configId }),
+    enabled: !!configId,
+  });
+  const accounts = useLocalRecords("accountOverview");
+  const account = accounts.data?.accounts.find(
+    (item) => item.id === preferences.data?.accountId,
+  );
+
   const missing: MissingItem[] = [];
-  if (!selection.data?.configId) {
+  if (!configId) {
     missing.push({ tab: "collect", text: "采集关键词组" });
+  } else if (!preferences.data?.accountId) {
+    missing.push({ tab: "collect", text: "采集账号" });
+  } else if (account?.state !== "VERIFIED" || !account?.hasSession) {
+    missing.push({ tab: "collect", text: "采集账号未验证" });
   }
-  if (steps.data?.autoReview && !steps.data?.policyId) {
-    missing.push({ tab: "review", text: "匹配目标" });
+  if (
+    (steps.data?.autoReview || steps.data?.autoReply) &&
+    !steps.data?.policyId
+  ) {
+    missing.push({ tab: "review", text: "评论匹配规则" });
   }
-  if (steps.data?.autoReply && !steps.data?.ruleId) {
-    missing.push({
-      tab: "contact",
-      text: steps.data.channel === "COMMENT" ? "评论规则" : "私信规则",
-    });
+  if (
+    steps.data?.autoReply &&
+    !steps.data.commentTemplateId &&
+    !steps.data.dmTemplateId
+  ) {
+    missing.push({ tab: "contact", text: "回复模板" });
+  }
+  if (accounts.data && !accounts.data.runtime.ready) {
+    missing.push({ tab: null, text: "平台组件未就绪" });
+  }
+  if (status.data && !credentialsAvailable) {
+    missing.push({ tab: null, text: "系统凭据保护未就绪" });
   }
 
   const setParam = (key: string, value: string) =>

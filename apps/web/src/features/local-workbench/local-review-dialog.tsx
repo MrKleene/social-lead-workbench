@@ -115,7 +115,7 @@ export function LocalReviewDialog({
         </Select>
       </FormField>
 
-      <FormField label="匹配目标">
+      <FormField label="评论匹配规则">
         <Select
           value={selectedPolicy ?? ""}
           onValueChange={(value) => {
@@ -123,7 +123,7 @@ export function LocalReviewDialog({
           setPlan(null);
           }}
         >
-          <SelectTrigger aria-label="匹配目标">
+          <SelectTrigger aria-label="评论匹配规则">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

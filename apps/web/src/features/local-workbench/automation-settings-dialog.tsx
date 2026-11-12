@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from "react";
 import { Link } from "@/lib/router-compat";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -7,35 +8,52 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { FormField } from "@/components/patterns/form-field";
+import { Input } from "@/components/ui/input";
+import {
+  SELECT_EMPTY,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 import { Switch, SwitchThumb } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ErrorNotice } from "@/components/feedback";
+import { cn } from "@/lib/utils";
 import type { JourneyStage } from "@/features/work/journey-model";
 import { localApi } from "./local-api";
 import { LocalCollectionPanel } from "./local-collection";
-import { useLocalAction, useLocalRecords } from "./use-local-records";
+import { useLocalRecords } from "./use-local-records";
 
 /**
  * 「采集设置」弹窗：三步各自的开关与选择。
  *
- * 每一组都有「必须配好才能开始」的东西：
- * - 采集：关键词组（采集规则）
- * - 评论匹配：开自动审核就必须选一个匹配目标
- * - 自动回复：开自动回复就必须选渠道（私信/评论）+ 该渠道下的一条规则
+ * 布局照 shadcn-admin 的设置页：左边一列步骤（带状态），右边一张内容卡。
+ * 三步是先后关系而不是并列分类，竖排比横向页签更能表达顺序，也能顺带显示每步配好没有。
  *
- * 缺配置时在对应页签内用红字指出，点「开始自动化采集」会被拦到那一页。
+ * 每组「必须配好才能开始」的东西：
+ * - 采集：关键词组
+ * - 评论匹配：开自动审核就必须选一个评论匹配规则
+ * - 自动回复：开自动回复就必须选渠道（私信/评论）+ 该渠道下的一条规则
  */
 export type AutomationSettingsTab = JourneyStage;
 
-/** 每个页签对应的全局配置页与入口文案——入口放标题行右侧，不放页脚。 */
-const manage: Record<
-  AutomationSettingsTab,
-  { to: string; label: string }
-> = {
+const order: AutomationSettingsTab[] = ["collect", "review", "contact"];
+
+const labels: Record<AutomationSettingsTab, string> = {
+  collect: "采集",
+  review: "评论匹配",
+  contact: "自动回复",
+};
+
+/** 每个步骤对应的全局配置页与入口文案——放页脚左侧，和主按钮分开。 */
+const manage: Record<AutomationSettingsTab, { to: string; label: string }> = {
   collect: { to: "/configuration?tab=keywords", label: "管理关键词组" },
-  review: { to: "/configuration?tab=matching", label: "管理匹配目标" },
-  contact: { to: "/auto-contact", label: "管理联系规则" },
+  review: { to: "/configuration?tab=matching", label: "管理评论匹配规则" },
+  contact: { to: "/configuration?tab=templates", label: "管理回复模板" },
 };
 
 export function AutomationSettingsDialog({
@@ -51,40 +69,85 @@ export function AutomationSettingsDialog({
   onTab: (tab: AutomationSettingsTab) => void;
   credentialsAvailable: boolean;
 }) {
+  const selection = useLocalRecords("workspaceSelection", undefined, {
+    enabled: open,
+  });
+  const steps = useLocalRecords("automationSteps", undefined, {
+    enabled: open,
+  });
+
+  const configured: Record<AutomationSettingsTab, string> = {
+    collect: selection.data?.configId ? "已配置" : "未配置",
+    review: !steps.data?.autoReview
+      ? "已关闭"
+      : steps.data.policyId
+        ? "已配置"
+        : "未配置",
+    contact: !steps.data?.autoReply
+      ? "已关闭"
+      : steps.data.commentTemplateId || steps.data.dmTemplateId
+        ? "已配置"
+        : "未配置",
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader className="flex flex-row items-center justify-between gap-4 pe-8">
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader>
           <DialogTitle>采集设置</DialogTitle>
-          <Button variant="outline" size="sm" asChild>
-            <Link to={manage[tab].to}>{manage[tab].label}</Link>
-          </Button>
         </DialogHeader>
 
-        <Tabs
-          value={tab}
-          onValueChange={(value) => onTab(value as AutomationSettingsTab)}
-        >
-          <TabsList aria-label="采集设置分组" className="w-full">
-            <TabsTrigger value="collect">采集</TabsTrigger>
-            <TabsTrigger value="review">评论匹配</TabsTrigger>
-            <TabsTrigger value="contact">自动回复</TabsTrigger>
-          </TabsList>
+        <div className="flex min-h-0 gap-4">
+          <nav
+            aria-label="采集设置分组"
+            className="flex w-44 shrink-0 flex-col gap-1"
+          >
+            {order.map((id, index) => {
+              const active = tab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => onTab(id)}
+                  className={cn(
+                    "flex w-full flex-col items-start gap-0.5 rounded-md px-3 py-2 text-start transition-colors",
+                    active ? "bg-muted" : "hover:bg-muted/60",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "text-body font-medium",
+                      active ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {index + 1}. {labels[id]}
+                  </span>
+                  <span className="text-caption text-muted-foreground">
+                    {configured[id]}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
 
-          <div className="max-h-[60vh] overflow-y-auto pe-1">
-            <TabsContent value="collect">
+          <div className="max-h-[60vh] min-h-80 min-w-0 flex-1 overflow-y-auto rounded-lg border bg-card p-6">
+            {tab === "collect" ? (
               <CollectTab credentialsAvailable={credentialsAvailable} />
-            </TabsContent>
-
-            <TabsContent value="review">
+            ) : tab === "review" ? (
               <MatchingTab />
-            </TabsContent>
-
-            <TabsContent value="contact">
+            ) : (
               <ReplyTab />
-            </TabsContent>
+            )}
           </div>
-        </Tabs>
+        </div>
+
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="outline" asChild>
+            <Link to={manage[tab].to}>{manage[tab].label}</Link>
+          </Button>
+          <Button onClick={() => onOpenChange(false)}>完成</Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -106,14 +169,13 @@ function MatchingTab() {
   const client = useQueryClient();
   const workflow = useLocalRecords("workflowOverview");
   const steps = useLocalRecords("automationSteps");
-  const save = useLocalAction("saveAutomationSteps");
+  const save = useSaveSteps();
   const review = useMutation({
     mutationFn: (input: unknown) => localApi("setReviewPolicy", input),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["local"] }),
   });
   const automatic = useMutation({
-    mutationFn: (input: unknown) =>
-      localApi("setAutomaticReviewPolicy", input),
+    mutationFn: (input: unknown) => localApi("setAutomaticReviewPolicy", input),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["local"] }),
   });
 
@@ -121,7 +183,12 @@ function MatchingTab() {
   const current = steps.data;
   const modelReady = !!data?.model?.authorized && !!data?.capabilities.review;
   const selected = data?.policies.find((item) => item.id === current?.policyId);
-  const error = workflow.error ?? steps.error ?? save.error ?? review.error ?? automatic.error;
+  const error =
+    workflow.error ??
+    steps.error ??
+    save.error ??
+    review.error ??
+    automatic.error;
 
   const persist = (patch: Partial<NonNullable<typeof current>>) => {
     if (!current) return;
@@ -193,7 +260,7 @@ function MatchingTab() {
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {error ? <ErrorNotice error={error} /> : null}
 
       <div className="flex items-center justify-between gap-3">
@@ -208,34 +275,31 @@ function MatchingTab() {
         </Switch>
       </div>
 
-      {!modelReady ? <Missing text="模型未授权" /> : null}
-
-      <RadioGroup
-        value={current?.policyId ?? ""}
-        onValueChange={pickPolicy}
-        aria-label="匹配目标"
-        className="flex flex-col gap-2"
-      >
-        {data?.policies.map((policy) => (
-          <label
-            key={policy.id}
-            className="flex items-center gap-3 rounded-md border p-3"
-          >
-            <RadioGroupItem value={policy.id} />
-            <span className="min-w-0 flex-1">
-              <span className="block text-body font-medium break-words">
+      <FormField label="评论匹配规则">
+        <Select
+          value={current?.policyId ?? ""}
+          disabled={!modelReady || !data?.policies.length}
+          onValueChange={(value) =>
+            value ? void pickPolicy(value) : persist({ policyId: null })
+          }
+        >
+          <SelectTrigger aria-label="评论匹配规则">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={SELECT_EMPTY}>选择评论匹配规则</SelectItem>
+            {data?.policies.map((policy) => (
+              <SelectItem key={policy.id} value={policy.id}>
                 {policy.name}
-              </span>
-              <span className="block text-caption text-muted-foreground break-words">
-                {policy.enabled ? "已允许用于审核" : "尚未授权"}
-              </span>
-            </span>
-          </label>
-        ))}
-      </RadioGroup>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FormField>
 
-      {current?.autoReview && !current.policyId ? (
-        <Missing text="需要配置匹配目标" />
+      {!modelReady ? <Hint>模型未选择，不允许开启自动审核</Hint> : null}
+      {modelReady && current?.autoReview && !current.policyId ? (
+        <Hint>未选择评论匹配规则</Hint>
       ) : null}
     </div>
   );
@@ -244,25 +308,30 @@ function MatchingTab() {
 /* ---------------- 自动回复 ---------------- */
 
 function ReplyTab() {
-  const rules = useLocalRecords("automationRules");
+  const configs = useLocalRecords("configurations");
   const steps = useLocalRecords("automationSteps");
-  const save = useLocalAction("saveAutomationSteps");
+  const save = useSaveSteps();
+  const [text, setText] = useState("");
 
   const current = steps.data;
-  const channel = current?.channel ?? "DM";
-  const available =
-    rules.data?.filter(
-      (rule) => rule.enabled && rule.plans.some((plan) => plan.channel === channel),
-    ) ?? [];
-  const error = rules.error ?? steps.error ?? save.error;
+  const comment = configs.data?.filter((item) => item.kind === "COMMENT_TEMPLATE") ?? [];
+  const dm = configs.data?.filter((item) => item.kind === "DM_TEMPLATE") ?? [];
+  const error = configs.error ?? steps.error ?? save.error;
 
   const persist = (patch: Partial<NonNullable<typeof current>>) => {
     if (!current) return;
     save.mutate({ ...current, ...patch });
   };
 
+  const commitThreshold = () => {
+    const next = Number(text);
+    setText("");
+    if (!Number.isInteger(next) || next < 0 || next > 100) return;
+    if (next !== current?.threshold) persist({ threshold: next });
+  };
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {error ? <ErrorNotice error={error} /> : null}
 
       <div className="flex items-center justify-between gap-3">
@@ -276,62 +345,57 @@ function ReplyTab() {
         </Switch>
       </div>
 
-      <RadioGroup
-        value={channel}
-        onValueChange={(value) =>
-          persist({ channel: value as "DM" | "COMMENT", ruleId: null })
-        }
-        aria-label="回复渠道"
-        className="flex gap-2"
-      >
-        {(
-          [
-            ["DM", "私信"],
-            ["COMMENT", "评论"],
-          ] as const
-        ).map(([value, label]) => (
-          <label
-            key={value}
-            className="flex flex-1 items-center gap-2 rounded-md border p-3"
-          >
-            <RadioGroupItem value={value} />
-            <span className="text-body">{label}</span>
-          </label>
-        ))}
-      </RadioGroup>
-
-      <RadioGroup
-        value={current?.ruleId ?? ""}
-        onValueChange={(value) => persist({ ruleId: value })}
-        aria-label="联系规则"
-        className="flex flex-col gap-2"
-      >
-        {available.map((rule) => (
-          <label
-            key={rule.id}
-            className="flex items-center gap-3 rounded-md border p-3"
-          >
-            <RadioGroupItem value={rule.id} />
-            <span className="min-w-0 flex-1">
-              <span className="block text-body font-medium break-words">
-                {rule.name}
-              </span>
-              <span className="block text-caption text-muted-foreground">
-                最低 {rule.threshold} 分
-              </span>
-            </span>
-          </label>
-        ))}
-      </RadioGroup>
-
-      {!available.length ? (
-        <Missing
-          text={channel === "DM" ? "需要配置私信规则" : "需要配置评论规则"}
+      <FormField label="满足分数自动发送">
+        <Input
+          type="number"
+          min={0}
+          max={100}
+          value={text || String(current?.threshold ?? 80)}
+          onChange={(event) => setText(event.target.value)}
+          onBlur={commitThreshold}
         />
-      ) : current?.autoReply && !current.ruleId ? (
-        <Missing
-          text={channel === "DM" ? "需要选择私信规则" : "需要选择评论规则"}
-        />
+      </FormField>
+
+      <FormField label="评论回复模板">
+        <Select
+          value={current?.commentTemplateId ?? ""}
+          onValueChange={(value) => persist({ commentTemplateId: value || null })}
+        >
+          <SelectTrigger aria-label="评论回复模板">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={SELECT_EMPTY}>不回复评论</SelectItem>
+            {comment.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                模板：{item.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FormField>
+
+      <FormField label="私信模板">
+        <Select
+          value={current?.dmTemplateId ?? ""}
+          onValueChange={(value) => persist({ dmTemplateId: value || null })}
+        >
+          <SelectTrigger aria-label="私信模板">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={SELECT_EMPTY}>不发私信</SelectItem>
+            {dm.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                模板：{item.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FormField>
+
+      {current?.autoReply && !current.commentTemplateId && !current.dmTemplateId ? (
+        <Hint>请选择至少一个自动回复模式</Hint>
       ) : null}
     </div>
   );
@@ -339,10 +403,26 @@ function ReplyTab() {
 
 /* ---------------- 共用 ---------------- */
 
-function Missing({ text }: { text: string }) {
+/**
+ * 保存三步设置：把返回结果直接写回查询缓存再触发失效。
+ * 否则下拉选完要等一次 refetch 才更新，慢的时候看起来像「选了没生效」。
+ */
+function useSaveSteps() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: unknown) => localApi("saveAutomationSteps", input),
+    onSuccess: (data) => {
+      client.setQueryData(["local", "automationSteps", null], data);
+      void client.invalidateQueries({ queryKey: ["local"] });
+    },
+  });
+}
+
+function Hint({ children }: { children: ReactNode }) {
   return (
-    <p role="alert" className="text-body text-destructive break-words">
-      {text}
-    </p>
+    <Alert variant="warning">
+      <AlertCircle />
+      <AlertDescription>{children}</AlertDescription>
+    </Alert>
   );
 }
