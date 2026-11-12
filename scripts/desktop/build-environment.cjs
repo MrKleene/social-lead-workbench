@@ -13,5 +13,5 @@ function buildEnvironment({platform=process.platform,arch=process.arch,compiler,
  }else Object.assign(env,{PATH:'/usr/bin:/bin',HOME:p.join(out,'home'),TMPDIR:p.join(out,'tmp')});
  return env;
 }
-function expectedCompiler(platform=process.platform,arch=process.arch){if(platform==='darwin'&&arch==='arm64')return 'go version go1.24.13 darwin/arm64';if(platform==='win32'&&arch==='x64')return 'go version go1.24.13 windows/amd64';throw Error('UNREVIEWED_BUILD_HOST');}
+function expectedCompiler(platform=process.platform,arch=process.arch){if(platform==='darwin'&&arch==='arm64')return 'go version go1.27.4 darwin/arm64';if(platform==='win32'&&arch==='x64')return 'go version go1.27.4 windows/amd64';throw Error('UNREVIEWED_BUILD_HOST');}
 module.exports={buildEnvironment,expectedCompiler};

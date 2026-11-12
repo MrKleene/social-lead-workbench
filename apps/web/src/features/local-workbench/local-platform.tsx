@@ -15,6 +15,20 @@ import { useDraftGuard } from "@/features/work/draft-guard";
 import { ErrorNotice } from "@/components/feedback";
 import { useLocalPlatform } from "./use-local-platform";
 
+/** 平台组件不可用时，把后端给的原因翻成人话。 */
+function platformReason(reason: string) {
+  switch (reason) {
+    case "PACKAGED_NATIVE_RESOURCES_UNAVAILABLE":
+      return "平台组件未构建";
+    case "WINDOWS_NATIVE_RUNTIME_VALIDATION_REQUIRED":
+      return "平台组件未通过校验";
+    case "SYNTHETIC_TEST_MODE":
+      return "合成测试模式";
+    default:
+      return "平台组件未就绪";
+  }
+}
+
 export function LocalLoginPanel({
   credentialsAvailable,
 }: {
@@ -29,7 +43,8 @@ export function LocalLoginPanel({
   const selected = platform.accounts.data?.accounts.find(
     (item) => item.id === accountId,
   );
-  const ready = platform.accounts.data?.runtime.ready && credentialsAvailable;
+  const runtimeReady = !!platform.accounts.data?.runtime.ready;
+  const ready = runtimeReady && credentialsAvailable;
 
   useDraftGuard(
     !!platform.login || !!platform.accounts.data?.login,
@@ -59,39 +74,39 @@ export function LocalLoginPanel({
       ) : null}
 
       <form className="flex flex-col gap-3" onSubmit={login}>
-        <h3 className="text-section font-semibold">小红书账号登录</h3>
-
-        <FormField label="账号">
-          <Select
-            value={accountId}
-            onValueChange={(value) => {
-            setAccountId(value);
-            const next = platform.accounts.data?.accounts.find(
-            (item) => item.id === value,
-            );
-            setName(next?.name ?? "");
-            setLimit(String(next?.daily_limit ?? 10));
-            setLoginConsent(false);
-            }}
-          >
-            <SelectTrigger aria-label="账号">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SELECT_EMPTY}>添加新账号</SelectItem>
-              {platform.accounts.data?.accounts.map((item) => (
-              <SelectItem key={item.id} value={item.id}>
-              {item.name} ·{" "}
-              {item.state === "VERIFIED"
-              ? "已验证"
-              : item.state === "RESTRICTED"
-              ? "有限制"
-              : "待登录"}
-              </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormField>
+        {platform.accounts.data?.accounts.length ? (
+          <FormField label="账号">
+            <Select
+              value={accountId}
+              onValueChange={(value) => {
+              setAccountId(value);
+              const next = platform.accounts.data?.accounts.find(
+              (item) => item.id === value,
+              );
+              setName(next?.name ?? "");
+              setLimit(String(next?.daily_limit ?? 10));
+              setLoginConsent(false);
+              }}
+            >
+              <SelectTrigger aria-label="账号">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SELECT_EMPTY}>添加新账号</SelectItem>
+                {platform.accounts.data?.accounts.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                {item.name} ·{" "}
+                {item.state === "VERIFIED"
+                ? "已验证"
+                : item.state === "RESTRICTED"
+                ? "有限制"
+                : "待登录"}
+                </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+        ) : null}
 
         <FormField label="本地账号名称">
           <Input
@@ -119,6 +134,17 @@ export function LocalLoginPanel({
         >
           授权在本机登录此账号。
         </CheckboxField>
+
+        {platform.accounts.data && !runtimeReady ? (
+          <p className="text-caption text-muted-foreground">
+            {platformReason(platform.accounts.data.runtime.reason)}
+          </p>
+        ) : null}
+        {!credentialsAvailable ? (
+          <p className="text-caption text-muted-foreground">
+            系统凭据保护未就绪
+          </p>
+        ) : null}
 
         <div className="flex flex-wrap gap-3">
           <Button

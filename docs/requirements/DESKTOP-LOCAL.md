@@ -54,7 +54,7 @@ Mac 原生监督器持有本次进程组与独占锁；停止证明后等待明�
 
 Windows MCP 已在 Mac 交叉编译为 PE x64；C# helper/Job Object、私有目录与资源 ACL、DPAPI、日志读取、受管浏览器和凭据交接有源代码及构建流程。原生运行入口要求精确绑定 MCP/helper/browser/license 的真机离线验证文件，缺失就禁用平台能力。未放宽为“Mac 通过即 Windows 通过”。
 
-构建者在 Windows 11 x64 系统 NTFS 用户目录准备 Node/项目依赖、固定 Go 1.24.13 windows/amd64 和现有 Go 模块缓存（普通安装用户无需这些）。PowerShell 示例：
+构建者在 Windows 11 x64 系统 NTFS 用户目录准备 Node/项目依赖、固定 Go 1.27.4 windows/amd64 和现有 Go 模块缓存（普通安装用户无需这些）。PowerShell 示例：
 
 ```powershell
 $env:DESKTOP_GO = 'C:\BuildTools\go\bin\go.exe'
@@ -91,7 +91,7 @@ Windows 可用 `scripts/desktop/windows-preview.ps1 -Go <绝对路径> -ModuleCa
 - `npm run build`：构建核心模块和网页，不读取真实账号或调用平台。
 - `npm run check`：结构、样式、类型和离线测试；原生资源不足的项目明确跳过。
 - `npm run desktop:build:native`：在目标系统编译原生辅助程序（macOS 为 device-vault 与监督器）。
-- `npm run desktop:prepare:mcp`：用显式 `DESKTOP_GO` / `DESKTOP_GO_MODCACHE` 编译 Go MCP，写入 `desktop-mcp` 与 `mcp-build.json`。
+- `npm run desktop:prepare:mcp`：用显式 `DESKTOP_GO` / `DESKTOP_GO_MODCACHE` 编译 Go MCP，写入 `desktop-mcp` 与 `mcp-build.json`；Mac ARM64 与 Windows x64 均固定 Go 1.27.4。
 - `npm run desktop:prepare:browser -- /绝对路径/Chromium.app`：校验架构、版本与逐文件权限后复制固定浏览器，写入 `browser-build.json`；不下载、不启动浏览器。
 - `npm run desktop:native:check`：只读报告原生资源是否齐备及缺项的生成命令；不齐备时退出码为 1，`desktop:package:mac:preview` 会先跑它。
 - `npm run desktop:test:ui`：使用临时合成数据的实际 Electron 界面测试。
