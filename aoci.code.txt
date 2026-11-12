@@ -51,19 +51,26 @@ vite.config.ts[FV6T]: F:渲染层构建配置：TanStack Router 插件生成路�
 vite.desktop.config.ts[FV6T]: F:桌面渲染层构建变体：合并 base 配置，加 desktop-entry-fallback 中间件把 HTML 请求重写到 desktop.html，产物出 dist-desktop | R:code:apps/web/vite.config.ts,code:apps/desktop/src/main.cjs | A:desktopEntry | S:打包态走 workbench://app/ 且路由期望文档在 /，而 vite 只在 /desktop.html 提供入口，没有这个重写所有路由都会落到 not found；中间件只放行 text/html 且跳过 /@、/src/ 与带扩展名的请求
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/===
-disclosure.tsx[CU4T]: F:折叠披露组件：ghost 按钮加 ChevronDown 触发 Collapsible | R:code:apps/web/src/components/ui/collapsible.tsx | A:Disclosure | S:-
-feedback.tsx[CU6T]: F:通用错误提示与加载骨架，分别带 role=alert 与 role=status 加 aria-live | R:code:apps/web/src/components/ui/alert.tsx | A:ErrorNotice,Loading | S:Loading 用 aria-live=polite 且带 aria-label，去掉后屏幕阅读器读不到加载态
+disclosure.tsx[CU5T]: F:可折叠区块：ghost 按钮触发 Collapsible，同时支持受控与非受控 | R:code:apps/web/src/components/ui/collapsible.tsx | A:Disclosure | S:箭头旋转必须用内联 transform 读 open 状态——group-data-* 与 [&[data-state=open]>svg] 在 Tailwind v4 + SVG 下都不生效，计算值恒为 0deg；这是文件里唯一的内联样式
+feedback.tsx[CU6T]: F:全站唯一的错误提示与首屏加载骨架 | R:code:apps/web/src/components/ui/alert.tsx | A:ErrorNotice,Loading | S:页面里不要再手写 <p role=alert>，统一走 ErrorNotice，否则既无图标也无边框；Loading 只在整块无数据时用，后台刷新应保留旧数据而不是换骨架
 navigation-progress.tsx[CU3T]: F:路由切换顶部进度条，pending 时 continuousStart，其余 complete | R:code:apps/web/src/routes/__root.tsx | A:NavigationProgress | S:-
 status-notice.tsx[CU7T]: F:紧凑状态条：风险标签常显，详情进 Sheet，关闭后焦点回到触发按钮 | R:code:apps/web/src/components/ui/sheet.tsx | A:StatusNotice,pauseDescription | S:pauseDescription 是发送暂停文案的唯一来源，新增 reason 必须在这里补文案，否则界面直接暴露原始代码
+command-menu.tsx[CU6T]: F:⌘K 命令面板：页面跳转、主题切换与侧栏搜索入口 | R:code:apps/web/src/context/search-provider.tsx,code:apps/web/src/components/layout/data/sidebar-data.ts | A:CommandMenu | S:菜单项直接读 sidebarData.navGroups，新增页面只改 sidebar-data 就会出现在面板；主题项调 useTheme 写 cookie，不在本地存状态
+config-drawer.tsx[CU6M]: F:主题设置抽屉：主题 light/dark/system、侧栏变体与折叠方式三组选项，带重置 | R:code:apps/web/src/context/layout-provider.tsx,code:apps/web/src/context/theme-provider.tsx | A:ConfigDrawer | S:三组选项都经 useLayout/useTheme 写 cookie，不存组件状态；重置调 resetTheme/resetLayout 清 cookie 而不是写默认值；SheetTitle 仍是上游英文 Theme Settings
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/layout/===
-app-sidebar.tsx[CU7T]: F:侧栏骨架：品牌头、分组导航、底部本地工作台菜单；未读数取自 useLocalRecords('unread') | R:code:apps/web/src/components/layout/nav-group.tsx,code:apps/web/src/components/layout/data/sidebar-data.ts | A:AppSidebar | S:未读数只在 item.url === '/inbox' 时注入，超过 99 显示 99+；改路由路径要同步这里，否则角标不会出现
+app-sidebar.tsx[CU7T]: F:侧栏骨架：TeamSwitcher 品牌块 + NavGroup 分组 + NavUser 底部，结构照 shadcn-admin | R:code:apps/web/src/context/layout-provider.tsx,code:apps/web/src/components/layout/data/sidebar-data.ts | A:AppSidebar | S:collapsible 与 variant 来自 useLayout，不在组件里写死；SidebarContent 的 role=navigation 与 aria-label=主导航 是本项目唯一接缝，也是 e2e 定位锚点
 nav-group.tsx[CU6S]: F:导航组渲染：按有无子项分派为普通链接、折叠项或收起态下拉菜单 | R:code:apps/web/src/components/layout/types.ts | A:NavGroup | S:先判 item.items 再判 state==='collapsed'&&!isMobile，顺序倒置会让桌面收起态下子项无法展开
-types.ts[FU3T]: F:侧栏导航类型：NavLink、NavCollapsible、NavItem、NavGroup、SidebarData | R:code:apps/web/src/components/layout/data/sidebar-data.ts | A:- | S:-
-workbench-shell.tsx[AU8T]: F:工作台外壳：先开本地数据再渲染，未初始化时进欢迎流程，之后挂侧栏与主区 | R:code:apps/web/src/features/local-workbench/use-local-workbench.ts,code:apps/web/src/components/layout/app-sidebar.tsx | A:WorkbenchShell | S:SidebarInset 上的 graphite-workspace 与 local-desktop 是有效作用域，不是历史类名；删掉会让未迁移到 Tailwind 的页面规则失效
+types.ts[FU3T]: F:侧栏类型：User、Team、NavLink、NavCollapsible、NavGroup、SidebarData | R:code:apps/web/src/components/layout/data/sidebar-data.ts | A:- | S:SidebarData 必须同时有 user 与 teams
+workbench-shell.tsx[AU8T]: F:工作台外壳：先开本地数据再渲染，未初始化进欢迎流程，之后套 shadcn-admin 外壳（Sidebar + Header + Main） | R:code:apps/web/src/components/layout/app-sidebar.tsx,code:apps/web/src/features/local-workbench/use-local-workbench.ts | A:WorkbenchShell | S:Provider 嵌套顺序固定为 DraftGuard → Search → Layout → Sidebar，ConfigDrawer 与 CommandMenu 依赖 Search/Layout 上下文；SidebarProvider 的 defaultOpen 读 cookie sidebar_state；graphite-workspace 与 local-desktop 两个类已从 SidebarInset 移除
+header.tsx[CU5T]: F:顶栏容器：固定 64px 横带，fixed 时随滚动加模糊与边框 | R:code:apps/web/src/components/layout/workbench-shell.tsx | A:Header | S:滚动偏移取 document.body 与 documentElement 的 scrollTop，用 passive 监听；子元素间距靠 Header 内层 gap-4，不要在调用点另加
+main.tsx[CU4T]: F:内容区容器：fixed 时 flex 撑满，非 fluid 时限制 max-w-7xl 并居中 | R:code:apps/web/src/components/layout/workbench-shell.tsx | A:Main | S:宽度用 @7xl/content 容器查询而不是媒体查询，父级必须有 @container/content 才生效
+nav-user.tsx[CU4T]: F:侧栏底部用户块：头像加下拉，含账号中心与使用引导两个入口 | R:code:apps/web/src/components/layout/data/sidebar-data.ts | A:NavUser | S:-
+team-switcher.tsx[CU3T]: F:侧栏品牌块：单一项时退化为静态展示，多项时走下拉 | R:code:apps/web/src/components/layout/data/sidebar-data.ts | A:TeamSwitcher | S:本项目 teams 只有一项，切换逻辑不会被触发；不要为了完整加假团队
+top-nav.tsx[CU3T]: F:横向导航：宽屏平铺，窄屏收进下拉 | R:code:apps/web/src/components/layout/header.tsx | A:TopNav | S:当前未在 Header 中使用，属 shadcn-admin 原样保留文件
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/layout/data/===
-sidebar-data.ts[FU6T]: F:侧栏导航数据：工作区、数据与审核、回复管理、管理四组共十四个条目 | R:code:apps/web/src/routes/_workbench/route.tsx | A:sidebarData | S:url 必须与 _workbench 下的路由文件一一对应，多一个孤儿条目会在点击时 404
+sidebar-data.ts[FU6T]: F:侧栏数据：user、teams、navGroups 三段，内容换成本项目十三个页面 | R:code:apps/web/src/components/layout/types.ts | A:sidebarData | S:teams 只留一项，TeamSwitcher 因此退化成静态品牌块；user 没有登录用户，放的是本地工作台与本机数据；url 必须与 _workbench 路由一一对应
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/ui/===
 alert-dialog.tsx[CU6S]: F:确认对话框：Radix 封装，支持 default 与 sm 两种尺寸 | R:code:apps/web/src/components/ui/button.tsx | A:AlertDialog,AlertDialogContent | S:打开时动态计算 zIndex 以压过已存在的 sheet-content，写死 z-50 会被抽屉盖住
@@ -637,3 +644,10 @@ icon-sidebar-floating.tsx[CU3T]: F:侧栏样式预览图标（floating）：配�
 icon-sidebar-inset.tsx[CU3T]: F:侧栏样式预览图标（inset）：配置抽屉里表示内嵌侧栏 | R:code:apps/web/src/components/config-drawer.tsx | A:IconSidebarInset | S:-
 icon-sidebar-sidebar.tsx[CU3T]: F:侧栏样式预览图标（sidebar）：配置抽屉里表示常规侧栏 | R:code:apps/web/src/components/config-drawer.tsx | A:IconSidebarSidebar | S:-
 icon-theme-dark.tsx[CU3T]: F:主题预览图标（dark）：配置抽屉里表示暗色主题 | R:code:apps/web/src/components/theme-switch.tsx | A:IconThemeDark | S:十六进制是写死的预览色，不随 token 变；示意图，不要改成 var(--*)
+icon-theme-light.tsx[CU3T]: F:主题预览图标（light）：配置抽屉里表示浅色主题 | R:code:apps/web/src/components/theme-switch.tsx | A:IconThemeLight | S:预览色写死，不随 token 变
+icon-theme-system.tsx[CU3S]: F:主题预览图标（system）：半明半暗示意，表示跟随系统 | R:code:apps/web/src/components/theme-switch.tsx | A:IconThemeSystem | S:唯一跟随选中态的图标：fill 走 fill-primary 与 group-data 变体
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/patterns/===
+checkbox-field.tsx[CU6T]: F:复选框加说明的授权块，替代旧的 .local-check | R:code:apps/web/src/components/ui/checkbox.tsx | A:CheckboxField | S:说明文字用 ps-6 对齐（复选框 16 加间隙 8），不写死在调用点；授权文案必须完整描述后果，不能用这个组件压缩措辞
+content-section.tsx[CU5T]: F:设置与详情类页面的内容块：标题、描述、分隔线，不套卡片 | R:code:apps/web/src/components/patterns/section-card.tsx | A:ContentSection | S:设置页用它、列表页用 SectionCard；外面再包边框会变成卡片套卡片，分层靠 Separator
+detail-sheet.tsx[CU6T]: F:详情抽屉：固定标题区加可滚动内容区 | R:code:apps/web/src/components/ui/sheet.tsx | A:DetailSheet | S:宽度用 sm:max-w-xl（576px）而不是任意值；它替代了五处手写 Sheet 加 .local-detail-sheet 的 !important 覆盖
