@@ -197,6 +197,16 @@ npm run typecheck -w @crm/web
 
 弹窗里的 `DialogDescription`、卡片里的 `description`、表单控件的 `hint` 都是解释文案的高发位置——除非它承载状态或授权，否则不要写。
 
+---
+
+## 10. 认知索引（AOCI）
+
+改动 `apps/` `packages/` `integrations/` `scripts/` 下的文件后，交付前跑一次 `npm run aoci:sync`，
+按返回的批次补条目；返回孤儿条目（文件已删）时一并裁决。纯文案、纯样式微调不需要。
+
+`npm run aoci:check` 只读校验，不改索引。索引状态 `invalid` 时 `aoci_overview` 会如实标记不可靠，
+不会拿旧认知冒充当前结构。
+
 <!-- aoci:begin -->
 ## AOCI 仓库认知
 

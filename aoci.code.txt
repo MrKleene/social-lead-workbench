@@ -3,7 +3,7 @@
 ===/Users/kleene/projects/social-lead-workbench/===
 .gitattributes[FV4T]: F:声明全仓库行尾归一策略，文本一律 LF 检出 | R:- | A:- | S:`* text=auto eol=lf` 是 AOCI 原始字节基线成立的前提；去掉它会让 Windows 检出整棵树被判 stale，全部 Entry 失效
 .gitignore[FS6T]: F:排除构建产物、本机数据、凭据与客户导出，只放行 schema 与迁移 SQL | R:code:.gitattributes | A:- | S:`!packages/local-runtime/src/schema.sql` 与 `!packages/local-runtime/src/migrations/*.sql` 是 SQL 进 Git 的唯一通道；新迁移目录不在白名单内会被静默忽略
-AGENTS.md[SU9M]: F:前端 UI 落地的强制约束：颜色唯一来源、组件改法、六档字号、间距圆角刻度与响应式底线 | R:code:apps/web/DESIGN.md,code:scripts/check-ui-conventions.mjs | A:必读顺序,禁止项,提交前检查 | S:本文件只是约束层，样式真值在 DESIGN.md 与 theme.css；新增例外必须在 check-ui-conventions.mjs 的 ALLOWED 登记文件+规则+理由，否则 ui:check 判失败。尾部 aoci:begin 区块由 AOCI 维护，删标记会导致重复追加
+AGENTS.md[SU9M]: F:前端落地的强制约束：颜色与组件改法、六档字号、间距圆角、响应式、遗留方言棘轮、shadcn-admin 外壳边界、文案只写状态与动作 | R:code:apps/web/DESIGN.md,code:scripts/check-ui-conventions.mjs | A:必读顺序,禁止项,提交前检查 | S:§6 已把遗留类名清到 0 处并由 ui:check 的 legacy-class 规则守住，白名单已空；§6.1 的 shadcn-admin 文件不做豁免，上游写法不合规要就地改并记录偏离（目前只有 search.tsx 的 ⌘K 字号一处）；§9 禁止解释性文案，判据是删掉这句用户还能不能完成操作。尾部 aoci:begin 区块由 AOCI 维护，删标记会重复追加
 README.md[SG5T]: F:产品定位、当前功能边界、本机开发命令与工程目录职责表 | R:code:docs/design/project-structure.md,code:apps/web/DESIGN.md | A:- | S:线索分配、销售跟进、人工 CRM 已退出产品，但数据库历史表与审计不物理删除；发送仍只读检查历史勿联系证据，防止重复联系
 package-lock.json[FV9L]: F:npm 锁文件：锁定全部工作区与第三方依赖的解析结果与完整性哈希 | R:code:package.json | A:- | S:由 npm 生成，手改会让 CI 的 npm ci 直接失败；六个 workspace 的链接关系也记在这里，增删 workspace 必须重新生成
 package.json[FV8T]: F:根工作区清单：六个 workspace、Node ≥24.11、构建/检查/打包脚本入口 | R:code:packages/contracts/package.json,code:scripts/check-structure.mjs | A:- | S:日常只用 desktop:dev 与 start；pretest 会先 build:core 再编测试用原生件，跳过它会让测试跑旧产物；engines 低于 24.11 直接不满足
@@ -11,20 +11,20 @@ tsconfig.base.json[FV6T]: F:全仓 TS 基础配置：ES2022 目标、strict、es
 vitest.config.ts[FQ7T]: F:根测试配置：把 contracts/domain/local-runtime 的 exports source 条件映射成别名，测试只收 test/**/*.test.ts | R:code:packages/domain/vitest.config.ts | A:- | S:别名必须指向 source 而不是 dist，否则测试与源码会各有一份错误类实例，instanceof 判断失效
 
 ===/Users/kleene/projects/social-lead-workbench/apps/desktop/===
-electron-builder.cjs[FV6T]: F:Electron 打包配置：appId、asar、fuses、mac dmg 与 win nsis 目标、原生资源白名单 | R:code:apps/desktop/src/native-resources.cjs | A:beforePack | S:beforePack 拒绝跨 OS/架构打包；mac 签名走 CSC_NAME，写 identity:null 会连已提供的证书一起禁用签名，所以键是省略而不是置空
+electron-builder.cjs[FV6T]: F:Electron 打包配置：appId、asar、fuses、mac dmg 与 win nsis 目标、原生资源白名单与图标 | R:code:apps/desktop/src/native-resources.cjs,code:apps/desktop/build/icon.svg | A:beforePack | S:新增 buildResources 指向 apps/desktop/build，win/mac 的 icon 从这里取；beforePack 拒绝跨 OS/架构打包；mac 签名走 CSC_NAME，写 identity:null 会连已提供的证书一起禁用签名
 package.json[FV3T]: F:桌面工作区清单，主入口 src/main.cjs，测试跑 test/*.test.cjs | R:code:apps/desktop/src/main.cjs | A:- | S:-
 release-readiness.json[OV6T]: F:发布就绪度台账：逐能力标注实测程度，如 synthetic-tested、live-unverified、not-executed | R:- | A:- | S:带 live-unverified 或 not-executed 的条目是真实未验收状态，不能当通过；改实现后必须同步这里，否则台账会掩盖缺口
 
 ===/Users/kleene/projects/social-lead-workbench/apps/desktop/src/===
 evidence-wire.cjs[IN7T]: F:只读回读证据：用一次性 Bearer 访问本机 MCP，确认评论或私信确实存在且本次未重复提交 | R:code:apps/desktop/src/platform-runtime.cjs,code:apps/desktop/src/send-wire.cjs | A:inspectComment,inspectDm | S:该通道只允许 workbench_reply_verify 一个工具且必须 submissions===0；放宽工具集或调用次数会让已发送证据变成可伪造
 inbox-wire.cjs[IM7T]: F:收件箱 MCP 通道：固定四个 inbox_* 工具，逐次只放行一个调用名并锁死 senderId 与 maxSubmissions=0 | R:code:apps/desktop/src/platform-runtime.cjs | A:DesktopInboxWire.connect,DesktopInboxWire.call | S:call 前置 allowed 并在 finally 清空，放行第二个工具名或让渲染层传入参数即可越权调用其它 inbox 能力；响应上限 2MB
-ipc-policy.cjs[ES8T]: F:IPC 准入：只接受主窗口主框架的 workbench://app 来源与固定方法白名单 | R:code:apps/desktop/src/preload.cjs,code:apps/desktop/src/main.cjs | A:validateCall | S:来源必须是 workbench://app 且无端口、用户名、密码，开发态只放行 devOrigin；方法表与 preload 必须一致；请求体上限 65536 字节。放宽任一项等于开放任意 IPC
-main.cjs[AG9S]: F:Electron 主进程：私有数据目录、凭据库、数据库、执行器装配、workbench 协议与 IPC 总入口 | R:code:apps/desktop/src/ipc-policy.cjs,code:apps/desktop/src/platform-runtime.cjs,code:apps/desktop/src/native-resources.cjs | A:main,bindRuntime,protocol.handle | S:nativeReady 为假时 SEND/COLLECT/INBOX 执行器根本不注册，UI 只能显示禁用，不是运行时再判断。protector.available() 会触 Keychain 弹窗，状态接口必须只用 availableHint()。打包态禁止 --dev，--self-test 与 --test-fixture 互斥。写操作串行化在 operations 链上，与备份恢复互斥
+ipc-policy.cjs[ES8T]: F:IPC 准入：只接受主窗口主框架的 workbench://app 来源与固定方法白名单 | R:code:apps/desktop/src/preload.cjs,code:apps/desktop/src/main.cjs | A:validateCall | S:archiveConfiguration 已改为 deleteConfiguration（真删除，不是归档），automationSteps/saveAutomationSteps 取代旧的 contact 系列；方法表必须与 preload.cjs 和 service 完全一致，漏一个就是调用被拒或调不存在的方法。请求体上限 65536 字节
+main.cjs[AG9S]: F:Electron 主进程：私有数据目录、凭据库、数据库、执行器装配、workbench 协议与 IPC 总入口 | R:code:apps/desktop/src/ipc-policy.cjs,code:apps/desktop/src/platform-runtime.cjs,code:apps/desktop/src/native-resources.cjs | A:main,bindRuntime,protocol.handle | S:开发态显式 app.dock.setIcon 换掉 Electron 默认图标，只在未打包时生效；nativeReady 为假时 SEND/COLLECT/INBOX 执行器根本不注册；protector.available() 会触 Keychain 弹窗，状态接口必须只用 availableHint()；写操作串行化在 operations 链上，与备份恢复互斥
 native-resources.cjs[RV8T]: F:原生资源完整性校验：按 build 清单逐文件比对哈希，并整树校验 Chromium 资源 | R:code:apps/desktop/src/owned-process.cjs | A:inspect,status | S:status() 吞掉异常只返回 ready:false，缺任一清单、版本或哈希不符即整体不可用，没有降级路径；Windows 还需 windows-validation.json 六项全为 true
 owned-journal.cjs[PR7T]: F:Windows 回复阶段日志读取：ACL 回调、单硬链接、打开前后双次 stat 比对，防符号链接与截断 | R:code:apps/desktop/src/platform-runtime.cjs | A:readOwnedJournal | S:读前后各调一次 checkPrivateFile 并比对 dev/ino/size，任一处不一致返回 INVALID；缺末尾换行返回 TRUNCATED；上限 128KB、64 条，序列号必须连续
 owned-process.cjs[RR8T]: F:受管子进程：校验 helper 与二进制哈希，必须收到 STOPPED 证明后才允许交接凭据 | R:code:apps/desktop/src/platform-runtime.cjs | A:spawnOwned,verified | S:stop() 先等 `STOPPED <code>` 再执行 afterStopped 回调，未确认即交接会把 cookie 留给存活进程；Windows 控制通道走 stdin JSON，mac 走 fd3
 platform-runtime.cjs[RR9T]: F:平台会话生命周期：独占目录、随机回环端口、一次性 token、重建环境变量、停止即删目录 | R:code:apps/desktop/src/owned-process.cjs,code:apps/desktop/src/owned-journal.cjs | A:open,openSaved,openLogin | S:子进程环境完全重建（PATH=/usr/bin:/bin、HOME=会话目录），不继承 API key、代理或 NODE_OPTIONS；18060/18061 被跳过；cookie 以 flag:wx 和 0o600 写入，停止时若无法证明已停则触发 onUnsafeStop 写 safety_state
-preload.cjs[ES8T]: F:预加载桥：把固定方法表冻结后暴露为 window.localWorkbench，全部走 workbench:call | R:code:apps/desktop/src/ipc-policy.cjs | A:contextBridge.exposeInMainWorld | S:方法表必须与 ipc-policy.cjs 的 methods 逐项一致；多出一个方法就多一个攻击面，且 ipc-policy 会直接拒绝该调用
+preload.cjs[ES8T]: F:预加载桥：固定方法表冻结后暴露为 window.localWorkbench，全部走 workbench:call | R:code:apps/desktop/src/ipc-policy.cjs | A:contextBridge.exposeInMainWorld | S:方法表必须与 ipc-policy.cjs 的 methods 逐项一致；archiveConfiguration→deleteConfiguration 的改名要两边同时改，只改一边渲染层会被直接拒
 send-wire.cjs[IM9T]: F:精确发送通道：评论与私信各只提交一次，先校验 capabilities 再调用 workbench_reply_exact | R:code:apps/desktop/src/platform-runtime.cjs,code:apps/desktop/src/evidence-wire.cjs | A:submitComment,submitDm,inspectComment | S:提交前必须 await beforeDispatch()，失败即抛 SEND_AUTHORITY_CHANGED；同一 attempt 只允许一次 exact 调用，请求上限 16 次、响应 64KB；工具目录或 RPC 名不符一律拒绝
 windows-browser-source.json[FV5T]: F:Windows 打包用 Chromium 归档的来源、版本、归档哈希与静态校验状态 | R:code:apps/desktop/src/native-resources.cjs | A:- | S:windowsExecuted 与 publisherSignatureValidated 都是 false，说明只做过 PE 与文件清单静态校验，不代表 Windows 上真机跑通
 windows-native.cjs[IV6T]: F:调用 windows-host.exe 执行 ACL、目录与文件等受限操作，输入输出走单行 JSON | R:code:apps/desktop/src/native-resources.cjs | A:windowsNative | S:只接受 win32/x64；二进制哈希必须匹配 windows-build.json，否则 WINDOWS_HELPER_UNVERIFIED；调用超时 15s、输出上限 32KB
@@ -42,27 +42,23 @@ windows-resources.test.cjs[TV7T]: F:校验 Windows 原生资源门：MCP、helpe
 windows-static-check.test.cjs[TV5T]: F:校验 PE 头静态检查拒绝错架构、截断与伪造头，且全程不执行文件 | R:code:scripts/desktop/windows-static-check.cjs | A:- | S:-
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/===
-DESIGN.md[SU9L]: F:唯一样式规范：优先级、色彩板与角色、排版、组件、布局间距、深度、响应式与机器可读 token | R:code:apps/web/src/styles/theme.css,code:AGENTS.md | A:规范优先级,机器可读 token 与校验 | S:0.1 节声明口径已收敛，旧 proposal 不再作数；第 10 节导出到 CSS 有已知损失，不能把导出结果当唯一真值反向推导样式
-components.json[FV3T]: F:shadcn 配置：new-york 风格、cssVariables 开启、路径别名与 lucide 图标库 | R:code:apps/web/package.json | A:- | S:-
+DESIGN.md[SU9L]: F:唯一样式规范：优先级、色彩板与角色、排版、组件与表单控件、页面骨架、布局间距、深度、响应式、机器可读 token | R:code:apps/web/src/styles/theme.css,code:AGENTS.md | A:规范优先级,机器可读 token 与校验 | S:§4 新增表单控件与 components/patterns/ 页面骨架两节，页面不再手写 CSS；第 10 节导出到 CSS 有已知损失，不能把导出结果当唯一真值反向推导样式
+components.json[FV3T]: F:shadcn 配置：new-york 风格、cssVariables 开启、路径别名与 lucide 图标库 | R:code:apps/web/package.json | A:- | S:css 指向 src/styles/index.css；改回旧路径 CLI 找不到 token
 desktop.html[EU4T]: F:桌面端 HTML 入口，挂载 #root 并加载 src/main.tsx | R:code:apps/web/src/main.tsx | A:- | S:-
-package.json[FV4T]: F:Web 工作区清单：Vite + TanStack Router/Query + Radix + Tailwind v4，只依赖 @crm/contracts | R:code:apps/web/vite.desktop.config.ts | A:- | S:dev 与 build 都显式指定 vite.desktop.config.ts，用默认 vite 配置会产出错入口
+package.json[FV4T]: F:Web 工作区清单：Vite + TanStack Router/Query + Radix 系列 + cmdk + date-fns + Tailwind v4，只依赖 @crm/contracts | R:code:apps/web/vite.desktop.config.ts | A:- | S:新增的 cmdk、date-fns、react-day-picker 与 avatar/label/radio-group/scroll-area 都是 shadcn-admin 外壳依赖；dev 与 build 都显式指定 vite.desktop.config.ts，用默认 vite 配置会产出错入口
 tsconfig.json[FC5T]: F:web 工作区编译配置：继承根 base，Bundler 解析、react-jsx、noEmit 与 @/* 路径别名 | R:code:tsconfig.base.json,code:apps/web/vite.config.ts | A:- | S:@/* 别名必须与 vite.config.ts 的 resolve.alias 一致，两边不同步会让 tsc 过而运行时解析失败；include 含 vite.config.ts 才能在编辑器里识别 defineConfig 类型
 vite.config.ts[FV6T]: F:渲染层构建配置：TanStack Router 插件生成路由树、React、Tailwind，别名 @ 指向 src，固定 5173 端口 | R:code:apps/web/src/routeTree.gen.ts,code:apps/web/src/styles/index.css | A:- | S:strictPort 与 host 127.0.0.1 是 dev.mjs 探活的前提，改成自动换端口会让桌面外壳连到错误端口；tanstackRouter 的 target:'react' 与 autoCodeSplitting 决定 routeTree.gen.ts 的形状
 vite.desktop.config.ts[FV6T]: F:桌面渲染层构建变体：合并 base 配置，加 desktop-entry-fallback 中间件把 HTML 请求重写到 desktop.html，产物出 dist-desktop | R:code:apps/web/vite.config.ts,code:apps/desktop/src/main.cjs | A:desktopEntry | S:打包态走 workbench://app/ 且路由期望文档在 /，而 vite 只在 /desktop.html 提供入口，没有这个重写所有路由都会落到 not found；中间件只放行 text/html 且跳过 /@、/src/ 与带扩展名的请求
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/===
-configuration-browser.css[CU5T]: F:配置管理两栅布局：左侧条目列表、右侧详情，767px 以下堆叠为单列 | R:code:apps/web/src/features/configuration/configuration.css | A:- | S:末段 `:root .graphite-workspace` 覆盖是有效作用域而非死规则，删它会破坏配置表单的纵向排列
 disclosure.tsx[CU4T]: F:折叠披露组件：ghost 按钮加 ChevronDown 触发 Collapsible | R:code:apps/web/src/components/ui/collapsible.tsx | A:Disclosure | S:-
 feedback.tsx[CU6T]: F:通用错误提示与加载骨架，分别带 role=alert 与 role=status 加 aria-live | R:code:apps/web/src/components/ui/alert.tsx | A:ErrorNotice,Loading | S:Loading 用 aria-live=polite 且带 aria-label，去掉后屏幕阅读器读不到加载态
-information-section.tsx[CU4T]: F:信息分区卡片：Card 加 h3 标题，useId 绑定 aria-labelledby 并声明 role=region | R:code:apps/web/src/components/ui/card.tsx | A:InfoSection | S:-
 navigation-progress.tsx[CU3T]: F:路由切换顶部进度条，pending 时 continuousStart，其余 complete | R:code:apps/web/src/routes/__root.tsx | A:NavigationProgress | S:-
-status-notice.css[CU5T]: F:紧凑状态条与详情抽屉样式，含 480px 以下触控尺寸调整 | R:code:apps/web/src/components/status-notice.tsx | A:- | S:-
 status-notice.tsx[CU7T]: F:紧凑状态条：风险标签常显，详情进 Sheet，关闭后焦点回到触发按钮 | R:code:apps/web/src/components/ui/sheet.tsx | A:StatusNotice,pauseDescription | S:pauseDescription 是发送暂停文案的唯一来源，新增 reason 必须在这里补文案，否则界面直接暴露原始代码
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/layout/===
 app-sidebar.tsx[CU7T]: F:侧栏骨架：品牌头、分组导航、底部本地工作台菜单；未读数取自 useLocalRecords('unread') | R:code:apps/web/src/components/layout/nav-group.tsx,code:apps/web/src/components/layout/data/sidebar-data.ts | A:AppSidebar | S:未读数只在 item.url === '/inbox' 时注入，超过 99 显示 99+；改路由路径要同步这里，否则角标不会出现
 nav-group.tsx[CU6S]: F:导航组渲染：按有无子项分派为普通链接、折叠项或收起态下拉菜单 | R:code:apps/web/src/components/layout/types.ts | A:NavGroup | S:先判 item.items 再判 state==='collapsed'&&!isMobile，顺序倒置会让桌面收起态下子项无法展开
-nav-workspace.tsx[CU4T]: F:侧栏底部本地工作台菜单：账号中心与使用引导两个入口 | R:code:apps/web/src/routes/_workbench/welcome.tsx | A:NavWorkspace | S:-
 types.ts[FU3T]: F:侧栏导航类型：NavLink、NavCollapsible、NavItem、NavGroup、SidebarData | R:code:apps/web/src/components/layout/data/sidebar-data.ts | A:- | S:-
 workbench-shell.tsx[AU8T]: F:工作台外壳：先开本地数据再渲染，未初始化时进欢迎流程，之后挂侧栏与主区 | R:code:apps/web/src/features/local-workbench/use-local-workbench.ts,code:apps/web/src/components/layout/app-sidebar.tsx | A:WorkbenchShell | S:SidebarInset 上的 graphite-workspace 与 local-desktop 是有效作用域，不是历史类名；删掉会让未迁移到 Tailwind 的页面规则失效
 
@@ -96,15 +92,12 @@ font-provider.tsx[CU3T]: F:字体上下文：切 html 上的 font-* 类，持久
 theme-provider.tsx[CU5S]: F:主题上下文：light/dark/system 三态，system 跟随 prefers-color-scheme | R:code:apps/web/src/lib/preferences.ts | A:ThemeProvider,useTheme | S:类名加在 documentElement 上且先 remove('light','dark') 再加；持久化走 getPreference 而非直接 localStorage，换存储层要同步 preferences.ts
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/auto-contact/===
-graphite-reply-history.css[CB5T]: F:回复记录页的局部布局：工具栏、筛选宽度 216px、表格固定列宽与最小宽 1080px | R:code:apps/web/src/features/auto-contact/reply-history-content.tsx | A:- | S:所有选择器都带 :root .graphite-workspace 前缀，这是功能级作用域；去掉前缀会污染其他工作区的表格
 reply-history-content.tsx[CB6T]: F:回复历史表格与详情：状态映射、北京时间展示、计划态与执行证据折叠 | R:code:apps/web/src/components/ui/table.tsx,code:apps/web/src/components/disclosure.tsx | A:ReplyHistoryTable,ReplyHistoryDetail | S:UNKNOWN 状态必须同时出“结果未知，待核对”提示与“保留占用·勿重发”注释；只改标签文案会让用户误以为可以重发
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/collection/===
-bounded-check-result.tsx[CB6T]: F:展开诊断结果：展示展开次数、平台声明数、唯一评论数与节点缺口 | R:code:apps/web/src/features/collection/bounded-read-evidence.tsx | A:BoundedCheckResult | S:无诊断时直接渲染“不能确认展开结果”的 alert，不回退到乐观文案
 bounded-read-evidence.tsx[CB5T]: F:本轮读取范围详情：窗口、保留数量、各层声明与已加载对比、分窗记录 | R:code:apps/web/src/features/collection/coverage-progress-summary.ts | A:BoundedReadEvidence,BoundedReadWindows | S:分窗记录只接受 2 到 8 个窗口，超出或含无效报告整体不渲染，避免半截证据误导
 collection-outcome.ts[DB8T]: F:采集结果的覆盖判定：区分“执行中断”与“覆盖缺失”，输出标签、告警与差异数 | R:code:apps/web/src/features/collection/types.ts | A:commentCoverage,collectionOutcome,readingInterruption | S:interruptions 集合内的原因一律不算覆盖完整，且绝不回写持久化状态；visible 需同时满足终态、无中断、逐帖 visible、保存数等于采集数、无剩余锚点，任一不满足就降为“覆盖待确认”
 config-draft.ts[DB6T]: F:关键词组草稿与校验：拆分、上限、去重与默认值继承 | R:code:apps/web/src/features/collection/types.ts | A:keywordDraft,keywordValidation,keywordDefaults | S:草稿只拷贝输入契约字段，不得带入 runtime/history 字段；只改名称与关键词时 batchLimit、excludeWords、defaultExecutionAccountId 必须原样继承，否则编辑会重置隐藏设置
-coverage-diagnostics.tsx[CB6T]: F:评论覆盖诊断：平台声明数、快照计数、是否有下一页与同页稳定性观察 | R:code:apps/web/src/features/collection/coverage-progress-summary.ts | A:CoverageDiagnostics | S:未滚动也未展开时，“计数未变”不代表采集完整，文案必须保留这句限定
 coverage-progress-summary.ts[DB7T]: F:读取进度摘要：初始与保留计数对比、增长量、缺口与点击/滚动次数 | R:code:apps/web/src/features/collection/collection-outcome.ts | A:coverageProgressSummary | S:增长量必须标注“不是数据库新增条数”；只有 status=OK 且 list=EXACT 且无 invalidNodes/missingIds/duplicateIds 的样本才参与计数
 coverage-reading-summary.ts[DB8T]: F:把一次读取描述成一句人话：是否读尽、差额原因、哪些不能断言 | R:code:apps/web/src/features/collection/collection-outcome.ts | A:coverageReadingSummary | S:绝不得把 UNKNOWN 或 PARTIAL 升为 COMPLETE；计数与平台声明不一致时必须明说“差额原因未知”，不能推断为删除、隐藏或漏读
 image-diagnostics.tsx[CB5T]: F:图片与头像字段诊断：缺图原因、URL 协议域名白名单、HTTPS 升级与转换前后结构 | R:code:apps/web/src/features/collection/coverage-diagnostics.tsx | A:ImageDiagnostics | S:附加候选只检查前 8 个，界面必须标出“仅检查前 8 个”，否则会被当成全量结论
@@ -115,7 +108,6 @@ run-review-model.ts[DB6T]: F:评论匹配阶段文案：从 job 计数推导当�
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/configuration/===
 configuration-route.ts[FC5T]: F:配置页的五个分页定义、tab 解析与跳转路径构造 | R:code:apps/web/src/features/local-workbench/local-configurations.tsx | A:configurationTabs,configurationTab,configurationPath | S:切换路径时必须保留 config 与 policy 两个查询参数，否则切分页会丢掉当前选中项
-configuration.css[CC5T]: F:配置页三栅布局：左侧分类导航、中间条目、右侧详情，1100px 与 767px 两级降级 | R:code:apps/web/src/components/configuration-browser.css | A:- | S:767px 以下隐藏左侧导航改用下拉选择；`body:has(.configuration-page){min-width:0}` 是消除 320px 横向滚动的关键，删掉会溢出
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/errors/===
 general-error.tsx[CU3T]: F:500 错误页：可选 minimal 模式只留文案，否则带返回与回首页 | R:code:apps/web/src/features/errors/not-found-error.tsx | A:GeneralError | S:大数字用 text-hero，这是 AGENTS.md 里唯一允许该档位的场景
@@ -124,7 +116,6 @@ not-found-error.tsx[CU3T]: F:404 页：整页大数字加返回上一页与回�
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/local-workbench/===
 local-account-page.tsx[CU6T]: F:账号中心：账号列表、额度与风险记录、本地资格检查、编辑与断开会话 | R:code:apps/web/src/features/local-workbench/local-diagnostics.tsx | A:LocalAccountPage,AccountEditor | S:平台账号 ID 未知时必须显示“尚未取得可靠身份”，不能拿昵称代替；无风险记录时也要声明“不代表平台允许发送”
 local-api.ts[EG9T]: F:渲染层与桌面 IPC 的唯一客户端：完整方法表类型、错误码到中文文案映射与调用封装 | R:code:apps/web/src/features/local-workbench/local-evidence-messages.ts | A:localApi,LocalMethods,messages | S:localApi 遇 ok:false 直接 throw，调用方只能走 mutation error 路径；新增错误码必须同时在 messages 里给文案，否则用户看到的是原始码。方法名必须与 preload 和 ipc-policy 的方法表一致
-local-automation.tsx[CB6T]: F:自动联系规则编辑与授权：规则表单、账号池顺序、日额度与预览确认 | R:code:apps/web/src/features/local-workbench/use-local-automation.ts | A:LocalAutomation,RuleEditor | S:保存只生成草稿，必须走“预览规则授权 + 勾选同意”才会启用；账号池顺序即分配优先级，UI 里的“顺序 N”就是它
 local-collection.tsx[CB7T]: F:本轮采集设置：关键词组选择、账号、笔记数 1-10、匹配方案勾选与范围预览授权 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:LocalCollectionPanel,CollectionSetup | S:笔记数超出 1-10 即时报错并阻断预览；已选但未授权的方案不会被自动换掉，只能由用户取消；切换关键词组前若有未保存修改必须先确认放弃
 local-configurations.tsx[CC6T]: F:配置管理页：五个分页、条目列表、编辑器与归档，模型分页单独渲染密钥与活动 | R:code:apps/web/src/features/configuration/configuration-route.ts | A:LocalConfigurations,Editor,LocalModelKey | S:密钥输入框保存后立即清空且不回显；切分页时先清空 editor、dirty 与 archive 三个状态，否则会带着上一页的编辑态
 local-contact.tsx[CB6T]: F:对已审核评论作者发起一次性联系：选账号、渠道、模板、预览后勾选确认 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:LocalContact | S:预览结果携带 requestKey，改动任一输入都会重置 plan 与 consent；只有 VERIFIED 且有会话的账号可选
@@ -139,16 +130,12 @@ local-model-settings.tsx[CA7T]: F:模型审核授权：选模型与日额度、�
 local-overview.tsx[CG6T]: F:工作台首页指标格与暂停提示，另导出数据页、平台能力页 | R:code:apps/web/src/features/local-workbench/local-record-pages.tsx | A:LocalOverview,LocalDataPage,LocalCapabilities | S:每个指标都链到对应列表页且带筛选参数，改路由要同步这里；指标值为空时显示破折号而不是 0
 local-platform.tsx[CI7T]: F:账号登录（二维码）与限时收件两个面板，均需显式勾选授权 | R:code:apps/web/src/features/local-workbench/local-collection.tsx | A:LocalLoginPanel,LocalReceivePanel | S:收件授权文案必须提前告知“历史记录可能不完整、平台消息可能被标记为已读”；登录二维码按 expiresAt 显示有效期
 local-post-comparison.tsx[CB6T]: F:同一笔记两个历史快照的差异对比与各自审核版本 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:LocalPostComparison | S:单侧出现不得解读为平台新增或删除，界面必须保留这句；absenceIsDeletion 恒为 false
-local-post-diagnostic.tsx[CB6T]: F:新链接单帖只读诊断：选账号与链接，可选验证翻页与回复展开 | R:code:apps/web/src/features/collection/bounded-check-result.tsx | A:LocalPostDiagnostic | S:提交后输入框锁定，避免同一 requestKey 重复提交；检查结果不写入采集历史，失败也不自动重试
 local-posts.tsx[CB7T]: F:本轮笔记列表与历史恢复：查原文、独立审核、重新读取、按检查点续读 | R:code:apps/web/src/features/local-workbench/use-local-posts.ts | A:LocalPosts | S:重新读取只更新采集与审核，不派生自动发送；续读仅复制摘要与原文一致的历史记录，锚点缺失时不得声称完整
 local-record-pages.tsx[CO5T]: F:分页、任务记录、待处理回复、运行异常四个共用记录视图 | R:code:apps/web/src/features/local-workbench/local-evidence.tsx | A:LocalPagination,LocalJobs,LocalPending,LocalNotices | S:每页固定 30 条，改这个数字要同步所有手写的 page*30 判断，否则末页会多出空页
 local-reply.tsx[CM7T]: F:对单条私信的一次性回复：预览后勾选确认才发 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:LocalReply | S:正在收件时必须先在任务列表取消收件；结果未知不会自动重发，文案已写明
 local-review-dialog.tsx[CA7T]: F:按笔记或独立审核历史原文的付费审核授权弹层 | R:code:apps/web/src/features/local-workbench/local-run-review.tsx | A:LocalReviewDialog | S:本轮审核只接受完整采集轮次及当时冻结的目标；独立审核不重读平台、不计入原轮自动联系门槛。估算费用必须标注“不是费用上限”
 local-run-review.tsx[CA6T]: F:本轮剩余评论匹配的预览与授权入口 | R:code:apps/web/src/features/local-workbench/local-review-dialog.tsx | A:LocalRunReview | S:预览里 skipped 是已有或空批次的数量，不能计入本次请求数
-local-shell.css[CU5T]: F:本地工作台在 local-desktop 作用域内的排版微调：表单、指标格、详情抽屉宽度 | R:code:apps/web/src/features/local-workbench/local-workbench.css | A:- | S:选择器全部限定在 .local-desktop 下，去掉作用域会覆盖到普通页面
 local-task-page.tsx[CW7T]: F:自动化任务页：按轮次与阶段（采集、审核、回复）组织工作区 | R:code:apps/web/src/features/work/journey-stepper.tsx,code:apps/web/src/features/local-workbench/local-posts.tsx | A:LocalTaskPage,RunWorkspace | S:stage 只认 collect、review、contact 三个值，其余一律回退 collect；浏览页面不会触发任何执行，文案已明说
-local-workbench.css[CU5T]: F:本地工作台基础样式：面板、编辑器、列表、消息流与二维码 | R:code:apps/web/src/features/local-workbench/local-shell.css | A:- | S:600px 以下面板内边距从 24 降到 16，与 AGENTS.md 的移动端卡片规则一致；改这里要同步 DESIGN.md
-use-local-automation.ts[AB6T]: F:自动联系规则的数据编排：编辑态、预览、授权与停用，决策列表每 5 秒轮询 | R:code:apps/web/src/features/local-workbench/local-api.ts | A:useLocalAutomation | S:授权必须带上 consent 版本串；save 成功后同时清空 editing 与 preview，否则界面会停在旧预览上
 use-local-data.ts[AD6T]: F:数据副本编排：导入旧导出、核对副本、激活切换、旧档案分页与恢复后解除暂停 | R:code:apps/web/src/features/local-workbench/local-data-management.tsx | A:useLocalData | S:activate 前必须已选副本并勾选同意，否则直接抛错；resume 只解除暂停，历史限制继续保留，新任务仍需重新授权
 use-local-evidence.ts[AB6T]: F:未知发送证据核对的编排：概览每 5 秒轮询、预览、只读核对与取消 | R:code:apps/web/src/features/local-workbench/local-evidence.tsx | A:useLocalEvidence | S:核对成功后额度仍保持占用，暂停必须在恢复核对里显式处理；失败时保留未知结果与禁止重发，不得自动重试
 use-local-history.ts[AB6T]: F:历史页数据编排：三视图各自查询、筛选从 URL 读、分页与审核决定 | R:code:apps/web/src/features/local-workbench/local-history.tsx | A:useLocalHistory | S:筛选全部从 URL 参数读取，不另存组件状态；每次改筛选都删 page 参数，否则页码与结果集错位
@@ -165,7 +152,6 @@ auto-apply-status.tsx[CU3T]: F:自动保存失败时的行内重试提示，成�
 draft-guard.tsx[AU7T]: F:未保存草稿守卫：登记 retained/modal/pending 三类草稿，路由切换与关闭窗口前弹确认 | R:code:apps/web/src/lib/router-compat.tsx,code:apps/web/src/features/work/navigation-policy.ts,code:apps/web/src/features/configuration/configuration-route.ts | A:DraftGuardProvider,useDraftGuard,useConfirmWorkspaceLeave,useConfirmDiscard | S:confirm 同一时刻只允许一个待决问题，重入直接返回 false；pending 类草稿一律禁止离开，它代表已提交未完成的写操作；deciding 标志防 blocker 连环触发，去掉会重复弹窗
 journey-model.ts[AD6T]: F:任务三阶段定义（采集、评论匹配、自动回复）与阶段解析、轮次选择规则 | R:code:apps/web/src/features/work/journey-step-state.ts,code:apps/web/src/features/collection/types.ts | A:journeyStages,journeyStage,selectedJourneyRun | S:历史链接里的 handoff 是已删除的第四步，必须映射到 contact 而不是回退 collect；selectedJourneyRun 在 config 缺失时返回 undefined，不能跨配置推断轮次
 journey-step-state.ts[AD8T]: F:由轮次、JourneySummary 与开关推导三个步骤的状态、当前步、提示语与是否需要关注 | R:code:apps/web/src/features/work/journey-model.ts,code:apps/web/src/features/comment-review/run-review-model.ts,code:apps/web/src/features/collection/collection-outcome.ts | A:journeyStepState,JourneyStep,StepState | S:live 事件超过 15 秒或时间戳比现在早 5 秒以上即判 stale 并降级 unavailable；contacts.UNKNOWN 必须提示“勿重发”，不得回退成 failed；durable stages 的 ready 门禁优先于统计推断，否则排队中的审核会被显示成可执行
-journey-stepper.css[CU5T]: F:三步步进器样式：连接线、状态色、旋转图标与 600px 以下的竖排布局 | R:code:apps/web/src/features/work/journey-stepper.tsx | A:- | S:状态色只走 var(--success)/var(--primary)/var(--attention)/var(--destructive) 等 token，写字面色会绕过主题；完成态连接线用 success，其余用 border
 journey-stepper.tsx[CU5T]: F:步骤条组件：按 state 选图标、aria-pressed 标记当前查看步，必要时挂状态条 | R:code:apps/web/src/features/work/journey-step-state.ts,code:apps/web/src/components/status-notice.tsx | A:JourneyStepper | S:只有 running/loading 加旋转类，且 CSS 在 prefers-reduced-motion 下停动画；details 非空或存在 unknown 步都必须渲染 StatusNotice，否则失败信息无处显示
 navigation-policy.ts[AD6T]: F:判断 retained 类草稿是否会因为这次跳转真的丢失 | R:code:apps/web/src/features/work/draft-guard.tsx | A:shouldProtectDrafts | S:设置与模板页在工作区内保持挂载，只有离开 /work 才算风险；/configuration 单独按路径不等判断，不能套用 /work 前缀规则
 use-auto-apply.ts[AG6T]: F:单写者自动保存：最新值入队、失败即停不后台重试、按代次丢弃过期响应 | R:code:apps/web/src/features/work/auto-apply-status.tsx | A:useAutoApply | S:generation 比对决定是否采纳返回值，旧代次响应必须丢弃否则界面回退到旧值；失败后清空 pending 且不再重试，只有 retry 或 flush 能重新提交
@@ -188,7 +174,6 @@ vite-env.d.ts[FC3T]: F:引入 vite/client 类型，提供 import.meta.env 与静
 __root.tsx[EU8T]: F:根路由：挂导航进度条、Outlet 与 Toaster，指定 404 与错误组件，开发态才加载两个 devtools | R:code:apps/web/src/routes/_workbench/route.tsx,code:apps/web/src/components/navigation-progress.tsx | A:Route | S:devtools 由 import.meta.env.MODE==='development' 门控，条件放宽会把调试面板打进生产包；Toaster 固定在根，页面不要再自己挂一套
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/auto-contact/===
-index.tsx[EU5T]: F:自动回复与账号矩阵路由页，只渲染标题与 LocalAutomation | R:code:apps/web/src/features/local-workbench/local-automation.tsx | A:Route | S:路由路径由文件位置决定（/_workbench/auto-contact/），改文件名即改 URL，sidebar-data 里的 url 必须同步
 pending.tsx[EU3T]: F:待处理回复路由页，直接复用 LocalPending | R:code:apps/web/src/features/local-workbench/local-record-pages.tsx | A:Route | S:-
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/routes/_workbench/automation/===
@@ -224,10 +209,8 @@ index.tsx[EU4T]: F:工作台首页路由，挂 LocalOverview 指标格 | R:code:
 notices.tsx[EU3T]: F:运行异常通知路由页，挂 LocalNotices | R:code:apps/web/src/features/local-workbench/local-record-pages.tsx | A:Route | S:-
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/styles/===
-desktop-bridge.css[CU6T]: F:把 graphite 页面样式接到 shadcn 侧栏外壳：只去掉 .graphite-workspace 的布局属性，保留作用域类 | R:code:apps/web/src/main.tsx,code:apps/web/src/components/layout/workbench-shell.tsx | A:- | S:.graphite-workspace 仍是 539 条后代规则的作用域，类名必须留在 SidebarInset 上；本文件必须在 foundation 之后加载，同特异性下后加载才生效；删掉这条会让 display 回落成 grid，内容区错位
 index.css[CU7T]: F:Tailwind 入口：声明层顺序、导入 theme、base 重置、container/no-scrollbar/faded-bottom 三个 utility 与折叠动画 | R:code:apps/web/src/styles/theme.css,code:apps/web/src/main.tsx | A:- | S:必须第一个被导入，它决定 theme→base→components→utilities 的层顺序；body[data-scroll-locked] 的 overflow:unset !important 是为 sticky 页头解 Radix 滚动锁，去掉后弹层关闭会锁住页面；767px 以下输入框强制 16px 防 iOS 聚焦缩放
 theme.css[CC8S]: F:唯一的设计 token 定义处：浅色与暗色两套表面/文本/语义/图表色，以及 @theme inline 的字体、圆角、六档字号与 color 映射 | R:code:apps/web/src/styles/index.css,code:apps/web/DESIGN.md | A:- | S:这里用 hex 是刻意的（直接取自规范原文，避免换算偏差），也是全仓唯一允许写字面色值的地方；新增语义色必须同时改 :root、.dark 与 @theme inline 三处，少一处就只在单一模式生效或 Tailwind 类不生成；--qr-surface 两套都固定纯白，否则二维码扫不出来
-workbench.css[CU6T]: F:graphite 设计系统删除后仍被使用的页面级样式：page-heading 与 local-desktop 下的标题、段落、dt/dd、alert | R:code:apps/web/src/styles/desktop-bridge.css,code:apps/web/src/styles/theme.css | A:- | S:上一轮 155KB 的 [data-slot] 全量覆写已整体删除，不要在这里重建；规则一律限定在 .local-desktop 作用域，去掉会波及 shadcn 基元；字号字重已压到 20/16/600 档位，加新档位要先改 theme.css
 
 ===/Users/kleene/projects/social-lead-workbench/docs/===
 README.md[SG5T]: F:文档总索引：requirements 回答做什么、design 回答怎么实现，以及三条阅读路径 | R:code:docs/requirements/README.md,code:docs/design/README.md | A:- | S:维护规则要求需求变更先改 requirements 再改 design；验证过程与一次性排查结论不单独建文档，只写提交说明
@@ -641,3 +624,16 @@ import-offline.mjs[XO6T]: F:命令行导入离线导出：目标必须是新的�
 ===/Users/kleene/projects/social-lead-workbench/scripts/real-mcp/===
 core.mjs[XQ7T]: F:真实 MCP 预检：锁定已审二进制哈希、干净环境、回环端口与单会话检查 | R:code:integrations/inbox-mcp/main.go | A:reviewed,cleanEnvironment,preflight,createSession | S:已审构建哈希是硬编码白名单，升级必须重新审阅而不是回退到任意二进制或自动下载；端口必须回环且可用
 core.test.mjs[XQ6T]: F:真实 MCP 预检的离线测试：干净环境、端口占用与符号链接拒绝 | R:code:scripts/real-mcp/core.mjs | A:- | S:断言符号链接与会话目录越界被拒；只测预检逻辑，不启动真实平台
+
+===/Users/kleene/projects/social-lead-workbench/apps/desktop/build/===
+icon.svg[OV4T]: F:应用图标源文件：1024 画布圆角方底、白色漏斗与红色圆点，导出 png/icns 供打包与开发态 Dock 使用 | R:code:apps/desktop/electron-builder.cjs | A:- | S:1024 画布四周留 100 给 Dock 阴影，漏斗用同色描边把折角磨圆以免缩小后出尖刺；改图形必须重新导出 icon.png/icon.icns，否则打包仍用旧图标
+
+===/Users/kleene/projects/social-lead-workbench/apps/web/src/assets/custom/===
+icon-dir.tsx[CU3S]: F:方向预览图标：按 dir 渲染 ltr/rtl 两态，rtl 时整体水平镜像 | R:code:apps/web/src/context/direction-provider.tsx | A:IconDir | S:rtl 用 rotate-y-180 镜像而非换图；data-name 带 dir 后缀
+icon-layout-compact.tsx[CU3S]: F:布局预览图标（compact）：配置抽屉里表示紧凑布局 | R:code:apps/web/src/components/config-drawer.tsx | A:IconLayoutCompact | S:-
+icon-layout-default.tsx[CU3S]: F:布局预览图标（default）：配置抽屉里表示默认布局 | R:code:apps/web/src/components/config-drawer.tsx | A:IconLayoutDefault | S:data-name 为 con-layout-default（缺 i），上游拼写错误
+icon-layout-full.tsx[CU3S]: F:布局预览图标（full）：配置抽屉里表示全宽布局 | R:code:apps/web/src/components/config-drawer.tsx | A:IconLayoutFull | S:-
+icon-sidebar-floating.tsx[CU3T]: F:侧栏样式预览图标（floating）：配置抽屉里表示悬浮侧栏 | R:code:apps/web/src/components/config-drawer.tsx | A:IconSidebarFloating | S:-
+icon-sidebar-inset.tsx[CU3T]: F:侧栏样式预览图标（inset）：配置抽屉里表示内嵌侧栏 | R:code:apps/web/src/components/config-drawer.tsx | A:IconSidebarInset | S:-
+icon-sidebar-sidebar.tsx[CU3T]: F:侧栏样式预览图标（sidebar）：配置抽屉里表示常规侧栏 | R:code:apps/web/src/components/config-drawer.tsx | A:IconSidebarSidebar | S:-
+icon-theme-dark.tsx[CU3T]: F:主题预览图标（dark）：配置抽屉里表示暗色主题 | R:code:apps/web/src/components/theme-switch.tsx | A:IconThemeDark | S:十六进制是写死的预览色，不随 token 变；示意图，不要改成 var(--*)

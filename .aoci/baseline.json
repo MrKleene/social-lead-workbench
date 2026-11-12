@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-11T10:57:30Z",
-  "updated_at": "2026-11-11T11:49:49Z",
+  "updated_at": "2026-11-12T17:46:54Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -17,9 +17,9 @@
     },
     "AGENTS.md": {
       "role": "index",
-      "sha256": "f5e7e8fd18fba5f2d8166602f6904231be3616c9e78058506ed07991912beaf4",
-      "size": 20418,
-      "normalized_sha256": "f5e7e8fd18fba5f2d8166602f6904231be3616c9e78058506ed07991912beaf4"
+      "sha256": "af72d19e03403bb03e897ccbdab645a817d3b79e9089196aed617855b8f8d6a3",
+      "size": 24615,
+      "normalized_sha256": "af72d19e03403bb03e897ccbdab645a817d3b79e9089196aed617855b8f8d6a3"
     },
     "README.md": {
       "role": "index",
@@ -29,9 +29,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "63daba8c5d9652873c88f8e17c92584b64e52dc21682f6714f145b6a9a4aa63a",
-      "size": 174433,
-      "normalized_sha256": "63daba8c5d9652873c88f8e17c92584b64e52dc21682f6714f145b6a9a4aa63a"
+      "sha256": "33c8f211020f9d8b7e8adba0386baf6d094d435809343da47d9cc1bec0edd502",
+      "size": 171751,
+      "normalized_sha256": "33c8f211020f9d8b7e8adba0386baf6d094d435809343da47d9cc1bec0edd502"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -45,11 +45,17 @@
       "size": 310,
       "normalized_sha256": "369f7838689ed31fc54964b9e96bbbae1413efde8506d0b0ab87608f04ceb052"
     },
+    "apps/desktop/build/icon.svg": {
+      "role": "index",
+      "sha256": "1f2568da403911b942c58605379a7ab678182fce9357978522e70f9778d98f52",
+      "size": 774,
+      "normalized_sha256": "1f2568da403911b942c58605379a7ab678182fce9357978522e70f9778d98f52"
+    },
     "apps/desktop/electron-builder.cjs": {
       "role": "index",
-      "sha256": "8d3968344728e254995c95d90865eff5f34e467fc8715113a32206ae914073f1",
-      "size": 2992,
-      "normalized_sha256": "8d3968344728e254995c95d90865eff5f34e467fc8715113a32206ae914073f1"
+      "sha256": "979f8e48371c7a4e74efa1a99671a95736d3ca0eb8ef689d45eedcfa5804860a",
+      "size": 3132,
+      "normalized_sha256": "979f8e48371c7a4e74efa1a99671a95736d3ca0eb8ef689d45eedcfa5804860a"
     },
     "apps/desktop/package.json": {
       "role": "index",
@@ -77,15 +83,15 @@
     },
     "apps/desktop/src/ipc-policy.cjs": {
       "role": "index",
-      "sha256": "1c1ad7fe056afd1f3b38118ff9883914799f93ba92ae244acb9e288002ffb1e9",
-      "size": 2252,
-      "normalized_sha256": "1c1ad7fe056afd1f3b38118ff9883914799f93ba92ae244acb9e288002ffb1e9"
+      "sha256": "550285e3a6402491f182d1a802f2e7ddfc0ff83216cb97e83fc43237f7b1bc2a",
+      "size": 2291,
+      "normalized_sha256": "550285e3a6402491f182d1a802f2e7ddfc0ff83216cb97e83fc43237f7b1bc2a"
     },
     "apps/desktop/src/main.cjs": {
       "role": "index",
-      "sha256": "1f0e75bab71f45c5ead8763dfed1ded4574b6dfb3f52667eea7f6286f366828a",
-      "size": 13790,
-      "normalized_sha256": "1f0e75bab71f45c5ead8763dfed1ded4574b6dfb3f52667eea7f6286f366828a"
+      "sha256": "571158200b5e1b80eaea9fc9cf8ae287ecff6a4a882d939f92c0d47ec922c252",
+      "size": 14021,
+      "normalized_sha256": "571158200b5e1b80eaea9fc9cf8ae287ecff6a4a882d939f92c0d47ec922c252"
     },
     "apps/desktop/src/native-resources.cjs": {
       "role": "index",
@@ -113,9 +119,9 @@
     },
     "apps/desktop/src/preload.cjs": {
       "role": "index",
-      "sha256": "0f9eb94502451c4bd0eea45f047d129d77ebeef24cc47aa0633cb5b5beefc1bf",
-      "size": 1744,
-      "normalized_sha256": "0f9eb94502451c4bd0eea45f047d129d77ebeef24cc47aa0633cb5b5beefc1bf"
+      "sha256": "ee5c59c93b063a4e61fc835b67fecc222d678a9acfc4fd2b7664b848930d6185",
+      "size": 1783,
+      "normalized_sha256": "ee5c59c93b063a4e61fc835b67fecc222d678a9acfc4fd2b7664b848930d6185"
     },
     "apps/desktop/src/send-wire.cjs": {
       "role": "index",
@@ -197,15 +203,15 @@
     },
     "apps/web/DESIGN.md": {
       "role": "index",
-      "sha256": "8d3ce550e28d606731f543499265a4a16e83f2fffff30c1b24c62c07c0be8600",
-      "size": 23932,
-      "normalized_sha256": "8d3ce550e28d606731f543499265a4a16e83f2fffff30c1b24c62c07c0be8600"
+      "sha256": "ac435f9c5baf696c12c5a0767492066eeb48835e344e93f16fd3ba9bf86e3379",
+      "size": 32016,
+      "normalized_sha256": "ac435f9c5baf696c12c5a0767492066eeb48835e344e93f16fd3ba9bf86e3379"
     },
     "apps/web/components.json": {
       "role": "index",
-      "sha256": "cf6241ac2e6cd6f8c1610db0d3047622bb83229b551400201377c74c2e1f5c28",
-      "size": 407,
-      "normalized_sha256": "cf6241ac2e6cd6f8c1610db0d3047622bb83229b551400201377c74c2e1f5c28"
+      "sha256": "f302266dedd28b0124ad146104429c285f7a125f7dd3ee3ee793db06e6fce1b8",
+      "size": 413,
+      "normalized_sha256": "f302266dedd28b0124ad146104429c285f7a125f7dd3ee3ee793db06e6fce1b8"
     },
     "apps/web/desktop.html": {
       "role": "index",
@@ -215,9 +221,57 @@
     },
     "apps/web/package.json": {
       "role": "index",
-      "sha256": "e106830bb1b15169f5ce8d7d9297019c551c20808ade673a80deafc48f92eb45",
-      "size": 1289,
-      "normalized_sha256": "e106830bb1b15169f5ce8d7d9297019c551c20808ade673a80deafc48f92eb45"
+      "sha256": "30f3ddc1c861ee16375d5d1398c6c6dcc8e76703b3e16b76125d12f10b3e7e9b",
+      "size": 1562,
+      "normalized_sha256": "30f3ddc1c861ee16375d5d1398c6c6dcc8e76703b3e16b76125d12f10b3e7e9b"
+    },
+    "apps/web/src/assets/custom/icon-dir.tsx": {
+      "role": "index",
+      "sha256": "f1b8d0b337fe551e7f7caab4cd9a133c775a00206d17239ecf1e9b13cee16be6",
+      "size": 2615,
+      "normalized_sha256": "f1b8d0b337fe551e7f7caab4cd9a133c775a00206d17239ecf1e9b13cee16be6"
+    },
+    "apps/web/src/assets/custom/icon-layout-compact.tsx": {
+      "role": "index",
+      "sha256": "a41ac2d843eeec098d1199183eeaf51ee11da9faed7f70a6c87d65dba41e1554",
+      "size": 3153,
+      "normalized_sha256": "a41ac2d843eeec098d1199183eeaf51ee11da9faed7f70a6c87d65dba41e1554"
+    },
+    "apps/web/src/assets/custom/icon-layout-default.tsx": {
+      "role": "index",
+      "sha256": "5779ce179c9c5d35a98d7827801e2dd7c5b340a6b35c8c424048bae671f8af73",
+      "size": 3245,
+      "normalized_sha256": "5779ce179c9c5d35a98d7827801e2dd7c5b340a6b35c8c424048bae671f8af73"
+    },
+    "apps/web/src/assets/custom/icon-layout-full.tsx": {
+      "role": "index",
+      "sha256": "171ed51cab26cbd706e33c6f57633a475582c52f35592211b27dd86f816b5e2c",
+      "size": 2396,
+      "normalized_sha256": "171ed51cab26cbd706e33c6f57633a475582c52f35592211b27dd86f816b5e2c"
+    },
+    "apps/web/src/assets/custom/icon-sidebar-floating.tsx": {
+      "role": "index",
+      "sha256": "d9f0f970b60e9839d74428408de22342a2812938554c89629e4889134b4bb2f5",
+      "size": 1886,
+      "normalized_sha256": "d9f0f970b60e9839d74428408de22342a2812938554c89629e4889134b4bb2f5"
+    },
+    "apps/web/src/assets/custom/icon-sidebar-inset.tsx": {
+      "role": "index",
+      "sha256": "035ff711a2870ddd6691adc49de9e6b4ae811f568d8abba9761c962186feff1a",
+      "size": 1376,
+      "normalized_sha256": "035ff711a2870ddd6691adc49de9e6b4ae811f568d8abba9761c962186feff1a"
+    },
+    "apps/web/src/assets/custom/icon-sidebar-sidebar.tsx": {
+      "role": "index",
+      "sha256": "1b20cef51740b0c7cf9e94246c346cc05daf69b3f52e4bf4c76f5c1523e5cce9",
+      "size": 1386,
+      "normalized_sha256": "1b20cef51740b0c7cf9e94246c346cc05daf69b3f52e4bf4c76f5c1523e5cce9"
+    },
+    "apps/web/src/assets/custom/icon-theme-dark.tsx": {
+      "role": "index",
+      "sha256": "549fb981558f6df1621785bd6bd40cf0fc8fd904b93472c938e704b37f13897d",
+      "size": 2445,
+      "normalized_sha256": "549fb981558f6df1621785bd6bd40cf0fc8fd904b93472c938e704b37f13897d"
     },
     "apps/web/src/components/configuration-browser.css": {
       "role": "index",
@@ -3643,9 +3697,9 @@
     },
     "tests/e2e/desktop.test.cjs": {
       "role": "observe",
-      "sha256": "e324df122e95af60c32122308f1cf7a98989c65987a96a3a16bd6ba669ea7ffb",
-      "size": 20262,
-      "normalized_sha256": "e324df122e95af60c32122308f1cf7a98989c65987a96a3a16bd6ba669ea7ffb"
+      "sha256": "03cab37f3a255af7977b7688e8dab88819b3e03bd89b571c7497ac8bbbe26d3b",
+      "size": 18403,
+      "normalized_sha256": "03cab37f3a255af7977b7688e8dab88819b3e03bd89b571c7497ac8bbbe26d3b"
     },
     "tests/e2e/onboarding.test.cjs": {
       "role": "observe",

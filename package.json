@@ -13,6 +13,8 @@
     "typecheck": "npm run typecheck -w @crm/contracts -w @crm/domain -w @crm/local-runtime -w @crm/web",
     "ui:check": "node scripts/check-ui-conventions.mjs",
     "ui:check:strict": "node scripts/check-ui-conventions.mjs --strict",
+    "aoci:sync": "aoci --repo . maintain",
+    "aoci:check": "aoci --repo . verify",
     "design:lint": "npx --yes @google/design.md@0.4.0 lint apps/web/DESIGN.md",
     "design:tokens": "npx --yes @google/design.md@0.4.0 export --format css-tailwind apps/web/DESIGN.md",
     "db:generate": "npm run db:generate -w @crm/legacy-migration",
