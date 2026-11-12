@@ -9,6 +9,10 @@ import { followStage, type StageFollow } from "@/features/work/journey-follow";
 import type { JourneyStage } from "@/features/work/journey-model";
 import type { JourneyStep } from "@/features/work/journey-step-state";
 import { AutomationSettingsDialog } from "./automation-settings-dialog";
+import {
+  MissingConfigDialog,
+  type MissingItem,
+} from "./missing-config-dialog";
 import { LocalPosts } from "./local-posts";
 import { LocalReviewDialog } from "./local-review-dialog";
 import { LocalRunReview } from "./local-run-review";
@@ -62,26 +66,26 @@ export function LocalTaskPage() {
   const [startOpen, setStartOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<JourneyStage>("collect");
+  const [missingOpen, setMissingOpen] = useState(false);
   const [notice, setNotice] = useState("");
 
   const running = ACTIVE_RUN.includes(progress.data?.run.status ?? "");
   const viewingHistory = !!runId && !!latestId && runId !== latestId;
 
-  /** 开始采集前必须配好的东西；缺哪一步就把用户送到哪一页签。 */
-  const missing: { tab: JourneyStage; text: string } | null = !selection.data
-    ?.configId
-    ? { tab: "collect", text: "需要配置关键词组" }
-    : steps.data?.autoReview && !steps.data?.policyId
-      ? { tab: "review", text: "需要配置匹配目标" }
-      : steps.data?.autoReply && !steps.data?.ruleId
-        ? {
-            tab: "contact",
-            text:
-              steps.data.channel === "COMMENT"
-                ? "需要配置评论规则"
-                : "需要配置私信规则",
-          }
-        : null;
+  /** 开始采集前必须配好的东西。缺几项就列几项，点「开始自动化采集」时弹出来。 */
+  const missing: MissingItem[] = [];
+  if (!selection.data?.configId) {
+    missing.push({ tab: "collect", text: "采集关键词组" });
+  }
+  if (steps.data?.autoReview && !steps.data?.policyId) {
+    missing.push({ tab: "review", text: "匹配目标" });
+  }
+  if (steps.data?.autoReply && !steps.data?.ruleId) {
+    missing.push({
+      tab: "contact",
+      text: steps.data.channel === "COMMENT" ? "评论规则" : "私信规则",
+    });
+  }
 
   const setParam = (key: string, value: string) =>
     setParams(
@@ -130,9 +134,8 @@ export function LocalTaskPage() {
             <Button
               disabled={running}
               onClick={() => {
-                if (missing) {
-                  setSettingsTab(missing.tab);
-                  setSettingsOpen(true);
+                if (missing.length) {
+                  setMissingOpen(true);
                   return;
                 }
                 setStartOpen(true);
@@ -145,11 +148,6 @@ export function LocalTaskPage() {
       />
 
       {runs.error ? <ErrorNotice error={runs.error} /> : null}
-      {missing ? (
-        <p role="alert" className="text-body text-destructive break-words">
-          {missing.text}
-        </p>
-      ) : null}
       {notice ? (
         <p role="status" className="text-body leading-relaxed break-words">
           {notice}
@@ -184,6 +182,16 @@ export function LocalTaskPage() {
         tab={settingsTab}
         onTab={setSettingsTab}
         credentialsAvailable={credentialsAvailable}
+      />
+
+      <MissingConfigDialog
+        open={missingOpen}
+        onOpenChange={setMissingOpen}
+        items={missing}
+        onLocate={(tab) => {
+          setSettingsTab(tab);
+          setSettingsOpen(true);
+        }}
       />
 
       <StartCollectionDialog

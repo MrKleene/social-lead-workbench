@@ -1,5 +1,16 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "@/lib/router-compat";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -167,12 +178,12 @@ export function LocalConfigurations() {
   const confirm = useConfirmDiscard();
   const [editor, setEditor] = useState<LocalConfiguration | "new" | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [archive, setArchive] = useState(false);
+  const [remove, setRemove] = useState(false);
 
   useEffect(() => {
     setEditor(null);
     setDirty(false);
-    setArchive(false);
+    setRemove(false);
   }, [tab]);
 
   const leave = async () =>
@@ -189,7 +200,7 @@ export function LocalConfigurations() {
               onClick={async () => {
                 if (await leave()) {
                   setEditor("new");
-                  setArchive(false);
+                  setRemove(false);
                 }
               }}
             >
@@ -245,7 +256,7 @@ export function LocalConfigurations() {
                       onClick={async () => {
                         if (await leave()) {
                           setEditor(null);
-                          setArchive(false);
+                          setRemove(false);
                           setParams({ tab, config: item.id });
                         }
                       }}
@@ -279,9 +290,39 @@ export function LocalConfigurations() {
                         >
                           编辑配置
                         </Button>
-                        <Button variant="outline" onClick={() => setArchive(true)}>
-                          归档配置
-                        </Button>
+                        <AlertDialog
+                          open={remove}
+                          onOpenChange={setRemove}
+                        >
+                          <AlertDialogTrigger asChild>
+                            <Button variant="destructive">删除配置</Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>删除配置</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                删除后无法恢复。已有采集或审核记录的配置不能删除。
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>取消</AlertDialogCancel>
+                              <AlertDialogAction
+                                variant="destructive"
+                                onClick={() =>
+                                  workbench.remove.mutate(
+                                    {
+                                      id: selected.id,
+                                      revision: selected.revision,
+                                    },
+                                    { onSuccess: () => setRemove(false) },
+                                  )
+                                }
+                              >
+                                确认删除
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </>
                     ) : undefined
                   }
@@ -322,25 +363,9 @@ export function LocalConfigurations() {
                         ) : null}
                       </DetailList>
 
-                      {archive ? (
-                        <div className="flex flex-wrap gap-3 border-t pt-4">
-                          <Button
-                            pending={workbench.archive.isPending}
-                            onClick={() =>
-                              workbench.archive.mutate(
-                                {
-                                  id: selected.id,
-                                  revision: selected.revision,
-                                },
-                                { onSuccess: () => setArchive(false) },
-                              )
-                            }
-                          >
-                            确认归档
-                          </Button>
-                          <Button variant="outline" onClick={() => setArchive(false)}>
-                            保留配置
-                          </Button>
+                      {workbench.remove.error ? (
+                        <div className="border-t pt-4">
+                          <ErrorNotice error={workbench.remove.error} />
                         </div>
                       ) : null}
                     </>

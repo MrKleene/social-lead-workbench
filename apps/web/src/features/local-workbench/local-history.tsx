@@ -2,6 +2,12 @@ import { useState } from "react";
 import { Link } from "@/lib/router-compat";
 import { Disclosure } from "@/components/disclosure";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   SELECT_EMPTY,
@@ -403,10 +409,23 @@ export function LocalHistory({
         />
       ) : null}
       {reviewRun ? (
-        <LocalReviewDialog
-          runId={reviewRun}
-          onClose={() => setReviewRun(null)}
-        />
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setReviewRun(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>审核评论</DialogTitle>
+            </DialogHeader>
+            <LocalReviewDialog
+              runId={reviewRun}
+              bare
+              onClose={() => setReviewRun(null)}
+            />
+          </DialogContent>
+        </Dialog>
       ) : null}
 
       <Pagination

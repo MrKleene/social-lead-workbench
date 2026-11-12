@@ -56,7 +56,25 @@ class LocalService {
   }
   this.store.audit('LOCAL_USER','CONFIGURATION_SAVED',id,{kind:value.kind});return {id};
  });}
- archiveConfiguration({id,revision}){return this.store.transaction(()=>{const n=this.store.db.prepare('UPDATE configurations SET archived=1,revision=revision+1,updated_at=? WHERE id=? AND revision=? AND archived=0').run(this.store.clock(),id,revision).changes;if(n!==1)throw new LocalError('CONFIGURATION_CHANGED');this.store.db.prepare('UPDATE review_policies SET enabled=0,version=version+1,model_version=NULL WHERE id=?').run(id);this.store.db.prepare('UPDATE contact_rules SET enabled=0,version=version+1,authorization_hash=NULL WHERE policy_id=?').run(id);this.store.audit('LOCAL_USER','CONFIGURATION_ARCHIVED',id);return {ok:true};});}
+ deleteConfiguration({id,revision}){return this.store.transaction(()=>{
+  const row=this.store.db.prepare('SELECT * FROM configurations WHERE id=? AND revision=? AND archived=0').get(id,revision);
+  if(!row)throw new LocalError('CONFIGURATION_CHANGED');
+  const hit=(sql)=>!!this.store.db.prepare(sql).get(id);
+  if(row.kind==='KEYWORDS'&&hit('SELECT 1 FROM collection_runs WHERE config_id=? LIMIT 1'))throw new LocalError('CONFIGURATION_HAS_HISTORY');
+  if(row.kind==='MATCHING'&&hit('SELECT 1 FROM review_batches WHERE policy_id=? LIMIT 1'))throw new LocalError('CONFIGURATION_HAS_HISTORY');
+  if(row.kind==='MATCHING'&&hit('SELECT 1 FROM automation_decisions WHERE rule_id IN(SELECT id FROM contact_rules WHERE policy_id=?) LIMIT 1'))throw new LocalError('CONFIGURATION_HAS_HISTORY');
+  if(this.store.db.prepare("SELECT 1 FROM contact_rules r, json_each(r.plans) p WHERE json_extract(p.value,'$.templateId')=? LIMIT 1").get(id))throw new LocalError('CONFIGURATION_IN_USE');
+  this.store.db.prepare('DELETE FROM settings WHERE key=?').run('collection-preference:'+id);
+  const selection=this.store.db.prepare("SELECT value FROM settings WHERE key='workspace-selection'").get();
+  if(selection&&JSON.parse(selection.value).configId===id)this.store.db.prepare("DELETE FROM settings WHERE key='workspace-selection'").run();
+  if(row.kind==='MATCHING'){
+   this.store.db.prepare('DELETE FROM automatic_review_authorizations WHERE policy_id=?').run(id);
+   this.store.db.prepare('DELETE FROM contact_rules WHERE policy_id=?').run(id);
+   this.store.db.prepare('DELETE FROM review_policies WHERE id=?').run(id);
+  }
+  this.store.db.prepare('DELETE FROM configurations WHERE id=?').run(id);
+  this.store.audit('LOCAL_USER','CONFIGURATION_DELETED',id,{kind:row.kind});return {deleted:true};
+ });}
  saveModelKey({key}){if(typeof key!=='string'||! /^[\x21-\x7e]{16,512}$/.test(key))throw new LocalError('INVALID_MODEL_KEY');if(!this.vault)throw new LocalError('OS_CREDENTIAL_PROTECTION_UNAVAILABLE');
   // Revoke before replacing the secret: an interrupted write must not leave old
   // grants authorizing a different provider account/workspace.

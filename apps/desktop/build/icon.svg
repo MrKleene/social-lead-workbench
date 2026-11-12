@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1c22"/>
+      <stop offset="1" stop-color="#0d0e12"/>
+    </linearGradient>
+  </defs>
+  <!-- 圆角方底：1024 画布，824 实心，四周留 100 给 Dock 阴影 -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <!-- 漏斗：从海量评论里筛出线索。同色描边把折角磨圆，缩小后不出尖刺 -->
+  <path d="M286 282H738L566 512V596H458V512Z"
+        fill="#ffffff" stroke="#ffffff" stroke-width="26" stroke-linejoin="round"/>
+  <!-- 落下来的那一条线索 -->
+  <circle cx="512" cy="692" r="62" fill="#ff2e4d"/>
+</svg>

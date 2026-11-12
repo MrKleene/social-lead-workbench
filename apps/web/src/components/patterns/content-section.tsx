@@ -28,7 +28,8 @@ export function ContentSection({
     <div className={className} {...props}>
       {hasHeader ? (
         <>
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          {/* min-h-9 同上：有动作按钮（36px）与没有时高度一致。 */}
+          <div className="flex min-h-9 flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               {title ? (
                 <h2 className="text-section font-semibold break-words">

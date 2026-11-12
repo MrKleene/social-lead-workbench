@@ -43,6 +43,8 @@ async function main(){
  if(!app.requestSingleInstanceLock()){app.quit();return;}
  app.on('second-instance',()=>{window?.show();window?.focus();});
  await app.whenReady();
+ // 开发态没有打包产物，Dock 会显示 Electron 默认图标；显式换成本项目的图标。
+ if(process.platform==='darwin'&&!app.isPackaged&&app.dock)app.dock.setIcon(path.join(root,'apps/desktop/build/icon.png'));
  const credentials=privateDirectory(path.join(data,'credentials'));privateDirectory(path.join(data,'backups'));privateDirectory(path.join(data,'restores'));privateDirectory(path.join(data,'imports'));
  const osKeyring=()=>process.platform!=='linux'||safeStorage.getSelectedStorageBackend()!=='basic_text';
  // `available()` touches the macOS Keychain, which raises a system password

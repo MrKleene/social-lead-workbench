@@ -38,7 +38,9 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-end justify-between gap-2",
+        // min-h-9：有动作按钮和没有动作按钮时整块高度一致（按钮 36px），
+        // 否则切页签时标题下方的间距会跳。
+        "flex min-h-9 flex-wrap items-end justify-between gap-2",
         className,
       )}
     >

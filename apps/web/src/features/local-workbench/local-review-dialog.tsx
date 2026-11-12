@@ -18,11 +18,14 @@ export function LocalReviewDialog({
   onClose,
   independent = false,
   postId,
+  bare = false,
 }: {
   runId: string;
   onClose: () => void;
   independent?: boolean;
   postId?: string;
+  /** 放进 Dialog 时用：不再画自己的标题和分隔线。 */
+  bare?: boolean;
 }) {
   const client = useQueryClient();
   const options = useQuery({
@@ -81,10 +84,12 @@ export function LocalReviewDialog({
     workflow.error ?? options.error ?? preview.error ?? authorize.error;
 
   return (
-    <div className="flex flex-col gap-3 border-t pt-4">
-      <h3 className="text-section font-semibold">
-        {independent ? "独立审核历史笔记" : "按笔记审核评论"}
-      </h3>
+    <div className={bare ? "flex flex-col gap-3" : "flex flex-col gap-3 border-t pt-4"}>
+      {bare ? null : (
+        <h3 className="text-section font-semibold">
+          {independent ? "独立审核历史笔记" : "按笔记审核评论"}
+        </h3>
+      )}
       {error ? (
         <ErrorNotice error={error} />
       ) : null}

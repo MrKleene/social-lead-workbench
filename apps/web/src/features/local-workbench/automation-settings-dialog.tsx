@@ -28,6 +28,16 @@ import { useLocalAction, useLocalRecords } from "./use-local-records";
  */
 export type AutomationSettingsTab = JourneyStage;
 
+/** 每个页签对应的全局配置页与入口文案——入口放标题行右侧，不放页脚。 */
+const manage: Record<
+  AutomationSettingsTab,
+  { to: string; label: string }
+> = {
+  collect: { to: "/configuration?tab=keywords", label: "管理关键词组" },
+  review: { to: "/configuration?tab=matching", label: "管理匹配目标" },
+  contact: { to: "/auto-contact", label: "管理联系规则" },
+};
+
 export function AutomationSettingsDialog({
   open,
   onOpenChange,
@@ -44,8 +54,11 @@ export function AutomationSettingsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
+        <DialogHeader className="flex flex-row items-center justify-between gap-4 pe-8">
           <DialogTitle>采集设置</DialogTitle>
+          <Button variant="outline" size="sm" asChild>
+            <Link to={manage[tab].to}>{manage[tab].label}</Link>
+          </Button>
         </DialogHeader>
 
         <Tabs
@@ -59,25 +72,16 @@ export function AutomationSettingsDialog({
           </TabsList>
 
           <div className="max-h-[60vh] overflow-y-auto pe-1">
-            <TabsContent value="collect" className="flex flex-col gap-4">
+            <TabsContent value="collect">
               <CollectTab credentialsAvailable={credentialsAvailable} />
-              <FooterLink
-                to="/configuration?tab=keywords"
-                label="管理关键词组与模板 →"
-              />
             </TabsContent>
 
-            <TabsContent value="review" className="flex flex-col gap-4">
+            <TabsContent value="review">
               <MatchingTab />
-              <FooterLink
-                to="/configuration?tab=matching"
-                label="管理匹配目标 →"
-              />
             </TabsContent>
 
-            <TabsContent value="contact" className="flex flex-col gap-4">
+            <TabsContent value="contact">
               <ReplyTab />
-              <FooterLink to="/auto-contact" label="管理联系规则 →" />
             </TabsContent>
           </div>
         </Tabs>
@@ -93,15 +97,7 @@ function CollectTab({
 }: {
   credentialsAvailable: boolean;
 }) {
-  const selection = useLocalRecords("workspaceSelection");
-  const configId = selection.data?.configId ?? "";
-
-  return (
-    <>
-      <LocalCollectionPanel credentialsAvailable={credentialsAvailable} />
-      {!configId ? <Missing text="需要配置关键词组" /> : null}
-    </>
-  );
+  return <LocalCollectionPanel credentialsAvailable={credentialsAvailable} />;
 }
 
 /* ---------------- 评论匹配 ---------------- */
@@ -348,15 +344,5 @@ function Missing({ text }: { text: string }) {
     <p role="alert" className="text-body text-destructive break-words">
       {text}
     </p>
-  );
-}
-
-function FooterLink({ to, label }: { to: string; label: string }) {
-  return (
-    <div className="border-t pt-4">
-      <Button variant="ghost" size="sm" asChild>
-        <Link to={to}>{label}</Link>
-      </Button>
-    </div>
   );
 }
