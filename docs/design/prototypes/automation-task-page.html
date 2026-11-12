@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自动化任务 · 样式预览（原型，非产品代码）</title>
+<style>
+  :root{
+    --background:#fafafa; --card:#ffffff; --fg:#171717; --muted-fg:#4d4d4d; --faint:#888888;
+    --border:#ebebeb; --muted:#f5f5f5; --primary:#171717; --on-primary:#ffffff;
+    --success:#0d7a3f; --success-bg:#e8f5ee;
+    --warning:#ab570a; --warning-bg:#ffefcf;
+    --destructive:#ee0000; --destructive-soft:#f7d4d6; --attention:#c50000;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--background); color:var(--fg);
+    font-family:'Inter','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans SC',system-ui,sans-serif;
+    font-size:14px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit}
+  svg{flex:0 0 auto}
+
+  /* ---------- 外壳 ---------- */
+  .app{display:flex;height:100%}
+  .sidebar{width:240px;flex:0 0 240px;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;gap:20px;padding:16px 12px}
+  .brand{display:flex;align-items:center;gap:8px;padding:8px}
+  .brand-mark{width:28px;height:28px;border-radius:6px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;font-size:12px;font-weight:600}
+  .brand-name{font-size:14px;font-weight:600}
+  .brand-sub{font-size:12px;color:var(--faint);margin-top:-4px}
+  .nav-group{display:flex;flex-direction:column;gap:2px}
+  .nav-label{font-size:12px;color:var(--faint);padding:0 8px;margin-bottom:4px}
+  .nav-item{display:flex;align-items:center;gap:8px;height:36px;padding:0 8px;border-radius:6px;font-size:14px;color:var(--muted-fg);cursor:pointer;user-select:none}
+  .nav-item:hover{background:var(--muted);color:var(--fg)}
+  .nav-item.active{background:var(--muted);color:var(--fg);font-weight:500}
+  .nav-item svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:52px;flex:0 0 52px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 24px;font-size:14px;color:var(--muted-fg)}
+  .topbar .sep{color:var(--faint)}
+  .topbar .current{color:var(--fg)}
+  .topbar .spacer{flex:1}
+  .kbd{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--faint)}
+  .avatar{width:28px;height:28px;border-radius:50%;background:var(--muted);color:var(--muted-fg);display:grid;place-items:center;font-size:12px;font-weight:500}
+  .scroll{flex:1;overflow:auto}
+  .page{max-width:1040px;margin:0 auto;padding:24px 24px 96px;display:flex;flex-direction:column;gap:20px}
+
+  /* ---------- 页头 ---------- */
+  .page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h1{font-size:24px;font-weight:600;line-height:1.35;margin:0}
+  .page-desc{font-size:14px;line-height:1.6;color:var(--muted-fg);margin:6px 0 0;max-width:75ch}
+  .header-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+
+  /* ---------- 按钮 ---------- */
+  .btn{height:36px;padding:0 16px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--fg);font-size:14px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:background .12s,border-color .12s,opacity .12s;white-space:nowrap}
+  .btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+  .btn-primary{background:var(--primary);color:var(--on-primary)}
+  .btn-primary:hover:not(:disabled){background:#000}
+  .btn-outline{background:var(--card);border-color:var(--border);color:var(--fg)}
+  .btn-outline:hover:not(:disabled){background:var(--muted)}
+  .btn-ghost:hover:not(:disabled){background:var(--muted)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn-sm{height:32px;padding:0 12px}
+  .btn-xs{height:28px;padding:0 10px;font-size:12px}
+
+  /* ---------- 卡片 ---------- */
+  .card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:24px;display:flex;flex-direction:column;gap:16px}
+  .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h2{font-size:16px;font-weight:600;line-height:1.5;margin:0}
+  .hint{font-size:12px;color:var(--faint)}
+  .sub{font-size:14px;line-height:1.6;color:var(--muted-fg);margin:0;overflow-wrap:anywhere}
+  .note{font-size:12px;line-height:1.5;color:var(--faint);margin:0;overflow-wrap:anywhere}
+
+  /* ---------- 步骤条 ---------- */
+  .stepper{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;list-style:none;margin:0;padding:0}
+  .step{position:relative;display:flex;align-items:flex-start;gap:10px;min-width:0}
+  .step::after{content:"";position:absolute;left:44px;right:-16px;top:13px;height:1px;background:var(--border)}
+  .step:last-child::after{display:none}
+  .step.is-complete::after{background:var(--success)}
+  .marker{position:relative;z-index:1;width:28px;height:28px;flex:0 0 28px;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--muted-fg);display:grid;place-items:center;font-size:12px;font-weight:500}
+  .marker svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+  .is-complete .marker{background:var(--success);border-color:var(--success);color:#fff}
+  .is-running .marker{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+  .is-idle .marker{border-style:dashed}
+  .is-attention .marker{border-color:var(--destructive);color:var(--attention)}
+  .step-body{display:grid;gap:2px;min-width:0;padding-top:3px}
+  .step-label{font-size:14px;font-weight:600;color:var(--fg);overflow-wrap:anywhere}
+  .is-idle .step-label{color:var(--muted-fg);font-weight:500}
+  .step-status{font-size:12px;line-height:1.5;color:var(--muted-fg);overflow-wrap:anywhere}
+  .is-complete .step-status{color:var(--success)}
+  .is-attention .step-status{color:var(--attention)}
+  .spin{animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.spin{animation:none}}
+
+  .auto-note{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--success);margin:0;padding-top:14px;border-top:1px solid var(--border)}
+  .auto-note svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---------- 面板内元素 ---------- */
+  .rows{display:flex;flex-direction:column;border-top:1px solid var(--border)}
+  .row{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);font-size:14px}
+  .row:last-child{border-bottom:0;padding-bottom:0}
+  .row-label{color:var(--muted-fg);flex:0 0 auto}
+  .row-value{font-weight:500;text-align:right;overflow-wrap:anywhere}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:16px}
+  .metric-label{font-size:12px;color:var(--muted-fg)}
+  .metric-value{font-size:20px;font-weight:600;line-height:1.35;margin-top:2px;font-variant-numeric:tabular-nums}
+  .metric-value .unit{font-size:12px;font-weight:400;color:var(--faint);margin-left:4px}
+  .bar{height:4px;border-radius:9999px;background:var(--muted);overflow:hidden}
+  .bar > i{display:block;height:100%;width:0;background:var(--primary);border-radius:9999px;transition:width .35s ease}
+  .bar.done > i{background:var(--success)}
+  .panel-actions{display:flex;flex-wrap:wrap;gap:12px}
+
+  .pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:12px;font-weight:500;white-space:nowrap}
+  .pill-success{background:var(--success-bg);color:var(--success)}
+  .pill-warning{background:var(--warning-bg);color:var(--warning)}
+  .pill-muted{background:var(--muted);color:var(--muted-fg)}
+  .pill-danger{background:var(--destructive-soft);color:var(--destructive)}
+  .notice{display:flex;gap:8px;padding:12px;border-radius:6px;background:var(--warning-bg);color:var(--warning);font-size:14px;line-height:1.6}
+  .notice svg{width:16px;height:16px;margin-top:2px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---------- 表格 ---------- */
+  .table-wrap{overflow-x:auto;border-top:1px solid var(--border);margin:0 -24px;padding:0 24px}
+  table{width:100%;border-collapse:collapse;font-size:14px;min-width:680px}
+  th{height:40px;background:var(--muted);text-align:left;font-size:12px;font-weight:500;color:var(--muted-fg);padding:10px 16px;white-space:nowrap}
+  td{padding:12px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tbody tr:hover td{background:#fcfcfc}
+  .num{font-variant-numeric:tabular-nums}
+  .cell-actions{display:flex;gap:8px;justify-content:flex-end}
+  .filters{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .control{height:36px;padding:0 12px;border:1px solid var(--border);border-radius:6px;background:var(--card);display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--fg);cursor:pointer}
+  .control .val{color:var(--muted-fg)}
+  .control svg{width:14px;height:14px;stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .pager{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:16px;font-size:12px;color:var(--muted-fg)}
+  .pager-btns{display:flex;gap:8px}
+
+  /* ---------- 浮层 ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.32);display:grid;place-items:center;padding:24px;z-index:50}
+  .dialog{width:100%;max-width:720px;max-height:calc(100vh - 96px);background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.16);display:flex;flex-direction:column}
+  .dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 24px 16px;border-bottom:1px solid var(--border)}
+  .dialog-title{font-size:16px;font-weight:600;margin:0;line-height:1.5}
+  .dialog-desc{font-size:12px;color:var(--muted-fg);margin:4px 0 0}
+  .dialog-body{padding:8px 24px;overflow:auto}
+  .dialog-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 24px;border-top:1px solid var(--border);flex-wrap:wrap}
+  .icon-btn{width:32px;height:32px;border-radius:6px;border:0;background:transparent;color:var(--muted-fg);display:grid;place-items:center;cursor:pointer}
+  .icon-btn:hover{background:var(--muted)}
+  .icon-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .rec{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--border)}
+  .rec:last-child{border-bottom:0}
+  .rec-title{font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .rec-meta{font-size:12px;color:var(--muted-fg);margin-top:2px;font-variant-numeric:tabular-nums}
+  .checkline{display:flex;align-items:flex-start;gap:8px;font-size:14px;line-height:1.6;color:var(--fg);cursor:pointer}
+  .checkline input{margin:4px 0 0;width:16px;height:16px;accent-color:var(--primary)}
+  .link{color:var(--fg);text-decoration:underline;text-underline-offset:4px;cursor:pointer}
+
+  /* ---------- 原型控制条（不是产品的一部分） ---------- */
+  .devbar{position:fixed;right:16px;bottom:16px;z-index:60;width:236px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.10);padding:12px;display:flex;flex-direction:column;gap:10px}
+  .devbar-title{font-size:12px;font-weight:600;color:var(--muted-fg)}
+  .seg{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  .seg button{flex:1;height:28px;border:0;background:var(--card);color:var(--muted-fg);font-size:12px;cursor:pointer;padding:0 6px}
+  .seg button + button{border-left:1px solid var(--border)}
+  .seg button.on{background:var(--primary);color:var(--on-primary);font-weight:500}
+  .devbar .hint{line-height:1.5}
+
+  @media (max-width:900px){
+    .sidebar{display:none}
+    .page{padding:16px 16px 96px}
+    .card{padding:16px}
+    .table-wrap{margin:0 -16px;padding:0 16px}
+    .stepper{grid-template-columns:1fr;gap:16px}
+    .step::after{display:none}
+    .devbar{left:16px;right:16px;width:auto}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- 侧栏（外壳只作参照，不是本次改动对象） -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">SL</div>
+      <div>
+        <div class="brand-name">Social Lead</div>
+        <div class="brand-sub">本机工作台</div>
+      </div>
+    </div>
+
+    <nav class="nav-group">
+      <div class="nav-label">工作区</div>
+      <div class="nav-item" data-nav="overview">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        概览
+      </div>
+      <div class="nav-item" data-nav="automation">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5 16 12l-6 3.5z"/></svg>
+        自动化任务
+      </div>
+      <div class="nav-item" data-nav="history" id="navHistory" hidden>
+        <svg viewBox="0 0 24 24"><path d="M3 7h18"/><rect x="4" y="7" width="16" height="13" rx="1.5"/><path d="M9 7V4h6v3"/></svg>
+        采集历史
+      </div>
+    </nav>
+
+    <nav class="nav-group">
+      <div class="nav-label">数据与审核</div>
+      <div class="nav-item" data-nav="review">
+        <svg viewBox="0 0 24 24"><path d="M3 7V5h18v2"/><path d="M3 12h18"/><path d="M3 17h18"/></svg>
+        评论审核
+      </div>
+      <div class="nav-item" data-nav="replies">
+        <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 1 1-3.2-6.4"/><path d="M3 20l3-3"/></svg>
+        回复记录
+      </div>
+    </nav>
+
+    <nav class="nav-group">
+      <div class="nav-label">管理</div>
+      <div class="nav-item" data-nav="settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+        配置管理
+      </div>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <span>工作区</span><span class="sep">/</span><span class="current" id="crumb">自动化任务</span>
+      <span class="spacer"></span>
+      <span class="kbd">搜索 ⌘K</span>
+      <span class="avatar">本</span>
+    </div>
+
+    <div class="scroll">
+
+      <!-- ============ 自动化任务 ============ -->
+      <div class="page" id="pageTask">
+        <header class="page-header">
+          <div>
+            <h1>自动化任务</h1>
+            <p class="page-desc">一轮任务按「采集内容 → 评论匹配 → 自动回复」连续执行，上一步完成后自动进入下一步。</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-outline" id="btnHistory">
+              <svg viewBox="0 0 24 24"><path d="M3 7h18"/><rect x="4" y="7" width="16" height="13" rx="1.5"/><path d="M9 7V4h6v3"/></svg>
+              查看采集历史
+            </button>
+            <button class="btn btn-primary" id="btnStart">开始自动化采集</button>
+          </div>
+        </header>
+
+        <section class="card">
+          <div class="card-head">
+            <h2>本轮进度</h2>
+            <span class="hint" id="progressHint">尚未开始</span>
+          </div>
+          <nav aria-label="任务步骤">
+            <ol class="stepper" id="stepper"></ol>
+          </nav>
+          <p class="auto-note" id="autoNote" hidden>
+            <svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+            <span id="autoNoteText"></span>
+          </p>
+        </section>
+
+        <section class="card" id="panel"></section>
+      </div>
+
+      <!-- ============ 采集历史（方案 B：独立页面） ============ -->
+      <div class="page" id="pageHistory" hidden>
+        <header class="page-header">
+          <div>
+            <h1>采集历史</h1>
+            <p class="page-desc">本机保存的每一轮采集及其审核、回复结果。历史轮次只读，不会因打开而重跑。</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-outline" id="btnBackToTask">返回自动化任务</button>
+          </div>
+        </header>
+
+        <section class="card">
+          <div class="filters">
+            <div class="control">状态 <span class="val">全部</span>
+              <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+            <div class="control">时间 <span class="val">最近 30 天</span>
+              <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+            <div class="control">关键词组 <span class="val">全部</span>
+              <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:150px">轮次</th>
+                  <th style="width:160px">开始时间</th>
+                  <th style="width:90px">笔记</th>
+                  <th style="width:90px">评论</th>
+                  <th style="width:130px">状态</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="historyTable"></tbody>
+            </table>
+          </div>
+
+          <div class="pager">
+            <span>共 7 轮 · 第 1 / 2 页</span>
+            <span class="pager-btns">
+              <button class="btn btn-outline btn-sm" disabled>上一页</button>
+              <button class="btn btn-outline btn-sm">下一页</button>
+            </span>
+          </div>
+        </section>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============ 采集历史弹窗（方案 A） ============ -->
+<div class="overlay" id="dlgHistory" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgHistoryTitle">
+    <div class="dialog-head">
+      <div>
+        <h3 class="dialog-title" id="dlgHistoryTitle">采集历史</h3>
+        <p class="dialog-desc">最近 5 轮 · 历史轮次只读</p>
+      </div>
+      <button class="icon-btn" data-close>
+        <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="dialog-body" id="historyList"></div>
+    <div class="dialog-foot">
+      <span class="note">只列出最近 5 轮</span>
+      <span class="link" id="dlgOpenArchive">打开完整采集归档 →</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 开始采集确认弹窗 ============ -->
+<div class="overlay" id="dlgStart" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgStartTitle" style="max-width:560px">
+    <div class="dialog-head">
+      <div>
+        <h3 class="dialog-title" id="dlgStartTitle">确认本轮采集范围</h3>
+        <p class="dialog-desc">读取一次，不会自动补跑，也不会读取范围外内容。</p>
+      </div>
+      <button class="icon-btn" data-close>
+        <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="dialog-body">
+      <div class="rows" style="border-top:0">
+        <div class="row"><span class="row-label">关键词组</span><span class="row-value">小红书 · 职场吐槽</span></div>
+        <div class="row"><span class="row-label">采集账号</span><span class="row-value">运营号 A · 已验证</span></div>
+        <div class="row"><span class="row-label">笔记上限</span><span class="row-value">3 篇</span></div>
+        <div class="row"><span class="row-label">后续步骤</span><span class="row-value">评论匹配 · 自动回复</span></div>
+      </div>
+      <div style="padding-top:16px">
+        <label class="checkline">
+          <input type="checkbox" id="startConsent">
+          <span>授权读取以上范围一次；后续步骤按已授权规则执行。</span>
+        </label>
+      </div>
+    </div>
+    <div class="dialog-foot" style="justify-content:flex-end">
+      <button class="btn btn-outline" data-close>取消</button>
+      <button class="btn btn-primary" id="btnConfirmStart" disabled>授权并开始采集</button>
+    </div>
+  </div>
+</div>
+
+<!-- 原型控制条 -->
+<div class="devbar">
+  <div class="devbar-title">原型预览</div>
+  <div class="seg" id="modeSeg">
+    <button data-mode="dialog" class="on">A 弹窗</button>
+    <button data-mode="page">B 独立页面</button>
+  </div>
+  <span class="hint" id="modeHint">查看采集历史 → 在当前页弹出浮层</span>
+  <button class="btn btn-outline btn-sm" id="btnReset">重置演示</button>
+</div>
+
+<script>
+(function () {
+  var TOTAL_POSTS = 3, TOTAL_COMMENTS = 42, HITS = 12, TOTAL_SEND = 5;
+
+  var state = { mode: 'dialog', page: 'task', stage: 'idle', posts: 0, comments: 0, matched: 0, sent: 0, unknown: 0, note: '' };
+  var timers = [];
+  function clearTimers() { timers.forEach(function (t) { clearTimeout(t); clearInterval(t); }); timers = []; }
+  function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+  function every(fn, ms) { var t = setInterval(fn, ms); timers.push(t); return t; }
+
+  var ICON = {
+    check: '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>',
+    spin: '<svg class="spin" viewBox="0 0 24 24" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>',
+    alert: '<svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.4 18a1.6 1.6 0 0 0 1.4 2.4h16.4A1.6 1.6 0 0 0 21.6 18L13.7 3.9a1.6 1.6 0 0 0-2.8 0Z"/></svg>'
+  };
+
+  /* ---------- 步骤状态 ---------- */
+  function steps() {
+    var s = state;
+    var running = s.stage === 'collecting' ? 'collect' : s.stage === 'reviewing' ? 'review' : s.stage === 'sending' ? 'contact' : null;
+    var order = ['collect', 'review', 'contact'];
+    var idx = order.indexOf(running);
+
+    return [
+      {
+        id: 'collect',
+        label: '采集内容',
+        state: s.stage === 'idle' ? 'idle' : (running === 'collect' ? 'running' : 'complete'),
+        status: s.stage === 'idle' ? '待开始'
+          : running === 'collect' ? '已读 ' + s.posts + ' / ' + TOTAL_POSTS + ' 篇 · ' + s.comments + ' 条评论'
+          : TOTAL_POSTS + ' 篇笔记 · ' + TOTAL_COMMENTS + ' 条评论'
+      },
+      {
+        id: 'review',
+        label: '评论匹配',
+        state: s.stage === 'idle' || s.stage === 'collecting' ? 'idle'
+          : running === 'review' ? 'running' : 'complete',
+        status: s.stage === 'idle' || s.stage === 'collecting' ? '等待采集完成'
+          : running === 'review' ? '已匹配 ' + s.matched + ' / ' + TOTAL_COMMENTS + ' 条'
+          : TOTAL_COMMENTS + ' 条已匹配 · ' + HITS + ' 条命中'
+      },
+      {
+        id: 'contact',
+        label: '自动回复',
+        state: s.unknown ? 'attention'
+          : (running === 'contact' ? 'running' : s.stage === 'done' ? 'complete' : 'idle'),
+        status: s.unknown ? s.unknown + ' 条结果未知 · 勿重发'
+          : running === 'contact' ? '已确认 ' + s.sent + ' / ' + TOTAL_SEND + ' 条'
+          : s.stage === 'done' ? TOTAL_SEND + ' 条已确认 · 0 条未知'
+          : '等待匹配完成'
+      }
+    ];
+  }
+
+  function marker(step, index) {
+    if (step.state === 'complete') return ICON.check;
+    if (step.state === 'running') return ICON.spin;
+    if (step.state === 'attention') return ICON.alert;
+    return String(index + 1);
+  }
+
+  function renderStepper() {
+    var el = document.getElementById('stepper');
+    el.innerHTML = steps().map(function (step, index) {
+      return '<li class="step is-' + step.state + '">' +
+        '<span class="marker" aria-hidden="true">' + marker(step, index) + '</span>' +
+        '<span class="step-body">' +
+          '<span class="step-label">' + step.label + '</span>' +
+          '<span class="step-status" role="status">' + step.status + '</span>' +
+        '</span>' +
+      '</li>';
+    }).join('');
+
+    var hint = document.getElementById('progressHint');
+    hint.textContent = state.stage === 'idle' ? '尚未开始'
+      : state.stage === 'done' ? '本轮已完成'
+      : '进行中';
+
+    var note = document.getElementById('autoNote');
+    if (state.note) { note.hidden = false; document.getElementById('autoNoteText').textContent = state.note; }
+    else { note.hidden = true; }
+  }
+
+  /* ---------- 面板 ---------- */
+  function metrics(items) {
+    return '<div class="metrics">' + items.map(function (item) {
+      return '<div><div class="metric-label">' + item[0] + '</div>' +
+        '<div class="metric-value">' + item[1] + (item[2] ? '<span class="unit">' + item[2] + '</span>' : '') + '</div></div>';
+    }).join('') + '</div>';
+  }
+
+  function panelHtml() {
+    var s = state;
+
+    if (s.stage === 'idle') {
+      return '<div class="card-head"><h2>本轮范围</h2><span class="hint">可在「采集设置」中调整</span></div>' +
+        '<div class="rows" style="border-top:0">' +
+          '<div class="row"><span class="row-label">关键词组</span><span class="row-value">小红书 · 职场吐槽</span></div>' +
+          '<div class="row"><span class="row-label">采集账号</span><span class="row-value">运营号 A · 已验证</span></div>' +
+          '<div class="row"><span class="row-label">笔记上限</span><span class="row-value">3 篇</span></div>' +
+          '<div class="row"><span class="row-label">后续步骤</span><span class="row-value">评论匹配 · 自动回复</span></div>' +
+        '</div>' +
+        '<p class="note">上一轮：11-12 15:40 · 已完整采集 · 3 篇笔记 / 42 条评论</p>';
+    }
+
+    if (s.stage === 'collecting') {
+      var pct = Math.round(s.posts / TOTAL_POSTS * 100);
+      return '<div class="card-head"><h2>采集内容</h2><span class="hint">正在读取第 ' + Math.min(s.posts + 1, TOTAL_POSTS) + ' 篇笔记</span></div>' +
+        '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
+        metrics([['已读笔记', s.posts + ' / ' + TOTAL_POSTS], ['评论', s.comments], ['进度', pct + '%']]) +
+        '<p class="note">进度读取自本机运行记录，刷新页面不会中断本轮。</p>';
+    }
+
+    if (s.stage === 'reviewing') {
+      var rp = Math.round(s.matched / TOTAL_COMMENTS * 100);
+      return '<div class="card-head"><h2>评论匹配</h2><span class="hint">自动审核进行中</span></div>' +
+        '<p class="sub">整帖审核完成后才进入下一步；超出模型容量会整帖停止，不会截断评论数。</p>' +
+        '<div class="bar"><i style="width:' + rp + '%"></i></div>' +
+        metrics([['已匹配', s.matched + ' / ' + TOTAL_COMMENTS], ['命中', Math.round(s.matched / TOTAL_COMMENTS * HITS)], ['待匹配', TOTAL_COMMENTS - s.matched]]) +
+        '<div class="panel-actions"><button class="btn btn-outline btn-sm">查看审核结果</button></div>';
+    }
+
+    if (s.stage === 'sending') {
+      var sp = Math.round(s.sent / TOTAL_SEND * 100);
+      return '<div class="card-head"><h2>自动回复</h2><span class="hint">按已授权规则发送</span></div>' +
+        '<p class="sub">结果未知时不会重发，需人工核对后处理。</p>' +
+        '<div class="bar"><i style="width:' + sp + '%"></i></div>' +
+        metrics([['队列', TOTAL_SEND], ['已确认', s.sent], ['未知', 0]]) +
+        '<div class="panel-actions"><button class="btn btn-outline btn-sm">查看回复记录</button></div>';
+    }
+
+    // done
+    var warn = s.unknown
+      ? '<div class="notice">' + ICON.alert + '<span>' + s.unknown + ' 条发送结果未知，请先核对账号后台再决定是否补发；系统不会自动重试。</span></div>'
+      : '';
+    return '<div class="card-head"><h2>本轮完成</h2><span class="hint">11-12 16:20 开始 · 用时 4 分 12 秒</span></div>' +
+      warn +
+      metrics([['笔记', TOTAL_POSTS, '篇'], ['评论', TOTAL_COMMENTS, '条'], ['命中', HITS, '条'], ['已回复', s.unknown ? TOTAL_SEND - s.unknown : TOTAL_SEND, '条']]) +
+      '<div class="panel-actions">' +
+        '<button class="btn btn-outline btn-sm">查看本轮笔记</button>' +
+        '<button class="btn btn-outline btn-sm" id="btnPanelHistory">查看采集历史</button>' +
+        (s.unknown ? '' : '<button class="btn btn-ghost btn-sm" id="btnDemoUnknown">演示：出现 1 条未知结果</button>') +
+      '</div>';
+  }
+
+  function renderPanel() {
+    var panel = document.getElementById('panel');
+    panel.innerHTML = panelHtml();
+    var demo = document.getElementById('btnDemoUnknown');
+    if (demo) demo.onclick = function () { state.unknown = 1; state.note = ''; render(); };
+    var ph = document.getElementById('btnPanelHistory');
+    if (ph) ph.onclick = openHistory;
+  }
+
+  function renderHeader() {
+    var btn = document.getElementById('btnStart');
+    var busy = ['collecting', 'reviewing', 'sending'].indexOf(state.stage) >= 0;
+    btn.disabled = busy;
+    btn.textContent = busy
+      ? (state.stage === 'collecting' ? '采集中…' : state.stage === 'reviewing' ? '匹配中…' : '回复中…')
+      : (state.stage === 'done' ? '开始新一轮采集' : '开始自动化采集');
+  }
+
+  function render() { renderStepper(); renderPanel(); renderHeader(); }
+
+  /* ---------- 流程 ---------- */
+  function startRun() {
+    clearTimers();
+    state.stage = 'collecting';
+    state.posts = 0; state.comments = 0; state.matched = 0; state.sent = 0; state.unknown = 0; state.note = '';
+    render();
+
+    var tick = every(function () {
+      if (state.posts < TOTAL_POSTS) {
+        state.posts += 1;
+        state.comments = Math.min(TOTAL_COMMENTS, state.comments + 14);
+      }
+      if (state.posts >= TOTAL_POSTS && state.comments >= TOTAL_COMMENTS) {
+        clearInterval(tick);
+        state.comments = TOTAL_COMMENTS;
+        render();
+        later(function () {
+          state.stage = 'reviewing';
+          state.note = '采集已完成 · 已自动进入「评论匹配」';
+          render();
+          startReview();
+        }, 700);
+        return;
+      }
+      render();
+    }, 750);
+  }
+
+  function startReview() {
+    var tick = every(function () {
+      state.matched = Math.min(TOTAL_COMMENTS, state.matched + 6);
+      if (state.matched >= TOTAL_COMMENTS) {
+        clearInterval(tick);
+        render();
+        later(function () {
+          state.stage = 'sending';
+          state.note = '评论匹配已完成 · 已自动进入「自动回复」';
+          render();
+          startSend();
+        }, 700);
+        return;
+      }
+      render();
+    }, 420);
+  }
+
+  function startSend() {
+    var tick = every(function () {
+      state.sent = Math.min(TOTAL_SEND, state.sent + 1);
+      if (state.sent >= TOTAL_SEND) {
+        clearInterval(tick);
+        render();
+        later(function () {
+          state.stage = 'done';
+          state.note = '本轮已完成 · ' + TOTAL_SEND + ' 条回复已确认';
+          render();
+        }, 600);
+        return;
+      }
+      render();
+    }, 520);
+  }
+
+  /* ---------- 采集历史 ---------- */
+  var RUNS = [
+    { id: '第 7 轮', at: '11-12 16:20', posts: 3, comments: 42, status: '已完整采集', tone: 'success' },
+    { id: '第 6 轮', at: '11-12 15:40', posts: 3, comments: 38, status: '已完整采集', tone: 'success' },
+    { id: '第 5 轮', at: '11-12 11:05', posts: 2, comments: 21, status: '部分完成', tone: 'warning' },
+    { id: '第 4 轮', at: '11-11 20:12', posts: 3, comments: 51, status: '已完整采集', tone: 'success' },
+    { id: '第 3 轮', at: '11-11 18:30', posts: 0, comments: 0, status: '失败', tone: 'danger' },
+    { id: '第 2 轮', at: '11-11 10:22', posts: 3, comments: 44, status: '已完整采集', tone: 'success' },
+    { id: '第 1 轮', at: '11-10 21:08', posts: 1, comments: 8, status: '已取消', tone: 'muted' }
+  ];
+
+  function pill(run) { return '<span class="pill pill-' + run.tone + '">' + run.status + '</span>'; }
+
+  function renderHistoryList() {
+    document.getElementById('historyList').innerHTML = RUNS.slice(0, 5).map(function (run) {
+      return '<div class="rec">' +
+        '<div><div class="rec-title">' + run.id + ' ' + pill(run) + '</div>' +
+        '<div class="rec-meta">' + run.at + ' · ' + run.posts + ' 篇笔记 · ' + run.comments + ' 条评论</div></div>' +
+        '<button class="btn btn-outline btn-sm" data-run="' + run.id + '">查看该轮</button>' +
+      '</div>';
+    }).join('');
+    document.querySelectorAll('#historyList [data-run]').forEach(function (btn) {
+      btn.onclick = function () { closeDialogs(); state.note = '已载入' + btn.getAttribute('data-run') + '（历史只读）'; showTask(); };
+    });
+  }
+
+  function renderHistoryTable() {
+    document.getElementById('historyTable').innerHTML = RUNS.map(function (run) {
+      return '<tr>' +
+        '<td><strong>' + run.id + '</strong></td>' +
+        '<td class="num">' + run.at + '</td>' +
+        '<td class="num">' + run.posts + '</td>' +
+        '<td class="num">' + run.comments + '</td>' +
+        '<td>' + pill(run) + '</td>' +
+        '<td><div class="cell-actions">' +
+          '<button class="btn btn-outline btn-xs">笔记</button>' +
+          '<button class="btn btn-outline btn-xs">审核</button>' +
+          '<button class="btn btn-outline btn-xs">回复</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  /* ---------- 页面/弹窗切换 ---------- */
+  function setNav(name) {
+    document.querySelectorAll('.nav-item').forEach(function (item) {
+      item.classList.toggle('active', item.getAttribute('data-nav') === name);
+    });
+  }
+
+  function showTask() {
+    state.page = 'task';
+    document.getElementById('pageTask').hidden = false;
+    document.getElementById('pageHistory').hidden = true;
+    document.getElementById('crumb').textContent = '自动化任务';
+    setNav('automation');
+    render();
+  }
+
+  function showHistory() {
+    if (state.mode === 'dialog') { openDialog('dlgHistory'); return; }
+    state.page = 'history';
+    document.getElementById('pageTask').hidden = true;
+    document.getElementById('pageHistory').hidden = false;
+    document.getElementById('crumb').textContent = '采集历史';
+    setNav('history');
+  }
+
+  function openHistory() { showHistory(); }
+
+  function openDialog(id) { document.getElementById(id).hidden = false; }
+  function closeDialogs() { document.querySelectorAll('.overlay').forEach(function (o) { o.hidden = true; }); }
+
+  function setMode(mode) {
+    state.mode = mode;
+    closeDialogs();
+    document.getElementById('navHistory').hidden = mode !== 'page';
+    document.getElementById('modeHint').textContent = mode === 'dialog'
+      ? '查看采集历史 → 在当前页弹出浮层'
+      : '查看采集历史 → 跳到独立页面（侧栏新增入口）';
+    document.querySelectorAll('#modeSeg button').forEach(function (btn) {
+      btn.classList.toggle('on', btn.getAttribute('data-mode') === mode);
+    });
+    showTask();
+  }
+
+  /* ---------- 事件 ---------- */
+  document.getElementById('btnStart').onclick = function () {
+    if (['collecting', 'reviewing', 'sending'].indexOf(state.stage) >= 0) return;
+    document.getElementById('startConsent').checked = false;
+    document.getElementById('btnConfirmStart').disabled = true;
+    openDialog('dlgStart');
+  };
+
+  document.getElementById('startConsent').onchange = function (e) {
+    document.getElementById('btnConfirmStart').disabled = !e.target.checked;
+  };
+
+  document.getElementById('btnConfirmStart').onclick = function () {
+    closeDialogs();
+    startRun();
+  };
+
+  document.getElementById('btnHistory').onclick = openHistory;
+  document.getElementById('btnBackToTask').onclick = showTask;
+  document.getElementById('dlgOpenArchive').onclick = function () {
+    closeDialogs();
+    state.mode = 'page';
+    setMode('page');
+    showHistory();
+  };
+
+  document.querySelectorAll('[data-close]').forEach(function (btn) { btn.onclick = closeDialogs; });
+  document.querySelectorAll('.overlay').forEach(function (overlay) {
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) closeDialogs(); });
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDialogs(); });
+
+  document.querySelectorAll('#modeSeg button').forEach(function (btn) {
+    btn.onclick = function () { setMode(btn.getAttribute('data-mode')); };
+  });
+
+  document.getElementById('btnReset').onclick = function () {
+    clearTimers();
+    state.stage = 'idle'; state.posts = 0; state.comments = 0; state.matched = 0; state.sent = 0; state.unknown = 0; state.note = '';
+    closeDialogs();
+    showTask();
+  };
+
+  document.querySelector('[data-nav="automation"]').onclick = showTask;
+  document.getElementById('navHistory').onclick = showHistory;
+
+  /* ---------- 初始化 ---------- */
+  renderHistoryList();
+  renderHistoryTable();
+  setMode('dialog');
+  document.querySelector('[data-nav="automation"]').classList.add('active');
+})();
+</script>
+</body>
+</html>

@@ -8,7 +8,9 @@ function Card({ className, asChild=false, ...props }: React.ComponentProps<"div"
     <Comp
       data-slot="card"
       className={cn(
-        "flex flex-col gap-6 rounded-lg border bg-card py-6 text-card-foreground shadow-sm",
+        // 对齐 DESIGN.md §6：卡片只用 1px 边框分层，阴影只给浮层，所以去掉了
+        // shadcn 默认的 shadow-sm；gap-4 = 标题到内容 16px（§5）。
+        "flex flex-col gap-4 rounded-lg border bg-card py-6 text-card-foreground",
         className
       )}
       {...props}

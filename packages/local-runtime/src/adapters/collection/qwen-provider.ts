@@ -12,8 +12,9 @@ export function qwenSettings(env:Record<string,string|undefined>):QwenSettings{
  if(env.QWEN_MATCH_ENABLED!=='1')return {status};
  if(!model)return {status:{...status,state:'INVALID_CONFIG',message:'型号、非思考Schema支持或北京价格未验证；禁止调用，不回退Flash'}};
  if(env.QWEN_MATCH_CONSENT!==QWEN_CONSENT)return {status:{...status,state:'UNAUTHORIZED',message:'运行环境尚未记录北京地域与评论原文外发授权'}};
- if(!/^(?:[1-9]|[1-9][0-9]|100)$/.test(env.QWEN_MATCH_DAILY_LIMIT||''))return {status:{...status,state:'BUDGET_REQUIRED',message:'尚未设置每日请求预算（1–100次）；禁止调用'}};
- status.dailyLimit=Number(env.QWEN_MATCH_DAILY_LIMIT);
+ const budget=env.QWEN_MATCH_DAILY_LIMIT||'',unlimited=budget==='unlimited';
+ if(!unlimited&&!/^(?:[1-9]|[1-9][0-9]|100)$/.test(budget))return {status:{...status,state:'BUDGET_REQUIRED',message:'尚未设置每日请求预算（1–100次，或 unlimited）；禁止调用'}};
+ status.dailyLimit=unlimited?null:Number(budget);
  if(env.QWEN_MATCH_PRICE_ACK!==model.priceAck)return {status:{...status,state:'BUDGET_REQUIRED',message:'尚未确认当前型号的北京价格与请求预算；禁止调用。'+model.priceVersion+' 原价：'+model.priceDescription+'。实际费用以账单为准'}};
  const profile=env.QWEN_MATCH_ENDPOINT??'beijing-standard';
  if(!['beijing-standard','beijing-workspace'].includes(profile))return {status:{...status,state:'INVALID_CONFIG',message:'未知端点；仅允许已核实的北京官方接口'}};

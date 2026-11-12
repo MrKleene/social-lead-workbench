@@ -1,22 +1,189 @@
-import {useSearchParams} from '@/lib/router-compat';
-import {Button} from '@/components/ui/button';
-import {LocalHistory} from './local-history';
-import {LocalReceivePanel} from './local-platform';
-import {useLocalRecords,useLocalAction} from './use-local-records';
+import { useSearchParams } from "@/lib/router-compat";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  SELECT_EMPTY,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CheckboxField } from "@/components/patterns/checkbox-field";
+import { EmptyState } from "@/components/patterns/empty-state";
+import { FilterBar, FilterField } from "@/components/patterns/filter-bar";
+import { PageHeader } from "@/components/patterns/page-header";
+import { Pagination } from "@/components/patterns/pagination";
+import { RecordItem, RecordList } from "@/components/patterns/record-list";
+import { SectionCard } from "@/components/patterns/section-card";
+import { ErrorNotice } from "@/components/feedback";
+import { LocalHistory } from "./local-history";
+import { LocalReceivePanel } from "./local-platform";
+import { useLocalAction, useLocalRecords } from "./use-local-records";
 
-function LocalCommentNotifications(){
- const [params,setParams]=useSearchParams(),page=Math.max(1,Number(params.get('page'))||1);
- const messages=useLocalRecords('inboxPage',{page,channel:'COMMENT',accountId:params.get('account')||undefined,unread:params.get('unread')==='1',query:params.get('query')||''});
- const read=useLocalAction('markRead'),changePage=(n:number)=>setParams(p=>{p.set('page',String(n));return p;});
- return <section className="local-panel"><h2>评论通知</h2>{(messages.error||read.error)&&<p role="alert">{(messages.error||read.error)?.message}</p>}
- {messages.isPending?<p>正在读取…</p>:!messages.data?.total?<p className="local-empty">没有符合筛选条件的评论通知。</p>:null}
- <ul className="local-config-list">{messages.data?.items.map(m=><li key={m.id}><div><strong>{m.sender_name||'未命名用户'}{m.unread?' · 未读':''}</strong><small>{m.post_title||'未记录笔记标题'} · {new Date(m.received_at).toLocaleString()}</small><p>{m.content_type==='TEXT'?m.body:'当前不支持展示此消息类型'}</p>{!!m.unread&&<Button variant="outline" pending={read.isPending} onClick={()=>read.mutate({id:m.id})}>标记已读</Button>}</div></li>)}</ul>
- {(messages.data?.total??0)>30&&<nav className="local-actions" aria-label="评论通知分页"><Button disabled={page===1} onClick={()=>changePage(page-1)}>上一页</Button><span>{page} / {Math.ceil((messages.data?.total??0)/30)}</span><Button disabled={page*30>=(messages.data?.total??0)} onClick={()=>changePage(page+1)}>下一页</Button></nav>}</section>;
+const PAGE_SIZE = 30;
+
+function LocalCommentNotifications() {
+  const [params, setParams] = useSearchParams();
+  const page = Math.max(1, Number(params.get("page")) || 1);
+  const messages = useLocalRecords("inboxPage", {
+    page,
+    channel: "COMMENT",
+    accountId: params.get("account") || undefined,
+    unread: params.get("unread") === "1",
+    query: params.get("query") || "",
+  });
+  const read = useLocalAction("markRead");
+  const changePage = (next: number) =>
+    setParams((previous) => {
+      previous.set("page", String(next));
+      return previous;
+    });
+
+  const failure = messages.error ?? read.error;
+  const total = messages.data?.total ?? 0;
+  const items = messages.data?.items ?? [];
+
+  return (
+    <SectionCard title="评论通知">
+      {failure ? (
+        <ErrorNotice error={failure} />
+      ) : null}
+      {messages.isPending ? (
+        <p className="text-body text-muted-foreground">正在读取…</p>
+      ) : null}
+      {!messages.isPending && total === 0 ? (
+        <EmptyState title="没有符合筛选条件的评论通知。" />
+      ) : null}
+      {items.length > 0 ? (
+        <RecordList>
+          {items.map((message) => (
+            <RecordItem
+              key={message.id}
+              title={`${message.sender_name || "未命名用户"}${message.unread ? " · 未读" : ""}`}
+              meta={`${message.post_title || "未记录笔记标题"} · ${new Date(message.received_at).toLocaleString()}`}
+              action={
+                message.unread ? (
+                  <Button
+                    variant="outline"
+                    pending={read.isPending}
+                    onClick={() => read.mutate({ id: message.id })}
+                  >
+                    标记已读
+                  </Button>
+                ) : null
+              }
+            >
+              {message.content_type === "TEXT"
+                ? message.body
+                : "当前不支持展示此消息类型"}
+            </RecordItem>
+          ))}
+        </RecordList>
+      ) : null}
+      <Pagination
+        page={page}
+        total={total}
+        pageSize={PAGE_SIZE}
+        onPageChange={changePage}
+        label="评论通知分页"
+      />
+    </SectionCard>
+  );
 }
-export function LocalInboxPage(){
- const status=useLocalRecords('status'),accounts=useLocalRecords('accounts'),[params,setParams]=useSearchParams(),comments=params.get('view')==='comments';
- const change=(key:string,value:string)=>setParams(previous=>{const next=new URLSearchParams(previous);value?next.set(key,value):next.delete(key);next.delete('page');return next;},{replace:true,flushSync:true});
- return <><h1>消息通知</h1><div className="local-actions" aria-label="消息类型"><Button variant={comments?'outline':'default'} aria-pressed={!comments} onClick={()=>change('view','')}>私信会话</Button><Button variant={comments?'default':'outline'} aria-pressed={comments} onClick={()=>change('view','comments')}>评论通知</Button></div>
- <div className="local-filterbar"><label>接收账号<select aria-label="接收账号" value={params.get('account')||''} onChange={e=>change('account',e.target.value)}><option value="">全部账号</option>{accounts.data?.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>搜索消息<input aria-label="搜索消息" value={params.get('query')||''} onChange={e=>change('query',e.target.value)} placeholder="正文或用户昵称"/></label><label><input type="checkbox" checked={params.get('unread')==='1'} onChange={e=>change('unread',e.target.checked?'1':'')}/>仅未读</label></div>
- {comments?<LocalCommentNotifications/>:<LocalHistory tab="conversations"/>}<section className="local-panel"><LocalReceivePanel credentialsAvailable={!!status.data?.credentialsAvailable}/></section></>;
+
+export function LocalInboxPage() {
+  const status = useLocalRecords("status");
+  const accounts = useLocalRecords("accounts");
+  const [params, setParams] = useSearchParams();
+  const comments = params.get("view") === "comments";
+
+  const change = (key: string, value: string) =>
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        next.delete("page");
+        return next;
+      },
+      { replace: true, flushSync: true },
+    );
+
+  return (
+    <>
+      <PageHeader
+        title="消息通知"
+        actions={
+          <div role="group" aria-label="消息类型" className="flex gap-2">
+            <Button
+              variant={comments ? "outline" : "default"}
+              aria-pressed={!comments}
+              onClick={() => change("view", "")}
+            >
+              私信会话
+            </Button>
+            <Button
+              variant={comments ? "default" : "outline"}
+              aria-pressed={comments}
+              onClick={() => change("view", "comments")}
+            >
+              评论通知
+            </Button>
+          </div>
+        }
+      />
+
+      <FilterBar>
+        <FilterField label="接收账号">
+          <Select
+            value={params.get("account") || ""}
+            onValueChange={(value) => change("account", value)}
+          >
+            <SelectTrigger aria-label="接收账号">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SELECT_EMPTY}>全部账号</SelectItem>
+              {accounts.data?.map((account) => (
+              <SelectItem key={account.id} value={account.id}>
+              {account.name}
+              </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
+        <FilterField label="搜索消息">
+          <Input
+            aria-label="搜索消息"
+            value={params.get("query") || ""}
+            onChange={(event) => change("query", event.target.value)}
+            placeholder="正文或用户昵称"
+          />
+        </FilterField>
+        <div className="flex h-9 items-center">
+          <CheckboxField
+            checked={params.get("unread") === "1"}
+            onCheckedChange={(checked) =>
+              change("unread", checked ? "1" : "")
+            }
+          >
+            仅未读
+          </CheckboxField>
+        </div>
+      </FilterBar>
+
+      {comments ? (
+        <LocalCommentNotifications />
+      ) : (
+        <LocalHistory tab="conversations" />
+      )}
+
+      <SectionCard>
+        <LocalReceivePanel
+          credentialsAvailable={!!status.data?.credentialsAvailable}
+        />
+      </SectionCard>
+    </>
+  );
 }

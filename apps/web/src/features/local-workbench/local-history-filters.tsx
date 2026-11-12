@@ -1,12 +1,361 @@
-import {Link,useSearchParams} from '@/lib/router-compat';
-import {Button} from '@/components/ui/button';
-import {useLocalRecords} from './use-local-records';
-import {LocalPagination} from './local-record-pages';
-export function LocalHistoryFilters({tab}:{tab:'runs'|'reviews'}){
- const [params,setParams]=useSearchParams(),configs=useLocalRecords('configurations'),accounts=useLocalRecords('accounts'),workflow=useLocalRecords('workflowOverview');
- const get=(key:string)=>params.get(key)||'',change=(key:string,value:string)=>setParams(previous=>{const next=new URLSearchParams(previous);value?next.set(key,value):next.delete(key);next.delete('page');return next;},{replace:true,flushSync:true});
- return <div className="local-editor"><div className="local-filterbar"><label>{tab==='runs'?'搜索配置或笔记标题':'搜索评论原文'}<input type="search" maxLength={200} value={get('query')} onChange={e=>change('query',e.target.value)}/></label>{tab==='runs'?<><label>采集状态<select aria-label="采集状态" value={get('state')} onChange={e=>change('state',e.target.value)}><option value="">全部状态</option>{[['RUNNING','进行中'],['COMPLETE','完整'],['PARTIAL','部分完成'],['FAILED','失败'],['CANCELLED','已取消'],['INTERRUPTED','已中断']].map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></label><label>来源配置<select value={get('config')} onChange={e=>change('config',e.target.value)}><option value="">全部配置</option>{configs.data?.filter(c=>c.kind==='KEYWORDS').map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>采集账号筛选<select value={get('account')} onChange={e=>change('account',e.target.value)}><option value="">全部账号</option>{accounts.data?.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label></>:<><label>匹配方案筛选<select value={get('policy')} onChange={e=>change('policy',e.target.value)}><option value="">全部方案</option>{workflow.data?.policies.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>评估记录<select aria-label="评估记录" value={get('evaluation')} onChange={e=>change('evaluation',e.target.value)}><option value="">已评分</option><option value="ALL_UNREVIEWED">未评分原文</option><option value="UNANALYSED">尚无请求</option><option value="FAILED">请求失败或取消</option><option value="UNKNOWN">请求结果未知</option><option value="PROCESSING">请求处理中</option></select></label></>}</div>
- {(tab==='runs'||!get('evaluation'))&&<details><summary>更多筛选</summary><div className="local-filterbar"><label>{tab==='runs'?'采集开始日期':'评论发布开始日期'}<input type="date" value={get('from')} onChange={e=>change('from',e.target.value)}/></label><label>{tab==='runs'?'采集结束日期':'评论发布结束日期'}<input type="date" value={get('to')} onChange={e=>change('to',e.target.value)}/></label>{tab==='reviews'&&<><label>最高匹配分<input type="number" min={0} max={100} value={get('maxScore')||'100'} onChange={e=>change('maxScore',e.target.value)}/></label><label>模型判断<select value={get('decision')} onChange={e=>change('decision',e.target.value)}><option value="">全部</option><option value="MATCH">匹配</option><option value="NO_MATCH">不匹配</option><option value="UNCERTAIN">不确定</option></select></label><label>上下文<select value={get('context')} onChange={e=>change('context',e.target.value)}><option value="">全部</option><option value="SUFFICIENT">充分</option><option value="INSUFFICIENT">不足</option></select></label><label>审核来源<select value={get('mode')} onChange={e=>change('mode',e.target.value)}><option value="">全部</option><option value="FROZEN_RUN">本轮审核</option><option value="INDEPENDENT">独立审核</option></select></label><label>评论发布时间<select value={get('publication')} onChange={e=>change('publication',e.target.value)}><option value="">全部</option><option value="known">已知</option><option value="unknown">未记录</option></select></label><label>审核排序<select value={get('sort')} onChange={e=>change('sort',e.target.value)}><option value="">审核记录：新到旧</option><option value="oldest">审核记录：旧到新</option><option value="score-desc">分数：高到低</option><option value="score-asc">分数：低到高</option><option value="comment-newest">评论时间：新到旧</option><option value="comment-oldest">评论时间：旧到新</option></select></label></>}</div></details>}
- <Button variant="ghost" onClick={()=>setParams(params.get('run')?{run:params.get('run')!}:{},{replace:true})}>清除页面筛选</Button></div>;
+import { Link, useSearchParams } from "@/lib/router-compat";
+import { Disclosure } from "@/components/disclosure";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  SELECT_EMPTY,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { EmptyState } from "@/components/patterns/empty-state";
+import { FilterBar, FilterField } from "@/components/patterns/filter-bar";
+import { Pagination } from "@/components/patterns/pagination";
+import { RecordItem, RecordList } from "@/components/patterns/record-list";
+import { ErrorNotice } from "@/components/feedback";
+import { useLocalRecords } from "./use-local-records";
+
+const runStates: Array<[string, string]> = [
+  ["RUNNING", "进行中"],
+  ["COMPLETE", "完整"],
+  ["PARTIAL", "部分完成"],
+  ["FAILED", "失败"],
+  ["CANCELLED", "已取消"],
+  ["INTERRUPTED", "已中断"],
+];
+
+export function LocalHistoryFilters({ tab }: { tab: "runs" | "reviews" }) {
+  const [params, setParams] = useSearchParams();
+  const configs = useLocalRecords("configurations");
+  const accounts = useLocalRecords("accounts");
+  const workflow = useLocalRecords("workflowOverview");
+
+  const get = (key: string) => params.get(key) || "";
+  const change = (key: string, value: string) =>
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        next.delete("page");
+        return next;
+      },
+      { replace: true, flushSync: true },
+    );
+
+  return (
+    <div className="flex flex-col gap-3">
+      <FilterBar>
+        <FilterField
+          label={tab === "runs" ? "搜索配置或笔记标题" : "搜索评论原文"}
+        >
+          <Input
+            type="search"
+            maxLength={200}
+            value={get("query")}
+            onChange={(event) => change("query", event.target.value)}
+          />
+        </FilterField>
+
+        {tab === "runs" ? (
+          <>
+            <FilterField label="采集状态">
+              <Select
+                value={get("state")}
+                onValueChange={(value) => change("state", value)}
+              >
+                <SelectTrigger aria-label="采集状态">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_EMPTY}>全部状态</SelectItem>
+                  {runStates.map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                  {label}
+                  </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+            <FilterField label="来源配置">
+              <Select
+                value={get("config")}
+                onValueChange={(value) => change("config", value)}
+              >
+                <SelectTrigger aria-label="来源配置">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_EMPTY}>全部配置</SelectItem>
+                  {configs.data
+                  ?.filter((config) => config.kind === "KEYWORDS")
+                  .map((config) => (
+                  <SelectItem key={config.id} value={config.id}>
+                  {config.name}
+                  </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+            <FilterField label="采集账号筛选">
+              <Select
+                value={get("account")}
+                onValueChange={(value) => change("account", value)}
+              >
+                <SelectTrigger aria-label="采集账号筛选">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_EMPTY}>全部账号</SelectItem>
+                  {accounts.data?.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                  {account.name}
+                  </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+          </>
+        ) : (
+          <>
+            <FilterField label="匹配方案筛选">
+              <Select
+                value={get("policy")}
+                onValueChange={(value) => change("policy", value)}
+              >
+                <SelectTrigger aria-label="匹配方案筛选">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_EMPTY}>全部方案</SelectItem>
+                  {workflow.data?.policies.map((policy) => (
+                  <SelectItem key={policy.id} value={policy.id}>
+                  {policy.name}
+                  </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+            <FilterField label="评估记录">
+              <Select
+                value={get("evaluation")}
+                onValueChange={(value) => change("evaluation", value)}
+              >
+                <SelectTrigger aria-label="评估记录">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_EMPTY}>已评分</SelectItem>
+                  <SelectItem value="ALL_UNREVIEWED">未评分原文</SelectItem>
+                  <SelectItem value="UNANALYSED">尚无请求</SelectItem>
+                  <SelectItem value="FAILED">请求失败或取消</SelectItem>
+                  <SelectItem value="UNKNOWN">请求结果未知</SelectItem>
+                  <SelectItem value="PROCESSING">请求处理中</SelectItem>
+                </SelectContent>
+              </Select>
+            </FilterField>
+          </>
+        )}
+      </FilterBar>
+
+      {tab === "runs" || !get("evaluation") ? (
+        <Disclosure title="更多筛选">
+          <div className="flex flex-col gap-3">
+            <FilterBar>
+              <FilterField
+                label={tab === "runs" ? "采集开始日期" : "评论发布开始日期"}
+              >
+                <DatePicker
+                  ariaLabel={tab === "runs" ? "采集开始日期" : "评论发布开始日期"}
+                  value={get("from")}
+                  placeholder="不限"
+                  onChange={(value) => change("from", value)}
+                />
+              </FilterField>
+              <FilterField
+                label={tab === "runs" ? "采集结束日期" : "评论发布结束日期"}
+              >
+                <DatePicker
+                  ariaLabel={tab === "runs" ? "采集结束日期" : "评论发布结束日期"}
+                  value={get("to")}
+                  placeholder="不限"
+                  onChange={(value) => change("to", value)}
+                />
+              </FilterField>
+              {tab === "reviews" ? (
+                <>
+                  <FilterField label="最高匹配分">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={get("maxScore") || "100"}
+                      onChange={(event) =>
+                        change("maxScore", event.target.value)
+                      }
+                    />
+                  </FilterField>
+                  <FilterField label="模型判断">
+                    <Select
+                      value={get("decision")}
+                      onValueChange={(value) =>
+                      change("decision", value)
+                      }
+                    >
+                      <SelectTrigger aria-label="模型判断">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={SELECT_EMPTY}>全部</SelectItem>
+                        <SelectItem value="MATCH">匹配</SelectItem>
+                        <SelectItem value="NO_MATCH">不匹配</SelectItem>
+                        <SelectItem value="UNCERTAIN">不确定</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                  <FilterField label="上下文">
+                    <Select
+                      value={get("context")}
+                      onValueChange={(value) => change("context", value)}
+                    >
+                      <SelectTrigger aria-label="上下文">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={SELECT_EMPTY}>全部</SelectItem>
+                        <SelectItem value="SUFFICIENT">充分</SelectItem>
+                        <SelectItem value="INSUFFICIENT">不足</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                  <FilterField label="审核来源">
+                    <Select
+                      value={get("mode")}
+                      onValueChange={(value) => change("mode", value)}
+                    >
+                      <SelectTrigger aria-label="审核来源">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={SELECT_EMPTY}>全部</SelectItem>
+                        <SelectItem value="FROZEN_RUN">本轮审核</SelectItem>
+                        <SelectItem value="INDEPENDENT">独立审核</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                  <FilterField label="评论发布时间">
+                    <Select
+                      value={get("publication")}
+                      onValueChange={(value) =>
+                      change("publication", value)
+                      }
+                    >
+                      <SelectTrigger aria-label="评论发布时间">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={SELECT_EMPTY}>全部</SelectItem>
+                        <SelectItem value="known">已知</SelectItem>
+                        <SelectItem value="unknown">未记录</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                  <FilterField label="审核排序">
+                    <Select
+                      value={get("sort")}
+                      onValueChange={(value) => change("sort", value)}
+                    >
+                      <SelectTrigger aria-label="审核排序">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={SELECT_EMPTY}>审核记录：新到旧</SelectItem>
+                        <SelectItem value="oldest">审核记录：旧到新</SelectItem>
+                        <SelectItem value="score-desc">分数：高到低</SelectItem>
+                        <SelectItem value="score-asc">分数：低到高</SelectItem>
+                        <SelectItem value="comment-newest">评论时间：新到旧</SelectItem>
+                        <SelectItem value="comment-oldest">评论时间：旧到新</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                </>
+              ) : null}
+            </FilterBar>
+          </div>
+        </Disclosure>
+      ) : null}
+
+      <div>
+        <Button
+          variant="ghost"
+          onClick={() =>
+            setParams(
+              params.get("run") ? { run: params.get("run")! } : {},
+              { replace: true },
+            )
+          }
+        >
+          清除页面筛选
+        </Button>
+      </div>
+    </div>
+  );
 }
-export function LocalUnreviewed(){const [params,setParams]=useSearchParams(),page=Math.max(1,Number(params.get('page'))||1),state=params.get('evaluation')||'',data=useLocalRecords('unreviewedComments',{page,runId:params.get('run')||'',policyId:params.get('policy')||'',query:params.get('query')||'',state:state==='ALL_UNREVIEWED'?'':state});return <>{data.error&&<p role="alert">{data.error.message}</p>}<ul className="local-config-list">{data.data?.items.map(c=><li key={c.id}><div><strong>{c.body}</strong><span>{c.post_title||'未保存标题'} · {c.batch_state??'尚无请求'}</span>{c.error_code&&<small>{c.error_code}</small>}<Link to={'/automation?run='+c.run_id+'&stage=review'}>查看原轮次审核与保护状态 →</Link></div></li>)}</ul><LocalPagination page={page} total={data.data?.total??0} onPage={p=>setParams(v=>{v.set('page',String(p));return v;})}/></>;}
+
+export function LocalUnreviewed() {
+  const [params, setParams] = useSearchParams();
+  const page = Math.max(1, Number(params.get("page")) || 1);
+  const state = params.get("evaluation") || "";
+  const data = useLocalRecords("unreviewedComments", {
+    page,
+    runId: params.get("run") || "",
+    policyId: params.get("policy") || "",
+    query: params.get("query") || "",
+    state: state === "ALL_UNREVIEWED" ? "" : state,
+  });
+
+  const items = data.data?.items ?? [];
+
+  return (
+    <>
+      {data.error ? (
+        <ErrorNotice error={data.error} />
+      ) : null}
+      {items.length ? (
+        <RecordList>
+          {items.map((comment) => (
+            <RecordItem
+              key={comment.id}
+              title={comment.body}
+              meta={`${comment.post_title || "未保存标题"} · ${comment.batch_state ?? "尚无请求"}`}
+            >
+              {comment.error_code ? <p>{comment.error_code}</p> : null}
+              <Link
+                to={`/automation?run=${comment.run_id}&stage=review`}
+                className="text-body underline underline-offset-4"
+              >
+                查看原轮次审核与保护状态 →
+              </Link>
+            </RecordItem>
+          ))}
+        </RecordList>
+      ) : (
+        <EmptyState title="没有符合条件的评论原文。" />
+      )}
+      <Pagination
+        page={page}
+        total={data.data?.total ?? 0}
+        onPageChange={(next) =>
+          setParams((previous) => {
+            previous.set("page", String(next));
+            return previous;
+          })
+        }
+        label="未评分原文分页"
+      />
+    </>
+  );
+}

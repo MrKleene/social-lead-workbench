@@ -54,7 +54,7 @@
 并保证作用域限定在功能类内。没有登记的例外一律判失败。
 
 > 历史教训：上一轮设计系统用 `[data-slot]` 全量覆写，堆出 155KB 死规则后被整体删除
-> （见 `src/styles/workbench.css` 文件头注释）。不要重演。
+> （记录见 `docs/design/ui-conformance-audit.md`）。不要重演。
 
 ---
 
@@ -96,17 +96,42 @@
 
 ---
 
-## 6. 历史遗留（样式已收敛，结构未清理）
+## 6. 遗留方言已清除（棘轮守卫）
 
-2026-11-09 已把 47 处硬编码 hex 全部换成 `var(--*)`，字号/字重/圆角压到规范档位，
-并删除 15 条 `.local-workbench` 死规则。以下属于**结构**遗留：
+2026-11-09 把 47 处硬编码 hex 换成 `var(--*)`，字号/字重/圆角压到规范档位。
+**2026-11-11 完成最后一步**：21 个页面文件从手写 CSS 迁到 Tailwind + `components/patterns`，
+删掉 5 个全局样式表（`workbench.css` / `local-workbench.css` / `local-shell.css` /
+`desktop-bridge.css` / `graphite-reply-history.css` 等），遗留类名 169 处 → **0 处**。
 
-| 项 | 说明 |
+| 项 | 现状 |
 |---|---|
-| 127 处 `className="local-*"` | 样式已走 token，类名仍是历史命名，可逐步改 |
-| `graphite-workspace` / `local-desktop` | **有效作用域**（63 处 CSS 引用），不是死 class；清理需连选择器一起改 |
+| `className="local-*"` 等遗留类名 | **0 处**。`ui:check` 的 `legacy-class` 规则守着，白名单已清空 |
+| `graphite-workspace` / `local-desktop` | 已从 `SidebarInset` 移除，对应 CSS 一并删除 |
+| 全局样式表 | 只剩 `styles/index.css`（Tailwind 入口）与 `styles/theme.css`（token） |
 
-`ui:check` 现有 5 条批准例外（`!important` 与 `[data-slot]` 布局覆盖），
+### 6.1 外壳使用 shadcn-admin 源码（2026-11-11）
+
+侧栏、顶栏、主题/布局配置**不再是本项目手写**，而是 shadcn-admin 的原样文件：
+
+```
+components/layout/{app-sidebar,header,top-nav,nav-group,nav-user,team-switcher,app-title,types}
+components/{search,command-menu,theme-switch,config-drawer,profile-dropdown,skip-to-main}
+context/{layout-provider,search-provider}  hooks/use-dialog-state  lib/cookies
+components/ui/{command,scroll-area,avatar,radio-group,label,dialog}  assets/custom/icon-*
+```
+
+- 这些文件**和业务代码受同一套规范约束**，`ui:check` 不做任何豁免。上游写法不合规时
+  **就地改掉**，并记录改动（见下）——例如 `search.tsx` 的 `text-[10px]` 已改成 `text-caption`。
+- **同步上游时要重放这些改动**。目前已知的偏离上游之处只有一处：
+  `components/search.tsx` 的 `⌘K` 键帽字号。其余文件仍是逐字节的上游代码。
+- `components/layout/app-title.tsx` 已删除（零引用死代码，且硬编码了上游品牌名与英文
+  `sr-only` 文案）。
+- **不要改它们的样式**。要改外观改 `features/**` 和 `components/patterns/**`。
+- 允许的接缝只有「内容」：中文文案、`layout/data/sidebar-data.ts` 的导航数据、
+  去掉本机应用没有的菜单项（登录/登出/账单/通知）、`SidebarContent` 的 `aria-label='主导航'`。
+- 同步上游：把上面这些文件从 shadcn-admin 重新 copy 覆盖，然后只重做「内容接缝」。
+
+`ui:check` 现有 2 条批准例外（1 条 `!important`、1 条 `[data-slot]` 布局覆盖），
 每条都在 `scripts/check-ui-conventions.mjs` 的 `ALLOWED` 里写明理由。
 **新增例外必须同样登记理由**，否则检查失败。
 
@@ -139,6 +164,38 @@ npm run typecheck -w @crm/web
 - 目录调整必须同步构建脚本、测试、桌面装配白名单和文档，不能只移动文件。
 - 工程结构修改运行 `npm run check`；桌面装配修改额外运行 `npm run desktop:stage` 和相关集成测试。
 - 不把可跳过的原生测试或静态验证描述为目标平台完整验收。
+
+---
+
+## 9. 文案：只写状态与动作，不写解释
+
+界面上只允许三类文字：
+
+1. **操作标签**：按钮、菜单、页签、字段名。
+2. **数据与状态**：值、计数、时间、状态词（已授权 / 待开始 / 失败 / 未选择关键词组）。
+3. **授权句**：必须由用户确认才能继续的勾选项，且能对应到服务端 consent 常量。
+
+**禁止解释性文案**：说明功能怎么运作、系统保证什么、费用怎么算、切换会不会丢、步骤会不会自动走、进度从哪来、为什么这么设计。
+
+判据只有一条：**删掉这句话，用户还能不能完成操作？能，就删。**
+
+已出现过的违规（不要重写）：
+
+| 位置 | 违规文案 | 应该写成 |
+|---|---|---|
+| 采集设置弹窗 | 「采集、评论匹配与自动回复三组设置分别保存，切换页签不会丢改动」 | 删掉 |
+| 模型配置 | 「项目价目版本：… 费用以供应商账单为准」 | 只留在付费授权页，不复制到别处 |
+| 自动化任务 | 「步骤会随进度自动推进；点步骤可切换查看」 | 删掉 |
+| 采集进度 | 「进度读取自本机运行记录，刷新页面不会中断本轮」 | 删掉 |
+| 空状态 | 「先在采集设置里选好关键词组和采集账号，再开始第一轮」 | 「未选择关键词组」 |
+| 授权之后 | 「本次有界采集已加入队列。步骤会随进度自动推进；离开页面不会中断本轮」 | 「已加入队列」 |
+
+**唯一例外（仅此两类）**
+
+- **付费 / 数据去向披露**：确有必要时只写在付费授权页，且不超过一行；不复制到弹窗或其他页面。
+- **危险操作后果**：写在确认弹窗里，一条，不重复第二遍。
+
+弹窗里的 `DialogDescription`、卡片里的 `description`、表单控件的 `hint` 都是解释文案的高发位置——除非它承载状态或授权，否则不要写。
 
 <!-- aoci:begin -->
 ## AOCI 仓库认知

@@ -20,7 +20,7 @@ class LocalModelExecutor {
   const plan=this.review.currentScope(job),expected={batchId:batch.id,model:batch.model,modelVersion:batch.model_version,payload:plan.payload,maxOutputTokens:plan.estimate.outputTokens,maxSubmissions:1};
   if(hash(command)!==hash(expected)||hash(JSON.parse(batch.payload))!==hash(command.payload))throw new LocalError('MODEL_COMMAND_CHANGED');
   const model=this.store.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get(),key=this.vault.get('MODEL_KEY','qwen');
-  const settings=qwenSettings({QWEN_MATCH_MODEL:model.model,QWEN_MATCH_ENABLED:model.authorized?'1':'0',QWEN_MATCH_CONSENT:model.consent,QWEN_MATCH_DAILY_LIMIT:String(model.daily_limit),QWEN_MATCH_PRICE_ACK:model.price_ack,QWEN_MATCH_ENDPOINT:'beijing-standard',QWEN_API_KEY:key});
+  const settings=qwenSettings({QWEN_MATCH_MODEL:model.model,QWEN_MATCH_ENABLED:model.authorized?'1':'0',QWEN_MATCH_CONSENT:model.consent,QWEN_MATCH_DAILY_LIMIT:model.daily_limit===null?'unlimited':String(model.daily_limit),QWEN_MATCH_PRICE_ACK:model.price_ack,QWEN_MATCH_ENDPOINT:'beijing-standard',QWEN_API_KEY:key});
   if(settings.status.state!=='READY')throw new LocalError('MODEL_PROVIDER_NOT_READY');
   this.store.transaction(()=>{
    const latest=this.queue.current(lease);if(latest.cancel_requested||this.store.db.prepare('SELECT 1 FROM model_submissions WHERE batch_id=?').get(batch.id))throw new LocalError('MODEL_ALREADY_SUBMITTED_OR_UNKNOWN');

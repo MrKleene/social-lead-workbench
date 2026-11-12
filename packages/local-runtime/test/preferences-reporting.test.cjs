@@ -13,6 +13,22 @@ test('per-configuration defaults persist with CAS, do not grant execution, and n
  f.store.db.exec("UPDATE configurations SET archived=1 WHERE id='config'");assert.equal(p.selection().configId,null);assert.throws(()=>p.get({configId:'config'}),/CONFIGURATION_CHANGED/);
 });
 
+test('step toggles persist with CAS and drop selections that no longer exist',t=>{
+ const f=fixture(t),p=new LocalPreferences(f.store);
+ f.store.db.exec("INSERT INTO contact_rules(id,name,policy_id,policy_revision,model,threshold,plans,accounts,version,enabled) VALUES('rule','合成规则','policy',1,'qwen3.8-flash',80,'[{\"channel\":\"DM\",\"content\":\"合成内容\",\"templateId\":null,\"templateVersion\":null}]','[]',1,1)");
+ assert.deepEqual(p.steps(),{version:0,autoReview:false,policyId:null,autoReply:false,channel:'DM',ruleId:null});
+ const saved=p.saveSteps({version:0,autoReview:true,policyId:'policy',autoReply:true,channel:'DM',ruleId:'rule'});
+ assert.equal(saved.version,1);assert.equal(saved.autoReview,true);assert.equal(saved.policyId,'policy');
+ assert.equal(new LocalPreferences(f.store).steps().ruleId,'rule');
+ assert.throws(()=>p.saveSteps({...saved,version:0}),/PREFERENCE_CHANGED/);
+ assert.throws(()=>p.saveSteps({...saved,channel:'EMAIL'}),/INVALID_LOCAL_PREFERENCE/);
+ assert.throws(()=>p.saveSteps({...saved,policyId:'missing'}),/REVIEW_POLICY_CHANGED/);
+ assert.throws(()=>p.saveSteps({...saved,ruleId:'missing'}),/CONTACT_RULE_CHANGED/);
+ assert.throws(()=>p.saveSteps({...saved,ruleId:'rule',channel:'COMMENT'}),/CONTACT_RULE_CHANGED/);
+ f.store.db.exec("DELETE FROM contact_rules; DELETE FROM review_policies");
+ const cleared=p.steps();assert.equal(cleared.policyId,null);assert.equal(cleared.ruleId,null);assert.equal(cleared.autoReview,true);
+});
+
 test('legacy defaults are restored as selections only and survive restart without restoring grants',t=>{
  const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{LocalDatabase}=require('../dist/database.cjs'),{prepareLegacySnapshot,importLegacySnapshot}=require('../dist/legacy-import.cjs');const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'local-pref-')));let db=new LocalDatabase(path.join(dir,'source.sqlite'));t.after(()=>{db.close();fs.rmSync(dir,{recursive:true,force:true});});
  importLegacySnapshot(db,prepareLegacySnapshot({CollectionConfig:[{id:'c',name:'旧选择',keywords:['合成'],excludeWords:[],batchLimit:3,defaultExecutionAccountId:'a'}],PlatformAccount:[{id:'a',platform:'XHS',label:'原账号',dailyLimit:2}],CommentReviewPolicy:[{id:'p',name:'原目标',target:'寻找有明确学习辅导需求的评论'}],AutomationPreferences:[{id:'workspace',configId:'c',policyId:'p'}]}));

@@ -27,9 +27,9 @@ colors:
 typography:
   page-title:
     fontFamily: Inter
-    fontSize: 20px
+    fontSize: 24px
     fontWeight: 600
-    lineHeight: 1.4
+    lineHeight: 1.35
     letterSpacing: -0.6px
   section:
     fontFamily: Inter
@@ -187,13 +187,18 @@ components:
 | 圆角档位 | 6 种（5/6/8/10/12/30） | 4 档（4/6/8/12）+ pill |
 | 死规则（`.local-workbench` 前缀） | 15 条 | **已删除** |
 | 任意值字号（`text-[7rem]` 等） | 7 处 | 0 处，改用 `text-hero` / `text-caption` |
-| `npm run ui:check` | 错误 8 / 警告 18 | **错误 0 / 警告 0**，另有 5 条带理由的批准例外 |
+| `npm run ui:check` | 错误 8 / 警告 18 | **错误 0 / 警告 0**，另有 2 条带理由的批准例外 |
 
-**仍存在的结构问题**（不影响观感，但会增加维护成本）：
+**2026-11-11 完成方言收敛**：
 
-- 127 处 `className="local-*"` 分布在 23 个组件文件，样式走 token 了，但类名仍是历史命名。
-- `WorkbenchShell` 上的 `graphite-workspace` / `local-desktop` 是**有效作用域**（CSS 里 63 处引用），
-  不是死 class；要清理需连同 63 条选择器一起改，属独立任务。
+| 项 | 收敛前 | 现在 |
+|---|---|---|
+| 手写 CSS 方言（`local-*` 等遗留类名） | 23 个文件 / 169 处 | **0 处** |
+| 全局样式表 | 6 个（含 155KB 历史残留） | 只剩 `index.css` + `theme.css` |
+| 页面骨架 | 3 套分页 / 2 套卡片容器 / 2 套空态 | `components/patterns` 各一套 |
+| `ui:check` 批准例外 | 5 条 | 2 条 |
+
+新页面一律用 `components/patterns/*`，`ui:check` 的 `legacy-class` 规则会拦住回退。
 
 
 ---
@@ -285,7 +290,7 @@ components:
 
 | 用途 | 字号 / 行高 | 字重 | 字距 | class |
 |---|---|---|---|---|
-| 页面标题 `h1` | 20px / 1.4 | 600 | `-0.6px`（仅 Latin） | `text-title` |
+| 页面标题 `h2` | 24px / 1.35 | 600 | `-0.6px`（仅 Latin） | `text-display font-semibold tracking-tight` |
 | 展示数字（404 等） | 48px / 1.05 | 600 | `-1.4px` | `text-hero` |
 | 区块标题 `h2` | 16px / 1.5 | 600 | 0 | `text-section` |
 | 正文 | 14px / 1.6 | 400 | 0 | `text-body` / `text-sm` |
@@ -299,13 +304,15 @@ components:
 不额外引入 13 / 15 / 17 / 18 / 22 / 25 / 30 这些档位——`ui:check` 会把它们判为越界。
 
 **字重天花板 600**：只用 400 / 500 / 600。vercel 明文规定不用 700+，需要更强的层级就加大字号。
+**这条没有例外**——包括 shadcn-admin 的外壳文件：`AppTitle` 的 700 已随死代码删除，
+`PageHeader` 从 700 降到 600。`ui:check` 不再有 `font-weight-over-600` 的白名单。
 
 **禁止 `text-[13px]` 这类 px 任意值**；需要新档位就往 `@theme inline` 加 `--text-*`。
 
 **CJK 规则（必须遵守）**：
 - 负字距只用于**纯 Latin 标题**。中文标题字距保持 `0`，`-0.02em` 会让汉字挤在一起。
 - 中文正文行高不低于 `1.6`；英文可到 `1.5`。
-- 正文段落最大宽度 `75ch`（`workbench.css` 已有 `.page-heading p` 先例）。
+- 正文段落最大宽度 `75ch`（`PageHeader` 的 description 已按此实现）。
 - 数字列用 `font-variant-numeric: tabular-nums`（见 `graphite-reply-history.css`）。
 - 长文本一律 `overflow-wrap: anywhere`，中文无空格断行不生效会导致溢出。
 
@@ -339,6 +346,43 @@ components:
 按钮统一 `rounded-md`、`text-sm`、`font-medium`、`gap-2`，图标默认 `size-4`（`xs` 为 `size-3`）。
 禁用态 `pointer-events-none` + 降透明，**不用**灰色替代色。
 
+### 表单控件（`input.tsx` / `textarea.tsx` / `select.tsx` / `date-picker.tsx` / `checkbox.tsx`）
+
+四件共用一套度量，**不要在页面里另写高度或边框**：
+
+| 控件 | 高度 | 圆角 | 底色 | 字号 |
+|---|---|---|---|---|
+| `Input` | `h-9`(36) | `rounded-md` | `bg-card` | `text-base md:text-sm` |
+| `Select`（`SelectTrigger`） | `h-9`(36) | `rounded-md` | `bg-card` | `text-base md:text-sm` |
+| `DatePicker`（触发器） | `h-9`(36) | `rounded-md` | `bg-card` | `text-base md:text-sm` |
+| `Textarea` | `min-h-16` | `rounded-md` | `bg-card` | `text-base md:text-sm` |
+| `Checkbox` | `size-4` | `rounded-sm` | `bg-card`，勾选态 `bg-primary` | — |
+
+- **底色用 `bg-card` 而不是 `bg-transparent`**。本项目的 `--input` 与 `--border` 取同一个 hairline 值，
+  透明底落在 `--muted`（`#f5f5f5`）的编辑器面板里会**完全没有边界**（2026-11-11 实测：
+  白底 + hairline 边框是唯一能让控件在灰面板上读出来的组合）。白卡片上 `bg-card` 与透明等价。
+- **`text-base` 在移动端是防 iOS 聚焦缩放**，`md:text-sm` 才是桌面档位；不要删。
+- **下拉一律用 Radix `Select`（`components/ui/select.tsx`），不要用原生 `<select>`。**
+  原生 `<select>` 的**弹出层由操作系统绘制**，CSS 完全控制不了——macOS 上必然是灰底 + 蓝高亮的
+  系统菜单，和全站的圆角浮层完全不搭（2026-11-12 实测截图对比）。样式化原生控件只能改触发器，
+  改不了弹出层，所以这条路走不通。
+- **「全部 / 未选」用 `SELECT_EMPTY` 哨兵**：Radix 的 `SelectItem` 不接受空字符串 value。
+  `Select` 封装已经把 `value=""` ↔ `SELECT_EMPTY` 做了双向映射，业务代码继续写
+  `value={state}`（空串表示全部）、`onValueChange={(v) => setState(v)}`，**不需要知道哨兵存在**；
+  只需要把「全部」那个选项写成 `<SelectItem value={SELECT_EMPTY}>全部</SelectItem>`。
+- **`required` 要自己补偿**：Radix `Select` 不参与原生表单校验。提交处理里必须有
+  `if (!value) return`，并用 `aria-required` 标注。
+- **`aria-label` 放 `SelectTrigger`，不要放 `Select`**：`Select`（Root）不渲染 DOM 元素，
+  放在它上面的 `aria-label` 会被丢弃。
+- **日期一律用 `DatePicker`（`Popover` + `Calendar`），不要用 `<Input type="date">`。**
+  原生日历的弹出层同样由浏览器绘制，配色/圆角/字体都不受控，和全站浮层不一致。
+  `DatePicker` 的值是 `YYYY-MM-DD` 字符串（不是 `Date`），因为 `new Date("2026-11-01")`
+  按 UTC 解析会在东八区退一天；组件内部手工按本地时区构造。
+  清空用「清除日期」，对应空字符串 `""`。
+- **`Checkbox` 边框不用 `border-input`**：同一个 hairline 值放在 16px 方框上在白底几乎不可见，
+  改用 `border-muted-foreground/60`（约 3:1），仍是无彩色。勾选态 `bg-primary` + 白色对勾。
+- 控件一律带 `data-slot`，状态走 `aria-invalid` / `data-state`，不要用颜色单独表达。
+
 ### 其他基元
 
 - **卡片**：`bg-card` + `border` + `rounded-lg`，内边距 18–24px。卡片内不再套卡片，用 `border-top` 分段。
@@ -349,6 +393,42 @@ components:
 **圆角刻度**：`--radius: 0.5rem`(8px) → `sm` 4px / `md` 6px / `lg` 8px / `xl` 12px / `full` pill。
 **双尺度纪律**：控件（按钮、输入、下拉）用 `md` 6px；卡片用 `lg` 8px。**同一屏不混用两套尺度**。
 `rounded-2xl` 及以上禁止使用。
+
+### 页面骨架（`src/components/patterns/`）
+
+**新页面必须用这套骨架，不要自己写容器。** 它们替代了手写 CSS 时代的
+`.local-panel` / `.local-filterbar` / `.local-config-list` / `.local-actions` / `.local-check`。
+
+| 组件 | 替代 | 关键约束 |
+|---|---|---|
+| `PageHeader` | `<header className="page-heading">` | 结构照框架普通页（`h2` + 标题块与动作区同行），但字号字重按本项目规范：`text-display font-semibold`（24px/600）；**不带外边距**（节奏由 `<Main>` 的 gap 给） |
+| `SectionCard` | `.local-panel` / `.configuration-detail` | 24px 内边距、边框分层无阴影、**卡片内不再套卡片** |
+| `FilterBar` / `FilterField` | `.local-filterbar` | 控件间距 12px；**自身不带上下 margin**，靠外壳 `gap-4` |
+| `RecordList` / `RecordItem` | `.local-config-list` | 行间 `divide-y`，动作区 `shrink-0` |
+| `Pagination` | `Pages` / `LocalPagination` / 内联 `<nav>` | 只有一页时整体不渲染；按钮 36px |
+| `EmptyState` | `.local-empty` | **不带边框**，因为它总在 `SectionCard` 里；需要带框时外套卡片 |
+| `FormField` | `.local-editor label` | 标签到控件 8px；提示/错误放在 `<label>` 外 |
+| `CheckboxField` | `.local-check` | 复选框 + 文案 + 可选说明；说明左对齐到文案 |
+| `DetailSheet` / `DetailList` | `.local-detail-sheet` + 手写 `<dl>` | 宽度 `sm:max-w-xl`，不用任意值 |
+| `Disclosure`（`components/disclosure.tsx`） | 原生 `<details>/<summary>` | 基于 `Collapsible`；标题 `font-medium`、左对齐到正文；**不要用原生 `details`**——三角标记无法统一、无展开动画、事件模型不同 |
+| `ErrorNotice` / `Loading`（`components/feedback.tsx`） | 裸 `<p role="alert">` / 手写骨架 | 错误一律 `Alert variant="destructive"` + 图标；**不要手写红字**。`Loading` 只在整块无数据时用 |
+
+**外壳（侧栏 / 顶栏 / 主题布局）不在这张表里**：2026-11-11 起它们**整体使用 shadcn-admin 的源码**
+（`components/layout/*`、`components/{search,command-menu,theme-switch,config-drawer,profile-dropdown,skip-to-main}.tsx`、
+`context/{layout,search}-provider.tsx`），不再由本项目手写。改动规则：
+
+- 这些文件**和业务代码受同一套规范约束**，`ui:check` 不做豁免。上游写法不合规时就地改掉
+  （已改：`search.tsx` 的键帽字号）。同步上游时需要重放这些改动——目前只有这一处。
+- 需要改外观时改 `features/**` 与 `components/patterns/**`（内容区），**不要改外壳**。
+- 唯一允许的接缝是「内容」而非「样式」：中文文案、侧栏数据（`layout/data/sidebar-data.ts`）、
+  菜单项（去掉登录/登出/账单这类本机应用没有的项）、`SidebarContent` 的 `aria-label`。
+
+**纵向节奏**：外壳用框架的 `<Main className='flex flex-1 flex-col gap-4 sm:gap-6'>`（16 / 24px）。
+骨架组件**一律不带上下 margin**，间距全交给 `<Main>` 的 gap；自己加 margin 会叠成 32px 以上。
+
+**棘轮机制**：`ui:check` 的 `legacy-class` 规则维护一份白名单（`scripts/check-ui-conventions.mjs`
+的 `LEGACY_CLASS_ALLOWED`）。白名单里的文件可以暂时用 `local-*` 等遗留类名，
+**迁完一个删一行，新文件一律不许加**。
 
 ---
 
@@ -415,13 +495,17 @@ components:
 - 不要在同一屏混用控件圆角（6px）和卡片圆角（8px）以外的尺度。
 - 不要在页面里用 `!important` 覆盖 shadcn 组件。确需覆盖第三方内置工具类时，
   必须到 `scripts/check-ui-conventions.mjs` 的 `ALLOWED` 登记文件与理由，否则 `ui:check` 判 error。
-  （`workbench.css` 注释记录了上一轮设计系统用 `[data-slot]` 全量覆写导致 155KB 死规则被删除的教训。）
+  （上一轮设计系统用 `[data-slot]` 全量覆写，堆出 155KB 死规则后被整体删除；
+  记录见 `docs/design/ui-conformance-audit.md`。）
 - 不要用 `[data-slot]` 批量覆写组件外观。布局类覆盖（宽度、内边距）作用域必须限定在功能类内，
   并同样登记到 `ALLOWED`。
 - 不要引入第二套设计系统 / 图标库；图标统一 `lucide-react`。
 - 不要用 100px 胶囊做工具按钮、不要网格渐变——那是 vercel 营销面的语言，不适用于本工具。
 - **一个控件只允许一套焦点指示**：不要同时保留全局 `outline` 和组件自带的 `focus-visible:ring`，
   否则会叠成双圈、且两圈颜色不一致（2026-10-26 那次审计的根因）。
+- **不要在界面上写解释性文案**。只写操作标签、数据与状态、授权句。判据：删掉这句用户还能完成操作，
+  就删。`DialogDescription`、卡片 `description`、表单 `hint` 是高发位置。规则与违规样例见
+  `AGENTS.md` §9；付费披露与危险操作确认是仅有的两类例外。
 
 ---
 
@@ -475,10 +559,13 @@ components:
 
 ### 已知结构问题（不影响观感）
 
-- 127 处 `className="local-*"` 仍是历史命名，样式已走 token，可逐步改名。
-- `graphite-workspace` / `local-desktop` 是有效作用域（63 处 CSS 引用），不是死 class。
-- `ui:check` 有 5 条批准例外（`!important` 与 `[data-slot]` 覆写），每条都在
+- 遗留类名与全局样式表**已清零**（2026-11-11）。`ui:check` 的 `legacy-class` 规则守着，白名单为空。
+- `ui:check` 有 2 条批准例外（1 条 `!important`、1 条 `[data-slot]` 覆写），每条都在
   `scripts/check-ui-conventions.mjs` 的 `ALLOWED` 里写了理由。新增例外必须同样写理由。
+- **内容容器仍缺 1040px 上限**：`workbench-shell` 的 `main` 是 `p-4 md:p-6` 全宽，
+  §5 要求的 `max-width:1040px` 尚未落地，宽屏下正文会一路拉到窗口边缘。
+- **`--input` 与 `--border` 同值**（hairline），36px 输入框边框对比度约 1.16:1，
+  低于 WCAG 1.4.11 的 3:1。属 token 决策，需单独评估。
 - 仓库根目录 `design-qa.md` 记录的 `Spatial Lead Space`（深色星空 + 香槟金 CTA）**已不在代码中**：
   全仓已无 `spatial` / `champagne` 相关类名。该文档是 2026-10-20 的历史交付记录，**不能当作当前基线**。
 

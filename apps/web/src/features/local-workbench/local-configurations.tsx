@@ -1,27 +1,346 @@
-import {useEffect,useState,type FormEvent} from 'react';
-import {Link,useSearchParams} from '@/lib/router-compat';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {useDraftGuard,useConfirmDiscard} from '@/features/work/draft-guard';
-import {configurationTabs,configurationTab,configurationPath} from '@/features/configuration/configuration-route';
-import {keywordWords,keywordValidation} from '@/features/collection/config-draft';
-import {useLocalWorkbench} from './use-local-workbench';
-import {LocalModelActivity} from './local-diagnostics';
-import {LocalModelSettings} from './local-model-settings';
-import type {ConfigurationKind,LocalConfiguration} from './local-api';
-import '@/components/configuration-browser.css';
-import '@/features/configuration/configuration.css';
-const kinds:Record<string,ConfigurationKind>={keywords:'KEYWORDS',matching:'MATCHING',templates:'COMMENT_TEMPLATE','dm-templates':'DM_TEMPLATE'};
-function Editor({kind,item,onSave,onCancel,pending,onDirty}:{kind:ConfigurationKind;item?:LocalConfiguration;onSave:(v:Partial<LocalConfiguration>)=>Promise<unknown>;onCancel:()=>void;pending:boolean;onDirty:(v:boolean)=>void}){
- const [name,setName]=useState(item?.name??''),[text,setText]=useState(item?.body.keywords?.join('\n')??item?.body.text??''),[exclude,setExclude]=useState(item?.body.excludeWords?.join('\n')??''),[error,setError]=useState('');
- const dirty=name!==(item?.name??'')||text!==(item?.body.keywords?.join('\n')??item?.body.text??'')||exclude!==(item?.body.excludeWords?.join('\n')??'');useDraftGuard(dirty,'modal');useDraftGuard(pending,'pending');useEffect(()=>{onDirty(dirty);return()=>onDirty(false);},[dirty,onDirty]);
- const submit=async(e:FormEvent)=>{e.preventDefault();const failure=kind==='KEYWORDS'?keywordValidation(name,text):!name.trim()||!text.trim()?'请填写描述和内容。':null;if(failure){setError(failure);return;}try{await onSave({...item,kind,name,body:kind==='KEYWORDS'?{keywords:keywordWords(text),excludeWords:keywordWords(exclude)}:{text}});}catch{/* mutation error remains visible */}};
- return <form className="local-editor" onSubmit={submit}><h2>{item?'编辑配置':'新增配置'}</h2><label>描述<Input aria-label="配置描述" value={name} maxLength={100} onChange={e=>setName(e.target.value)} required/></label><label>{kind==='KEYWORDS'?'关键词内容':'配置内容'}<textarea value={text} rows={8} maxLength={kind==='MATCHING'?1500:4000} onChange={e=>setText(e.target.value)} required/></label>{kind==='KEYWORDS'&&<><label>排除词<textarea rows={3} value={exclude} onChange={e=>setExclude(e.target.value)}/></label></>}{error&&<p role="alert">{error}</p>}<div className="local-actions"><Button type="submit" pending={pending}>保存配置</Button><Button type="button" variant="outline" onClick={onCancel}>取消编辑</Button></div></form>;
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useSearchParams } from "@/lib/router-compat";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { DetailItem, DetailList } from "@/components/patterns/detail-sheet";
+import { FormField } from "@/components/patterns/form-field";
+import { PageHeader } from "@/components/patterns/page-header";
+import { SectionCard } from "@/components/patterns/section-card";
+import { keywordValidation, keywordWords } from "@/features/collection/config-draft";
+import {
+  configurationPath,
+  configurationTab,
+  configurationTabs,
+} from "@/features/configuration/configuration-route";
+import { useConfirmDiscard, useDraftGuard } from "@/features/work/draft-guard";
+import { ErrorNotice } from "@/components/feedback";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { LocalModelSettings } from "./local-model-settings";
+import type { ConfigurationKind, LocalConfiguration } from "./local-api";
+import { useLocalWorkbench } from "./use-local-workbench";
+
+const kinds: Record<string, ConfigurationKind> = {
+  keywords: "KEYWORDS",
+  matching: "MATCHING",
+  templates: "COMMENT_TEMPLATE",
+  "dm-templates": "DM_TEMPLATE",
+};
+
+function Editor({
+  kind,
+  item,
+  onSave,
+  onCancel,
+  pending,
+  onDirty,
+}: {
+  kind: ConfigurationKind;
+  item?: LocalConfiguration;
+  onSave: (value: Partial<LocalConfiguration>) => Promise<unknown>;
+  onCancel: () => void;
+  pending: boolean;
+  onDirty: (dirty: boolean) => void;
+}) {
+  const [name, setName] = useState(item?.name ?? "");
+  const [text, setText] = useState(
+    item?.body.keywords?.join("\n") ?? item?.body.text ?? "",
+  );
+  const [exclude, setExclude] = useState(
+    item?.body.excludeWords?.join("\n") ?? "",
+  );
+  const [error, setError] = useState("");
+
+  const dirty =
+    name !== (item?.name ?? "") ||
+    text !== (item?.body.keywords?.join("\n") ?? item?.body.text ?? "") ||
+    exclude !== (item?.body.excludeWords?.join("\n") ?? "");
+
+  useDraftGuard(dirty, "modal");
+  useDraftGuard(pending, "pending");
+  useEffect(() => {
+    onDirty(dirty);
+    return () => onDirty(false);
+  }, [dirty, onDirty]);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const failure =
+      kind === "KEYWORDS"
+        ? keywordValidation(name, text)
+        : !name.trim() || !text.trim()
+          ? "请填写描述和内容。"
+          : null;
+    if (failure) {
+      setError(failure);
+      return;
+    }
+    try {
+      await onSave({
+        ...item,
+        kind,
+        name,
+        body:
+          kind === "KEYWORDS"
+            ? { keywords: keywordWords(text), excludeWords: keywordWords(exclude) }
+            : { text },
+      });
+    } catch {
+      /* mutation error remains visible */
+    }
+  };
+
+  return (
+    <form className="flex flex-col gap-3" onSubmit={submit}>
+      <h2 className="text-section font-semibold">
+        {item ? "编辑配置" : "新增配置"}
+      </h2>
+      <FormField label="描述">
+        <Input
+          aria-label="配置描述"
+          value={name}
+          maxLength={100}
+          onChange={(event) => setName(event.target.value)}
+          required
+        />
+      </FormField>
+      <FormField label={kind === "KEYWORDS" ? "关键词内容" : "配置内容"}>
+        <Textarea
+          value={text}
+          rows={8}
+          maxLength={kind === "MATCHING" ? 1500 : 4000}
+          onChange={(event) => setText(event.target.value)}
+          required
+        />
+      </FormField>
+      {kind === "KEYWORDS" ? (
+        <FormField label="排除词">
+          <Textarea
+            rows={3}
+            value={exclude}
+            onChange={(event) => setExclude(event.target.value)}
+          />
+        </FormField>
+      ) : null}
+      {error ? (
+        <Alert variant="destructive">
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+      ) : null}
+      <div className="flex flex-wrap gap-3">
+        <Button type="submit" pending={pending}>
+          保存配置
+        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          取消编辑
+        </Button>
+      </div>
+    </form>
+  );
 }
-export function LocalModelKey(){const w=useLocalWorkbench(),[value,setValue]=useState('');useDraftGuard(!!value,'modal');return <section className="local-panel"><h2>模型密钥</h2><p>{w.status.data?.modelKeyConfigured?'已配置，密钥不回显。':'密钥仅保存在本机系统保护区。保存不会调用模型。'}</p>{w.error&&<p role="alert">{w.error.message}</p>}{w.notice&&<p role="status">{w.notice}</p>}<form className="local-key-form" onSubmit={async e=>{e.preventDefault();try{await w.key.mutateAsync(value);}catch{/* Mutation error remains visible. */}finally{setValue('');}}}><label>千问 API Key<Input type="password" value={value} autoComplete="off" onChange={e=>setValue(e.target.value)} required/></label><Button type="submit" disabled={!w.status.data?.credentialsAvailable} pending={w.key.isPending}>加密保存</Button></form>{!w.status.data?.credentialsAvailable&&<p>系统凭据保护未就绪，暂时不能保存密钥。</p>}</section>;}
-export function LocalConfigurations(){
- const w=useLocalWorkbench(),[params,setParams]=useSearchParams(),tab=configurationTab(params.toString()),kind=kinds[tab],items=w.configs.data?.filter(c=>c.kind===kind)??[],selected=items.find(c=>c.id===params.get('config'))??items[0],confirm=useConfirmDiscard(),[editor,setEditor]=useState<LocalConfiguration|'new'|null>(null),[dirty,setDirty]=useState(false),[archive,setArchive]=useState(false);
- useEffect(()=>{setEditor(null);setDirty(false);setArchive(false);},[tab]);
- const leave=async()=>!w.save.isPending&&(!dirty||await confirm('当前配置尚未保存，是否放弃修改？'));
- return <div className="configuration-page"><nav className="configuration-navigation" aria-label="配置分类">{configurationTabs.map(t=><Button key={t.id} asChild variant="ghost" className="configuration-category"><Link to={configurationPath(t.id)} aria-current={tab===t.id?'page':undefined}>{t.label}</Link></Button>)}</nav><section className="configuration-content" key={tab}>{tab==='model'?<><h1>模型配置</h1><LocalModelKey/><LocalModelSettings keyConfigured={!!w.status.data?.modelKeyConfigured}/><LocalModelActivity/></>:<><header className="page-heading"><h1>{configurationTabs.find(t=>t.id===tab)?.label}</h1><Button onClick={async()=>{if(await leave()){setEditor('new');setArchive(false);}}}>新增配置</Button></header>{w.error&&<p role="alert">{w.error.message}</p>}{w.notice&&<p role="status">{w.notice}</p>}<div className="configuration-browser"><aside className="configuration-items" aria-label="已有配置"><h2>已有配置 · {items.length}</h2>{items.map(c=><Button variant="ghost" className="configuration-item" key={c.id} aria-pressed={!editor&&selected?.id===c.id} onClick={async()=>{if(await leave()){setEditor(null);setArchive(false);setParams({tab,config:c.id});}}}><span>{c.name}</span><small>{c.body.keywords?.join(' / ')??c.body.text}</small></Button>)}</aside><section className="configuration-detail" aria-label="配置详情">{editor?<Editor key={editor==='new'?'new':editor.id} kind={kind} item={editor==='new'?undefined:editor} onDirty={setDirty} pending={w.save.isPending} onSave={async v=>{const result=await w.save.mutateAsync(v);setDirty(false);setEditor(null);return result;}} onCancel={()=>void leave().then(ok=>{if(ok)setEditor(null);})}/>:selected?<><header><h2>{selected.name}</h2><div className="local-actions"><Button variant="outline" onClick={()=>setEditor(selected)}>编辑配置</Button><Button variant="outline" onClick={()=>setArchive(true)}>归档配置</Button></div></header><dl><dt>描述</dt><dd>{selected.name}</dd><dt>内容</dt><dd>{selected.body.keywords?.join('\n')??selected.body.text}</dd>{kind==='KEYWORDS'&&<><dt>排除词</dt><dd>{selected.body.excludeWords?.join('、')||'未设置'}</dd></>}</dl>{archive&&<div className="local-editor"><Button pending={w.archive.isPending} onClick={()=>w.archive.mutate({id:selected.id,revision:selected.revision},{onSuccess:()=>setArchive(false)})}>确认归档</Button><Button variant="outline" onClick={()=>setArchive(false)}>保留配置</Button></div>}</>:<p>尚无此类配置，请新增。</p>}</section></div></>}</section></div>;
+
+export function LocalConfigurations() {
+  const workbench = useLocalWorkbench();
+  const [params, setParams] = useSearchParams();
+  const tab = configurationTab(params.toString());
+  const kind = kinds[tab];
+  const items = workbench.configs.data?.filter((item) => item.kind === kind) ?? [];
+  const selected =
+    items.find((item) => item.id === params.get("config")) ?? items[0];
+  const confirm = useConfirmDiscard();
+  const [editor, setEditor] = useState<LocalConfiguration | "new" | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [archive, setArchive] = useState(false);
+
+  useEffect(() => {
+    setEditor(null);
+    setDirty(false);
+    setArchive(false);
+  }, [tab]);
+
+  const leave = async () =>
+    !workbench.save.isPending &&
+    (!dirty || (await confirm("当前配置尚未保存，是否放弃修改？")));
+
+  return (
+    <div className="grid gap-7 lg:grid-cols-[180px_minmax(0,1fr)]">
+      {/* 窄屏横向滚动，宽屏改成左侧竖排：原实现在 <767px 直接 display:none，
+          分类导航会彻底消失，等于进不去别的配置类型。 */}
+      <nav
+        aria-label="配置分类"
+        className="flex gap-1 overflow-x-auto lg:sticky lg:top-5 lg:flex-col lg:self-start lg:border-e lg:pe-4"
+      >
+        {configurationTabs.map((entry) => (
+          <Button
+            key={entry.id}
+            asChild
+            variant="ghost"
+            className="h-auto min-h-10 shrink-0 justify-start px-3 py-2.5 text-start whitespace-normal"
+          >
+            <Link
+              to={configurationPath(entry.id)}
+              aria-current={tab === entry.id ? "page" : undefined}
+              className="aria-[current=page]:bg-muted aria-[current=page]:font-semibold"
+            >
+              {entry.label}
+            </Link>
+          </Button>
+        ))}
+      </nav>
+
+      <section key={tab} className="flex min-w-0 flex-col gap-4">
+        {tab === "model" ? (
+          <>
+            <PageHeader title="模型配置" />
+            <LocalModelSettings
+              keyConfigured={!!workbench.status.data?.modelKeyConfigured}
+            />
+          </>
+        ) : (
+          <>
+            <PageHeader
+              title={configurationTabs.find((entry) => entry.id === tab)?.label}
+              actions={
+                <Button
+                  onClick={async () => {
+                    if (await leave()) {
+                      setEditor("new");
+                      setArchive(false);
+                    }
+                  }}
+                >
+                  新增配置
+                </Button>
+              }
+            />
+
+            {workbench.error ? (
+              <ErrorNotice error={workbench.error} />
+            ) : null}
+            {workbench.notice ? (
+              <p role="status" className="text-body text-muted-foreground">
+                {workbench.notice}
+              </p>
+            ) : null}
+
+            <div className="grid items-start gap-5 xl:grid-cols-[minmax(200px,240px)_minmax(0,1fr)]">
+              <aside
+                aria-label="已有配置"
+                className="flex min-w-0 flex-col gap-1.5"
+              >
+                <h2 className="px-3 text-caption text-muted-foreground">
+                  已有配置 · {items.length}
+                </h2>
+                {items.map((item) => (
+                  <Button
+                    variant="ghost"
+                    key={item.id}
+                    aria-pressed={!editor && selected?.id === item.id}
+                    className="h-auto min-h-16 flex-col items-start justify-start gap-1.5 border border-transparent px-3 py-3 text-start whitespace-normal aria-pressed:border-border aria-pressed:bg-muted"
+                    onClick={async () => {
+                      if (await leave()) {
+                        setEditor(null);
+                        setArchive(false);
+                        setParams({ tab, config: item.id });
+                      }
+                    }}
+                  >
+                    <span className="text-body font-semibold break-words">
+                      {item.name}
+                    </span>
+                    <small className="line-clamp-2 text-caption leading-relaxed text-muted-foreground break-words">
+                      {item.body.keywords?.join(" / ") ?? item.body.text}
+                    </small>
+                  </Button>
+                ))}
+              </aside>
+
+              <SectionCard aria-label="配置详情" className="min-w-0">
+                {editor ? (
+                  <Editor
+                    key={editor === "new" ? "new" : editor.id}
+                    kind={kind}
+                    item={editor === "new" ? undefined : editor}
+                    onDirty={setDirty}
+                    pending={workbench.save.isPending}
+                    onSave={async (value) => {
+                      const result = await workbench.save.mutateAsync(value);
+                      setDirty(false);
+                      setEditor(null);
+                      return result;
+                    }}
+                    onCancel={() =>
+                      void leave().then((ok) => {
+                        if (ok) setEditor(null);
+                      })
+                    }
+                  />
+                ) : selected ? (
+                  <>
+                    <header className="flex flex-wrap items-start justify-between gap-3">
+                      <h2 className="text-section font-semibold break-words">
+                        {selected.name}
+                      </h2>
+                      <div className="flex flex-wrap gap-3">
+                        <Button
+                          variant="outline"
+                          onClick={() => setEditor(selected)}
+                        >
+                          编辑配置
+                        </Button>
+                        <Button variant="outline" onClick={() => setArchive(true)}>
+                          归档配置
+                        </Button>
+                      </div>
+                    </header>
+
+                    <DetailList>
+                      <DetailItem label="描述">{selected.name}</DetailItem>
+                      <DetailItem label="内容">
+                        <span className="whitespace-pre-wrap">
+                          {selected.body.keywords?.join("\n") ??
+                            selected.body.text}
+                        </span>
+                      </DetailItem>
+                      {kind === "KEYWORDS" ? (
+                        <DetailItem label="排除词">
+                          {selected.body.excludeWords?.join("、") || "未设置"}
+                        </DetailItem>
+                      ) : null}
+                    </DetailList>
+
+                    {archive ? (
+                      <div className="flex flex-wrap gap-3 border-t pt-4">
+                        <Button
+                          pending={workbench.archive.isPending}
+                          onClick={() =>
+                            workbench.archive.mutate(
+                              {
+                                id: selected.id,
+                                revision: selected.revision,
+                              },
+                              { onSuccess: () => setArchive(false) },
+                            )
+                          }
+                        >
+                          确认归档
+                        </Button>
+                        <Button variant="outline" onClick={() => setArchive(false)}>
+                          保留配置
+                        </Button>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-body text-muted-foreground">
+                    尚无此类配置，请新增。
+                  </p>
+                )}
+              </SectionCard>
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
 }

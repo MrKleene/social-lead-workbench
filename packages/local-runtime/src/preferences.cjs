@@ -21,5 +21,31 @@ class LocalPreferences{
   return this.store.transaction(()=>{if(this.get({configId}).version!==version)throw new LocalError('PREFERENCE_CHANGED');if(accountId&&!this.db.prepare("SELECT 1 FROM accounts WHERE id=? AND state<>'ARCHIVED'").get(accountId))throw new LocalError('PREFERRED_ACCOUNT_UNAVAILABLE');for(const id of policyIds)if(!this.db.prepare('SELECT 1 FROM review_policies p WHERE id=? AND NOT EXISTS(SELECT 1 FROM configurations c WHERE c.id=p.id AND c.archived=1)').get(id))throw new LocalError('REVIEW_POLICY_CHANGED');this.put('collection-preference:'+configId,{accountId,batchLimit,policyIds},version+1);this.store.audit('LOCAL_USER','COLLECTION_PREFERENCES_SAVED',configId,{version:version+1});return this.get({configId});});
  }
  put(key,value,revision){this.db.prepare('INSERT INTO settings(key,value,revision) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,revision=excluded.revision').run(key,canonical(value),revision);}
+ /**
+  * 三步各自的开关与选择（评论匹配 / 自动回复）。
+  * 采集这一步的「采集规则」就是 workspace-selection 里的 configId，不在这里重复存。
+  */
+ steps(){
+  const row=this.db.prepare("SELECT value,revision FROM settings WHERE key='automation-steps'").get(),saved=row?JSON.parse(row.value):{};
+  return {version:row?.revision??0,
+   autoReview:saved.autoReview===true,
+   policyId:validId(saved.policyId)&&this.policy(saved.policyId)?saved.policyId:null,
+   autoReply:saved.autoReply===true,
+   channel:saved.channel==='COMMENT'?'COMMENT':'DM',
+   ruleId:validId(saved.ruleId)&&this.rule(saved.ruleId,saved.channel==='COMMENT'?'COMMENT':'DM')?saved.ruleId:null};
+ }
+ saveSteps({version,autoReview,policyId,autoReply,channel,ruleId}){
+  if(!Number.isInteger(version)||version<0||typeof autoReview!=='boolean'||typeof autoReply!=='boolean'||!['DM','COMMENT'].includes(channel)||policyId!==null&&!validId(policyId)||ruleId!==null&&!validId(ruleId))throw new LocalError('INVALID_LOCAL_PREFERENCE');
+  return this.store.transaction(()=>{
+   if(this.steps().version!==version)throw new LocalError('PREFERENCE_CHANGED');
+   if(policyId&&!this.policy(policyId))throw new LocalError('REVIEW_POLICY_CHANGED');
+   if(ruleId&&!this.rule(ruleId,channel))throw new LocalError('CONTACT_RULE_CHANGED');
+   this.put('automation-steps',{autoReview,policyId,autoReply,channel,ruleId},version+1);
+   this.store.audit('LOCAL_USER','AUTOMATION_STEPS_SAVED',policyId??ruleId??'none',{version:version+1,autoReview,policyId,autoReply,channel,ruleId});
+   return this.steps();
+  });
+ }
+ policy(id){return this.db.prepare('SELECT id FROM review_policies WHERE id=? AND NOT EXISTS(SELECT 1 FROM configurations c WHERE c.id=review_policies.id AND c.archived=1)').get(id);}
+ rule(id,channel){return this.db.prepare("SELECT id FROM contact_rules WHERE id=? AND EXISTS(SELECT 1 FROM json_each(contact_rules.plans) WHERE json_extract(value,'$.channel')=?)").get(id,channel);}
 }
 module.exports={LocalPreferences};

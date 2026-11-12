@@ -1,15 +1,330 @@
-import {LocalPostComparison} from './local-post-comparison';
-import {ImageDiagnostics} from '@/features/collection/image-diagnostics';
-import {BoundedReadEvidence,BoundedReadWindows} from '@/features/collection/bounded-read-evidence';
-import {useState} from 'react';
-import {Button} from '@/components/ui/button';
-import {useLocalPosts} from './use-local-posts';
-import {LocalReviewDialog} from './local-review-dialog';
-export function LocalPosts({runId,onClose}:{runId:string;onClose:()=>void}){
- const p=useLocalPosts(runId),[reviewId,setReview]=useState<string|null>(null),[readId,setRead]=useState(''),[resume,setResume]=useState(false),[configId,setConfig]=useState(''),[accountId,setAccount]=useState(''),[policyIds,setPolicies]=useState<string[]>([]);
- const reset=()=>{p.setPlan(null);p.setConsent(false);};
- return <div className="local-editor"><h3>本轮笔记与历史恢复</h3><Button variant="outline" onClick={onClose}>收起笔记</Button>{p.error&&<p role="alert">{p.error.message}</p>}{p.notice&&<p role="status">{p.notice}</p>}<ul className="local-config-list">{p.posts.data?.map(post=><li key={post.id}><div><strong>{post.title||'无标题笔记'}</strong><small>{post.comments} 条评论 · {post.coverage==='COMPLETE'?'完整':'完整性未确认'} · {post.observedAt?new Date(post.observedAt).toLocaleString():'历史时间未知'}</small><div className="local-actions"><Button variant="outline" onClick={()=>p.selectHistory(post.id)}>查看原文与评论</Button><Button variant="outline" disabled={!post.independentReady} onClick={()=>setReview(post.id)}>独立审核历史原文</Button><Button variant="outline" disabled={!post.readAvailable} onClick={()=>{setRead(post.id);setResume(false);reset();}}>重新读取此笔记</Button><Button variant="outline" disabled={!post.readAvailable||!post.resumeReady} onClick={()=>{setRead(post.id);setResume(true);reset();}}>按已验证检查点续读</Button></div>{!post.readAvailable&&<small>来源凭据不可用，请用关键词重新查找。</small>}</div></li>)}</ul>
- {p.historyId&&p.history.data&&<div className="local-editor"><h3>{p.history.data.post.title||'历史笔记原文'}</h3><p>{p.history.data.post.body}</p><details><summary>查看保存的读取与图片诊断</summary><ImageDiagnostics value={p.history.data.post.imageDiagnostics}/><BoundedReadEvidence value={p.history.data.post.boundedRead}/><BoundedReadWindows values={p.history.data.post.boundedReadWindows}/></details><ol>{p.history.data.comments.items.map(c=><li key={c.id}><small>{c.nickname||'未命名用户'}{c.parent_id?' · 楼中回复':''} · {c.published_at?new Date(c.published_at).toLocaleString():'评论发布时间未记录'}</small><p>{c.body}</p><details><summary>查看头像诊断</summary><ImageDiagnostics value={c.image_diagnostics}/></details></li>)}</ol>{p.history.data.comments.total>30&&<div className="local-actions"><Button variant="outline" disabled={p.historyPage===1} onClick={()=>p.setHistoryPage(p.historyPage-1)}>上一页评论</Button><Button variant="outline" disabled={p.historyPage*30>=p.history.data.comments.total} onClick={()=>p.setHistoryPage(p.historyPage+1)}>下一页评论</Button></div>}<LocalPostComparison key={p.historyId} postId={p.historyId} versions={p.history.data.versions}/><h4>同一笔记的历史快照</h4>{p.history.data.versions.map(v=><Button key={v.id} variant="outline" onClick={()=>p.selectHistory(v.id)}>{new Date(v.created_at).toLocaleString()} · {v.reason==='LEGACY_HISTORY_READ_ONLY'?'旧档案':v.coverage==='COMPLETE'?'完整':'部分或未知'}</Button>)}<Button variant="outline" onClick={()=>p.selectHistory(null)}>收起原文</Button></div>}
- {reviewId&&<LocalReviewDialog key={reviewId} independent runId={runId} postId={reviewId} onClose={()=>setReview(null)}/>}
- {readId&&<div className="local-editor"><h3>{resume?'新轮次继续验证历史检查点':'单笔记重新读取'}</h3><p>{resume?'仅复制摘要与原文一致的历史记录，交由平台再次核对锚点；锚点缺失或身份变化时不会宣称完整。':'从当前平台重新读取并保留原历史。'}</p><label>本次配置<select aria-label="单笔记配置" value={configId} onChange={e=>{setConfig(e.target.value);reset();}}><option value="">选择配置</option>{p.configs.data?.filter(c=>c.kind==='KEYWORDS').map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>读取账号<select aria-label="单笔记读取账号" value={accountId} onChange={e=>{setAccount(e.target.value);reset();}}><option value="">选择已登录账号</option>{p.accounts.data?.accounts.filter(a=>a.state==='VERIFIED'&&a.hasSession).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>{p.workflow.data?.policies.filter(rule=>rule.enabled).map(rule=><label className="local-check" key={rule.id}><input type="checkbox" checked={policyIds.includes(rule.id)} onChange={e=>{setPolicies(old=>e.target.checked?[...old,rule.id]:old.filter(id=>id!==rule.id));reset();}}/>{rule.name}</label>)}<Button variant="outline" disabled={!configId||!accountId} pending={p.preview.isPending} onClick={()=>p.preview.mutate({savedPostId:readId,configId,accountId,policyIds,resume})}>预览单笔记读取</Button>{p.plan&&<><p>{p.plan.title} · {p.plan.accountName} · {p.plan.reviewTargets} 个匹配目标</p><label className="local-check"><input type="checkbox" checked={p.consent} onChange={e=>p.setConsent(e.target.checked)}/>{resume?'授权在新轮次续读此检查点，重新核对历史锚点，保留原轮次。':'授权读取此笔记一次，保留原历史。'}不会调用模型或自动联系；不保证当前平台仍能提供完整内容。</label><Button disabled={!p.consent} pending={p.read.isPending} onClick={()=>p.read.mutate()}>授权单笔记读取</Button></>}</div>}</div>;
+import { useState } from "react";
+import { Disclosure } from "@/components/disclosure";
+import { Button } from "@/components/ui/button";
+import {
+  SELECT_EMPTY,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CheckboxField } from "@/components/patterns/checkbox-field";
+import { EmptyState } from "@/components/patterns/empty-state";
+import { FormField } from "@/components/patterns/form-field";
+import { Pagination } from "@/components/patterns/pagination";
+import { RecordItem, RecordList } from "@/components/patterns/record-list";
+import { BoundedReadEvidence, BoundedReadWindows } from "@/features/collection/bounded-read-evidence";
+import { ImageDiagnostics } from "@/features/collection/image-diagnostics";
+import { ErrorNotice } from "@/components/feedback";
+import { LocalPostComparison } from "./local-post-comparison";
+import { LocalReviewDialog } from "./local-review-dialog";
+import { useLocalPosts } from "./use-local-posts";
+
+export function LocalPosts({
+  runId,
+  onClose,
+}: {
+  runId: string;
+  onClose: () => void;
+}) {
+  const posts = useLocalPosts(runId);
+  const [reviewId, setReview] = useState<string | null>(null);
+  const [readId, setRead] = useState("");
+  const [resume, setResume] = useState(false);
+  const [configId, setConfig] = useState("");
+  const [accountId, setAccount] = useState("");
+  const [policyIds, setPolicies] = useState<string[]>([]);
+
+  const reset = () => {
+    posts.setPlan(null);
+    posts.setConsent(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-3 border-t pt-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h3 className="text-section font-semibold">本轮笔记与历史恢复</h3>
+        <Button variant="outline" onClick={onClose}>
+          收起笔记
+        </Button>
+      </div>
+
+      {posts.error ? (
+        <ErrorNotice error={posts.error} />
+      ) : null}
+      {posts.notice ? (
+        <p role="status" className="text-body text-muted-foreground">
+          {posts.notice}
+        </p>
+      ) : null}
+
+      {posts.posts.data?.length ? (
+        <RecordList>
+          {posts.posts.data.map((post) => (
+            <RecordItem
+              key={post.id}
+              title={post.title || "无标题笔记"}
+              meta={`${post.comments} 条评论 · ${post.coverage === "COMPLETE" ? "完整" : "完整性未确认"} · ${post.observedAt ? new Date(post.observedAt).toLocaleString() : "历史时间未知"}`}
+              action={
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => posts.selectHistory(post.id)}
+                  >
+                    查看原文与评论
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!post.independentReady}
+                    onClick={() => setReview(post.id)}
+                  >
+                    独立审核历史原文
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!post.readAvailable}
+                    onClick={() => {
+                      setRead(post.id);
+                      setResume(false);
+                      reset();
+                    }}
+                  >
+                    重新读取此笔记
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!post.readAvailable || !post.resumeReady}
+                    onClick={() => {
+                      setRead(post.id);
+                      setResume(true);
+                      reset();
+                    }}
+                  >
+                    按已验证检查点续读
+                  </Button>
+                </>
+              }
+            >
+              {!post.readAvailable ? (
+                <p className="text-caption">来源凭据不可用，请用关键词重新查找。</p>
+              ) : null}
+            </RecordItem>
+          ))}
+        </RecordList>
+      ) : (
+        <EmptyState title="本轮还没有保存的笔记。" />
+      )}
+
+      {posts.historyId && posts.history.data ? (
+        <div className="flex flex-col gap-3 border-t pt-4">
+          <h3 className="text-section font-semibold break-words">
+            {posts.history.data.post.title || "历史笔记原文"}
+          </h3>
+          <p className="text-body leading-relaxed whitespace-pre-wrap break-words">
+            {posts.history.data.post.body}
+          </p>
+
+          <Disclosure title="查看保存的读取与图片诊断">
+            <div className="flex flex-col gap-3">
+              <ImageDiagnostics value={posts.history.data.post.imageDiagnostics} />
+              <BoundedReadEvidence value={posts.history.data.post.boundedRead} />
+              <BoundedReadWindows
+                values={posts.history.data.post.boundedReadWindows}
+              />
+            </div>
+          </Disclosure>
+
+          <ol className="divide-y">
+            {posts.history.data.comments.items.map((comment) => (
+              <li key={comment.id} className="flex flex-col gap-1 py-4">
+                <p className="text-caption text-muted-foreground break-words">
+                  {comment.nickname || "未命名用户"}
+                  {comment.parent_id ? " · 楼中回复" : ""} ·{" "}
+                  {comment.published_at
+                    ? new Date(comment.published_at).toLocaleString()
+                    : "评论发布时间未记录"}
+                </p>
+                <p className="text-body leading-relaxed break-words">
+                  {comment.body}
+                </p>
+                <Disclosure title="查看头像诊断">
+                  <ImageDiagnostics value={comment.image_diagnostics} />
+                </Disclosure>
+              </li>
+            ))}
+          </ol>
+
+          <Pagination
+            page={posts.historyPage}
+            total={posts.history.data.comments.total}
+            onPageChange={posts.setHistoryPage}
+            label="历史评论分页"
+          />
+
+          <LocalPostComparison
+            key={posts.historyId}
+            postId={posts.historyId}
+            versions={posts.history.data.versions}
+          />
+
+          <h4 className="text-body font-semibold">同一笔记的历史快照</h4>
+          <div className="flex flex-wrap gap-3">
+            {posts.history.data.versions.map((version) => (
+              <Button
+                key={version.id}
+                variant="outline"
+                onClick={() => posts.selectHistory(version.id)}
+              >
+                {new Date(version.created_at).toLocaleString()} ·{" "}
+                {version.reason === "LEGACY_HISTORY_READ_ONLY"
+                  ? "旧档案"
+                  : version.coverage === "COMPLETE"
+                    ? "完整"
+                    : "部分或未知"}
+              </Button>
+            ))}
+            <Button variant="outline" onClick={() => posts.selectHistory(null)}>
+              收起原文
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {reviewId ? (
+        <LocalReviewDialog
+          key={reviewId}
+          independent
+          runId={runId}
+          postId={reviewId}
+          onClose={() => setReview(null)}
+        />
+      ) : null}
+
+      {readId ? (
+        <div className="flex flex-col gap-3 border-t pt-4">
+          <h3 className="text-section font-semibold">
+            {resume ? "新轮次继续验证历史检查点" : "单笔记重新读取"}
+          </h3>
+          <p className="text-body leading-relaxed text-muted-foreground break-words">
+            {resume
+              ? "仅复制摘要与原文一致的历史记录，交由平台再次核对锚点；锚点缺失或身份变化时不会宣称完整。"
+              : "从当前平台重新读取并保留原历史。"}
+          </p>
+
+          <FormField label="本次配置">
+            <Select
+              value={configId}
+              onValueChange={(value) => {
+              setConfig(value);
+              reset();
+              }}
+            >
+              <SelectTrigger aria-label="单笔记配置">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SELECT_EMPTY}>选择配置</SelectItem>
+                {posts.configs.data
+                ?.filter((config) => config.kind === "KEYWORDS")
+                .map((config) => (
+                <SelectItem key={config.id} value={config.id}>
+                {config.name}
+                </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+
+          <FormField label="读取账号">
+            <Select
+              value={accountId}
+              onValueChange={(value) => {
+              setAccount(value);
+              reset();
+              }}
+            >
+              <SelectTrigger aria-label="单笔记读取账号">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SELECT_EMPTY}>选择已登录账号</SelectItem>
+                {posts.accounts.data?.accounts
+                .filter((item) => item.state === "VERIFIED" && item.hasSession)
+                .map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                {item.name}
+                </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+
+          {posts.workflow.data?.policies
+            .filter((rule) => rule.enabled)
+            .map((rule) => (
+              <CheckboxField
+                key={rule.id}
+                checked={policyIds.includes(rule.id)}
+                onCheckedChange={(checked) => {
+                  setPolicies((previous) =>
+                    checked
+                      ? [...previous, rule.id]
+                      : previous.filter((id) => id !== rule.id),
+                  );
+                  reset();
+                }}
+              >
+                {rule.name}
+              </CheckboxField>
+            ))}
+
+          <div className="flex flex-wrap gap-3">
+            <Button
+              variant="outline"
+              disabled={!configId || !accountId}
+              pending={posts.preview.isPending}
+              onClick={() =>
+                posts.preview.mutate({
+                  savedPostId: readId,
+                  configId,
+                  accountId,
+                  policyIds,
+                  resume,
+                })
+              }
+            >
+              预览单笔记读取
+            </Button>
+          </div>
+
+          {posts.plan ? (
+            <div className="flex flex-col gap-3 border-t pt-4">
+              <p className="text-body leading-relaxed break-words">
+                {posts.plan.title} · {posts.plan.accountName} ·{" "}
+                {posts.plan.reviewTargets} 个匹配目标
+              </p>
+              <CheckboxField
+                checked={posts.consent}
+                onCheckedChange={posts.setConsent}
+              >
+                {resume
+                  ? "授权在新轮次续读此检查点，重新核对历史锚点，保留原轮次。"
+                  : "授权读取此笔记一次，保留原历史。"}
+              </CheckboxField>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  disabled={!posts.consent}
+                  pending={posts.read.isPending}
+                  onClick={() => posts.read.mutate()}
+                >
+                  授权单笔记读取
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }

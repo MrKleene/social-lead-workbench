@@ -1,18 +1,126 @@
-import {useState,type FormEvent} from 'react';
-import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
-import {Button} from '@/components/ui/button';
-import {localApi} from './local-api';
-export function LocalModelSettings({keyConfigured}:{keyConfigured:boolean}){
- const client=useQueryClient(),info=useQuery({queryKey:['local','workflow'],queryFn:()=>localApi('workflowOverview')}),[model,setModel]=useState(''),[limit,setLimit]=useState(''),[consent,setConsent]=useState(false),[policyConsent,setPolicyConsent]=useState(false),[autoConsent,setAutoConsent]=useState(false);
- const refresh=()=>client.invalidateQueries({queryKey:['local']});
- const save=useMutation({mutationFn:(input:unknown)=>localApi('saveModelProfile',input),onSuccess:()=>{setConsent(false);void refresh();}}),toggle=useMutation({mutationFn:(input:unknown)=>localApi('setReviewPolicy',input),onSuccess:refresh});
- const automatic=useMutation({mutationFn:(input:unknown)=>localApi('setAutomaticReviewPolicy',input),onSuccess:()=>{setAutoConsent(false);void refresh();}});
- const data=info.data,selected=data?.choices.find(c=>c.id===(model||data.model?.model||data.choices[0]?.id));
- const submit=(e:FormEvent)=>{e.preventDefault();if(!selected||!consent)return;save.mutate({version:data?.model?.version??0,model:selected.id,dailyLimit:Number(limit||data?.model?.daily_limit||1),priceAck:selected.id+':'+selected.priceVersion,consent:'beijing-original-comments-v2'});};
- const error=info.error||save.error||toggle.error||automatic.error;
- return <section className="local-panel"><h2>模型审核授权</h2>{error&&<p role="alert" className="local-error">{error.message}</p>}{data&&<>
- {data.modelPaused&&<p role="alert">存在结果未知的模型请求，须核对后才能继续。修改配置不会解除暂停。</p>}
- <form className="local-editor" onSubmit={submit}><label>审核模型<select value={selected?.id??''} onChange={e=>{setModel(e.target.value);setConsent(false);}}>{data.choices.map(c=><option key={c.id} value={c.id}>{c.id}</option>)}</select></label><label>每日最多请求次数<input type="number" min={1} max={100} value={limit||String(data.model?.daily_limit??1)} onChange={e=>{setLimit(e.target.value);setConsent(false);}} required/></label><p>项目价目版本：{selected?.priceVersion}。{selected?.priceDescription}。费用以供应商账单为准。</p><label className="local-check"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>同意将评论原文发送至北京千问。</label><Button type="submit" pending={save.isPending} disabled={!consent||!keyConfigured||!data.capabilities.review}>保存审核授权</Button>{!keyConfigured&&<p>请先加密保存模型密钥。</p>}{!data.capabilities.review&&<p>当前测试环境不启用付费模型请求。</p>}</form>
- <h3>可选匹配目标</h3><label className="local-check"><input type="checkbox" checked={policyConsent} onChange={e=>setPolicyConsent(e.target.checked)}/>允许选定目标用于原文审核。</label><ul className="local-config-list">{data.policies.map(p=><li key={p.id}><div><strong>{p.name}</strong><span>{p.target}</span><small>{p.enabled?'已允许用于审核':'尚未授权'}</small></div><Button variant="outline" pending={toggle.isPending} disabled={!p.enabled&&(!policyConsent||!data.model?.authorized)} onClick={()=>toggle.mutate({id:p.id,version:p.version,enabled:!p.enabled,consent:'comment-review-original-first-use-v2',modelVersion:data.model?.version})}>{p.enabled?'停用':'允许审核'}</Button></li>)}</ul><h3>整轮自动审核</h3><label className="local-check"><input type="checkbox" checked={autoConsent} onChange={e=>setAutoConsent(e.target.checked)}/>授权后续采集自动审核（产生付费请求）。</label><ul className="local-config-list">{data.policies.map(p=><li key={p.id}><div><strong>{p.name}</strong><small>{p.autoEnabled?'自动审核已开启':'自动审核已关闭'}</small></div><Button variant="outline" pending={automatic.isPending} disabled={!p.autoEnabled&&(!autoConsent||!p.enabled||!data.capabilities.review||!data.model?.authorized)} onClick={()=>automatic.mutate({id:p.id,version:p.version,enabled:!p.autoEnabled,consent:'comment-review-continuous-single-post-v3',modelVersion:data.model?.version,priceAck:data.model?.price_ack})}>{p.autoEnabled?'关闭自动审核':'开启自动审核'}</Button></li>)}</ul>
- </>}</section>;
+import { useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { FormField } from "@/components/patterns/form-field";
+import { SectionCard } from "@/components/patterns/section-card";
+import { ErrorNotice } from "@/components/feedback";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useDraftGuard } from "@/features/work/draft-guard";
+import { localApi } from "./local-api";
+import { useLocalWorkbench } from "./use-local-workbench";
+
+/**
+ * 模型配置：只有两件事——选模型、存 API Key。
+ * 一次保存先写密钥再写授权，避免「密钥没存但授权成功了」这种半状态。
+ */
+export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }) {
+  const client = useQueryClient();
+  const workbench = useLocalWorkbench();
+  const info = useQuery({
+    queryKey: ["local", "workflow"],
+    queryFn: () => localApi("workflowOverview"),
+  });
+  const [model, setModel] = useState("");
+  const [key, setKey] = useState("");
+
+  useDraftGuard(!!key, "modal");
+
+  const save = useMutation({
+    mutationFn: (input: unknown) => localApi("saveModelProfile", input),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["local"] }),
+  });
+
+  const data = info.data;
+  const selected = data?.choices.find(
+    (choice) => choice.id === (model || data.model?.model || data.choices[0]?.id),
+  );
+  const error = info.error ?? save.error ?? workbench.key.error;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    try {
+      if (key) await workbench.key.mutateAsync(key);
+      await save.mutateAsync({
+        version: data?.model?.version ?? 0,
+        model: selected.id,
+        dailyLimit: null,
+        priceAck: selected.id + ":" + selected.priceVersion,
+        consent: "beijing-original-comments-v2",
+      });
+      setKey("");
+    } catch {
+      // 错误由 ErrorNotice 显示；已输入的密钥保留，方便直接重试。
+    }
+  };
+
+  return (
+    <SectionCard>
+      {error ? <ErrorNotice error={error} /> : null}
+
+      {data?.modelPaused ? (
+        <Alert variant="warning">
+          <AlertDescription>
+            存在结果未知的模型请求，须核对后才能继续。
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <form className="flex flex-col gap-3" onSubmit={submit}>
+        <FormField label="审核模型">
+          <Select value={selected?.id ?? ""} onValueChange={setModel}>
+            <SelectTrigger aria-label="审核模型">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {data?.choices.map((choice) => (
+                <SelectItem key={choice.id} value={choice.id}>
+                  {choice.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormField>
+
+        <FormField label="千问 API Key">
+          <Input
+            type="password"
+            value={key}
+            autoComplete="off"
+            placeholder={keyConfigured ? "已保存" : undefined}
+            onChange={(event) => setKey(event.target.value)}
+          />
+        </FormField>
+
+        <div className="flex flex-wrap gap-3">
+          <Button
+            type="submit"
+            pending={save.isPending || workbench.key.isPending}
+            disabled={
+              (!keyConfigured && !key) ||
+              !data?.capabilities.review ||
+              !workbench.status.data?.credentialsAvailable
+            }
+          >
+            保存
+          </Button>
+        </div>
+
+        {!workbench.status.data?.credentialsAvailable ? (
+          <p className="text-caption text-muted-foreground">系统凭据保护未就绪</p>
+        ) : null}
+        {data && !data.capabilities.review ? (
+          <p className="text-caption text-muted-foreground">模型请求未启用</p>
+        ) : null}
+      </form>
+    </SectionCard>
+  );
 }

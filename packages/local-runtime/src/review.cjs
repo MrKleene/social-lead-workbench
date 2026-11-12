@@ -44,7 +44,7 @@ class LocalReview {
   budget(){
     if(this.db.prepare("SELECT 1 FROM safety_state WHERE id='model' AND reason IS NOT NULL").get())throw new LocalError('MODEL_RECONCILIATION_REQUIRED');
     const now=this.store.clock(),model=this.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get(),day=dayAt(now),used=this.db.prepare('SELECT occupied FROM model_days WHERE day=?').get(day)?.occupied||0;
-    if(!model?.authorized||used>=model.daily_limit)throw new LocalError('MODEL_DAILY_LIMIT');
+    if(!model?.authorized||(model.daily_limit!==null&&used>=model.daily_limit))throw new LocalError('MODEL_DAILY_LIMIT');
     const last=this.db.prepare("SELECT * FROM review_batches WHERE state NOT IN('CANCELLED','RESERVED') ORDER BY created_at DESC,id DESC LIMIT 1").get();
     if(last&&policy.modelCallWaitMs({status:last.state==='COMPLETED'?'COMPLETED':last.state,createdAt:new Date(last.created_at),finishedAt:last.finished_at===null?null:new Date(last.finished_at),errorCode:last.error_code},now)>0)throw new LocalError('MODEL_CALL_COOLDOWN');
     if(this.db.prepare("SELECT 1 FROM review_batches WHERE state IN('RESERVED','DISPATCHED')").get())throw new LocalError('MODEL_CALL_IN_PROGRESS');
@@ -70,7 +70,7 @@ class LocalReview {
     const grant=this.db.prepare("SELECT * FROM authorizations WHERE id=? AND state='ACTIVE' AND expires_at>?").get(job.authorization_id,this.store.clock());
     if(job.kind!=='REVIEW'||job.dispatch_started||job.cancel_requested||!batch||!grant||grant.scope_hash!==job.payload_hash)throw new LocalError('MODEL_AUTHORIZATION_ENDED');
     const plan=this.currentScope(job),usage=this.db.prepare('SELECT occupied FROM model_days WHERE day=?').get(batch.day),profile=this.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get();
-    if(dayAt(this.store.clock())!==batch.day||!usage||usage.occupied<1||usage.occupied>profile.daily_limit)throw new LocalError('MODEL_DAILY_LIMIT_CHANGED');
+    if(dayAt(this.store.clock())!==batch.day||!usage||usage.occupied<1||(profile.daily_limit!==null&&usage.occupied>profile.daily_limit))throw new LocalError('MODEL_DAILY_LIMIT_CHANGED');
     if(this.db.prepare("SELECT 1 FROM safety_state WHERE id='model' AND reason IS NOT NULL").get())throw new LocalError('MODEL_RECONCILIATION_REQUIRED');
     this.db.prepare("UPDATE review_batches SET state='DISPATCHED' WHERE id=?").run(batchId);
     this.db.prepare('UPDATE jobs SET dispatch_started=1,updated_at=? WHERE id=?').run(this.store.clock(),job.id);

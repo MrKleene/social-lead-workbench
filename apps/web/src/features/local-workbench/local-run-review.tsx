@@ -1,5 +1,93 @@
-import {useState} from 'react';
-import {Button} from '@/components/ui/button';
-import {useLocalRecords,useLocalAction} from './use-local-records';
-import type {RunReviewPreview} from './local-api';
-export function LocalRunReview({runId}:{runId:string}){const [plan,setPlan]=useState<(RunReviewPreview&{requestKey:string})|null>(null),[consent,setConsent]=useState(false),preview=useLocalAction('previewRunReview'),authorize=useLocalAction('authorizeRunReview'),workflow=useLocalRecords('workflowOverview');return <section className="local-panel"><h2>本轮剩余评论匹配</h2>{(preview.error||authorize.error)&&<p role="alert">{(preview.error||authorize.error)?.message}</p>}<Button variant="outline" pending={preview.isPending} onClick={()=>preview.mutate({runId},{onSuccess:p=>{setPlan({...p,requestKey:crypto.randomUUID()});setConsent(false);}})}>预览本轮剩余审核</Button>{plan&&<><p>{plan.requests} 个请求 · {plan.comments} 条评论输入 · 跳过 {plan.skipped} 个已有或空批次 · 估算 ¥{plan.estimatedMicros===null?'未知':(plan.estimatedMicros/1000000).toFixed(4)}，并非硬费用上限。</p><p>{plan.scope.automaticRules?`本轮已有 ${plan.scope.automaticRules} 条冻结规则，全部审核完成后可自动发送。`:'本轮没有冻结自动联系规则。'}</p><label className="local-check"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>同意发送以上评论原文至北京千问（付费）。</label><Button disabled={!consent||!plan.requests||!workflow.data?.capabilities.review} pending={authorize.isPending} onClick={()=>authorize.mutate({...plan,consent:'review-exact-new-run-batches-v1'},{onSuccess:()=>setPlan(null)})}>授权本轮剩余审核</Button></>}{authorize.isSuccess&&<p role="status">已加入队列。</p>}</section>;}
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { CheckboxField } from "@/components/patterns/checkbox-field";
+import { SectionCard } from "@/components/patterns/section-card";
+import { ErrorNotice } from "@/components/feedback";
+import { useLocalAction, useLocalRecords } from "./use-local-records";
+import type { RunReviewPreview } from "./local-api";
+
+export function LocalRunReview({ runId }: { runId: string }) {
+  const [plan, setPlan] = useState<
+    (RunReviewPreview & { requestKey: string }) | null
+  >(null);
+  const [consent, setConsent] = useState(false);
+  const preview = useLocalAction("previewRunReview");
+  const authorize = useLocalAction("authorizeRunReview");
+  const workflow = useLocalRecords("workflowOverview");
+
+  const failure = preview.error ?? authorize.error;
+
+  return (
+    <SectionCard
+      title="本轮剩余评论匹配"
+      footer={
+        <>
+          <Button
+            variant="outline"
+            pending={preview.isPending}
+            onClick={() =>
+              preview.mutate(
+                { runId },
+                {
+                  onSuccess: (value) => {
+                    setPlan({ ...value, requestKey: crypto.randomUUID() });
+                    setConsent(false);
+                  },
+                },
+              )
+            }
+          >
+            预览本轮剩余审核
+          </Button>
+          {plan ? (
+            <Button
+              disabled={
+                !consent || !plan.requests || !workflow.data?.capabilities.review
+              }
+              pending={authorize.isPending}
+              onClick={() =>
+                authorize.mutate(
+                  { ...plan, consent: "review-exact-new-run-batches-v1" },
+                  { onSuccess: () => setPlan(null) },
+                )
+              }
+            >
+              授权本轮剩余审核
+            </Button>
+          ) : null}
+        </>
+      }
+    >
+      {failure ? (
+        <ErrorNotice error={failure} />
+      ) : null}
+
+      {plan ? (
+        <>
+          <p className="text-body leading-relaxed text-muted-foreground break-words">
+            {plan.requests} 个请求 · {plan.comments} 条评论输入 · 跳过{" "}
+            {plan.skipped} 个已有或空批次 · 估算 ¥
+            {plan.estimatedMicros === null
+              ? "未知"
+              : (plan.estimatedMicros / 1000000).toFixed(4)}
+            ，并非硬费用上限。
+          </p>
+          <p className="text-body leading-relaxed text-muted-foreground break-words">
+            {plan.scope.automaticRules
+              ? `本轮已有 ${plan.scope.automaticRules} 条冻结规则，全部审核完成后可自动发送。`
+              : "本轮没有冻结自动联系规则。"}
+          </p>
+          <CheckboxField checked={consent} onCheckedChange={setConsent}>
+            同意发送以上评论原文至北京千问（付费）。
+          </CheckboxField>
+        </>
+      ) : null}
+
+      {authorize.isSuccess ? (
+        <p role="status" className="text-body text-muted-foreground">
+          已加入队列。
+        </p>
+      ) : null}
+    </SectionCard>
+  );
+}

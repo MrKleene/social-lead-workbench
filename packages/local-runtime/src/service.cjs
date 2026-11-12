@@ -27,6 +27,8 @@ class LocalService {
  saveCollectionPreferences(input){return this.preferences().save(input);}
  workspaceSelection(){return this.preferences().selection();}
  selectWorkspaceConfiguration(input){return this.preferences().select(input);}
+ automationSteps(){return this.preferences().steps();}
+ saveAutomationSteps(input){return this.preferences().saveSteps(input);}
  reporting(){return new(require('./reporting.cjs').LocalReporting)(this.store);}
  accountDiagnostics(input){return this.reporting().account(input);}
  unreviewedComments(input){return this.reporting().unreviewed(input);}

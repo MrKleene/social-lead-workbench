@@ -1,9 +1,278 @@
-import {useState,type FormEvent} from 'react';
-import {Button} from '@/components/ui/button';import {Input} from '@/components/ui/input';
-import {useDraftGuard} from '@/features/work/draft-guard';
-import {useLocalPlatform} from './use-local-platform';
-export function LocalLoginPanel({credentialsAvailable}:{credentialsAvailable:boolean}){const p=useLocalPlatform(),[accountId,setAccountId]=useState(''),[name,setName]=useState(''),[limit,setLimit]=useState('10'),[loginConsent,setLoginConsent]=useState(false);const selected=p.accounts.data?.accounts.find(a=>a.id===accountId),ready=p.accounts.data?.runtime.ready&&credentialsAvailable;useDraftGuard(!!p.login||!!p.accounts.data?.login,'pending');const login=(e:FormEvent)=>{e.preventDefault();if(!loginConsent)return;p.begin.mutate({...(selected?{accountId:selected.id,revision:selected.revision}:{}),name:name||selected?.name,dailyLimit:Number(limit),consent:'login-this-account-on-this-device-v1'});};return <section>{p.error&&<p role="alert">{p.error.message}</p>}{p.notice&&<p role="status">{p.notice}</p>} <form className="local-editor" onSubmit={login}><h3>小红书账号登录</h3><label>账号<select value={accountId} onChange={e=>{setAccountId(e.target.value);const a=p.accounts.data?.accounts.find(a=>a.id===e.target.value);setName(a?.name??'');setLimit(String(a?.daily_limit??10));setLoginConsent(false);}}><option value="">添加新账号</option>{p.accounts.data?.accounts.map(a=><option key={a.id} value={a.id}>{a.name} · {a.state==='VERIFIED'?'已验证':a.state==='RESTRICTED'?'有限制':'待登录'}</option>)}</select></label><label>本地账号名称<Input value={name||selected?.name||''} onChange={e=>setName(e.target.value)} maxLength={80} required/></label><label>每日发送上限<input type="number" min={0} max={1000} value={limit} onChange={e=>setLimit(e.target.value)} required/></label><small>0 表示禁止发送</small><label className="local-check"><input type="checkbox" checked={loginConsent} onChange={e=>setLoginConsent(e.target.checked)}/>授权在本机登录此账号。</label><Button type="submit" disabled={!ready||!loginConsent||!!p.login||!!p.accounts.data?.login} pending={p.begin.isPending}>获取登录二维码</Button></form>
- {p.login&&<div className="local-editor"><img className="local-login-qr" src={p.login.image} alt="本次小红书登录二维码"/><p>有效期至 {new Date(p.login.expiresAt).toLocaleTimeString()}。请核对扫码账号。</p><Button variant="outline" pending={p.cancel.isPending} onClick={()=>p.cancel.mutate()}>取消登录</Button></div>}{!p.login&&p.accounts.data?.login&&<Button variant="outline" onClick={()=>p.cancel.mutate()}>取消尚未完成的登录</Button>}
-</section>;}
-export {LocalCollectionPanel} from './local-collection';
-export function LocalReceivePanel({credentialsAvailable}:{credentialsAvailable:boolean}){const p=useLocalPlatform(),[receiverId,setReceiverId]=useState(''),[inboxConsent,setInboxConsent]=useState(false),ready=p.accounts.data?.runtime.ready&&credentialsAvailable;return <section>{p.error&&<p role="alert">{p.error.message}</p>}{p.notice&&<p role="status">{p.notice}</p>}<div className="local-editor"><h3>限时接收消息</h3><label>收件账号<select value={receiverId} onChange={e=>{setReceiverId(e.target.value);p.setInboxPlan(null);setInboxConsent(false);}}><option value="">选择已登录账号</option>{p.accounts.data?.accounts.filter(a=>a.state==='VERIFIED'&&a.hasSession).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><Button variant="outline" disabled={!ready||!receiverId} pending={p.previewInbox.isPending} onClick={()=>p.previewInbox.mutate(receiverId)}>预览收件授权</Button>{p.inboxPlan&&<><p>{p.inboxPlan.accountName} · 最长 {p.inboxPlan.minutes} 分钟。历史记录可能不完整，平台消息可能被标记为已读。</p><label className="local-check"><input type="checkbox" checked={inboxConsent} onChange={e=>setInboxConsent(e.target.checked)}/>允许读取消息（含已读状态）。</label><Button disabled={!inboxConsent} pending={p.receive.isPending} onClick={()=>p.receive.mutate()}>授权并开始收件</Button></>}</div>{!!p.receivers.data?.length&&<div className="local-editor"><h3>收件运行状态</h3><ul>{p.receivers.data.map(r=><li key={r.account_id}>{r.name} · {r.job_state==='QUEUED'&&r.reason==='YIELDED_FOR_SEND'?'等待发送结束后继续':r.state} · 截止 {new Date(r.expires_at).toLocaleTimeString()}</li>)}</ul></div>}</section>;}
+import { useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  SELECT_EMPTY,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CheckboxField } from "@/components/patterns/checkbox-field";
+import { FormField } from "@/components/patterns/form-field";
+import { useDraftGuard } from "@/features/work/draft-guard";
+import { ErrorNotice } from "@/components/feedback";
+import { useLocalPlatform } from "./use-local-platform";
+
+export function LocalLoginPanel({
+  credentialsAvailable,
+}: {
+  credentialsAvailable: boolean;
+}) {
+  const platform = useLocalPlatform();
+  const [accountId, setAccountId] = useState("");
+  const [name, setName] = useState("");
+  const [limit, setLimit] = useState("10");
+  const [loginConsent, setLoginConsent] = useState(false);
+
+  const selected = platform.accounts.data?.accounts.find(
+    (item) => item.id === accountId,
+  );
+  const ready = platform.accounts.data?.runtime.ready && credentialsAvailable;
+
+  useDraftGuard(
+    !!platform.login || !!platform.accounts.data?.login,
+    "pending",
+  );
+
+  const login = (event: FormEvent) => {
+    event.preventDefault();
+    if (!loginConsent) return;
+    platform.begin.mutate({
+      ...(selected ? { accountId: selected.id, revision: selected.revision } : {}),
+      name: name || selected?.name,
+      dailyLimit: Number(limit),
+      consent: "login-this-account-on-this-device-v1",
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {platform.error ? (
+        <ErrorNotice error={platform.error} />
+      ) : null}
+      {platform.notice ? (
+        <p role="status" className="text-body text-muted-foreground">
+          {platform.notice}
+        </p>
+      ) : null}
+
+      <form className="flex flex-col gap-3" onSubmit={login}>
+        <h3 className="text-section font-semibold">小红书账号登录</h3>
+
+        <FormField label="账号">
+          <Select
+            value={accountId}
+            onValueChange={(value) => {
+            setAccountId(value);
+            const next = platform.accounts.data?.accounts.find(
+            (item) => item.id === value,
+            );
+            setName(next?.name ?? "");
+            setLimit(String(next?.daily_limit ?? 10));
+            setLoginConsent(false);
+            }}
+          >
+            <SelectTrigger aria-label="账号">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SELECT_EMPTY}>添加新账号</SelectItem>
+              {platform.accounts.data?.accounts.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+              {item.name} ·{" "}
+              {item.state === "VERIFIED"
+              ? "已验证"
+              : item.state === "RESTRICTED"
+              ? "有限制"
+              : "待登录"}
+              </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormField>
+
+        <FormField label="本地账号名称">
+          <Input
+            value={name || selected?.name || ""}
+            onChange={(event) => setName(event.target.value)}
+            maxLength={80}
+            required
+          />
+        </FormField>
+
+        <FormField label="每日发送上限" hint="0 表示禁止发送">
+          <Input
+            type="number"
+            min={0}
+            max={1000}
+            value={limit}
+            onChange={(event) => setLimit(event.target.value)}
+            required
+          />
+        </FormField>
+
+        <CheckboxField
+          checked={loginConsent}
+          onCheckedChange={setLoginConsent}
+        >
+          授权在本机登录此账号。
+        </CheckboxField>
+
+        <div className="flex flex-wrap gap-3">
+          <Button
+            type="submit"
+            disabled={
+              !ready ||
+              !loginConsent ||
+              !!platform.login ||
+              !!platform.accounts.data?.login
+            }
+            pending={platform.begin.isPending}
+          >
+            获取登录二维码
+          </Button>
+        </div>
+      </form>
+
+      {platform.login ? (
+        <div className="flex flex-col gap-3 border-t pt-4">
+          <img
+            className="w-60 max-w-full rounded-md border bg-qr-surface p-3"
+            src={platform.login.image}
+            alt="本次小红书登录二维码"
+          />
+          <p className="text-body leading-relaxed text-muted-foreground break-words">
+            有效期至 {new Date(platform.login.expiresAt).toLocaleTimeString()}
+            。请核对扫码账号。
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              variant="outline"
+              pending={platform.cancel.isPending}
+              onClick={() => platform.cancel.mutate()}
+            >
+              取消登录
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {!platform.login && platform.accounts.data?.login ? (
+        <div>
+          <Button variant="outline" onClick={() => platform.cancel.mutate()}>
+            取消尚未完成的登录
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function LocalReceivePanel({
+  credentialsAvailable,
+}: {
+  credentialsAvailable: boolean;
+}) {
+  const platform = useLocalPlatform();
+  const [receiverId, setReceiverId] = useState("");
+  const [inboxConsent, setInboxConsent] = useState(false);
+  const ready = platform.accounts.data?.runtime.ready && credentialsAvailable;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {platform.error ? (
+        <ErrorNotice error={platform.error} />
+      ) : null}
+      {platform.notice ? (
+        <p role="status" className="text-body text-muted-foreground">
+          {platform.notice}
+        </p>
+      ) : null}
+
+      <h3 className="text-section font-semibold">限时接收消息</h3>
+
+      <FormField label="收件账号">
+        <Select
+          value={receiverId}
+          onValueChange={(value) => {
+          setReceiverId(value);
+          platform.setInboxPlan(null);
+          setInboxConsent(false);
+          }}
+        >
+          <SelectTrigger aria-label="收件账号">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={SELECT_EMPTY}>选择已登录账号</SelectItem>
+            {platform.accounts.data?.accounts
+            .filter((item) => item.state === "VERIFIED" && item.hasSession)
+            .map((item) => (
+            <SelectItem key={item.id} value={item.id}>
+            {item.name}
+            </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FormField>
+
+      <div className="flex flex-wrap gap-3">
+        <Button
+          variant="outline"
+          disabled={!ready || !receiverId}
+          pending={platform.previewInbox.isPending}
+          onClick={() => platform.previewInbox.mutate(receiverId)}
+        >
+          预览收件授权
+        </Button>
+      </div>
+
+      {platform.inboxPlan ? (
+        <div className="flex flex-col gap-3 border-t pt-4">
+          <p className="text-body leading-relaxed text-muted-foreground break-words">
+            {platform.inboxPlan.accountName} · 最长 {platform.inboxPlan.minutes}{" "}
+            分钟。历史记录可能不完整，平台消息可能被标记为已读。
+          </p>
+          <CheckboxField
+            checked={inboxConsent}
+            onCheckedChange={setInboxConsent}
+          >
+            允许读取消息（含已读状态）。
+          </CheckboxField>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              disabled={!inboxConsent}
+              pending={platform.receive.isPending}
+              onClick={() => platform.receive.mutate()}
+            >
+              授权并开始收件
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {platform.receivers.data?.length ? (
+        <div className="flex flex-col gap-2 border-t pt-4">
+          <h3 className="text-body font-semibold">收件运行状态</h3>
+          <ul className="flex flex-col gap-2">
+            {platform.receivers.data.map((receiver) => (
+              <li
+                key={receiver.account_id}
+                className="text-caption leading-relaxed text-muted-foreground break-words"
+              >
+                {receiver.name} ·{" "}
+                {receiver.job_state === "QUEUED" &&
+                receiver.reason === "YIELDED_FOR_SEND"
+                  ? "等待发送结束后继续"
+                  : receiver.state}{" "}
+                · 截止 {new Date(receiver.expires_at).toLocaleTimeString()}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}

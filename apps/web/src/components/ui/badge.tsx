@@ -15,6 +15,10 @@ const badgeVariants = cva(
           "bg-destructive text-white dark:bg-destructive/60 [a&]:hover:bg-destructive/90",
         outline:
           "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+        // 状态色：只表达状态，不用于装饰（DESIGN.md §7）。
+        // 语义 token 已在 theme.css 的 :root / .dark 双套定义。
+        success: "border-success/30 bg-success-bg text-success",
+        warning: "border-warning/30 bg-warning-bg text-warning",
         ghost: "[a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         link: "text-primary underline-offset-4 [a&]:hover:underline",
       },

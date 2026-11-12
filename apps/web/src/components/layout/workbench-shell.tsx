@@ -1,14 +1,19 @@
 import { Outlet, useNavigate } from '@tanstack/react-router'
+import { ConfigDrawer } from '@/components/config-drawer'
+import { Header } from '@/components/layout/header'
+import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
+import { SkipToMain } from '@/components/skip-to-main'
+import { ThemeSwitch } from '@/components/theme-switch'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from '@/components/ui/sidebar'
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { LayoutProvider } from '@/context/layout-provider'
+import { SearchProvider } from '@/context/search-provider'
 import { DraftGuardProvider } from '@/features/work/draft-guard'
 import { useLocalWorkbench } from '@/features/local-workbench/use-local-workbench'
 import { Welcome, type WelcomeDestination } from '@/features/onboarding/welcome'
+import { getCookie } from '@/lib/cookies'
+import { Main } from '@/components/layout/main'
 import { AppSidebar } from './app-sidebar'
 
 /** Opens local data before rendering the workbench; first use shows the welcome flow. */
@@ -55,33 +60,34 @@ export function WorkbenchShell() {
 
   return (
     <DraftGuardProvider>
-      <SidebarProvider>
-        <AppSidebar />
-        {/* Both classes are load-bearing: `graphite-workspace` scopes the page
-            rules that have not been ported to Tailwind yet, `local-desktop`
-            scopes the local-workbench overrides. The old shell grid itself is
-            neutralised in styles/desktop-bridge.css. */}
-        <SidebarInset className='graphite-workspace local-desktop'>
-          <a
-            href='#workspace-main'
-            className='sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm'
+      <SearchProvider>
+        <LayoutProvider>
+          <SidebarProvider
+            defaultOpen={getCookie('sidebar_state') !== 'false'}
           >
-            跳到工作内容
-          </a>
-          <header className='flex h-14 shrink-0 items-center gap-2 border-b px-4'>
-            <SidebarTrigger className='-ms-1' aria-label='打开导航' />
-            <Separator orientation='vertical' className='me-1 h-6' />
-            <span className='text-sm text-muted-foreground'>本机工作台</span>
-          </header>
-          <main
-            id='workspace-main'
-            tabIndex={-1}
-            className='flex flex-1 flex-col gap-4 p-4 outline-none md:p-6'
-          >
-            <Outlet />
-          </main>
-        </SidebarInset>
-      </SidebarProvider>
+            <SkipToMain />
+            <AppSidebar />
+            <SidebarInset className='@container/content'>
+              {/* 顶栏与侧栏都来自 shadcn-admin 原样文件：Header 负责 64px 横带，
+                  TopNav / Search / ThemeSwitch / ConfigDrawer / ProfileDropdown
+                  是它的子元素，间距靠 Header 内层的 gap-4。 */}
+              <Header fixed>
+                <Search placeholder='搜索' className='me-auto min-w-0' />
+                <ThemeSwitch />
+                <ConfigDrawer />
+                <ProfileDropdown />
+              </Header>
+              <Main
+                id='content'
+                tabIndex={-1}
+                className='flex flex-1 flex-col gap-4 outline-none sm:gap-6'
+              >
+                <Outlet />
+              </Main>
+            </SidebarInset>
+          </SidebarProvider>
+        </LayoutProvider>
+      </SearchProvider>
     </DraftGuardProvider>
   )
 }

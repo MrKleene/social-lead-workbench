@@ -10,6 +10,8 @@ const alertVariants = cva(
         default: "bg-card text-card-foreground",
         destructive:
           "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 [&>svg]:text-current",
+        // 未知结果/需要核对：用 warning 语义 token，不用彩色装饰（DESIGN.md §7）。
+        warning: "border-border bg-warning-bg text-warning",
       },
     },
     defaultVariants: {

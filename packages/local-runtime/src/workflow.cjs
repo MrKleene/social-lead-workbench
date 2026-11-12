@@ -9,7 +9,7 @@ class LocalWorkflow {
  saveModel({version,model,dailyLimit,priceAck,consent}){return this.store.transaction(()=>{
   const old=this.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get(),spec=policy.qwenModel(model);
   if(!Number.isInteger(version)||version!==(old?.version??0))throw new LocalError('MODEL_CONFIGURATION_CHANGED');
-  if(!spec||!Number.isInteger(dailyLimit)||dailyLimit<1||dailyLimit>100||priceAck!==spec.priceAck||consent!=='beijing-original-comments-v2')throw new LocalError('MODEL_CONSENT_REQUIRED');
+  if(!spec||!(dailyLimit===null||(Number.isInteger(dailyLimit)&&dailyLimit>=1&&dailyLimit<=100))||priceAck!==spec.priceAck||consent!=='beijing-original-comments-v2')throw new LocalError('MODEL_CONSENT_REQUIRED');
   if(!this.vault?.has('MODEL_KEY','qwen')||!this.vault.protector.available())throw new LocalError('MODEL_KEY_UNAVAILABLE');
   this.db.prepare("INSERT INTO model_profile VALUES('qwen',?,?,1,?,?,?) ON CONFLICT(id) DO UPDATE SET model=excluded.model,version=excluded.version,authorized=1,daily_limit=excluded.daily_limit,price_ack=excluded.price_ack,consent=excluded.consent").run(model,version+1,dailyLimit,priceAck,consent);
   this.db.exec('UPDATE review_policies SET enabled=0,version=version+1; UPDATE contact_rules SET enabled=0,version=version+1,authorization_hash=NULL');

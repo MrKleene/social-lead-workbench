@@ -12,14 +12,8 @@ import { routeTree } from './routeTree.gen'
 // 的样式，该层会被注册在最前、优先级降到 preflight 之下，页面标题的字号
 // 和页头外边距会全部失效（2026-11-09 修过一次，ui:check 的 css-layer-order 会守）。
 import './styles/index.css'
-// Page-level styles. The graphite design system (foundation/simple/mist) is
-// gone: every rule that survived is scoped to a class the pages actually use.
-// Feature stylesheets are imported by their own components; only the two that
-// the deleted router entry used to pull in are wired here.
-import './features/local-workbench/local-workbench.css'
-import './features/local-workbench/local-shell.css'
-import './styles/workbench.css'
-import './styles/desktop-bridge.css'
+// 2026-11-11：手写页面样式（workbench.css / local-workbench.css / local-shell.css /
+// desktop-bridge.css）已全部迁到 Tailwind + components/patterns，不再有全局样式表。
 
 const queryClient = new QueryClient({
   defaultOptions: {

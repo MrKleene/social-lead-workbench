@@ -1,13 +1,414 @@
-import {LocalPostDiagnostic} from './local-post-diagnostic';
-import {Link,useSearchParams} from '@/lib/router-compat';
-import {JourneyStepper} from '@/features/work/journey-stepper';
-import type {JourneyStage} from '@/features/work/journey-model';
-import type {JourneyStep} from '@/features/work/journey-step-state';
-import {useLocalRecords} from './use-local-records';
-import {LocalCollectionPanel} from './local-platform';
-import {LocalPosts} from './local-posts';
-import {LocalReviewDialog} from './local-review-dialog';
-import {LocalRunReview} from './local-run-review';
-import {LocalJobs} from './local-record-pages';
-export function LocalTaskPage(){const [params,setParams]=useSearchParams(),stage=(['collect','review','contact'].includes(params.get('stage')||'')?params.get('stage'):'collect') as JourneyStage,runs=useLocalRecords('runs'),status=useLocalRecords('status'),runId=params.get('run')||runs.data?.items[0]?.id||'';return <><header className="page-heading"><h1>自动化任务</h1><Link to="/configuration?tab=keywords">采集设置 →</Link></header><label className="local-run-picker">查看轮次<select value={runId} onChange={e=>setParams(p=>{p.set('run',e.target.value);return p;})}><option value="">尚无采集轮次</option>{runs.data?.items.map(r=><option key={r.id} value={r.id}>{r.name} · {new Date(r.created_at).toLocaleString()}</option>)}</select></label>{runs.error&&<p role="alert">{runs.error.message}</p>}{runId?<RunWorkspace key={runId} runId={runId} stage={stage} onStage={s=>setParams(p=>{p.set('stage',s);return p;})} credentialsAvailable={!!status.data?.credentialsAvailable}/>:<><LocalCollectionPanel credentialsAvailable={!!status.data?.credentialsAvailable}/></>}<LocalPostDiagnostic/><LocalJobs runId={runId||undefined}/></>;}
-function RunWorkspace({runId,stage,onStage,credentialsAvailable}:{runId:string;stage:JourneyStage;onStage:(s:JourneyStage)=>void;credentialsAvailable:boolean}){const data=useLocalRecords('runProgress',{runId}),r=data.data;const steps:JourneyStep[]=[{id:'collect',label:'采集内容',state:r?.run.status==='RUNNING'?'running':r?.run.status==='COMPLETE'?'complete':r?.run.status==='PARTIAL'?'partial':r?'paused':'loading',status:r?`${r.posts} 篇笔记 · ${r.comments} 条评论`:'正在读取'},{id:'review',label:'评论匹配',state:r?.reviews.UNKNOWN?'unknown':r?.reviews.DISPATCHED?'running':r?.reviewReady?'complete':'idle',status:r?.reviewReady?'整轮审核屏障通过':'已授权自动审核，或手动补审'},{id:'contact',label:'回复结果',state:r?.jobs.some(j=>j.kind==='SEND'&&j.state==='UNKNOWN')?'unknown':r?.jobs.some(j=>j.kind==='SEND'&&['QUEUED','RUNNING'].includes(j.state))?'queued':'idle',status:'查看本轮持久任务与回执'}];return <>{data.error&&<p role="alert">{data.error.message}</p>}<JourneyStepper steps={steps} selected={stage} onSelect={onStage} caption="查看同一轮次的采集、审核和回复；浏览页面不会自动执行。" attention={!!r?.run.reason} details={r?.run.reason?[r.run.reason]:[]}/>{stage==='collect'&&<><LocalPosts runId={runId} onClose={()=>onStage('review')}/><details><summary>开始新一轮采集</summary><LocalCollectionPanel credentialsAvailable={credentialsAvailable}/></details></>}{stage==='review'&&<><LocalRunReview runId={runId}/><LocalReviewDialog runId={runId} onClose={()=>onStage('collect')}/><Link to={'/comment-review?run='+runId}>查看本轮审核结果 →</Link></>}{stage==='contact'&&<section className="local-panel"><h2>本轮回复</h2><Link to={'/reply-history?run='+runId}>查看本轮回复记录 →</Link><p><Link to="/auto-contact/pending">查看待处理及未知结果 →</Link></p></section>}</>;}
+import { useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "@/lib/router-compat";
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/patterns/page-header";
+import { SectionCard } from "@/components/patterns/section-card";
+import { ErrorNotice } from "@/components/feedback";
+import { JourneyStepper } from "@/features/work/journey-stepper";
+import { followStage, type StageFollow } from "@/features/work/journey-follow";
+import type { JourneyStage } from "@/features/work/journey-model";
+import type { JourneyStep } from "@/features/work/journey-step-state";
+import { AutomationSettingsDialog } from "./automation-settings-dialog";
+import { LocalPosts } from "./local-posts";
+import { LocalReviewDialog } from "./local-review-dialog";
+import { LocalRunReview } from "./local-run-review";
+import { StartCollectionDialog } from "./start-collection-dialog";
+import type { LocalMethods } from "./local-api";
+import { useLocalRecords } from "./use-local-records";
+
+const STAGES = ["collect", "review", "contact"] as const;
+const ACTIVE_RUN = ["QUEUED", "RUNNING"];
+
+type RunProgress = LocalMethods["runProgress"];
+
+/** 还没有任何轮次时的步骤条：三步都在「待开始」，和真实轮次的视觉保持一致。 */
+const IDLE_STEPS: JourneyStep[] = [
+  { id: "collect", label: "采集内容", state: "idle", status: "待开始" },
+  { id: "review", label: "评论匹配", state: "idle", status: "等待采集完成" },
+  { id: "contact", label: "自动回复", state: "idle", status: "等待匹配完成" },
+];
+
+/**
+ * 自动化任务页。
+ *
+ * 结构：页头三个动作（查看采集历史 / 采集设置 / 开始自动化采集）+ 本轮进度步骤条 +
+ * 当前步骤内容。「查看采集历史」跳独立页面（`/work/archive`），不在本页弹窗——历史需要
+ * 筛选、分页和每轮多个动作，弹窗装不下，也会挡住步骤条。
+ *
+ * 「采集设置」是三步各自的设置（采集 / 评论匹配 / 自动回复），不是全局配置页。
+ *
+ * 步骤会自己往前走：采集完成后自动进「评论匹配」，匹配完成后自动进「自动回复」。
+ * 判定在 `followStage` 里，只跟随本次挂载中观察到的跃迁——打开历史轮次不会自己跳。
+ */
+export function LocalTaskPage() {
+  const [params, setParams] = useSearchParams();
+  const requested = params.get("stage") || "";
+  const stage = (
+    STAGES.includes(requested as JourneyStage) ? requested : "collect"
+  ) as JourneyStage;
+
+  const runs = useLocalRecords("runs");
+  const status = useLocalRecords("status");
+  const selection = useLocalRecords("workspaceSelection");
+  const steps = useLocalRecords("automationSteps");
+  const latestId = runs.data?.items[0]?.id ?? "";
+  const runId = params.get("run") || latestId;
+  const progress = useLocalRecords(
+    "runProgress",
+    runId ? { runId } : undefined,
+    { enabled: !!runId, refetchInterval: 2000 },
+  );
+  const credentialsAvailable = !!status.data?.credentialsAvailable;
+  const [startOpen, setStartOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<JourneyStage>("collect");
+  const [notice, setNotice] = useState("");
+
+  const running = ACTIVE_RUN.includes(progress.data?.run.status ?? "");
+  const viewingHistory = !!runId && !!latestId && runId !== latestId;
+
+  /** 开始采集前必须配好的东西；缺哪一步就把用户送到哪一页签。 */
+  const missing: { tab: JourneyStage; text: string } | null = !selection.data
+    ?.configId
+    ? { tab: "collect", text: "需要配置关键词组" }
+    : steps.data?.autoReview && !steps.data?.policyId
+      ? { tab: "review", text: "需要配置匹配目标" }
+      : steps.data?.autoReply && !steps.data?.ruleId
+        ? {
+            tab: "contact",
+            text:
+              steps.data.channel === "COMMENT"
+                ? "需要配置评论规则"
+                : "需要配置私信规则",
+          }
+        : null;
+
+  const setParam = (key: string, value: string) =>
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+
+  /**
+   * 一次算完两个改动：`setParams` 基于本次渲染的 params 快照，同一 tick 里连调两次
+   * 会让后一次覆盖前一次。
+   */
+  const handleStarted = () =>
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete("run");
+        next.set("stage", "collect");
+        return next;
+      },
+      { replace: true },
+    );
+
+  return (
+    <>
+      <PageHeader
+        title="自动化任务"
+        actions={
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/work/archive">查看采集历史</Link>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSettingsTab(stage);
+                setSettingsOpen(true);
+              }}
+            >
+              采集设置
+            </Button>
+            <Button
+              disabled={running}
+              onClick={() => {
+                if (missing) {
+                  setSettingsTab(missing.tab);
+                  setSettingsOpen(true);
+                  return;
+                }
+                setStartOpen(true);
+              }}
+            >
+              {running ? "本轮进行中" : "开始自动化采集"}
+            </Button>
+          </>
+        }
+      />
+
+      {runs.error ? <ErrorNotice error={runs.error} /> : null}
+      {missing ? (
+        <p role="alert" className="text-body text-destructive break-words">
+          {missing.text}
+        </p>
+      ) : null}
+      {notice ? (
+        <p role="status" className="text-body leading-relaxed break-words">
+          {notice}
+        </p>
+      ) : null}
+
+      {runId ? (
+        <RunWorkspace
+          runId={runId}
+          stage={stage}
+          progress={progress}
+          viewingHistory={viewingHistory}
+          onStage={(next) => setParam("stage", next)}
+          onLatest={() => setParam("run", "")}
+        />
+      ) : (
+        /* 还没有轮次时步骤条也要在：它是这个页面的主体，不能等到有数据才出现。 */
+        <SectionCard title="本轮进度" description="尚未开始">
+          <JourneyStepper
+            steps={IDLE_STEPS}
+            selected={stage}
+            onSelect={(next) => setParam("stage", next)}
+            caption="未开始"
+            attention={false}
+          />
+        </SectionCard>
+      )}
+
+      <AutomationSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        tab={settingsTab}
+        onTab={setSettingsTab}
+        credentialsAvailable={credentialsAvailable}
+      />
+
+      <StartCollectionDialog
+        open={startOpen}
+        onOpenChange={setStartOpen}
+        credentialsAvailable={credentialsAvailable}
+        onStarted={() => {
+          setNotice("已加入队列");
+          handleStarted();
+        }}
+      />
+    </>
+  );
+}
+
+function RunWorkspace({
+  runId,
+  stage,
+  progress,
+  viewingHistory,
+  onStage,
+  onLatest,
+}: {
+  runId: string;
+  stage: JourneyStage;
+  progress: { data?: RunProgress; error: unknown };
+  viewingHistory: boolean;
+  onStage: (stage: JourneyStage) => void;
+  onLatest: () => void;
+}) {
+  const data = progress.data;
+  const collectFollow = useRef<StageFollow | undefined>(undefined);
+  const reviewFollow = useRef<StageFollow | undefined>(undefined);
+
+  const runStatus = data?.run.status ?? "";
+  const reviews = data?.reviews ?? {};
+  const jobs = data?.jobs ?? [];
+  const reviewReady = !!data?.reviewReady;
+  const collectActive = ACTIVE_RUN.includes(runStatus);
+  const collectSettled =
+    (runStatus === "COMPLETE" || runStatus === "PARTIAL") && !data?.run.reason;
+  const reviewActive =
+    (reviews.DISPATCHED ?? 0) > 0 ||
+    (stage === "review" && !!data && !reviewReady);
+
+  // 依赖只用原始值：轮询每次都可能返回等价但不同引用的对象，用对象做依赖会重复推进判定。
+  useEffect(() => {
+    const result = followStage(collectFollow.current, {
+      key: runId + ":collect",
+      active: collectActive,
+      ready: collectSettled,
+      stage,
+      from: "collect",
+    });
+    collectFollow.current = result.follow;
+    if (result.advance) onStage("review");
+  }, [runId, collectActive, collectSettled, stage, onStage]);
+
+  useEffect(() => {
+    const result = followStage(reviewFollow.current, {
+      key: runId + ":review",
+      active: reviewActive,
+      ready: reviewReady,
+      stage,
+      from: "review",
+    });
+    reviewFollow.current = result.follow;
+    if (result.advance) onStage("contact");
+  }, [runId, reviewActive, reviewReady, stage, onStage]);
+
+  const sendUnknown = jobs.some(
+    (job) => job.kind === "SEND" && job.state === "UNKNOWN",
+  );
+  const sendQueued = jobs.some(
+    (job) =>
+      job.kind === "SEND" && ["QUEUED", "RUNNING"].includes(job.state),
+  );
+  const sendFailed = jobs.some(
+    (job) => job.kind === "SEND" && job.state === "FAILED",
+  );
+  const sendConfirmed = jobs.some(
+    (job) => job.kind === "SEND" && job.state === "SUCCEEDED",
+  );
+  const sendStopped = jobs.some(
+    (job) =>
+      job.kind === "SEND" && ["CANCELLED", "INTERRUPTED"].includes(job.state),
+  );
+
+  const steps: JourneyStep[] = [
+    {
+      id: "collect",
+      label: "采集内容",
+      state: !data
+        ? "loading"
+        : collectActive
+          ? "running"
+          : runStatus === "FAILED"
+            ? "failed"
+            : runStatus === "COMPLETE"
+              ? data.run.reason
+                ? "partial"
+                : "complete"
+              : runStatus === "PARTIAL"
+                ? "partial"
+                : "paused",
+      status: data
+        ? `${data.posts} 篇笔记 · ${data.comments} 条评论`
+        : "正在读取",
+    },
+    {
+      id: "review",
+      label: "评论匹配",
+      state: !data
+        ? "loading"
+        : reviews.UNKNOWN
+          ? "unknown"
+          : (reviews.DISPATCHED ?? 0) > 0
+            ? "running"
+            : reviewReady
+              ? "complete"
+              : "idle",
+      status: !data
+        ? "正在读取"
+        : reviewReady
+          ? "整轮审核已完成"
+          : (reviews.DISPATCHED ?? 0) > 0
+            ? "整轮审核进行中"
+            : collectSettled
+              ? "等待本轮审核"
+              : "等待采集完成",
+    },
+    {
+      id: "contact",
+      label: "自动回复",
+      state: !data
+        ? "loading"
+        : sendUnknown
+          ? "unknown"
+          : sendQueued
+            ? "queued"
+            : sendFailed
+              ? "failed"
+              : sendConfirmed
+                ? "complete"
+                : sendStopped
+                  ? "partial"
+                  : "idle",
+      status: !data
+        ? "正在读取"
+        : sendUnknown
+          ? "结果未知 · 勿重发"
+          : sendQueued
+            ? "任务执行中"
+            : sendFailed
+              ? "回复存在失败"
+              : sendConfirmed
+                ? "已确认发送"
+                : sendStopped
+                  ? "已结束 · 有未发送"
+                  : "查看本轮回复记录",
+    },
+  ];
+
+  const meta = data
+    ? `${data.run.name} · ${new Date(data.run.createdAt).toLocaleString()}`
+    : "正在读取本轮…";
+
+  return (
+    <>
+      {progress.error ? <ErrorNotice error={progress.error} /> : null}
+
+      <SectionCard
+        title="本轮进度"
+        description={meta}
+        actions={
+          viewingHistory ? (
+            <Button variant="outline" size="sm" onClick={onLatest}>
+              返回最近一轮
+            </Button>
+          ) : undefined
+        }
+      >
+        <JourneyStepper
+          steps={steps}
+          selected={stage}
+          onSelect={onStage}
+          caption={data?.run.reason ? "本轮已停止" : "进行中"}
+          attention={!!data?.run.reason}
+          details={data?.run.reason ? [data.run.reason] : []}
+        />
+      </SectionCard>
+
+      {stage === "collect" ? (
+        <LocalPosts runId={runId} onClose={() => onStage("review")} />
+      ) : null}
+
+      {stage === "review" ? (
+        <>
+          <LocalRunReview runId={runId} />
+          <LocalReviewDialog runId={runId} onClose={() => onStage("collect")} />
+          <Link
+            to={`/comment-review?run=${runId}`}
+            className="text-body underline underline-offset-4"
+          >
+            查看本轮审核结果 →
+          </Link>
+        </>
+      ) : null}
+
+      {stage === "contact" ? (
+        <SectionCard title="本轮回复">
+          <Link
+            to={`/reply-history?run=${runId}`}
+            className="text-body underline underline-offset-4"
+          >
+            查看本轮回复记录 →
+          </Link>
+          <Link
+            to="/auto-contact/pending"
+            className="text-body underline underline-offset-4"
+          >
+            查看待处理及未知结果 →
+          </Link>
+        </SectionCard>
+      ) : null}
+    </>
+  );
+}

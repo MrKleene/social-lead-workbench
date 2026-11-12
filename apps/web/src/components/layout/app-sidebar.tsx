@@ -1,64 +1,37 @@
-import { Layers } from 'lucide-react'
-import { useLocalRecords } from '@/features/local-workbench/use-local-records'
+import { useLayout } from '@/context/layout-provider'
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarRail,
 } from '@/components/ui/sidebar'
-import { NavGroup } from './nav-group'
-import { NavWorkspace } from './nav-workspace'
 import { sidebarData } from './data/sidebar-data'
+import { NavGroup } from './nav-group'
+import { NavUser } from './nav-user'
+import { TeamSwitcher } from './team-switcher'
 
+/**
+ * 侧栏。结构照 shadcn-admin 的 `app-sidebar.tsx`：
+ * `TeamSwitcher`（品牌块）+ `NavGroup`（分组）+ `NavUser`（底部用户）+ `SidebarRail`。
+ *
+ * 唯一的接缝：`SidebarContent` 加了 `role='navigation' aria-label='主导航'`——
+ * 一个导航地标应该有名字，顺带也是 e2e 的定位锚点。
+ */
 export function AppSidebar() {
-  const unread = useLocalRecords('unread')
-
-  const navGroups = sidebarData.navGroups.map((group) => ({
-    ...group,
-    items: group.items.map((item) =>
-      item.url === '/inbox' && unread.data?.count
-        ? {
-            ...item,
-            badge: unread.data.count > 99 ? '99+' : String(unread.data.count),
-          }
-        : item
-    ),
-  }))
-
+  const { collapsible, variant } = useLayout()
   return (
-    <Sidebar collapsible='icon' variant='sidebar'>
+    <Sidebar collapsible={collapsible} variant={variant}>
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size='lg' asChild>
-              <div className='flex items-center gap-2'>
-                <span className='flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground'>
-                  <Layers className='size-4' />
-                </span>
-                <span className='grid flex-1 text-start text-sm leading-tight'>
-                  <span className='truncate font-semibold'>Social Lead</span>
-                  <span className='truncate text-xs text-muted-foreground'>
-                    本机工作台
-                  </span>
-                </span>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <TeamSwitcher teams={sidebarData.teams} />
       </SidebarHeader>
-
       <SidebarContent role='navigation' aria-label='主导航'>
-        {navGroups.map((group) => (
-          <NavGroup key={group.title} {...group} />
+        {sidebarData.navGroups.map((props) => (
+          <NavGroup key={props.title} {...props} />
         ))}
       </SidebarContent>
-
       <SidebarFooter>
-        <NavWorkspace />
+        <NavUser user={sidebarData.user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

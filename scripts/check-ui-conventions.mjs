@@ -49,35 +49,28 @@ const ALLOWED = [
     'Radix 滚动锁会移除滚动条宽度，sticky 表头需要 overflow:unset；输入框 16px 是 iOS 聚焦缩放防护',
   ],
   [
-    'features/local-workbench/local-shell.css',
-    'important',
-    'SheetContent 内置 w-3/4 sm:max-w-sm 工具类，普通声明无法覆盖详情抽屉宽度',
-  ],
-  [
-    'features/auto-contact/graphite-reply-history.css',
-    'data-slot-override',
-    '表格密度与列宽，作用域限定在 .reply-history-table 内，不触碰组件默认外观',
-  ],
-  [
     'components/status-notice.css',
     'data-slot-override',
     '通知条内按钮尺寸与抽屉宽度，作用域限定在 .compact-status-notice / .compact-status-dialog',
-  ],
-  [
-    'features/configuration/configuration.css',
-    'data-slot-override',
-    '移动端下拉需占满容器宽度，作用域限定在 .configuration-mobile-selector',
   ],
 ]
 const allowedKey = new Set(ALLOWED.map(([f, r]) => `${f}::${r}`))
 const allowedReason = new Map(ALLOWED.map(([f, r, why]) => [`${f}::${r}`, why]))
 
 /** 已知债务文件：仍会产生 error，但单独标注，避免误以为是新引入的。 */
-const KNOWN_DEBT = new Set([
-  'features/local-workbench/local-workbench.css',
-  'features/local-workbench/local-shell.css',
-  'features/work/journey-stepper.css',
-])
+const KNOWN_DEBT = new Set([])
+
+/**
+ * 遗留方言棘轮：`local-*` / `configuration-*` / `journey-*` / `graphite-*` /
+ * `reply-history-*` 是手写 CSS 时代的类名，样式不走 Tailwind + shadcn。
+ *
+ * **2026-11-11 已清空**：全部页面迁移完毕，白名单为空。新代码出现这些类名
+ * 一律判 error。确实需要临时例外时加进来并写明理由，迁完立刻删掉。
+ */
+const LEGACY_CLASS_ALLOWED = new Set([])
+
+/** 遗留类名前缀。命中且文件不在白名单 → error。 */
+const LEGACY_PREFIX = /^(?:local|configuration|journey|graphite|reply-history)-/
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-desktop', '.git', 'assets'])
 
@@ -360,6 +353,26 @@ function checkTsx(file, content) {
       detail: `${imp.length} 处 !important`,
       snippet: `第 ${lineAt(content, imp[0].index)} 行`,
     })
+  }
+
+  // 10. 遗留方言棘轮：className 里出现手写 CSS 时代的类名
+  const rel = relative(SCAN_DIR, file)
+  if (!LEGACY_CLASS_ALLOWED.has(rel)) {
+    const legacyHits = []
+    for (const m of content.matchAll(/className=(?:"([^"]*)"|'([^']*)')/g)) {
+      for (const token of (m[1] ?? m[2] ?? '').split(/\s+/)) {
+        if (LEGACY_PREFIX.test(token)) legacyHits.push(token)
+      }
+    }
+    if (legacyHits.length) {
+      add({
+        rule: 'legacy-class',
+        level: 'error',
+        file,
+        detail: `${legacyHits.length} 处遗留类名（应改用 Tailwind + components/patterns）`,
+        snippet: [...new Set(legacyHits)].slice(0, 4).join(' '),
+      })
+    }
   }
 }
 
