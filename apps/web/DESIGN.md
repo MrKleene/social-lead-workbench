@@ -410,8 +410,14 @@ components:
 | `FormField` | `.local-editor label` | 标签到控件 8px；提示/错误放在 `<label>` 外 |
 | `CheckboxField` | `.local-check` | 复选框 + 文案 + 可选说明；说明左对齐到文案 |
 | `DetailSheet` / `DetailList` | `.local-detail-sheet` + 手写 `<dl>` | 宽度 `sm:max-w-xl`，不用任意值 |
+| `SidebarNav` | 手写分类导航 | 图标 + `ghost` 按钮，选中 `bg-muted`；窄屏横向滚动，宽屏竖排 |
+| `ContentSection` | 设置类页面套 `SectionCard` | 标题 + 描述 + `Separator` + 内容，**不套卡片** |
 | `Disclosure`（`components/disclosure.tsx`） | 原生 `<details>/<summary>` | 基于 `Collapsible`；标题 `font-medium`、左对齐到正文；**不要用原生 `details`**——三角标记无法统一、无展开动画、事件模型不同 |
 | `ErrorNotice` / `Loading`（`components/feedback.tsx`） | 裸 `<p role="alert">` / 手写骨架 | 错误一律 `Alert variant="destructive"` + 图标；**不要手写红字**。`Loading` 只在整块无数据时用 |
+
+**`SectionCard` 和 `ContentSection` 怎么选**：列表类页面（采集归档、回复记录、消息通知）用
+`SectionCard`——卡片是用来分隔独立记录的；设置/详情类页面（配置管理、账号中心、模型配置）用
+`ContentSection`——主体是「一屏文档」，外面再包边框会变成卡片里放卡片。同一页不混用两种。
 
 **外壳（侧栏 / 顶栏 / 主题布局）不在这张表里**：2026-11-11 起它们**整体使用 shadcn-admin 的源码**
 （`components/layout/*`、`components/{search,command-menu,theme-switch,config-drawer,profile-dropdown,skip-to-main}.tsx`、

@@ -163,6 +163,69 @@ const pick = async (label, value) => {
 button 的 accessible name 会变成「标签文本 + 当前选中值」，`exact` 匹配失败。
 所以每个 `SelectTrigger` 都必须有 `aria-label`，38 处已补齐。
 
+### 设置类页面照 shadcn-admin 的 Settings 重做（2026-11-12）
+
+用户指出配置管理页面和 shadcn-admin 的 Settings 差距很大，要求把能替换的都换掉。
+
+**差距在哪**：当前三个区域（分类导航 / 配置列表 / 详情）**各自套了一张卡片**，
+`SectionCard` + `border` 叠三层，页面像三个盒子并排。shadcn-admin 的 Settings
+**完全没有卡片**——靠 `Separator` 和 `bg-muted` 分层。
+
+**从 shadcn-admin 移植两个骨架**（`components/patterns/`）：
+
+| 组件 | 来源 | 与上游的差异 |
+|---|---|---|
+| `SidebarNav` | `features/settings/components/sidebar-nav.tsx` | 选中项由 `activeHref` 传入，不读 `useLocation`（本项目分类切换靠 query，`pathname` 全一样）；移动端保留横向滚动，不换成 `Select`（`router-compat` 没有 `useNavigate`） |
+| `ContentSection` | `features/settings/components/content-section.tsx` | 标题可选（无标题时不渲染 header 和分隔线）；`actions` 支持右上角按钮 |
+
+**改造的三个页面**：
+
+1. **配置管理**：`PageHeader title="配置管理"`（原来是"分类名"当标题，和左侧导航重复）
+   \+ `Separator` + `SidebarNav`（5 个分类各配图标：Tag/Filter/MessageSquare/Send/Cpu）
+   \+ 配置列表（去掉 `border`，选中态 `bg-muted`）+ `ContentSection`。
+   "新增配置"按钮提到页面级，`tab === "model"` 时隐藏。
+2. **账号中心**：详情从 `SectionCard` 换成 `ContentSection`，「编辑账号设置 / 断开本机会话」
+   从内容底部移到 header 的 `actions`；「添加账号」从卡片换成 `ContentSection`。
+3. **模型配置**：`SectionCard` 换成 `ContentSection title="模型审核授权"`，
+   表单加 `max-w-xl`（原来输入框拉满 660px）。
+
+**边界**：列表类页面（采集归档、回复记录、消息通知、概览）**保留 `SectionCard`**——
+那里的卡片是用来分隔独立记录的，去掉反而更乱。这条写进了 `DESIGN.md`。
+
+**注意**：`ContentSection` 的 `Separator` 颜色是 `--border`（#ebebeb），在白色背景上
+对比度只有 1.19:1，截图缩放下几乎看不见，放大后是清晰的 hairline。这是 token 层
+既有的取舍（见「仍未解决」一节），不是这次引入的问题。
+
+### e2e 跟随信息架构重做（2026-11-12）
+
+`44181a9` 重做了自动化任务三步流程、改名「采集归档 → 采集历史」、把模型配置拆成多个设置页，
+**e2e 没有同步**，导致测试大面积失败。这一轮按新 UI 重写，逐条都是先探查 DOM 再改，不猜文案。
+
+**探查出来的实际交互**（用于写断言）：
+
+| 位置 | 实际结构 |
+|---|---|
+| 自动化任务页 | 页头三动作「查看采集历史 / 采集设置 / 开始自动化采集」+ `JourneyStepper`（`aria-label="任务步骤"`） |
+| 采集设置 | 弹窗 + Tabs（采集 / 评论匹配 / 自动回复）；采集页签初始只有「关键词配置」，**选了配置才出现**「采集账号」「本次最多笔记数」 |
+| 开始采集 | 弹窗「确认本轮采集范围」，动作「取消 / 预览采集范围」 |
+| 采集历史 | 页头只有筛选（采集状态 / 来源配置 / 采集账号筛选 / 更多筛选）+ 列表，**没有「查看笔记与恢复」** |
+| 笔记详情与跨版本对比 | 移到**任务页**的「本轮笔记与历史恢复」，入口是「查看原文与评论」 |
+
+**改了什么**：
+
+1. 页面标题：`关键词配置` → `配置管理`（2 处）
+2. 导航名：`采集归档` → `采集历史`
+3. 采集设置：从「点折叠面板」改成「点采集设置按钮 → 弹窗内操作 → Escape 关闭」，
+   并在选配置后加 `waitForTimeout` 等 `CollectionSetup` 渲染
+4. 采集历史详情：改为「采集历史只验筛选 + 空态」→「回任务页点查看原文与评论」走对比流程
+5. 模型配置：`模型运行记录` / `整轮自动审核` / `模型请求状态` 三个断言删除
+   （这些功能已移走或删除），改成验「模型审核授权」+「审核模型」下拉存在
+6. **删除「新链接单帖只读诊断」整段**——该功能已从产品中移除（`单帖` 相关文案全仓 0 处）
+7. 同时删掉 result 里的 `newLinkDiagnosticControl: true`——功能都没了，flag 还声明覆盖，
+   属于**谎报**。这类硬编码 flag 要跟着功能一起删。
+
+**结果**：31 项检查全绿，`errors: []`，320/390 无横向溢出。
+
 ### 取消字重例外：框架文件也遵守 vercel 规范（2026-11-12）
 
 之前为了「和 shadcn-admin 普通页逐像素一致」，页面标题用了 700 字重，并在 `ui:check` 里

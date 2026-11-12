@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormField } from "@/components/patterns/form-field";
-import { SectionCard } from "@/components/patterns/section-card";
+import { ContentSection } from "@/components/patterns/content-section";
 import { ErrorNotice } from "@/components/feedback";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useDraftGuard } from "@/features/work/draft-guard";
@@ -63,7 +63,7 @@ export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }
   };
 
   return (
-    <SectionCard>
+    <ContentSection title="模型审核授权">
       {error ? <ErrorNotice error={error} /> : null}
 
       {data?.modelPaused ? (
@@ -74,7 +74,7 @@ export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }
         </Alert>
       ) : null}
 
-      <form className="flex flex-col gap-3" onSubmit={submit}>
+      <form className="flex max-w-xl flex-col gap-3" onSubmit={submit}>
         <FormField label="审核模型">
           <Select value={selected?.id ?? ""} onValueChange={setModel}>
             <SelectTrigger aria-label="审核模型">
@@ -121,6 +121,6 @@ export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }
           <p className="text-caption text-muted-foreground">模型请求未启用</p>
         ) : null}
       </form>
-    </SectionCard>
+    </ContentSection>
   );
 }

@@ -6,7 +6,8 @@ import { DetailItem, DetailList } from "@/components/patterns/detail-sheet";
 import { EmptyState } from "@/components/patterns/empty-state";
 import { FormField } from "@/components/patterns/form-field";
 import { PageHeader } from "@/components/patterns/page-header";
-import { SectionCard } from "@/components/patterns/section-card";
+import { ContentSection } from "@/components/patterns/content-section";
+import { Separator } from "@/components/ui/separator";
 import { useDraftGuard } from "@/features/work/draft-guard";
 import { ErrorNotice } from "@/components/feedback";
 import { LocalAccountDiagnostics } from "./local-diagnostics";
@@ -111,6 +112,7 @@ export function LocalAccountPage() {
   return (
     <>
       <PageHeader title="账号中心" />
+      <Separator />
 
       {failure ? (
         <ErrorNotice error={failure} />
@@ -124,7 +126,7 @@ export function LocalAccountPage() {
               key={item.id}
               disabled={editing}
               aria-pressed={account?.id === item.id}
-              className="h-auto min-h-16 flex-col items-start justify-start gap-1.5 border border-transparent px-3 py-3 text-start whitespace-normal aria-pressed:border-border aria-pressed:bg-muted"
+              className="h-auto min-h-16 flex-col items-start justify-start gap-1.5 px-3 py-3 text-start whitespace-normal aria-pressed:bg-muted"
               onClick={() => {
                 setSelected(item.id);
                 setConfirm(false);
@@ -141,7 +143,26 @@ export function LocalAccountPage() {
           ))}
         </aside>
 
-        <SectionCard title={account?.name} className="min-w-0">
+        <ContentSection
+          className="min-w-0"
+          title={account?.name ?? "账号详情"}
+          actions={
+            account ? (
+              <>
+                <Button variant="outline" onClick={() => setEditing(true)}>
+                  编辑账号设置
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={!account.hasSession}
+                  onClick={() => setConfirm(true)}
+                >
+                  断开本机会话
+                </Button>
+              </>
+            ) : undefined
+          }
+        >
           {account ? (
             <>
               <DetailList>
@@ -179,19 +200,6 @@ export function LocalAccountPage() {
                 accountId={account.id}
               />
 
-              <div className="flex flex-wrap gap-3 border-t pt-4">
-                <Button variant="outline" onClick={() => setEditing(true)}>
-                  编辑账号设置
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={!account.hasSession}
-                  onClick={() => setConfirm(true)}
-                >
-                  断开本机会话
-                </Button>
-              </div>
-
               {editing ? (
                 <AccountEditor
                   key={account.id + account.revision}
@@ -222,14 +230,15 @@ export function LocalAccountPage() {
           ) : (
             <EmptyState title="尚未添加账号。" />
           )}
-        </SectionCard>
+        </ContentSection>
       </div>
 
-      <SectionCard>
+      <Separator />
+      <ContentSection title="添加账号">
         <LocalLoginPanel
           credentialsAvailable={!!status.data?.credentialsAvailable}
         />
-      </SectionCard>
+      </ContentSection>
     </>
   );
 }
