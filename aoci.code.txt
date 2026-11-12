@@ -3,7 +3,7 @@
 ===/Users/kleene/projects/social-lead-workbench/===
 .gitattributes[FV4T]: F:声明全仓库行尾归一策略，文本一律 LF 检出 | R:- | A:- | S:`* text=auto eol=lf` 是 AOCI 原始字节基线成立的前提；去掉它会让 Windows 检出整棵树被判 stale，全部 Entry 失效
 .gitignore[FS6T]: F:排除构建产物、本机数据、凭据与客户导出，只放行 schema 与迁移 SQL | R:code:.gitattributes | A:- | S:`!packages/local-runtime/src/schema.sql` 与 `!packages/local-runtime/src/migrations/*.sql` 是 SQL 进 Git 的唯一通道；新迁移目录不在白名单内会被静默忽略
-AGENTS.md[SU9M]: F:前端落地的强制约束：颜色与组件改法、六档字号、间距圆角、响应式、遗留方言棘轮、shadcn-admin 外壳边界、文案只写状态与动作 | R:code:apps/web/DESIGN.md,code:scripts/check-ui-conventions.mjs | A:必读顺序,禁止项,提交前检查 | S:§6 已把遗留类名清到 0 处并由 ui:check 的 legacy-class 规则守住，白名单已空；§6.1 的 shadcn-admin 文件不做豁免，上游写法不合规要就地改并记录偏离（目前只有 search.tsx 的 ⌘K 字号一处）；§9 禁止解释性文案，判据是删掉这句用户还能不能完成操作。尾部 aoci:begin 区块由 AOCI 维护，删标记会重复追加
+AGENTS.md[SU9M]: F:前端落地的强制约束：颜色与组件改法、六档字号、间距圆角、响应式、遗留方言棘轮、shadcn-admin 外壳边界、文案只写状态与动作 | R:code:apps/web/DESIGN.md,code:scripts/check-ui-conventions.mjs | A:必读顺序,禁止项,提交前检查 | S:§6 已把遗留类名清到 0 处并由 ui:check 的 legacy-class 规则守住，白名单已空；§6.1 的 shadcn-admin 文件不做豁免，上游写法不合规要就地改并记录偏离（目前只有 search.tsx 的 ⌘K 字号一处）；§6.1 的 ui:check 批准例外只剩 styles/index.css 的 !important 一条，删文件必须同步删例外；§9 禁止解释性文案，判据是删掉这句用户还能不能完成操作
 README.md[SG5T]: F:产品定位、当前功能边界、本机开发命令与工程目录职责表 | R:code:docs/design/project-structure.md,code:apps/web/DESIGN.md | A:- | S:线索分配、销售跟进、人工 CRM 已退出产品，但数据库历史表与审计不物理删除；发送仍只读检查历史勿联系证据，防止重复联系
 package-lock.json[FV9L]: F:npm 锁文件：锁定全部工作区与第三方依赖的解析结果与完整性哈希 | R:code:package.json | A:- | S:由 npm 生成，手改会让 CI 的 npm ci 直接失败；根 package.json 的 overrides 会在这里固化成解析结果，改 overrides 必须重新生成
 package.json[FV8T]: F:根工作区清单：apps 与 packages 两类通配工作区、Node ≥24.11、构建检查打包与 aoci 脚本入口 | R:code:packages/contracts/package.json,code:scripts/check-structure.mjs | A:- | S:workspaces 用通配符，新目录放进 apps 或 packages 即自动成为工作区；pretest 会先 build:core 再编测试用原生件，跳过它会让测试跑旧产物；engines 低于 24.11 直接不满足
@@ -42,7 +42,7 @@ windows-resources.test.cjs[TV7T]: F:校验 Windows 原生资源门：MCP、helpe
 windows-static-check.test.cjs[TV5T]: F:校验 PE 头静态检查拒绝错架构、截断与伪造头，且全程不执行文件 | R:code:scripts/desktop/windows-static-check.cjs | A:- | S:-
 
 ===/Users/kleene/projects/social-lead-workbench/apps/web/===
-DESIGN.md[SU9L]: F:唯一样式规范：优先级、色彩板与角色、排版、组件与表单控件、页面骨架、布局间距、深度、响应式、机器可读 token | R:code:apps/web/src/styles/theme.css,code:AGENTS.md | A:规范优先级,机器可读 token 与校验 | S:§4 新增表单控件与 components/patterns/ 页面骨架两节，页面不再手写 CSS；第 10 节导出到 CSS 有已知损失，不能把导出结果当唯一真值反向推导样式
+DESIGN.md[SU9L]: F:唯一样式规范：优先级、色彩板与角色、排版、组件与表单控件、页面骨架、布局间距、深度、响应式、机器可读 token | R:code:apps/web/src/styles/theme.css,code:AGENTS.md | A:规范优先级,机器可读 token 与校验 | S:§4 含表单控件与 components/patterns/ 页面骨架两节，页面不再手写 CSS；第 10 节导出到 CSS 有已知损失，不能把导出结果当唯一真值反向推导样式；末节「已知结构问题」里 input 与 border 同值、main 缺 1040px 上限都是已知取舍，不是待修 bug
 components.json[FV3T]: F:shadcn 配置：new-york 风格、cssVariables 开启、路径别名与 lucide 图标库 | R:code:apps/web/package.json | A:- | S:css 指向 src/styles/index.css；改回旧路径 CLI 找不到 token
 desktop.html[EU4T]: F:桌面端 HTML 入口，挂载 #root 并加载 src/main.tsx | R:code:apps/web/src/main.tsx | A:- | S:-
 package.json[FV4T]: F:Web 工作区清单：Vite + TanStack Router/Query + Radix 系列 + cmdk + date-fns + Tailwind v4，只依赖 @crm/contracts | R:code:apps/web/vite.desktop.config.ts | A:- | S:新增的 cmdk、date-fns、react-day-picker 与 avatar/label/radio-group/scroll-area 都是 shadcn-admin 外壳依赖；dev 与 build 都显式指定 vite.desktop.config.ts，用默认 vite 配置会产出错入口
@@ -54,7 +54,7 @@ vite.desktop.config.ts[FV6T]: F:桌面渲染层构建变体：合并 base 配置
 disclosure.tsx[CU5T]: F:可折叠区块：ghost 按钮触发 Collapsible，同时支持受控与非受控 | R:code:apps/web/src/components/ui/collapsible.tsx | A:Disclosure | S:箭头旋转必须用内联 transform 读 open 状态——group-data-* 与 [&[data-state=open]>svg] 在 Tailwind v4 + SVG 下都不生效，计算值恒为 0deg；这是文件里唯一的内联样式
 feedback.tsx[CU6T]: F:全站唯一的错误提示与首屏加载骨架 | R:code:apps/web/src/components/ui/alert.tsx | A:ErrorNotice,Loading | S:页面里不要再手写 <p role=alert>，统一走 ErrorNotice，否则既无图标也无边框；Loading 只在整块无数据时用，后台刷新应保留旧数据而不是换骨架
 navigation-progress.tsx[CU3T]: F:路由切换顶部进度条，pending 时 continuousStart，其余 complete | R:code:apps/web/src/routes/__root.tsx | A:NavigationProgress | S:-
-status-notice.tsx[CU7T]: F:紧凑状态条：风险标签常显，原因去重后进 Sheet，关闭后焦点回到触发按钮 | R:code:apps/web/src/components/ui/sheet.tsx,code:apps/web/src/features/work/journey-stepper.tsx | A:StatusNotice,pauseDescription | S:pauseDescription 是发送暂停文案的唯一来源，新增 reason 必须在这里补文案，否则界面直接暴露原始代码；details 经 Set 去重，重复条目不会重复渲染
+status-notice.tsx[CU7S]: F:紧凑状态条：风险标签常显，原因去重后进 Sheet，关闭后焦点回到触发按钮 | R:code:apps/web/src/components/ui/sheet.tsx,code:apps/web/src/features/work/journey-stepper.tsx | A:StatusNotice,pauseDescription | S:pauseDescription 是发送暂停文案的唯一来源，新增 reason 必须在这里补文案，否则界面直接暴露原始代码；details 经 Set 去重，重复条目不会重复渲染
 command-menu.tsx[CU6T]: F:⌘K 命令面板：页面跳转、主题切换与侧栏搜索入口 | R:code:apps/web/src/context/search-provider.tsx,code:apps/web/src/components/layout/data/sidebar-data.ts | A:CommandMenu | S:菜单项直接读 sidebarData.navGroups，新增页面只改 sidebar-data 就会出现在面板；主题项调 useTheme 写 cookie，不在本地存状态
 config-drawer.tsx[CU6M]: F:主题设置抽屉：主题 light/dark/system、侧栏变体与折叠方式三组选项，带重置 | R:code:apps/web/src/context/layout-provider.tsx,code:apps/web/src/context/theme-provider.tsx | A:ConfigDrawer | S:三组选项都经 useLayout/useTheme 写 cookie，不存组件状态；重置调 resetTheme/resetLayout 清 cookie 而不是写默认值；SheetTitle 仍是上游英文 Theme Settings
 profile-dropdown.tsx[CU3T]: F:顶栏头像菜单：账号信息加账号中心、使用引导两个入口 | R:code:apps/web/src/components/layout/data/sidebar-data.ts,code:apps/web/src/components/ui/avatar.tsx | A:ProfileDropdown | S:用户信息读 sidebarData.user，本机无登录态；登录/账单/登出菜单项已删，勿随上游补回
@@ -257,7 +257,7 @@ local-runtime.md[SB7T]: F:本地运行时的边界：只用 Node 内置模块，
 model-settings-security.md[SB7T]: F:模型凭据的保存与授权边界：safeStorage 加密成 .sealed 文件、无系统保护即拒绝保存、Key 与执行授权分开管理 | R:code:packages/local-runtime/src/credentials.cjs,code:apps/desktop/src/main.cjs | A:- | S:换 Key 前必须先撤销模型、目标与自动联系授权，写入失败授权也保持撤销；业务备份不含凭据，跨电脑必须重新输入；界面“已配置”只表示本地文件存在，不证明 Key 有效
 project-structure.md[SB7T]: F:工程结构与依赖方向：六个工作区的允许依赖、源码与 dist 归属、构建顺序与检查命令 | R:code:AGENTS.md,code:scripts/check-structure.mjs | A:- | S:domain 不能反向依赖运行时或 Electron；跨包必须走 package 名与 exports，不得相对穿透 src；staging 与最终包核对共用 stage-layout.cjs，避免两套白名单漂移
 qwen-comment-matching.md[SB7T]: F:模型评论匹配的调用节奏、受控型号与价格版本、脱敏与预算守卫 | R:code:packages/local-runtime/src/adapters/collection/qwen-provider.ts,code:packages/domain/src/collection/qwen-models.cjs | A:- | S:全局并发 1、两次开始间隔至少 1 秒、429 后退避 60 秒、失败不自动重试；改型号或调用上限必须重新勾选价格确认，服务端核对受控型号与价格版本；未知型号或价格直接阻断，不回退便宜型号
-ui-conformance-audit.md[SL7L]: F:UI 一致性审计记录：代码实际形态与规范的差距、修复步骤与机器检查抓不到的问题 | R:code:apps/web/DESIGN.md,code:AGENTS.md | A:- | S:本文件是审计记录不是规范，不得当作样式依据；文中“新增 NativeSelect”等中间态已被后续 Radix Select 取代，以现行代码为准
+ui-conformance-audit.md[SL7L]: F:UI 一致性审计记录：代码实际形态与规范的差距、修复步骤与机器检查抓不到的问题 | R:code:apps/web/DESIGN.md,code:AGENTS.md | A:- | S:本文件是审计记录不是规范，不得当作样式依据；文中“新增 NativeSelect”等中间态已被后续 Radix Select 取代；批准例外已从 2 条降到 1 条，以现行 ALLOWED 为准
 
 ===/Users/kleene/projects/social-lead-workbench/docs/requirements/===
 ACCEPTANCE.md[SB5T]: F:本轮验收范围：首次使用引导、业务与安全边界、工程验证命令 | R:code:docs/requirements/IMPLEMENTATION-STATUS.md | A:- | S:Windows 路径模拟不等于真机验收；原生资源缺失导致的跳过项、签名、安装升级与真实收发必须单独记录
@@ -388,7 +388,7 @@ search.go[IN8M]: F:关键词搜索：打开搜索页、应用筛选并读取搜�
 search_capture.go[IR6T]: F:搜索页轮询观测：只轮询已打开的页面，8 秒是截止时间不是就绪信号 | R:code:integrations/inbox-mcp/xiaohongshu/search_observation.go | A:observeSearch,observeSearchAtOrigin | S:不 reload、不重试搜索、不滚动、不展开；origin 只能由回环测试注入，生产固定为 https://www.xiaohongshu.com
 search_diagnostic.go[IO6T]: F:搜索阶段失败的分类：把底层错误包装成带 reason 的失败或观测错误 | R:code:packages/contracts/src/collection-diagnostic.ts | A:searchStageFailure,searchFailure,searchObservedError | S:reason 必须取自 searchFailureReasons 白名单，自由文本会污染落盘诊断；cause 用 Unwrap 保留但不外泄到用户文案
 search_note.go[IN6S]: F:搜索结果的笔记结构：只保留打开笔记与归一化封面所需字段 | R:code:integrations/inbox-mcp/xiaohongshu/search.go | A:SearchFeed,SearchNoteCard | S:封面用 RawMessage 原样保留交给严格图片归一化器，绝不进入诊断、日志或解析错误；首页 Feed 的计数器与视频结构不能塞进这里
-search_observation.go[IO6S]: F:搜索观测的封闭结构：只含状态枚举、计数与布尔，不含关键词、ID、URL 或正文 | R:code:integrations/inbox-mcp/xiaohongshu/search_capture.go | A:SearchObservation,SearchParseIssue | S:结构本身是封闭契约，加任何字符串值字段都会破坏“不含关键词/ID/URL/响应文本”的前提；计数用指针区分未知与 0
+search_observation.go[IO6T]: F:搜索观测的封闭结构：只含状态枚举、计数与布尔，不含关键词、ID、URL 或正文 | R:code:integrations/inbox-mcp/xiaohongshu/search_capture.go | A:SearchObservation,SearchParseIssue | S:结构本身是封闭契约，加任何字符串值字段都会破坏“不含关键词/ID/URL/响应文本”的前提；计数用指针区分未知与 0
 selection_diagnostic_driver.go[IN5T]: F:选择诊断驱动：只持有共享选择页，不暴露输入、提交或读回 | R:code:integrations/inbox-mcp/xiaohongshu/exact_reply_driver.go | A:SelectionDiagnosticDriver | S:编译期断言 _ exactreply.SelectionInspector，公开面没有正文参数；加回 Submit 或 Readback 即越界
 types.go[FG7M]: F:小红书 Feed 的数据结构：__INITIAL_STATE__ 的 feed/feeds/_value 包裹与单条 Feed 字段 | R:code:integrations/inbox-mcp/xiaohongshu/feed_detail.go | A:FeedResponse,FeedData,FeedsValue,Feed | S:平台用 _value 包裹数组，直接 unmarshal 成切片会得到空；xsecToken 与 id 必须同时保留，缺一个就打不开笔记
 user_profile.go[IN6S]: F:用户主页读取：三个子 tab（笔记/收藏/点赞）解析与列表读取 | R:code:integrations/inbox-mcp/xiaohongshu/types.go | A:ProfileTab,ParseProfileTab,UserProfileAction | S:tab 空值默认 note，非法值必须报错而不是回落；三个常量 note/fav/liked 与页面 tab 文案要成对维护
@@ -409,7 +409,7 @@ tsconfig.json[FV4T]: F:契约包编译配置：CommonJS 加 Node 解析、输出
 auto-contact.ts[DB7S]: F:自动联系规则的 zod 契约：渠道计划、规则输入、开关与状态文案 | R:code:packages/contracts/src/comment-rules.ts | A:autoContactRuleInput,autoContactToggleInput,contactStatusLabel,channelPlanSchema | S:channelPlans 最多 2 条且渠道不能重复；阈值 0-100、账号最多 100 个且 id 不能重复；状态文案里 UNKNOWN 必须保留“保留占用”，改成“失败”会误导重发
 avatar-query.ts[DB5T]: F:头像 imageView2 缩略图查询参数的纯函数校验（与 Go 侧同构） | R:code:integrations/inbox-mcp/xiaohongshu/avatar_query.go | A:avatarQueryPolicy | S:与 Go 的 avatarQueryPolicy 必须逐条同构，任一侧放宽就会出现前后端判定不一致；只接受 w/h/q 与 format 四类键且不可重复
 avatar-source-diagnostic.ts[DA6T]: F:头像来源诊断的 zod schema：v1/v2 两版、候选名清单与交叉校验 | R:code:packages/contracts/src/avatar-query.ts | A:avatarSourceDiagnosticSchema,avatarCandidateNames | S:avatarCandidateNames 是检查词表不是别名映射，不能据此认定头像来源；v2 的 fields 与 conversion 计数和必须等于 roots+replies，否则整份诊断判非法
-bounded-read.ts[DB8S]: F:有界读取的预算、停止原因与报告 schema，含 COMPLETE 的一致性交叉校验 | R:code:packages/contracts/src/comment-checkpoint.ts,code:packages/contracts/src/coverage-diagnostic.ts | A:boundedReadConfigSchema,boundedReadReportSchema,boundedReadReasons | S:预算上限与 Go 的 BoundedReadConfig 必须一致（3/12/40/100/30/15000）；state=COMPLETE 还需 hasMore=false、deficit 与 excess 为 0、scopeExact=true、replyControls=0，少一条即判非法
+bounded-read.ts[DB8T]: F:有界读取的预算、停止原因与报告 schema，含 COMPLETE 的一致性交叉校验 | R:code:packages/contracts/src/comment-checkpoint.ts,code:packages/contracts/src/coverage-diagnostic.ts | A:boundedReadConfigSchema,boundedReadReportSchema,boundedReadReasons | S:预算上限与 Go 的 BoundedReadConfig 必须一致（3/12/40/100/30/15000）；state=COMPLETE 还需 hasMore=false、deficit 与 excess 为 0、scopeExact=true、replyControls=0，少一条即判非法
 capture-display.ts[DB5T]: F:可选展示元数据（昵称、头像、发布时间）的清洗函数 | R:code:packages/contracts/src/image-diagnostic.ts | A:CaptureDisplay,savedNickname,safeAvatarUrl,savedPublishedAt | S:展示元数据不得用于身份、内容版本或模型输入；发布时间接受秒/毫秒 epoch，早于 2000 年或晚于明天一律丢弃
 collection-diagnostic.ts[DO7T]: F:采集诊断的封闭词表：搜索/详情失败原因、中文字案与阶段枚举 | R:code:packages/contracts/src/search-observation.ts | A:collectionDiagnosticSchema,searchFailureLabels,postFailureLabels | S:只允许受控词表与有界序号跨持久化与日志边界；SEARCH_DATA_MISSING 必须保留“不等于没有匹配帖子”，PAGE_UNAVAILABLE 必须保留“不能据此判断删除”
 comment-checkpoint.ts[DB7T]: F:评论检查点与分块请求/响应的传输契约 | R:code:packages/contracts/src/bounded-read.ts | A:commentCheckpointSchema,commentChunkRequestSchema,commentChunkSchema | S:marks 上限 2000，且 parent 必须指向已出现的 id、id 不可重复，否则拓扑非法；检查点绝不能进入公开证据、语义输入、日志或内容哈希
@@ -519,7 +519,7 @@ dm-protocol.cjs[DB5T]: F:私信协议的薄封装：从策略 bundle 取常量�
 evidence.cjs[DR8T]: F:未知发送的只读证据核对：范围校验、两次独立会话与结果落库 | R:code:packages/local-runtime/src/evidence.cjs | A:LocalEvidence | S:只接受 state=UNKNOWN 的尝试；账号必须有 session_ref 且 platform_user_id 等于尝试的 sender_id；平台暂停时必须先对账，两次会话都要证明已停止
 history-recovery.cjs[DR7T]: F:历史检查点续读：校验源检查点与行指纹后，把旧评论复制进新 run | R:code:packages/local-runtime/src/collection.cjs | A:HistoryRecovery | S:行数上限 800，marks 数量必须等于行数且每个 digest 与当前内容一致，否则 HISTORY_CHECKPOINT_MISMATCH；身份冲突或旧只读历史一律拒绝
 inbox-executor.cjs[IM8T]: F:收件执行器：按授权窗口建会话、同步历史、监听并在发送排队时让出 | R:code:packages/local-runtime/src/inbox.cjs | A:LocalInboxExecutor | S:有排队中的 SEND 任务必须 INBOX_YIELD_FOR_SEND 让出；wire 返回必须 identity=MATCH 且 submissions=0；停止无法证明时写 platform 安全状态并抛错
-inbox.cjs[IM8T]: F:收件状态机：接收窗口、身份校验、去重落库与未读 | R:code:packages/local-runtime/src/inbox-executor.cjs | A:LocalInbox,validInbound | S:入站必须 DM、TEXT、有正文、identity_verified=1 且无冲突、receiver_id 等于本账号、sender 与 receiver 都是 24 位 ID 且不相等；平台消息 ID 必须过 validDmMessageId
+inbox.cjs[IM8S]: F:收件状态机：接收窗口、身份校验、去重落库与未读 | R:code:packages/local-runtime/src/inbox-executor.cjs | A:LocalInbox,validInbound | S:入站必须 DM、TEXT、有正文、identity_verified=1 且无冲突、receiver_id 等于本账号、sender 与 receiver 都是 24 位 ID 且不相等；平台消息 ID 必须过 validDmMessageId
 legacy-evidence.cjs[PR6T]: F:旧库 UNKNOWN 证据导入：把可精确绑定的旧尝试转成原生只读核对记录 | R:code:packages/local-runtime/src/legacy-import.cjs | A:importUnknownEvidence | S:必须在事务内调用；账号、发送人、接收人、目标、内容、时间必须全部精确绑定，任一缺失只保留档案并计入 uncertain；导入的是已撤销授权与不可执行任务
 legacy-history.cjs[PR6T]: F:旧历史导入：把旧 run、帖子、评论与审核转成原生只读历史，无法归属的保留计数 | R:code:packages/local-runtime/src/legacy-import.cjs | A:importHistory | S:旧历史一律不可执行，导入的 job 状态是 INTERRUPTED 且授权已撤销；配置缺失即 LEGACY_RUN_CONFIGURATION_MISSING，不能凭空造配置
 legacy-import.cjs[PR7T]: F:旧数据导入的白名单与清洗：允许表、排除表、凭据字段与 URL 脱参 | R:code:packages/local-runtime/src/account-safety.cjs | A:prepareLegacySnapshot,importLegacySnapshot,legacyEntities | S:User/Session/RefreshGrant 等会话与设备表明确排除；凭据字段名集合命中即丢弃；URL 里的 xsec_token 等参数必须删除后再入库
@@ -621,7 +621,7 @@ build-device-vault.mjs[XV6T]: F:编译 macOS device-vault：swiftc 编译后写�
 build-module.mjs[XV6T]: F:按名字构建 domain / local-runtime / legacy-migration 并补拷非 TS 产物 | R:code:packages/local-runtime/package.json | A:- | S:名字只允许三个，拼错直接抛错；先 rmSync dist 再编译，拷贝只针对源码目录里的非编译文件
 build-windows-host.mjs[XV6T]: F:在 Windows 上编译 .NET helper 并校验平台能力 | R:code:native/windows/WindowsHost.cs | A:- | S:只在 win32 执行且要求 Windows 11 x64，ARM64/WSL/Server 一律拒绝；缺 SystemRoot 直接失败
 check-structure.mjs[XV5T]: F:结构检查：每个 workspace 必须有 package.json，依赖与 exports 必须显式声明 | R:code:docs/design/project-structure.md | A:- | S:apps 与 packages 下每个目录都要有清单，缺一个就失败；跳包相对穿透 src 会被判违规
-check-ui-conventions.mjs[XQ8L]: F:UI 规范检查：字号、圆角、字重、间距档位，硬编码颜色、任意值、!important 与 data-slot 覆写 | R:code:AGENTS.md,code:apps/web/DESIGN.md | A:- | S:FONT_SIZE_SCALE、RADIUS_SCALE、FONT_WEIGHT_SCALE、SPACING_SCALE 是白名单，加档位要同步 DESIGN.md；--strict 让 warning 也算失败；ALLOWED 的 data-slot 例外指向已不存在的 components/status-notice.css，当前等于空豁免
+check-ui-conventions.mjs[XQ8L]: F:UI 规范检查：字号、圆角、字重、间距档位，硬编码颜色、任意值、!important 与 data-slot 覆写 | R:code:AGENTS.md,code:apps/web/DESIGN.md | A:- | S:FONT_SIZE_SCALE、RADIUS_SCALE、FONT_WEIGHT_SCALE、SPACING_SCALE 是白名单，加档位要同步 DESIGN.md；--strict 让 warning 也算失败；ALLOWED 只登记当前仍存在的文件，文件删掉必须同步删例外，否则留下永远命中不到的空豁免
 test-all.mjs[XQ7T]: F:统一测试入口：逐组跑完所有测试，前一组失败不掩盖后面的组 | R:code:package.json | A:- | S:不能用 && 串起来，否则第一个红就吞掉后续组；集成测试按 tests/integration 目录自动发现
 test-device-vault.mjs[OQ6T]: F:在新建临时钥匙串上用假数据实测 macOS Keychain 往返 | R:code:native/macos/device-vault.swift | A:- | S:非 darwin/arm64 直接 SKIP 退出 0，并明说其他执行器未验证；绝不碰用户已有钥匙串条目
 test-windows-native.mjs[OQ6T]: F:Windows 真机测试 DPAPI、ACL 与 Job Object，用全新测试目录与假密钥 | R:code:native/windows/WindowsDesktop.cs | A:- | S:非 win32 直接 SKIP 并声明不主张 Windows 成功；测试目录与 deviceId/keyId 都随机生成，不复用已有数据
@@ -656,7 +656,7 @@ build-policy.mjs[XV7T]: F:用 esbuild 构建纯策略 bundle 并拷贝 schema �
 import-offline.mjs[XO6T]: F:命令行导入离线导出：目标必须是新的绝对路径，先建空文件再导入 | R:code:packages/local-runtime/src/legacy-import.cjs | A:- | S:目标已存在即拒绝；输入必须是普通文件、非符号链接且不超过 512MB；用 wx 模式建文件抢占所有权，失败时清理
 
 ===/Users/kleene/projects/social-lead-workbench/scripts/real-mcp/===
-core.mjs[XQ7T]: F:真实 MCP 预检：锁定已审二进制哈希、干净环境、回环端口与单会话检查 | R:code:integrations/inbox-mcp/main.go | A:reviewed,cleanEnvironment,preflight,createSession | S:已审构建哈希是硬编码白名单，升级必须重新审阅而不是回退到任意二进制或自动下载；端口必须回环且可用
+core.mjs[XQ7S]: F:真实 MCP 预检：锁定已审二进制哈希、干净环境、回环端口与单会话检查 | R:code:integrations/inbox-mcp/main.go | A:reviewed,cleanEnvironment,preflight,createSession | S:已审构建哈希是硬编码白名单，升级必须重新审阅而不是回退到任意二进制或自动下载；端口必须回环且可用
 core.test.mjs[XQ6T]: F:真实 MCP 预检的离线测试：干净环境、端口占用与符号链接拒绝 | R:code:scripts/real-mcp/core.mjs | A:- | S:断言符号链接与会话目录越界被拒；只测预检逻辑，不启动真实平台
 
 ===/Users/kleene/projects/social-lead-workbench/apps/desktop/build/===
@@ -677,7 +677,7 @@ icon-theme-system.tsx[CU3S]: F:主题预览图标（system）：半明半暗示�
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/components/patterns/===
 checkbox-field.tsx[CU6T]: F:复选框加说明的授权块，替代旧的 .local-check | R:code:apps/web/src/components/ui/checkbox.tsx | A:CheckboxField | S:说明文字用 ps-6 对齐（复选框 16 加间隙 8），不写死在调用点；授权文案必须完整描述后果，不能用这个组件压缩措辞
 content-section.tsx[CU5T]: F:设置与详情类页面的内容块：标题、描述、分隔线，不套卡片 | R:code:apps/web/src/components/patterns/section-card.tsx | A:ContentSection | S:设置页用它、列表页用 SectionCard；外面再包边框会变成卡片套卡片，分层靠 Separator
-detail-sheet.tsx[CU6T]: F:详情抽屉：固定标题区加可滚动内容区 | R:code:apps/web/src/components/ui/sheet.tsx | A:DetailSheet | S:宽度用 sm:max-w-xl（576px）而不是任意值；它替代了五处手写 Sheet 加 .local-detail-sheet 的 !important 覆盖
+detail-sheet.tsx[CU6T]: F:详情抽屉：固定标题区加可滚动内容区 | R:code:apps/web/src/components/ui/sheet.tsx | A:DetailSheet | S:宽度用 sm:max-w-xl（576px）而不是任意值；它替代了五处手写 Sheet 加 .local-detail-sheet 的宽度覆盖，对应的 ALLOWED 例外已删除
 empty-state.tsx[CU5T]: F:空状态占位：标题、可选描述与可选动作，居中排版 | R:code:apps/web/src/components/patterns/section-card.tsx | A:EmptyState | S:刻意不带边框与底色——它几乎总在 SectionCard 内部，自带边框会形成卡片套卡片；需要独立带框的空状态时由调用点外层套 SectionCard
 filter-bar.tsx[CU5T]: F:筛选工具条与带标签筛选项：控件横向换行，标签在上控件在下 | R:code:apps/web/src/components/layout/main.tsx | A:FilterBar,FilterField | S:自身不带上下外边距：它是外壳 main（gap-4）的直接子元素，调用点再加 margin 会叠成 32px 破坏纵向节奏；FilterField 的 min-w-40 是防塌陷下限，去掉后输入框会被压到读不出内容
 form-field.tsx[CU6T]: F:表单项：标签在上、控件在下，提示与错误在控件下方 | R:code:AGENTS.md | A:FormField | S:hint 与 error 必须渲染在 label 外面，放进去会被算进控件的可访问名称；hint 是 AGENTS §9 解释性文案的高发位置，只承载状态或授权

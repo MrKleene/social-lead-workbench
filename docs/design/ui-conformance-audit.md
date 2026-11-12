@@ -53,8 +53,8 @@
 |---|---|---|
 | 遗留类名（`local-*` 等） | 23 个文件 / 169 处 | **0 处** |
 | 全局样式表 | 6 个 | **2 个**（`index.css` + `theme.css`） |
-| `ui:check` 批准例外 | 5 条 | **2 条** |
-| 手写 CSS 总行数 | 464 行 | 0 行（`status-notice.css` 除外） |
+| `ui:check` 批准例外 | 5 条 | **1 条** |
+| 手写 CSS 总行数 | 464 行 | **0 行** |
 
 删除的样式表：`styles/workbench.css`、`styles/desktop-bridge.css`、
 `features/local-workbench/local-workbench.css`、`features/local-workbench/local-shell.css`、
@@ -335,7 +335,8 @@ CLI 装了 `react-day-picker@10.0.2` + `date-fns@4.4.0`，但**有两个坑**：
    改成纯 Tailwind，并把写死的 3 行骨架改成 `rows` 参数。
 5. **`StatusNotice` 是最后一份手写 CSS**——`status-notice.css` 9 条规则，含一条
    `[data-slot=sheet-content]` 覆写（`ALLOWED` 里的批准例外）。全部翻成 Tailwind 后删除 CSS，
-   `data-slot-override` 例外随之消失。
+   `data-slot-override` 例外随之消失。**2026-11-13 补完**：CSS 与 `data-slot-override`
+   例外已一并删除，`ALLOWED` 只剩 `styles/index.css` 的 `!important` 一条。
 
 另外把 4 处手写容器换成组件：`local-account-page` 与 `local-configurations` 的
 `<section className="rounded-lg border bg-card p-6">` → `SectionCard`（后者需要透传

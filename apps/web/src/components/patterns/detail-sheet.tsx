@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * 详情抽屉。替代 5 处手写 `<Sheet>` + `.local-detail-sheet` 的宽度强制覆盖
- * （那条 `ALLOWED` 例外也随之可以删掉）。
+ * （对应的 `ALLOWED` 例外已删除）。
  *
  * 宽度用 `sm:max-w-xl`（576px）而不是任意值；内容区自己滚，标题区固定。
  */

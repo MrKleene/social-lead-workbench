@@ -566,8 +566,9 @@ components:
 ### 已知结构问题（不影响观感）
 
 - 遗留类名与全局样式表**已清零**（2026-11-11）。`ui:check` 的 `legacy-class` 规则守着，白名单为空。
-- `ui:check` 有 2 条批准例外（1 条 `!important`、1 条 `[data-slot]` 覆写），每条都在
-  `scripts/check-ui-conventions.mjs` 的 `ALLOWED` 里写了理由。新增例外必须同样写理由。
+- `ui:check` 有 1 条批准例外（`styles/index.css` 的 `!important`），在
+  `scripts/check-ui-conventions.mjs` 的 `ALLOWED` 里写了理由。新增例外必须同样写理由；
+  文件删除后必须同步删掉例外。
 - **内容容器仍缺 1040px 上限**：`workbench-shell` 的 `main` 是 `p-4 md:p-6` 全宽，
   §5 要求的 `max-width:1040px` 尚未落地，宽屏下正文会一路拉到窗口边缘。
 - **`--input` 与 `--border` 同值**（hairline），36px 输入框边框对比度约 1.16:1，

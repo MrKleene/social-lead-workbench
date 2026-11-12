@@ -41,17 +41,15 @@ const TOKEN_SOURCE = new Set(['styles/theme.css'])
 /**
  * 显式例外：必须逐条给出理由，否则仍算违规。
  * 用于「技术上无法避免」的场景（覆盖第三方组件内置工具类、Radix 运行时行为）。
+ *
+ * 只登记**当前仍存在**的文件。文件删掉后必须同步删掉这里，
+ * 否则会留下一条永远命中不到的空豁免，让「还有几条例外」这个事实失真。
  */
 const ALLOWED = [
   [
     'styles/index.css',
     'important',
     'Radix 滚动锁会移除滚动条宽度，sticky 表头需要 overflow:unset；输入框 16px 是 iOS 聚焦缩放防护',
-  ],
-  [
-    'components/status-notice.css',
-    'data-slot-override',
-    '通知条内按钮尺寸与抽屉宽度，作用域限定在 .compact-status-notice / .compact-status-dialog',
   ],
 ]
 const allowedKey = new Set(ALLOWED.map(([f, r]) => `${f}::${r}`))

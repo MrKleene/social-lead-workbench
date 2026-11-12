@@ -131,9 +131,9 @@ components/ui/{command,scroll-area,avatar,radio-group,label,dialog}  assets/cust
   去掉本机应用没有的菜单项（登录/登出/账单/通知）、`SidebarContent` 的 `aria-label='主导航'`。
 - 同步上游：把上面这些文件从 shadcn-admin 重新 copy 覆盖，然后只重做「内容接缝」。
 
-`ui:check` 现有 2 条批准例外（1 条 `!important`、1 条 `[data-slot]` 布局覆盖），
-每条都在 `scripts/check-ui-conventions.mjs` 的 `ALLOWED` 里写明理由。
-**新增例外必须同样登记理由**，否则检查失败。
+`ui:check` 现有 1 条批准例外（`styles/index.css` 的 `!important`），
+在 `scripts/check-ui-conventions.mjs` 的 `ALLOWED` 里写明理由。
+**新增例外必须同样登记理由**，否则检查失败；**文件删除后必须同步删掉对应例外**。
 
 ---
 
