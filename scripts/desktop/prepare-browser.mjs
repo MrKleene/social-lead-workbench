@@ -56,6 +56,17 @@ fs.cpSync(source, destination, {
   mode: fs.constants.COPYFILE_FICLONE,
 })
 
+// 复制后校验签名完整性。Chromium 的沙箱依赖签名里的 entitlements，缺 _CodeSignature
+// 的 linker-signed 副本能通过版本/架构/权限检查，却会在启动时报
+// "sandbox initialization failed"，最终表现为扫码进程启动失败。
+// 在目标路径校验，避免挂载卷上的 Finder 元数据造成误报。
+const signature = cp.spawnSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', destination], {
+  encoding: 'utf8',
+})
+if (signature.status !== 0) {
+  throw Error('BROWSER_SIGNATURE_INVALID: ' + (signature.stderr || '').trim())
+}
+
 const files = {}
 function walk(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
