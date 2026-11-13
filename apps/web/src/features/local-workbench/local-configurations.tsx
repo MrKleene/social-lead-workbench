@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Cpu, Filter, MessageSquare, Send, Tag } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { ContentSection } from "@/components/patterns/content-section";
+import { SectionCard } from "@/components/patterns/section-card";
 import { DetailItem, DetailList } from "@/components/patterns/detail-sheet";
 import { FormField } from "@/components/patterns/form-field";
 import { PageHeader } from "@/components/patterns/page-header";
@@ -271,7 +271,7 @@ export function LocalConfigurations() {
                   ))}
                 </aside>
 
-                <ContentSection
+                <SectionCard
                   aria-label="配置详情"
                   className="min-w-0"
                   title={
@@ -374,7 +374,7 @@ export function LocalConfigurations() {
                       尚无此类配置，请新增。
                     </p>
                   )}
-                </ContentSection>
+                </SectionCard>
               </div>
             </>
           )}

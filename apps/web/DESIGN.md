@@ -182,6 +182,32 @@ components:
 冲突时**以本文为准**。已经按本文改掉的有：圆角 10px→8px、字重 700→600、卡片阴影移除、
 `hsl(var(--x))` 套壳修正。**没有**跟进的只有配色（见 §1「冷灰」和 §2 暗色说明），那是刻意保留的。
 
+### 每条规则的出处（别把自定的当上游）
+
+| 规则 | 谁定的 | 依据 |
+|---|---|---|
+| 颜色值、灰阶、hairline、表面三层 | **vercel** | `design.md` 的 colors token，逐值可查 |
+| 圆角刻度、字重 600 天花板、字号阶梯 | **vercel** | 同上 |
+| 外壳结构、`SidebarNav` 等组件形态、`Main` 的 1280px 容器 | **shadcn-admin** | 源码，不是规范文档 |
+| ~~列表页用 `SectionCard` / 设置页用 `ContentSection`~~ | **已废止**（无上游出处，也无产品决策记录） | 2026-11-12 `4567fed` 归纳，2026-11-14 删除 |
+| ~~阴影只用于浮层、卡片不用阴影~~ | **已废止**（无上游出处，且与 vercel 相反） | 见下 |
+| 强制间距表、文案规则（§9）、CJK 排版规则、整套暗色 | **本项目** | §3/§5、`AGENTS.md` §9 |
+
+**2026-11-14 清理了两条无主条款**（都写进了本文，但没有人认领过）：
+
+1. **「阴影只用于浮层 / 卡片不用阴影」已废止**。它来自 `fb570d5`（建规范那次），
+   `卡片不用阴影` 这句是 2026-11-14 补写时把代码现状总结成规则的产物。而 vercel 的 elevation
+   有 5 级，Level 2「Subtle Drop」明确给卡片叠极轻阴影（`0 1px 1px #00000005` +
+   `0 2px 2px #0000000a` + inset hairline）。所以这条**不仅无主，还与上游相反**。
+   现在 §6 按 vercel 分级描述，卡片阴影属于允许项（当前未启用）。
+2. **「设置页不套卡片」已删除**（同表上一行）。它是 `4567fed` 里跟着 `content-section.tsx`
+   一起写进来的 6 行归纳——先抄了上游组件的形态，再把「什么时候用它」总结成规则。
+   vercel 通篇没有组件架构话题，shadcn-admin 也只有那个组件本身。
+   2026-11-14 按用户决定废止，页面骨架统一改用 `SectionCard`，组件文件已删除。
+
+**教训**：这两条都是「把当时的实现总结成规范」的产物。写规范时如果要写
+「必须用 A 不能用 B」，先确认这是谁的决定——否则下一个维护者会把它当成约束去遵守。
+
 **2026-11-09 收敛结果**：
 
 | 项 | 收敛前 | 现在 |
@@ -223,7 +249,8 @@ components:
   - 理由二：浅色已是中性灰，暗色若单独带蓝，切换主题时会出现明显的色相跳变；
     要换就得两套一起换，那等于放弃 vercel 的灰阶体系。
   - 理由三：`--input` 的 3:1 是在中性底上验的，换底色要全部重算。
-- **扁平**：页面骨架只用 1px 边框分层；阴影只用于浮层（dropdown / dialog / sheet）。
+- **扁平**：页面骨架只用 1px 边框分层；阴影按 vercel 的 elevation 分级使用（见 §6），
+  当前卡片不带阴影，浮层带。
 - **圆角偏小**：基准 8px，控件 6px、卡片 8px，同一屏不混用两套尺度。
 - 双语界面（中文为主 + 英文标识），排版必须同时满足 CJK 与 Latin 的可读性。
 
@@ -439,7 +466,7 @@ components:
 | 组件 | 替代 | 关键约束 |
 |---|---|---|
 | `PageHeader` | `<header className="page-heading">` | 结构照框架普通页（`h2` + 标题块与动作区同行），但字号字重按本项目规范：`text-display font-semibold`（24px/600）；**不带外边距**（节奏由 `<Main>` 的 gap 给） |
-| `SectionCard` | `.local-panel` / `.configuration-detail` | 24px 内边距、边框分层无阴影、**卡片内不再套卡片** |
+| `SectionCard` | `.local-panel` / `.configuration-detail` | **所有页面骨架都用它**；24px 内边距、1px 边框分层（阴影可选，见 §6）、**卡片内不再套卡片** |
 | `FilterBar` / `FilterField` | `.local-filterbar` | 控件间距 12px；**自身不带上下 margin**，靠外壳 `gap-4` |
 | `RecordList` / `RecordItem` | `.local-config-list` | 行间 `divide-y`，动作区 `shrink-0` |
 | `Pagination` | `Pages` / `LocalPagination` / 内联 `<nav>` | 只有一页时整体不渲染；按钮 36px |
@@ -448,13 +475,16 @@ components:
 | `CheckboxField` | `.local-check` | 复选框 + 文案 + 可选说明；说明左对齐到文案 |
 | `DetailSheet` / `DetailList` | `.local-detail-sheet` + 手写 `<dl>` | 宽度 `sm:max-w-xl`，不用任意值 |
 | `SidebarNav` | 手写分类导航 | 图标 + `ghost` 按钮，选中 `bg-muted`；窄屏横向滚动，宽屏竖排 |
-| `ContentSection` | 设置类页面套 `SectionCard` | 标题 + 描述 + `Separator` + 内容，**不套卡片** |
 | `Disclosure`（`components/disclosure.tsx`） | 原生 `<details>/<summary>` | 基于 `Collapsible`；标题 `font-medium`、左对齐到正文；**不要用原生 `details`**——三角标记无法统一、无展开动画、事件模型不同 |
 | `ErrorNotice` / `Loading`（`components/feedback.tsx`） | 裸 `<p role="alert">` / 手写骨架 | 错误一律 `Alert variant="destructive"` + 图标；**不要手写红字**。`Loading` 只在整块无数据时用 |
 
-**`SectionCard` 和 `ContentSection` 怎么选**：列表类页面（采集归档、回复记录、消息通知）用
-`SectionCard`——卡片是用来分隔独立记录的；设置/详情类页面（配置管理、账号中心、模型配置）用
-`ContentSection`——主体是「一屏文档」，外面再包边框会变成卡片里放卡片。同一页不混用两种。
+**页面骨架统一用 `SectionCard`**：一块独立内容 = 一张卡，列表页、设置页、详情页都一样。
+卡片内部要分节时用 `border-t`（不要套第二张卡）；一屏只有一段内容时也照样用卡片，
+**不要退回裸 `<div>` + 分隔线**——那样在宽屏上会变成贴着左边的一条窄带。
+
+> 2026-11-14 废止了旧的「列表页用 SectionCard / 设置页用 ContentSection」二选一规则。
+> 那条规则来自 2026-11-12 一次重构的事后归纳，没有产品决策记录（见 §0.1 归属表），
+> 现已删除 `components/patterns/content-section.tsx`，全部页面改用 `SectionCard`。
 
 **外壳（侧栏 / 顶栏 / 主题布局）不在这张表里**：2026-11-11 起它们**整体使用 shadcn-admin 的源码**
 （`components/layout/*`、`components/{search,command-menu,theme-switch,config-drawer,profile-dropdown,skip-to-main}.tsx`、
@@ -515,12 +545,17 @@ components:
 
 1. **边框**（首选）：`1px solid var(--border)`，最轻，用于卡片、表格、分段、sticky 顶栏。
 2. **表面差**（次选）：`background` → `muted` → `card`，暗色下靠亮度阶梯。
-3. **阴影**（仅浮层）：`shadow-md`（Popover / Select / Dropdown 面板）、`shadow-lg`（Dialog / Sheet / AlertDialog）。
+3. **阴影**：浮层用 `shadow-md`（Popover / Select / Dropdown）、`shadow-lg`（Dialog / Sheet / AlertDialog）；
+   卡片可用 `shadow-xs` / `shadow-sm` 这一档。
 
-卡片**不用阴影**（`Card` 的 `shadow-sm` 已移除），顶栏**不用阴影**（滚动时加 1px `border-b`）。
-`shadow-2xl` 及以上禁止——`ui:check` 的 `shadow-out-of-scale` 会拦。
+**卡片阴影是可选项，不是禁止项**。vercel 的 elevation 分 5 级，Level 2「Subtle Drop」就是给卡片的
+（`0 1px 1px #00000005` + `0 2px 2px #0000000a` + inset hairline）。本项目**当前没有启用**：
+内部工具卡片密集，阴影叠起来会变成噪点，靠 1px 边框 + 表面差已经够分层。要启用就用 `shadow-xs` / `shadow-sm`。
 
-禁止：彩色阴影、大范围高斯模糊光晕、超过 `shadow-xl` 的投影。
+顶栏不加阴影（滚动时加 1px `border-b`）——这是当前实现，不是禁令。
+
+仍然禁止：彩色阴影、大范围高斯模糊光晕、`shadow-2xl` 及以上（`ui:check` 的 `shadow-out-of-scale` 会拦）。
+这一条是机械守卫，防止阴影从"轻微抬升"退化成装饰。
 
 ---
 

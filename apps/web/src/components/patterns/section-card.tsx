@@ -6,7 +6,7 @@ import { Card, CardAction, CardContent, CardHeader } from "@/components/ui/card"
  * 三套手写容器。
  *
  * 度量来自 `DESIGN.md` §4/§5：内边距 24px、圆角 8px（`Card` 自带 `rounded-lg`）、
- * 只用 1px 边框分层（`Card` 的 `shadow-sm` 已按 §6「阴影仅浮层」移除）、
+ * 只用 1px 边框分层（`Card` 的 `shadow-sm` 当前未启用，§6 允许但不强制）、
  * 标题到内容 16px（`Card` 的 `gap-4`）。
  *
  * **卡片里不再套卡片**：分段用 `border-t`（`DESIGN.md` §4）。

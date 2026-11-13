@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormField } from "@/components/patterns/form-field";
-import { ContentSection } from "@/components/patterns/content-section";
+import { SectionCard } from "@/components/patterns/section-card";
 import { ErrorNotice } from "@/components/feedback";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useDraftGuard } from "@/features/work/draft-guard";
@@ -63,7 +63,7 @@ export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }
   };
 
   return (
-    <ContentSection title="评论审核模型配置">
+    <SectionCard title="评论审核模型配置">
       {error ? <ErrorNotice error={error} /> : null}
 
       {data?.modelPaused ? (
@@ -121,6 +121,6 @@ export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }
           <p className="text-caption text-muted-foreground">模型请求未启用</p>
         ) : null}
       </form>
-    </ContentSection>
+    </SectionCard>
   );
 }
