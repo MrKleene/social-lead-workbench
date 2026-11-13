@@ -1,9 +1,23 @@
 const path=require('node:path');
 const native=path.resolve(__dirname,'dist/native',process.platform+'-'+process.arch);
+const {execFileSync}=require('node:child_process');
 const {NativeResources}=require('./src/native-resources.cjs');
 // Signing is opt-in: set CSC_NAME (or CSC_LINK/CSC_KEY_PASSWORD) to sign, leave
 // unset for an ad-hoc preview build. Passing `identity: null` would *disable*
 // signing even when a certificate is supplied, so the key is omitted instead.
+// 未显式指定身份时，若钥匙串里有本地自签证书就自动启用：ad-hoc 的指定要求绑定
+// cdhash，每次打包都会变，会反复触发钥匙串授权弹窗；证书签名的指定要求绑定证书，
+// 跨版本稳定。这里自动探测，避免忘记 export CSC_NAME 时静默退回 ad-hoc。
+if(!process.env.CSC_NAME&&!process.env.CSC_LINK&&process.platform==='darwin'){
+ try{
+  const out=execFileSync('security',['find-identity','-v','-p','codesigning'],{encoding:'utf8'});
+  if(out.includes('SocialLead Local Signing')){
+   process.env.CSC_NAME='SocialLead Local Signing';
+   // 自签证书取不到 Apple 时间戳
+   if(!process.env.CSC_TIMESTAMP)process.env.CSC_TIMESTAMP='none';
+  }
+ }catch{}
+}
 const macIdentity=process.env.CSC_NAME;
 // 自签名证书取不到 Apple 时间戳，设 CSC_TIMESTAMP=none 让 codesign 用 --timestamp=none。
 const macTimestamp=process.env.CSC_TIMESTAMP?{timestamp:process.env.CSC_TIMESTAMP}:{};
