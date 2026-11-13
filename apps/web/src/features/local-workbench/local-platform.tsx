@@ -31,10 +31,13 @@ function platformReason(reason: string) {
 
 export function LocalLoginPanel({
   credentialsAvailable,
+  onVerified,
 }: {
   credentialsAvailable: boolean;
+  /** 扫码核验通过后回调——「添加账号」弹窗用它自动关闭。 */
+  onVerified?: () => void;
 }) {
-  const platform = useLocalPlatform();
+  const platform = useLocalPlatform({ onVerified });
   const [accountId, setAccountId] = useState("");
   const [name, setName] = useState("");
   const [limit, setLimit] = useState("10");

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,17 +14,80 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { DetailItem, DetailList } from "@/components/patterns/detail-sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DetailItem,
+  DetailList,
+  DetailSheet,
+} from "@/components/patterns/detail-sheet";
+import { EmptyState } from "@/components/patterns/empty-state";
 import { FormField } from "@/components/patterns/form-field";
 import { PageHeader } from "@/components/patterns/page-header";
 import { SectionCard } from "@/components/patterns/section-card";
 import { useDraftGuard } from "@/features/work/draft-guard";
 import { ErrorNotice } from "@/components/feedback";
-import { LocalAccountDiagnostics } from "./local-diagnostics";
+import { cn } from "@/lib/utils";
 import { LocalLoginPanel } from "./local-platform";
 import { useLocalAction, useLocalRecords } from "./use-local-records";
 import type { AccountDetails } from "./local-api";
-import { cn } from "@/lib/utils";
+
+/** 卡片只放基础信息；完整字段与操作在详情抽屉里。
+ *
+ *  `Card asChild` 把卡片样式落到真正的 `<button>` 上——整张卡可点，且键盘 Tab / Enter /
+ *  焦点环都是原生行为，不用给 div 补 role 与 keydown。
+ */
+function AccountCard({
+  account,
+  onOpen,
+}: {
+  account: AccountDetails;
+  onOpen: () => void;
+}) {
+  const restricted = account.state === "RESTRICTED";
+  const title = account.nickname ?? account.name;
+  return (
+    <Card asChild className="transition-colors hover:bg-accent">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="text-start outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        <CardContent className="flex items-center gap-3">
+          <Avatar className="size-10">
+            {account.avatar_url ? (
+              <AvatarImage src={account.avatar_url} alt="" />
+            ) : null}
+            <AvatarFallback className="text-caption">
+              {title.slice(0, 1)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="flex min-w-0 flex-col gap-1">
+            <span className="text-section font-semibold break-words">
+              {title}
+            </span>
+            <span
+              className={cn(
+                "text-caption break-words",
+                restricted ? "text-attention" : "text-muted-foreground",
+              )}
+            >
+              {restricted ? "账号受限 · " : ""}
+              {account.hasSession ? "已有本机会话" : "待重新登录"}
+              {" · 今日 "}
+              {account.occupied}/{account.todayLimit}
+            </span>
+          </span>
+        </CardContent>
+      </button>
+    </Card>
+  );
+}
 
 function AccountEditor({
   account,
@@ -47,7 +112,7 @@ function AccountEditor({
 
   return (
     <form
-      className="flex max-w-xl flex-col gap-4 border-t pt-6"
+      className="flex flex-col gap-4 border-t pt-4"
       onSubmit={(event) => {
         event.preventDefault();
         edit.mutate(
@@ -62,7 +127,6 @@ function AccountEditor({
         );
       }}
     >
-      <h3 className="text-section font-semibold">编辑账号设置</h3>
       <FormField label="本地名称">
         <Input
           value={name}
@@ -71,7 +135,6 @@ function AccountEditor({
           required
         />
       </FormField>
-      {/* 两个上限是同一类数字字段，并排比竖排更省纵向空间。 */}
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="默认每日发送上限">
           <Input
@@ -108,177 +171,206 @@ function AccountEditor({
 }
 
 /**
- * 账号中心。布局照配置管理：左侧账号列表当导航，右侧一列内容（详情 + 添加账号）。
- * 表单都限宽，避免输入框在宽屏上拉成一整行。
+ * 账号中心：页头一个「添加账号」，账号以卡片网格排列，点卡片开详情抽屉。
+ *
+ * 卡片只放基础信息（名称、会话状态、今日额度）；完整字段与编辑/断开/删除都在抽屉里，
+ * 十几个账号时主列表也不会变成一屏长列表。
  */
 export function LocalAccountPage() {
   const data = useLocalRecords("accountDetails");
   const status = useLocalRecords("status");
   const disconnect = useLocalAction("disconnectAccount");
-  const [selected, setSelected] = useState("");
+  const remove = useLocalAction("deleteAccount");
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const accounts = data.data ?? [];
-  const account =
-    accounts.find((item) => item.id === selected) ?? accounts[0];
-  const failure = data.error ?? disconnect.error;
+  // 从列表里现取：账号被删或数据刷新后抽屉自动失效，不会停在旧快照上。
+  const selected = accounts.find((item) => item.id === detailId) ?? null;
+  const failure = data.error ?? disconnect.error ?? remove.error;
+  const credentialsAvailable = !!status.data?.credentialsAvailable;
+
+  const closeDetail = () => {
+    setDetailId(null);
+    setEditing(false);
+    setConfirmDisconnect(false);
+    setConfirmRemove(false);
+  };
 
   return (
     <>
-      <PageHeader title="账号中心" />
+      <PageHeader
+        title="账号中心"
+        actions={<Button onClick={() => setAddOpen(true)}>添加账号</Button>}
+      />
 
       {failure ? <ErrorNotice error={failure} /> : null}
 
-      <div
-        className={
-          accounts.length
-            ? "grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8"
-            : "flex flex-col gap-6"
-        }
-      >
-        {accounts.length ? (
-          <nav
-            aria-label="账号列表"
-            // 账号可能到十几个：让列表自己滚（吸顶 + 限高），
-            // 否则列表会把整页拉长，滚动时右侧详情跟着滚走。
-            className="flex min-w-0 flex-col gap-1 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto"
-          >
-            {accounts.map((item) => (
-              <Button
-                variant="ghost"
-                key={item.id}
-                disabled={editing}
-                aria-pressed={account?.id === item.id}
-                aria-current={account?.id === item.id ? "page" : undefined}
-                className="h-auto flex-col items-start justify-start gap-1 whitespace-normal px-3 py-2.5 text-start aria-pressed:bg-muted"
-                onClick={() => {
-                  setSelected(item.id);
-                  setEditing(false);
-                }}
-              >
-                <span className="text-body font-medium break-words">
-                  {item.name}
-                </span>
-                {/* 受限是列表里唯一必须在展开前就看到的状态，其余信息保持次级色。 */}
-                <span
-                  className={cn(
-                    "text-caption leading-relaxed break-words",
-                    item.state === "RESTRICTED"
-                      ? "text-attention"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {item.state === "RESTRICTED" ? "账号受限 · " : ""}
-                  {item.hasSession ? "已有本机会话" : "待重新登录"} · 今日{" "}
-                  {item.occupied}/{item.todayLimit}
-                </span>
-              </Button>
-            ))}
-          </nav>
-        ) : null}
-
-        <div className="flex min-w-0 flex-col gap-6">
-          {account ? (
-            <SectionCard
-              title={account.name}
-              actions={
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={() => setEditing((value) => !value)}
-                  >
-                    {editing ? "取消编辑" : "编辑账号设置"}
-                  </Button>
-                  <AlertDialog
-                    open={confirmOpen}
-                    onOpenChange={setConfirmOpen}
-                  >
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" disabled={!account.hasSession}>
-                        断开本机会话
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>断开本机会话</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          断开后需要重新扫码才能继续使用该账号。
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>保留会话</AlertDialogCancel>
-                        <AlertDialogAction
-                          variant="destructive"
-                          onClick={() =>
-                            disconnect.mutate(
-                              { id: account.id, revision: account.revision },
-                              { onSuccess: () => setConfirmOpen(false) },
-                            )
-                          }
-                        >
-                          确认断开
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </>
-              }
-            >
-              <DetailList>
-                <DetailItem label="平台账号 ID">
-                  {account.platform_user_id ?? "尚未取得可靠身份"}
-                </DetailItem>
-                <DetailItem label="登录与会话">
-                  {account.hasSession
-                    ? "本机已保存；实际执行前再次核验"
-                    : "本机未保存有效会话"}
-                </DetailItem>
-                <DetailItem label="今日额度（北京时间）">
-                  {account.occupied} / {account.todayLimit} · {account.day}
-                </DetailItem>
-                <DetailItem label="默认每日上限">
-                  {account.daily_limit}
-                </DetailItem>
-                <DetailItem label="风险记录">
-                  {account.holds.length ? (
-                    account.holds.map((hold) => (
-                      <p key={hold.reason + String(hold.channel)}>
-                        {hold.channel ?? "全部渠道"} · {hold.reason}
-                      </p>
-                    ))
-                  ) : account.state === "RESTRICTED" ? (
-                    "账号受限，登录不能解除限制"
-                  ) : (
-                    "暂无独立风险记录；不代表平台允许发送。"
-                  )}
-                </DetailItem>
-              </DetailList>
-
-              <LocalAccountDiagnostics
-                key={"diagnostics:" + account.id + ":" + account.revision}
-                accountId={account.id}
-              />
-
-              {editing ? (
-                <AccountEditor
-                  key={account.id + account.revision}
-                  account={account}
-                  onClose={() => setEditing(false)}
-                />
-              ) : null}
-            </SectionCard>
-          ) : null}
-
-          <SectionCard title="添加账号">
-            <div className="max-w-2xl">
-              <LocalLoginPanel
-                credentialsAvailable={!!status.data?.credentialsAvailable}
-              />
-            </div>
-          </SectionCard>
+      {accounts.length ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {accounts.map((account) => (
+            <AccountCard
+              key={account.id}
+              account={account}
+              onOpen={() => {
+                setEditing(false);
+                setDetailId(account.id);
+              }}
+            />
+          ))}
         </div>
-      </div>
+      ) : (
+        <SectionCard>
+          <EmptyState
+            title="还没有账号"
+            action={<Button onClick={() => setAddOpen(true)}>添加账号</Button>}
+          />
+        </SectionCard>
+      )}
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>添加账号</DialogTitle>
+            <DialogDescription className="sr-only">
+              扫码登录一个新的小红书账号
+            </DialogDescription>
+          </DialogHeader>
+          <LocalLoginPanel
+            credentialsAvailable={credentialsAvailable}
+            onVerified={() => setAddOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <DetailSheet
+        open={!!selected}
+        onOpenChange={(open) => {
+          if (!open) closeDetail();
+        }}
+        title={selected ? (selected.nickname ?? selected.name) : ""}
+      >
+        {selected ? (
+          <>
+            <DetailList>
+              {selected.nickname ? (
+                <DetailItem label="平台昵称">{selected.nickname}</DetailItem>
+              ) : null}
+              {selected.nickname ? (
+                <DetailItem label="本地名称">{selected.name}</DetailItem>
+              ) : null}
+              <DetailItem label="平台账号 ID">
+                {selected.platform_user_id ?? "尚未取得可靠身份"}
+              </DetailItem>
+              <DetailItem label="登录与会话">
+                {selected.hasSession
+                  ? "本机已保存；实际执行前再次核验"
+                  : "本机未保存有效会话"}
+              </DetailItem>
+              <DetailItem label="今日额度（北京时间）">
+                {selected.occupied} / {selected.todayLimit} · {selected.day}
+              </DetailItem>
+              <DetailItem label="默认每日上限">
+                {selected.daily_limit}
+              </DetailItem>
+              <DetailItem label="风险记录">
+                {selected.holds.length ? (
+                  selected.holds.map((hold) => (
+                    <p key={hold.reason + String(hold.channel)}>
+                      {hold.channel ?? "全部渠道"} · {hold.reason}
+                    </p>
+                  ))
+                ) : selected.state === "RESTRICTED" ? (
+                  "账号受限，登录不能解除限制"
+                ) : (
+                  "暂无独立风险记录；不代表平台允许发送。"
+                )}
+              </DetailItem>
+            </DetailList>
+
+            {editing ? (
+              <AccountEditor
+                key={selected.id + selected.revision}
+                account={selected}
+                onClose={() => setEditing(false)}
+              />
+            ) : null}
+
+            <div className="flex flex-wrap gap-3 border-t pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setEditing((value) => !value)}
+              >
+                {editing ? "取消编辑" : "编辑账号设置"}
+              </Button>
+
+              <AlertDialog
+                open={confirmDisconnect}
+                onOpenChange={setConfirmDisconnect}
+              >
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" disabled={!selected.hasSession}>
+                    断开本机会话
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>断开本机会话</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      断开后需要重新扫码才能继续使用该账号。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>保留会话</AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="destructive"
+                      onClick={() =>
+                        disconnect.mutate(
+                          { id: selected.id, revision: selected.revision },
+                          { onSuccess: () => setConfirmDisconnect(false) },
+                        )
+                      }
+                    >
+                      确认断开
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              <AlertDialog open={confirmRemove} onOpenChange={setConfirmRemove}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive">删除账号</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>删除账号</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      删除后该账号从列表移除，发送与收件记录保留。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>保留账号</AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="destructive"
+                      onClick={() =>
+                        remove.mutate(
+                          { id: selected.id, revision: selected.revision },
+                          { onSuccess: closeDetail },
+                        )
+                      }
+                    >
+                      确认删除
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </>
+        ) : null}
+      </DetailSheet>
     </>
   );
 }
