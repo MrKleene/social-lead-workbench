@@ -242,6 +242,7 @@ export function LocalAccountPage() {
           <LocalLoginPanel
             credentialsAvailable={credentialsAvailable}
             onVerified={() => setAddOpen(false)}
+            onCancelled={() => setAddOpen(false)}
           />
         </DialogContent>
       </Dialog>

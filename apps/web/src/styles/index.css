@@ -85,3 +85,23 @@
     height: 0;
   }
 }
+
+/* pending 按钮转圈。
+   `Button` 的 `pending` 只设 data-pending / aria-busy，没有视觉反馈——
+   扫码、登录这类要等几秒的动作，用户会以为点了没生效。 */
+[data-pending]::before {
+  content: '';
+  flex: none;
+  width: 0.875em;
+  height: 0.875em;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  animation: pendingSpin 0.6s linear infinite;
+}
+
+@keyframes pendingSpin {
+  to {
+    transform: rotate(1turn);
+  }
+}

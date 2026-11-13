@@ -32,10 +32,13 @@ function platformReason(reason: string) {
 export function LocalLoginPanel({
   credentialsAvailable,
   onVerified,
+  onCancelled,
 }: {
   credentialsAvailable: boolean;
   /** 扫码核验通过后回调——「添加账号」弹窗用它自动关闭。 */
   onVerified?: () => void;
+  /** 用户取消登录后回调——取消等于放弃这次添加，弹窗一起关掉。 */
+  onCancelled?: () => void;
 }) {
   const platform = useLocalPlatform({ onVerified });
   const [accountId, setAccountId] = useState("");
@@ -144,8 +147,8 @@ export function LocalLoginPanel({
           </p>
         ) : null}
 
-        {/* 不再画分隔线：这是表单的唯一动作，不需要和上面的字段分开。 */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* 表单动作放页脚右对齐：单独一个按钮贴左边，看起来像没接上表单。 */}
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
           <Button
             type="submit"
             disabled={
@@ -155,7 +158,7 @@ export function LocalLoginPanel({
             }
             pending={platform.begin.isPending}
           >
-            获取登录二维码
+            {platform.begin.isPending ? "正在生成二维码…" : "获取登录二维码"}
           </Button>
         </div>
       </form>
@@ -176,7 +179,11 @@ export function LocalLoginPanel({
             <Button
               variant="outline"
               pending={platform.cancel.isPending}
-              onClick={() => platform.cancel.mutate()}
+              onClick={() =>
+                platform.cancel.mutate(undefined, {
+                  onSuccess: () => onCancelled?.(),
+                })
+              }
             >
               取消登录
             </Button>
