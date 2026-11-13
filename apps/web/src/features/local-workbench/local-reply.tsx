@@ -49,7 +49,7 @@ export function LocalReply({
       setPlan(null);
       setContent("");
       setConsent(false);
-      setNotice("已加入发送队列。请在任务记录确认结果；未知结果不会自动重发。");
+      setNotice("已加入发送队列。");
       void client.invalidateQueries({ queryKey: ["local"] });
     },
   });

@@ -27,7 +27,6 @@ export function Welcome({ onContinue, pending = false, error }: WelcomeProps) {
           </div>
         </div>
         <h1 id='welcome-title' className='text-display font-semibold'>欢迎使用线索工作台</h1>
-        <p className='mt-4 text-muted-foreground'>从连接账号开始，按需配置模型，再创建你的第一个任务。</p>
       </header>
 
       <div className='mt-6 flex flex-col gap-4 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:p-6'>
@@ -59,9 +58,11 @@ export function Welcome({ onContinue, pending = false, error }: WelcomeProps) {
             先进入工作台
           </Button>
         </div>
-        <p role='status' className='mt-4 text-caption text-muted-foreground'>
-          {pending ? '正在打开本地工作台…' : '之后可以在账号中心和配置管理中继续配置。'}
-        </p>
+        {pending ? (
+          <p role='status' className='mt-4 text-caption text-muted-foreground'>
+            正在打开本地工作台…
+          </p>
+        ) : null}
       </div>
       <footer className='mt-10 border-t pt-6 text-center text-caption text-muted-foreground'>无需注册工作台账号</footer>
     </section>

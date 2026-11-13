@@ -206,12 +206,6 @@ export function LocalPosts({
           <h3 className="text-section font-semibold">
             {resume ? "新轮次继续验证历史检查点" : "单笔记重新读取"}
           </h3>
-          <p className="text-body leading-relaxed text-muted-foreground break-words">
-            {resume
-              ? "仅复制摘要与原文一致的历史记录，交由平台再次核对锚点；锚点缺失或身份变化时不会宣称完整。"
-              : "从当前平台重新读取并保留原历史。"}
-          </p>
-
           <FormField label="本次配置">
             <Select
               value={configId}

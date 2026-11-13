@@ -72,7 +72,7 @@ export function ImageDiagnostics({ value }: { value: unknown }) {
   if (!data || !Object.keys(data).length) {
     return (
       <p className="text-body text-muted-foreground">
-        此次记录没有图片诊断，无法追溯缺图原因。
+        此次记录没有图片诊断。
       </p>
     );
   }

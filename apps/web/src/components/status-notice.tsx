@@ -17,6 +17,9 @@ import { cn } from "@/lib/utils";
  * `text-attention`。原因放在抽屉里，因为可能有多条，展开会把列表挤走。
  *
  * 抽屉宽度用 `min(480px, 100vw-24px)`：窄屏留 12px 边距，避免贴边。
+ *
+ * **不带外边距**：纵向节奏交给父容器的 `gap`（`DESIGN.md` §4），自己加 margin
+ * 会在卡片底部留下无主空白。
  */
 export function StatusNotice({
   label,
@@ -33,7 +36,7 @@ export function StatusNotice({
   const Icon = attention ? CircleAlert : Info;
 
   return (
-    <div className="mb-4 flex items-center gap-2 py-1 text-caption leading-relaxed">
+    <div className="flex items-center gap-2 py-1 text-caption leading-relaxed">
       <div
         role="status"
         aria-live="polite"

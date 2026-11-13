@@ -6,7 +6,7 @@ export function useLocalData(){
  const [recoveryConsent,setRecoveryConsent]=useState(false),[recoveryPlan,setRecoveryPlan]=useState<RecoveryPreview|null>(null);
  const recovery=useQuery({queryKey:['local','recovery'],queryFn:()=>localApi('recoveryPreview')});
  const inspectRecovery=useMutation({mutationFn:()=>localApi('recoveryPreview'),onSuccess:p=>{setRecoveryPlan(p);setRecoveryConsent(false);}});
- const resume=useMutation({mutationFn:()=>localApi('resumeReviewedCopy',{previewHash:recoveryPlan!.previewHash,consent:'resume-reviewed-copy-for-new-work-v1'}),onSuccess:()=>{setRecoveryPlan(null);setRecoveryConsent(false);setNotice('已解除副本核对暂停。历史限制继续保留，新任务仍需重新授权。');void refresh();}});
+ const resume=useMutation({mutationFn:()=>localApi('resumeReviewedCopy',{previewHash:recoveryPlan!.previewHash,consent:'resume-reviewed-copy-for-new-work-v1'}),onSuccess:()=>{setRecoveryPlan(null);setRecoveryConsent(false);setNotice('已解除副本核对暂停。');void refresh();}});
  const copies=useQuery({queryKey:['local','copies'],queryFn:()=>localApi('dataCopies')});
  const overview=useQuery({queryKey:['local','legacy'],queryFn:()=>localApi('legacyOverview')});
  const rows=useQuery({queryKey:['local','legacy',entity,page],queryFn:()=>localApi('legacyPage',{entity,page}),enabled:!!entity});

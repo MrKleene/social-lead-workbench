@@ -188,6 +188,18 @@ function checkCss(file, content) {
     })
   }
 
+  // 5b. `hsl(var(--x))`：token 是 hex，套进 hsl() 是非法 CSS，声明会被整条丢弃
+  const wrapped = collect(content, /(?:hsl|rgb|rgba|hsla)\(\s*var\(--/g)
+  if (wrapped.length) {
+    add({
+      rule: 'wrapped-color-var',
+      level: 'error',
+      file,
+      detail: `${wrapped.length} 处把 hex token 套进 hsl()/rgb()（非法 CSS，会静默失效）`,
+      snippet: [...new Set(wrapped.map((h) => h.text))].slice(0, 4).join(' '),
+    })
+  }
+
   // 6. data-slot 覆写 shadcn（上一轮设计系统崩掉的模式）
   //    :not([data-slot=...]) 是排除守卫，不是覆写，先剔除
   const withoutGuards = content.replace(/:not\(\[data-slot[^\]]*\]\)/g, '')
@@ -228,6 +240,12 @@ const PALETTE =
   /\b(?:bg|text|border|ring|from|to|via|fill|stroke|outline|divide|shadow|accent|caret|decoration)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)\b/g
 
 function checkTsx(file, content) {
+  // 注释里引用的类名（解释「为什么不用 shadow-2xl」这类）不算违规。
+  // 只剥整行 `//` 与 JSX 块注释 `{/* … */}`，避免误伤字符串里的 `https://`。
+  // 用空格替换非换行字符以维持行号。
+  content = content.replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => m.replace(/[^\n]/g, ' '))
+  content = content.replace(/^[ \t]*\/\/.*$/gm, (m) => ' '.repeat(m.length))
+
   // 1. 任意值颜色
   const arbColor = collect(content, /\b(?:bg|text|border|ring|fill|stroke|from|to|via)-\[(?:#|rgb|hsl)[^\]]*\]/g)
   if (arbColor.length) {
@@ -371,6 +389,82 @@ function checkTsx(file, content) {
         snippet: [...new Set(legacyHits)].slice(0, 4).join(' '),
       })
     }
+  }
+
+  // 11. 任意值圆角：`rounded-[6px]` 这类应写成 rounded-md。
+  //     只放行 `rounded-[inherit]` 这种关键字（滚动区跟随父级圆角）。
+  const arbRadius = collect(content, /\brounded-\[(?!inherit\])[^\]]*\]/g)
+  if (arbRadius.length) {
+    add({
+      rule: 'arbitrary-radius',
+      level: 'error',
+      file,
+      detail: `${arbRadius.length} 处任意值圆角（应使用 sm/md/lg/xl/full）`,
+      snippet: [...new Set(arbRadius.map((h) => h.text))].slice(0, 4).join(' '),
+    })
+  }
+
+  // 12. 圆角越界：`rounded-2xl` 及以上禁止（DESIGN.md §4 只有 4 档 + pill）
+  const bigRadius = collect(content, /\brounded-(?:2xl|3xl|4xl|5xl)\b/g)
+  if (bigRadius.length) {
+    add({
+      rule: 'radius-out-of-scale',
+      level: 'error',
+      file,
+      detail: `${bigRadius.length} 处圆角超过 xl(12px)`,
+      snippet: [...new Set(bigRadius.map((h) => h.text))].slice(0, 4).join(' '),
+    })
+  }
+
+  // 13. 阴影越界：`shadow-2xl` 及以上禁止（DESIGN.md §6 上限是 shadow-xl）
+  const bigShadow = collect(content, /\bshadow-(?:2xl|3xl)\b/g)
+  if (bigShadow.length) {
+    add({
+      rule: 'shadow-out-of-scale',
+      level: 'error',
+      file,
+      detail: `${bigShadow.length} 处投影超过 shadow-xl（阴影只给浮层）`,
+      snippet: [...new Set(bigShadow.map((h) => h.text))].slice(0, 4).join(' '),
+    })
+  }
+
+  // 14. `hsl(var(--x))` / `rgb(var(--x))`：本项目 token 是 hex，
+  //     套进 hsl() 会得到非法 CSS，整条声明被浏览器丢弃（静默失效）。
+  const wrappedVar = collect(content, /(?:hsl|rgb|rgba|hsla)\(\s*var\(--/g)
+  if (wrappedVar.length) {
+    add({
+      rule: 'wrapped-color-var',
+      level: 'error',
+      file,
+      detail: `${wrappedVar.length} 处把 hex token 套进 hsl()/rgb()（非法 CSS，会静默失效）`,
+      snippet: [...new Set(wrappedVar.map((h) => h.text))].slice(0, 4).join(' '),
+    })
+  }
+
+  // 15. 原生表单控件：下拉与日期必须用 Radix Select / DatePicker，
+  //     原生弹出层由系统绘制，样式完全不受控（DESIGN.md §4）。
+  const nativeControl = collect(content, /<select\b|type=['"](?:date|time|datetime-local)['"]/g)
+  if (nativeControl.length) {
+    add({
+      rule: 'native-form-control',
+      level: 'error',
+      file,
+      detail: `${nativeControl.length} 处原生下拉/日期控件（应改用 Select / DatePicker）`,
+      snippet: [...new Set(nativeControl.map((h) => h.text))].slice(0, 4).join(' '),
+    })
+  }
+
+  // 16. 拿边框色当填充：`bg-input` 是控件边界色（3:1 灰），
+  //     当表面用会把控件底色调得又灰又亮，暗色填充应走 `bg-muted`。
+  const inputFill = collect(content, /\bbg-input(?:\/\d+)?\b/g)
+  if (inputFill.length) {
+    add({
+      rule: 'input-as-fill',
+      level: 'error',
+      file,
+      detail: `${inputFill.length} 处把 --input（边框色）当表面填充（暗色填充应用 bg-muted）`,
+      snippet: [...new Set(inputFill.map((h) => h.text))].slice(0, 4).join(' '),
+    })
   }
 }
 

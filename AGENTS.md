@@ -122,14 +122,23 @@ components/ui/{command,scroll-area,avatar,radio-group,label,dialog}  assets/cust
 
 - 这些文件**和业务代码受同一套规范约束**，`ui:check` 不做任何豁免。上游写法不合规时
   **就地改掉**，并记录改动（见下）——例如 `search.tsx` 的 `text-[10px]` 已改成 `text-caption`。
-- **同步上游时要重放这些改动**。目前已知的偏离上游之处只有一处：
-  `components/search.tsx` 的 `⌘K` 键帽字号。其余文件仍是逐字节的上游代码。
+- **同步上游时要重放下面这张偏离表**。当前偏离上游之处（共 6 个文件）：
+
+| 文件 | 改动 | 原因 |
+|---|---|---|
+| `components/search.tsx` | `⌘K` 键帽字号 → `text-caption` | 上游用 `text-[10px]`，越界 |
+| `components/config-drawer.tsx` | 全量中文；选中态 `shadow-2xl` → `ring-2`；`rounded-[6px]`/`ring-[1px]` → `rounded-md`/`ring-1`；预览层改 `aria-hidden` | 中文接缝 + 阴影/圆角越界 |
+| `components/theme-switch.tsx` | 中文；`theme-color` 改为读 `--background`；图标 `size-[1.2rem]` → `size-5` | 中文接缝 + 去硬编码色 |
+| `components/command-menu.tsx` | 中文（占位符、空态、主题分组） | 中文接缝 |
+| `components/skip-to-main.tsx` | `Skip to Main` → `跳到主内容` | 中文接缝 |
+| `components/ui/sidebar.tsx` | outline 变体的 `hsl(var(--sidebar-*))` → `var(--sidebar-*)` | token 是 hex，套 `hsl()` 会静默失效 |
+
 - `components/layout/app-title.tsx` 已删除（零引用死代码，且硬编码了上游品牌名与英文
   `sr-only` 文案）。
 - **不要改它们的样式**。要改外观改 `features/**` 和 `components/patterns/**`。
 - 允许的接缝只有「内容」：中文文案、`layout/data/sidebar-data.ts` 的导航数据、
   去掉本机应用没有的菜单项（登录/登出/账单/通知）、`SidebarContent` 的 `aria-label='主导航'`。
-- 同步上游：把上面这些文件从 shadcn-admin 重新 copy 覆盖，然后只重做「内容接缝」。
+- 同步上游：把上面这些文件从 shadcn-admin 重新 copy 覆盖，然后按上表重放偏离、再重做「内容接缝」。
 
 `ui:check` 现有 1 条批准例外（`styles/index.css` 的 `!important`），
 在 `scripts/check-ui-conventions.mjs` 的 `ALLOWED` 里写明理由。
@@ -146,8 +155,9 @@ npm run design:lint     # DESIGN.md 内部一致性
 npm run typecheck -w @crm/web
 ```
 
-`ui:check` 的 error 级规则：硬编码颜色、任意值颜色/字号/字重、直接调色板、字号/字重/圆角越界、
-`!important`、`[data-slot]` 覆写。它不判断审美，也不能替代截图核对。
+`ui:check` 的 error 级规则：硬编码颜色、任意值颜色/字号/字重/圆角、直接调色板、字号/字重/圆角/阴影越界、
+原生下拉与日期控件、`hsl(var(--x))` 套壳、`!important`、`[data-slot]` 覆写、遗留类名。
+它不判断审美，也不能替代截图核对。TSX 里的整行 `//` 与 `{/* … */}` 注释不参与规则匹配。
 
 ---
 

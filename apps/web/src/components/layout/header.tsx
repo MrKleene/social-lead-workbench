@@ -26,9 +26,12 @@ export function Header({ className, fixed, children, ...props }: HeaderProps) {
   return (
     <header
       className={cn(
-        'z-50 h-16',
+        'z-50 h-16 border-b',
         fixed && 'header-fixed peer/header sticky top-0 w-[inherit]',
-        offset > 10 && fixed ? 'shadow' : 'shadow-none',
+        // 滚动后出现 1px 分割线，而不是投影：DESIGN.md §6 的分层首选是边框，
+        // 阴影只留给浮层（dropdown / dialog / sheet）。
+        // 顶部时用透明边框占位，避免滚动瞬间高度跳 1px。
+        offset > 10 && fixed ? 'border-border' : 'border-transparent',
         className
       )}
       {...props}

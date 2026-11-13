@@ -301,7 +301,7 @@ export function LocalConfigurations() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>删除配置</AlertDialogTitle>
                               <AlertDialogDescription>
-                                删除后无法恢复。已有采集或审核记录的配置不能删除。
+                                删除后无法恢复。
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>

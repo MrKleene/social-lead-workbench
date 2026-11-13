@@ -106,7 +106,7 @@ export function LocalHistory({
       {tab === "runs" ? (
         <PageHeader
           title="采集历史"
-          description="本机保存的每一轮采集。打开历史轮次不会重跑，也不会自动推进步骤。"
+          description="本机保存的每一轮采集。"
         />
       ) : null}
       <SectionCard title={tab === "runs" ? undefined : title}>
@@ -203,7 +203,7 @@ export function LocalHistory({
                   <p className="text-body leading-relaxed text-muted-foreground break-words">
                     {history.conversation.data.replyEvidence
                       ? "已核验入站身份；每次回复仍需核对账号、对象及内容。"
-                      : "缺少可靠入站身份，只可查看。历史消息不会因导入而自动获得回复资格。"}
+                      : "缺少可靠入站身份，只可查看。"}
                   </p>
                   <ol className="divide-y">
                     {history.conversation.data.items.map((message) => (

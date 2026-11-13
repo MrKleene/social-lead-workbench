@@ -11,10 +11,11 @@ function Checkbox({
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        // 边框不用 shadcn 默认的 border-input：本项目 --input 与 --border 取同一个
-        // hairline 值，放在 36px 输入框上够用，但 16px 的方框在白底上几乎看不见。
-        // 这里退到 muted-foreground 的 60%（约 3:1），仍然是无彩色。
-        "peer size-4 shrink-0 rounded-sm border border-muted-foreground/60 bg-card transition-shadow outline-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground dark:bg-input/30 dark:data-[state=checked]:bg-primary",
+        // 边框直接用 border-input：--input 已独立成 3:1 档（#909090），
+        // 16px 方框在白底上也能读出来，不需要再单独退到 muted-foreground。
+        "peer size-4 shrink-0 rounded-sm border border-input bg-card transition-shadow outline-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground dark:bg-muted dark:data-[state=checked]:bg-primary",
+        // 16px 方框上的光环要小一号，否则会盖住相邻文字。
+        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
         className,
       )}
       {...props}

@@ -76,7 +76,7 @@ export function LocalContact({
       }),
     onSuccess: () => {
       reset();
-      setNotice("已加入本地队列，请在任务记录确认结果。");
+      setNotice("已加入本地队列。");
       void client.invalidateQueries({ queryKey: ["local"] });
     },
   });

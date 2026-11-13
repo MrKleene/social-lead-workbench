@@ -10,6 +10,6 @@ export function useLocalPosts(runId:string){
  const configs=useQuery({queryKey:['local','configurations'],queryFn:()=>localApi('configurations')});
  const workflow=useQuery({queryKey:['local','workflow'],queryFn:()=>localApi('workflowOverview')});
  const preview=useMutation({mutationFn:(input:unknown)=>localApi('previewSavedPost',input),onSuccess:p=>{setPlan({...p,requestKey:crypto.randomUUID()});setConsent(false);}});
- const read=useMutation({mutationFn:()=>localApi('authorizeSavedPost',{...plan,consent:(plan!.scope.readPlan as {resume?:unknown})?.resume?'resume-exact-checkpoint-in-new-run-v1':'reread-exact-saved-post-once-v1'}),onSuccess:()=>{setPlan(null);setNotice('已创建新的单笔记读取任务。原轮次和原文保持不变；新读取完成后可另行授权审核。');void client.invalidateQueries({queryKey:['local']});}});
+ const read=useMutation({mutationFn:()=>localApi('authorizeSavedPost',{...plan,consent:(plan!.scope.readPlan as {resume?:unknown})?.resume?'resume-exact-checkpoint-in-new-run-v1':'reread-exact-saved-post-once-v1'}),onSuccess:()=>{setPlan(null);setNotice('已创建新的单笔记读取任务。');void client.invalidateQueries({queryKey:['local']});}});
  return {historyId,selectHistory:(id:string|null)=>{setHistoryId(id);setHistoryPage(1);},historyPage,setHistoryPage,history,posts,accounts,configs,workflow,plan,setPlan,consent,setConsent,notice,preview,read,error:history.error||posts.error||accounts.error||configs.error||workflow.error||preview.error||read.error};
 }

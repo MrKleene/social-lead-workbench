@@ -14,7 +14,7 @@ colors:
   muted-foreground: "#4d4d4d"
   faint: "#888888"
   accent: "#f5f5f5"
-  destructive: "#ee0000"
+  destructive: "#e60000"
   destructive-soft: "#f7d4d6"
   warning: "#ab570a"
   warning-bg: "#ffefcf"
@@ -22,7 +22,7 @@ colors:
   success: "#0d7a3f"
   success-bg: "#e8f5ee"
   border: "#ebebeb"
-  input: "#ebebeb"
+  input: "#909090"
   ring: "#171717"
 typography:
   page-title:
@@ -177,6 +177,11 @@ components:
 只取它的色彩纪律、表面三层、圆角双尺度、字重天花板；营销语言（100px 胶囊 CTA、网格渐变、
 64–96px 区块留白）全部剔除。暗色阶与 success 色是我们自己补的，规范原文没有。
 
+**与 shadcn-admin 的分工**：只取它的**外壳结构与组件代码**，不取它的**配色与度量**。
+上游默认值是 slate 蓝灰色板、10px 圆角基准、700 字重、卡片带 `shadow-sm`——这四项都与本文冲突，
+冲突时**以本文为准**。已经按本文改掉的有：圆角 10px→8px、字重 700→600、卡片阴影移除、
+`hsl(var(--x))` 套壳修正。**没有**跟进的只有配色（见 §1「冷灰」和 §2 暗色说明），那是刻意保留的。
+
 **2026-11-09 收敛结果**：
 
 | 项 | 收敛前 | 现在 |
@@ -211,6 +216,13 @@ components:
 - **表面三层**：页底 `#fafafa`（canvas-soft）→ 卡片 `#ffffff`（canvas）→ 边框 `#ebebeb`（hairline）。
   卡片"坐在"页面上，而不是白卡片贴白底。
 - **冷灰**：全阶无彩色倾向（灰阶 chroma ≈ 0），避免与内容区的截图/头像冲突。
+  **这一条是刻意不跟 shadcn-admin 的**，不要"修"回 slate：
+  - 上游用 slate 色板（`oklch(... 0.04 260)`），是带蓝的灰；vercel 的灰阶是 R=G=B 的中性灰
+    （`#4d4d4d` `#888888` `#a1a1a1`）。本项目以 vercel 为准。
+  - 理由一：内容区满是小红色/抖音的彩色截图与头像，蓝调灰阶会和它们抢色。
+  - 理由二：浅色已是中性灰，暗色若单独带蓝，切换主题时会出现明显的色相跳变；
+    要换就得两套一起换，那等于放弃 vercel 的灰阶体系。
+  - 理由三：`--input` 的 3:1 是在中性底上验的，换底色要全部重算。
 - **扁平**：页面骨架只用 1px 边框分层；阴影只用于浮层（dropdown / dialog / sheet）。
 - **圆角偏小**：基准 8px，控件 6px、卡片 8px，同一屏不混用两套尺度。
 - 双语界面（中文为主 + 英文标识），排版必须同时满足 CJK 与 Latin 的可读性。
@@ -236,11 +248,12 @@ components:
 | `--secondary` / `--muted` / `--accent` | 次级面、禁用、hover 底 | `#f5f5f5` |
 | `--muted-foreground` | 次级正文、导航未激活（body） | `#4d4d4d` |
 | `--faint` | 占位符、最低强调（mute） | `#888888` |
-| `--destructive` / `--destructive-soft` | 错误、删除 / 错误底 | `#ee0000` / `#f7d4d6` |
+| `--destructive` / `--destructive-soft` | 错误、删除 / 错误底 | `#e60000` / `#f7d4d6` |
 | `--warning` / `--warning-bg` | 未知结果、提示条 | `#ab570a` / `#ffefcf` |
 | `--attention` | 需注意但非错误的文字 | `#c50000` |
 | `--success` / `--success-bg` | 成功、已就绪 | `#0d7a3f` / `#e8f5ee` |
-| `--border` / `--input` | 分割线、输入框描边（hairline） | `#ebebeb` |
+| `--border` | 分割线、卡片边框（hairline） | `#ebebeb` |
+| `--input` | 输入框描边（控件边界，需 ≥3:1） | `#909090` |
 | `--ring` | 焦点环 | `#171717` |
 | `--qr-surface` | 二维码底（两种模式都纯白） | `#ffffff` |
 
@@ -263,11 +276,26 @@ components:
 | `--warning` / `--warning-bg` | `#f5a623` / `#2a1f0f` |
 | `--attention` | `#ff8a8a` |
 | `--success` / `--success-bg` | `#3ddc84` / `#0f2419` |
-| `--border` / `--input` | `#262626` / `#2e2e2e` |
+| `--border` | `#262626` |
+| `--input` | `#666666` |
 | `--ring` | `#ededed` |
 
-**暗色是推导值，不是规范原文**：vercel 那份 DESIGN.md 只覆盖浅色。推导规则——
-表面阶梯反向（页底最暗、卡片略亮）、边框改实色深灰、语义色提亮、`primary` 反转为浅色。
+**暗色是推导值，不是规范原文**：vercel 那份 DESIGN.md 只覆盖浅色（它连暗色章节都没有，
+只有"极性反转的深色带"）。推导规则——表面阶梯反向（页底最暗、卡片略亮）、
+边框改实色深灰、语义色提亮、`primary` 反转为浅色。
+
+**暗色不跟 shadcn-admin**，两处结构性差异都是刻意的：
+
+| 项 | shadcn-admin `.dark` | 本项目 | 为什么 |
+|---|---|---|---|
+| 灰阶色相 | slate 蓝灰（`#020618` `#1d293d`） | 中性灰（`#0a0a0a` `#1a1a1a`） | 见 §1「冷灰」 |
+| 边框 | 白 10% / 15% 半透明 | 实色 `#262626` / `#666666` | 见下 |
+
+**边框必须是实色，不能用半透明**：半透明描边叠在不同表面上对比度不可预测，
+没法保证 WCAG 1.4.11 的 3:1；vercel 的 `hairline` 也是实色 `#ebebeb`，alpha 只出现在阴影里。
+上游的 `oklch(1 0 0 / 15%)` 叠在 `#020919` 上只有约 1.3:1，控件等于没有边界。
+另有一处同样别抄：上游暗色的 `card`（`#020919`）几乎等于 `background`（`#020618`），
+卡片靠半透明边框才看得出轮廓；本项目保持"卡片比页底亮一档"，靠表面差分层（§6）。
 
 **关键差异**：暗色下 `primary` 反转（浅底深字）；浮层比背景更亮一档
 （`popover` `#161616` > `card` `#111111` > `background` `#0a0a0a`）。
@@ -290,7 +318,7 @@ components:
 
 | 用途 | 字号 / 行高 | 字重 | 字距 | class |
 |---|---|---|---|---|
-| 页面标题 `h2` | 24px / 1.35 | 600 | `-0.6px`（仅 Latin） | `text-display font-semibold tracking-tight` |
+| 页面标题 `h2` | 24px / 1.35 | 600 | `-0.6px`（仅 Latin） | `text-display font-semibold`（纯 Latin 标题另加 `tracking-tight`） |
 | 展示数字（404 等） | 48px / 1.05 | 600 | `-1.4px` | `text-hero` |
 | 区块标题 `h2` | 16px / 1.5 | 600 | 0 | `text-section` |
 | 正文 | 14px / 1.6 | 400 | 0 | `text-body` / `text-sm` |
@@ -300,6 +328,8 @@ components:
 
 **字号档位只有 6 档**：`text-caption`(12) `text-body`(14) `text-section`(16) `text-title`(20)
 `text-display`(24) `text-hero`(48)。定义在 `theme.css` 的 `@theme inline`，Tailwind v4 会自动生成对应 class。
+**行高写在 token 里**（`--text-body--line-height: 1.6` 等），所以 `text-body` 自带 1.6，
+不需要每个调用点再补 `leading-relaxed`；上表的行高就是 token 值，改行高改 `theme.css`，不要在页面里逐处写。
 `hero` 对应 vercel 的 `display-xl`，只用于 404 这类整页大数字，业务页面不得使用。
 不额外引入 13 / 15 / 17 / 18 / 22 / 25 / 30 这些档位——`ui:check` 会把它们判为越界。
 
@@ -358,9 +388,16 @@ components:
 | `Textarea` | `min-h-16` | `rounded-md` | `bg-card` | `text-base md:text-sm` |
 | `Checkbox` | `size-4` | `rounded-sm` | `bg-card`，勾选态 `bg-primary` | — |
 
-- **底色用 `bg-card` 而不是 `bg-transparent`**。本项目的 `--input` 与 `--border` 取同一个 hairline 值，
-  透明底落在 `--muted`（`#f5f5f5`）的编辑器面板里会**完全没有边界**（2026-11-11 实测：
-  白底 + hairline 边框是唯一能让控件在灰面板上读出来的组合）。白卡片上 `bg-card` 与透明等价。
+**暗色填充**：四件在暗色下用 `dark:bg-muted`（`#1a1a1a`）而不是 `bg-card`，因为暗色下
+`--card`（`#111`）与页底几乎同色，需要一档表面差把控件"托"起来。不要写成 `dark:bg-input/30`——
+那是拿边框色当填充，`--input` 改成 3:1 后会连带把控件底色调亮。
+
+- **底色用 `bg-card` 而不是 `bg-transparent`**。透明底落在 `--muted`（`#f5f5f5`）的编辑器面板里，
+  控件与面板同属浅灰、只剩一条描边可读，边界会明显变弱。白底控件在灰面板上是"浮起来"的，
+  这是本项目的固定组合，不要改成透明。
+- **`--input` 与 `--border` 是两档，不要合并**：`--border` 是装饰性 hairline（`#ebebeb`），
+  `--input` 是控件边界，必须满足 WCAG 1.4.11 的 3:1（`#909090` 对白底 3.19:1，暗色 `#666` 对 `#111` 3.29:1）。
+  两者同值曾让 36px 输入框的边框对比度只有 1.16:1，等于控件没有边界。
 - **`text-base` 在移动端是防 iOS 聚焦缩放**，`md:text-sm` 才是桌面档位；不要删。
 - **下拉一律用 Radix `Select`（`components/ui/select.tsx`），不要用原生 `<select>`。**
   原生 `<select>` 的**弹出层由操作系统绘制**，CSS 完全控制不了——macOS 上必然是灰底 + 蓝高亮的
@@ -379,13 +416,13 @@ components:
   `DatePicker` 的值是 `YYYY-MM-DD` 字符串（不是 `Date`），因为 `new Date("2026-11-01")`
   按 UTC 解析会在东八区退一天；组件内部手工按本地时区构造。
   清空用「清除日期」，对应空字符串 `""`。
-- **`Checkbox` 边框不用 `border-input`**：同一个 hairline 值放在 16px 方框上在白底几乎不可见，
-  改用 `border-muted-foreground/60`（约 3:1），仍是无彩色。勾选态 `bg-primary` + 白色对勾。
+- **`Checkbox` 与输入框共用 `border-input`**：`--input` 已是 3:1 档，16px 方框在白底上也能读出来，
+  不需要再单独退到 `border-muted-foreground/60`。勾选态 `bg-primary` + 白色对勾。
 - 控件一律带 `data-slot`，状态走 `aria-invalid` / `data-state`，不要用颜色单独表达。
 
 ### 其他基元
 
-- **卡片**：`bg-card` + `border` + `rounded-lg`，内边距 18–24px。卡片内不再套卡片，用 `border-top` 分段。
+- **卡片**：`bg-card` + `border` + `rounded-lg`，内边距固定 24px（移动端 16px）。卡片内不再套卡片，用 `border-top` 分段。
 - **输入框**：`border-input` + `rounded-md` + 高 36px；聚焦走 `ring`，错误走 `aria-invalid:border-destructive`。
 - **表格**：`[data-slot=table-head]` 高 40px、`bg-muted`；`[data-slot=table-cell]` 内边距 `12px 16px`。
 - **徽标/状态**：`rounded-full` 药丸或 `rounded-sm` 方标，语义色只用于状态，不用于装饰。
@@ -423,8 +460,9 @@ components:
 （`components/layout/*`、`components/{search,command-menu,theme-switch,config-drawer,profile-dropdown,skip-to-main}.tsx`、
 `context/{layout,search}-provider.tsx`），不再由本项目手写。改动规则：
 
-- 这些文件**和业务代码受同一套规范约束**，`ui:check` 不做豁免。上游写法不合规时就地改掉
-  （已改：`search.tsx` 的键帽字号）。同步上游时需要重放这些改动——目前只有这一处。
+- 这些文件**和业务代码受同一套规范约束**，`ui:check` 不做豁免。上游写法不合规时就地改掉。
+  当前有 6 个文件偏离上游（中文化、`shadow-2xl` → `ring-2`、`hsl(var(--x))` 套壳等），
+  **逐条清单在 `AGENTS.md` §6.1 的偏离表里**，同步上游时照表重放。
 - 需要改外观时改 `features/**` 与 `components/patterns/**`（内容区），**不要改外壳**。
 - 唯一允许的接缝是「内容」而非「样式」：中文文案、侧栏数据（`layout/data/sidebar-data.ts`）、
   菜单项（去掉登录/登出/账单这类本机应用没有的项）、`SidebarContent` 的 `aria-label`。
@@ -454,7 +492,7 @@ components:
 | 卡片内首行到边框 | ≥ 16px | 视觉呼吸的最小值 |
 | 页头到首个内容块 | **24px** | `.page-heading` 的 `margin-bottom` |
 | 卡片网格间隙 | 16px | `.local-metric-grid` / `grid gap-4` |
-| 卡片之间纵向 | 20px | `.local-panel` 的 `margin-bottom` |
+| 卡片之间纵向 | **16px（≥sm 24px）** | 由外壳 `<Main>` 的 `gap-4 sm:gap-6` 给；骨架组件自身不带 margin |
 | 表单标签到控件 | 8px | `label` 内部 `gap` |
 | 表单控件之间 | 12px | `.local-key-form` / `.local-filterbar` 的 `gap` |
 | 卡片标题到内容 | 16px | `h2` 之后的第一个块用 `margin-top: 16px` |
@@ -462,7 +500,8 @@ components:
 
 ### 其他
 
-- 内容容器：`max-width: 1040px`，居中（`.local-workbench` 先例）。
+- 内容容器：**由外壳 `<Main>` 统一给上限**——`px-4 py-6`，宽度到 `@7xl/content`（1280px）以上时
+  `mx-auto max-w-7xl` 居中。页面自身不再写 `max-w-*`，否则会和外层叠成两道约束。
 - 页面纵向节奏：上 44px / 左右 24px / 下 80px。
 - 常用 flex 间隙：`gap-2`(8) 图标与文字、`gap-3`(12) 按钮组、`gap-4`(16) 区块、`gap-5`(20) 页头。
 - **不用固定侧边栏**撑满布局；宽表允许横向滚动，用 `min-width` 保证列不塌（如 1080px 表格）。
@@ -474,9 +513,12 @@ components:
 
 三层，按此顺序表达层级，**不要同时用三种**：
 
-1. **边框**（首选）：`1px solid var(--border)`，最轻，用于卡片、表格、分段。
+1. **边框**（首选）：`1px solid var(--border)`，最轻，用于卡片、表格、分段、sticky 顶栏。
 2. **表面差**（次选）：`background` → `muted` → `card`，暗色下靠亮度阶梯。
-3. **阴影**（仅浮层）：`shadow-xs`（输入框/小卡）、`shadow-sm`（卡片）、`shadow-lg`（弹层/Dropdown）。
+3. **阴影**（仅浮层）：`shadow-md`（Popover / Select / Dropdown 面板）、`shadow-lg`（Dialog / Sheet / AlertDialog）。
+
+卡片**不用阴影**（`Card` 的 `shadow-sm` 已移除），顶栏**不用阴影**（滚动时加 1px `border-b`）。
+`shadow-2xl` 及以上禁止——`ui:check` 的 `shadow-out-of-scale` 会拦。
 
 禁止：彩色阴影、大范围高斯模糊光晕、超过 `shadow-xl` 的投影。
 
@@ -553,7 +595,9 @@ components:
 > 在本项目 `apps/web` 下新建一个页面：使用现有的 shadcn 组件（`@/components/ui/*`），
 > 只用 `theme.css` 的语义 token（`bg-background`、`bg-card`、`border-border`、
 > `text-muted-foreground`、`bg-primary`），不要写任何十六进制色值，不要新增 CSS 文件。
-> 页面容器 `max-w-[1040px] mx-auto px-6 py-11`，标题 `text-title font-semibold`
+> 页面容器交给外壳 `<Main>`（`px-4 py-6` + 1280px 上限），页面自己只写
+> `<PageHeader title=… />` + 内容块，不要再包一层 `max-w-*`；
+> 标题用 `PageHeader`（24px/600，中文不加负字距），
 > （纯 Latin 标题可加 `tracking-[-0.6px]`，中文标题不加），正文 `text-body leading-relaxed`，
 > 元信息 `text-caption text-muted-foreground`。
 > 卡片用 `bg-card rounded-lg border`，放在 `bg-background`（#fafafa）上，不要加阴影。
@@ -569,10 +613,13 @@ components:
 - `ui:check` 有 1 条批准例外（`styles/index.css` 的 `!important`），在
   `scripts/check-ui-conventions.mjs` 的 `ALLOWED` 里写了理由。新增例外必须同样写理由；
   文件删除后必须同步删掉例外。
-- **内容容器仍缺 1040px 上限**：`workbench-shell` 的 `main` 是 `p-4 md:p-6` 全宽，
-  §5 要求的 `max-width:1040px` 尚未落地，宽屏下正文会一路拉到窗口边缘。
-- **`--input` 与 `--border` 同值**（hairline），36px 输入框边框对比度约 1.16:1，
-  低于 WCAG 1.4.11 的 3:1。属 token 决策，需单独评估。
+- **内容容器上限已落地**：`components/layout/main.tsx` 在 `@7xl/content` 以上加
+  `mx-auto w-full max-w-7xl`（1280px），页面自己不再写 `max-w-*`。
+  窄于该断点时正文占满可用宽度，这是刻意的——运营表格需要横向空间。
+- **`--input` 已独立成档**：`#909090`（暗色 `#666666`），对相邻卡片底 ≥3:1，满足 WCAG 1.4.11。
+  `--border` 保持 hairline，两者不再同值。
+- **顶栏不再用投影**：滚动超过 10px 时出现 1px `border-b`（§6 首选边框分层），
+  未滚动时是透明边框占位，不会跳高度。
 - 仓库根目录 `design-qa.md` 记录的 `Spatial Lead Space`（深色星空 + 香槟金 CTA）**已不在代码中**：
   全仓已无 `spatial` / `champagne` 相关类名。该文档是 2026-10-20 的历史交付记录，**不能当作当前基线**。
 
@@ -591,7 +638,7 @@ npm run ui:check         # 校验代码是否遵守本文（另一套规则，�
 
 **分工**：`design:lint` 管文档内部一致性，`ui:check` 管代码是否越界。两者都不判断审美。
 
-**当前 lint 状态**：0 error / 若干 `orphaned-tokens` warning。
+**当前 lint 状态**：0 error / 11 条 `orphaned-tokens` warning。
 warning 来自「token 已定义但没被 `components:` 表引用」——那些 token 由 CSS 选择器使用，
 不在 component 表里体现。补全 `components` 可以消掉，但会显著拉长文件，暂不处理。
 
