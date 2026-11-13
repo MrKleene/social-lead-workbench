@@ -51,12 +51,15 @@ async function main(){
  // Team ID，条目的 partition_id 只能记录 cdhash；每次重新打包 cdhash 都变，导致启动和读写
  // 凭据时反复弹出系统授权框。这里改为从本机硬件标识派生密钥做 AES-256-GCM：密钥不落盘，
  // 换机器解不开。代价是密钥可由本机推导、不再要求用户授权，适用于单机自用场景。
+ // 两个外部命令都用绝对路径：打包后从 Finder/资源管理器启动时 PATH 可能被裁剪。
  const machineSecret=()=>{
   if(process.platform==='darwin'){
-   const out=execFileSync('ioreg',['-rd1','-c','IOPlatformExpertDevice'],{encoding:'utf8',maxBuffer:1<<20});
+   const ioreg=fs.existsSync('/usr/sbin/ioreg')?'/usr/sbin/ioreg':'ioreg';
+   const out=execFileSync(ioreg,['-rd1','-c','IOPlatformExpertDevice'],{encoding:'utf8',maxBuffer:1<<20});
    const found=/IOPlatformUUID"\s*=\s*"([^"]+)"/.exec(out);if(found)return found[1];
   }else if(process.platform==='win32'){
-   const out=execFileSync('reg',['query','HKLM\\SOFTWARE\\Microsoft\\Cryptography','/v','MachineGuid'],{encoding:'utf8'});
+   const reg=path.join(process.env.SystemRoot||process.env.SYSTEMROOT||'C:\\Windows','System32','reg.exe');
+   const out=execFileSync(reg,['query','HKLM\\SOFTWARE\\Microsoft\\Cryptography','/v','MachineGuid'],{encoding:'utf8'});
    const found=/MachineGuid\s+REG_SZ\s+(\S+)/.exec(out);if(found)return found[1];
   }else if(fs.existsSync('/etc/machine-id'))return fs.readFileSync('/etc/machine-id','utf8').trim();
   throw new LocalError('LOCAL_MACHINE_ID_UNAVAILABLE');
