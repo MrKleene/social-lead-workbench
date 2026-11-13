@@ -73,7 +73,7 @@ export function LocalLoginPanel({
         </p>
       ) : null}
 
-      <form className="flex flex-col gap-3" onSubmit={login}>
+      <form className="flex flex-col gap-4" onSubmit={login}>
         {platform.accounts.data?.accounts.length ? (
           <FormField label="账号">
             <Select
@@ -108,25 +108,28 @@ export function LocalLoginPanel({
           </FormField>
         ) : null}
 
-        <FormField label="本地账号名称">
-          <Input
-            value={name || selected?.name || ""}
-            onChange={(event) => setName(event.target.value)}
-            maxLength={80}
-            required
-          />
-        </FormField>
+        {/* 名称占满，上限是 0–1000 的短数字，不需要和名称一样宽。 */}
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
+          <FormField label="本地账号名称">
+            <Input
+              value={name || selected?.name || ""}
+              onChange={(event) => setName(event.target.value)}
+              maxLength={80}
+              required
+            />
+          </FormField>
 
-        <FormField label="每日发送上限" hint="0 表示禁止发送">
-          <Input
-            type="number"
-            min={0}
-            max={1000}
-            value={limit}
-            onChange={(event) => setLimit(event.target.value)}
-            required
-          />
-        </FormField>
+          <FormField label="每日发送上限" hint="0 表示禁止发送">
+            <Input
+              type="number"
+              min={0}
+              max={1000}
+              value={limit}
+              onChange={(event) => setLimit(event.target.value)}
+              required
+            />
+          </FormField>
+        </div>
 
         <CheckboxField
           checked={loginConsent}
@@ -146,7 +149,8 @@ export function LocalLoginPanel({
           </p>
         ) : null}
 
-        <div className="flex flex-wrap gap-3">
+        {/* 不画分隔线：勾选授权和它授权的按钮是一个整体，中间加横线会拆开。 */}
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             type="submit"
             disabled={
