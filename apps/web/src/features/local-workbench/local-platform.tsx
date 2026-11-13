@@ -41,7 +41,6 @@ export function LocalLoginPanel({
   const [accountId, setAccountId] = useState("");
   const [name, setName] = useState("");
   const [limit, setLimit] = useState("10");
-  const [loginConsent, setLoginConsent] = useState(false);
 
   const selected = platform.accounts.data?.accounts.find(
     (item) => item.id === accountId,
@@ -56,7 +55,8 @@ export function LocalLoginPanel({
 
   const login = (event: FormEvent) => {
     event.preventDefault();
-    if (!loginConsent) return;
+    // 授权句不再由勾选框承载：登录本机账号是这一步的前提，点按钮即视为授权。
+    // consent 常量照发——后端 begin() 仍硬校验它，只是不再有可取消的 UI 开关。
     platform.begin.mutate({
       ...(selected ? { accountId: selected.id, revision: selected.revision } : {}),
       name: name || selected?.name,
@@ -88,7 +88,6 @@ export function LocalLoginPanel({
               );
               setName(next?.name ?? "");
               setLimit(String(next?.daily_limit ?? 10));
-              setLoginConsent(false);
               }}
             >
               <SelectTrigger aria-label="账号">
@@ -134,13 +133,6 @@ export function LocalLoginPanel({
           </FormField>
         </div>
 
-        <CheckboxField
-          checked={loginConsent}
-          onCheckedChange={setLoginConsent}
-        >
-          授权在本机登录此账号。
-        </CheckboxField>
-
         {platform.accounts.data && !runtimeReady ? (
           <p className="text-caption text-muted-foreground">
             {platformReason(platform.accounts.data.runtime.reason)}
@@ -152,13 +144,12 @@ export function LocalLoginPanel({
           </p>
         ) : null}
 
-        {/* 不画分隔线：勾选授权和它授权的按钮是一个整体，中间加横线会拆开。 */}
+        {/* 不再画分隔线：这是表单的唯一动作，不需要和上面的字段分开。 */}
         <div className="flex flex-wrap items-center gap-3">
           <Button
             type="submit"
             disabled={
               !ready ||
-              !loginConsent ||
               !!platform.login ||
               !!platform.accounts.data?.login
             }
@@ -170,7 +161,8 @@ export function LocalLoginPanel({
       </form>
 
       {platform.login ? (
-        <div className="flex flex-col gap-3 border-t pt-4">
+        // 二维码是这一步唯一要看的东西，整块居中：图、有效期、取消按钮都在中轴上。
+        <div className="flex flex-col items-center gap-3 border-t pt-4 text-center">
           <img
             className="w-60 max-w-full rounded-md border bg-qr-surface p-3"
             src={platform.login.image}
@@ -180,7 +172,7 @@ export function LocalLoginPanel({
             有效期至 {new Date(platform.login.expiresAt).toLocaleTimeString()}
             。请核对扫码账号。
           </p>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap justify-center gap-3">
             <Button
               variant="outline"
               pending={platform.cancel.isPending}
