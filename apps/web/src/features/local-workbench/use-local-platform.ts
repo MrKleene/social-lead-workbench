@@ -12,7 +12,7 @@ export function useLocalPlatform(options?:{onVerified?:()=>void}){
  const rules=useQuery({queryKey:['local','automation-rules'],queryFn:()=>localApi('automationRules')});
  const receivers=useQuery({queryKey:['local','receivers'],queryFn:()=>localApi('inboxReceivers'),refetchInterval:5000});
  const begin=useMutation({mutationFn:(input:unknown)=>localApi('beginLogin',input),onSuccess:r=>{setLogin(r);setNotice('请使用对应小红书账号扫码。');void refresh();}});
- const poll=useQuery({queryKey:['local','login',login?.id],queryFn:()=>localApi('pollLogin',{id:login!.id}),enabled:!!login,refetchInterval:5000,retry:false});
+ const poll=useQuery({queryKey:['local','login',login?.id],queryFn:()=>localApi('pollLogin',{id:login!.id}),enabled:!!login,refetchInterval:2000,retry:false});
  useEffect(()=>{if(poll.data?.state==='VERIFIED'){setLogin(null);setNotice('账号身份已核验，登录凭据已加密保存在本机。');void client.invalidateQueries({queryKey:['local']});verified.current?.();}},[poll.data,client]);
  useEffect(()=>{if(poll.error&&login){setLogin(null);setNotice('登录核验未完成，尝试已结束。请检查平台状态后重新获取二维码。');void client.invalidateQueries({queryKey:['local']});}},[poll.error,login,client]);
  const cancel=useMutation({mutationFn:()=>localApi('cancelLogin',{id:login?.id??accounts.data?.login?.id}),onSuccess:r=>{setLogin(null);setNotice(r.stopped?'已取消登录并清理临时文件。':'停止尚未确认，平台操作已暂停。');void refresh();}});

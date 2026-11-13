@@ -114,7 +114,15 @@ func (s *XiaohongshuService) CheckLoginStatus(ctx context.Context) (*LoginStatus
 
 	loginAction := xiaohongshu.NewLogin(page)
 
-	isLoggedIn, err := loginAction.CheckLoginStatus(ctx)
+	// 扫码等待期间（桌面端 LOGIN 模式）不能导航：CheckLoginStatus 会跳回 explore，
+	// 把登录页冲掉，扫码结果就回不来。改用只看 Cookie 的就地判断。
+	var isLoggedIn bool
+	var err error
+	if os.Getenv("CRM_DESKTOP_MODE") == "LOGIN" {
+		isLoggedIn, err = loginAction.CheckLoginStatusInPlace(ctx)
+	} else {
+		isLoggedIn, err = loginAction.CheckLoginStatus(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}

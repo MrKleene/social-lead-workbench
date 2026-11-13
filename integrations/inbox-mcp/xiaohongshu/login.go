@@ -38,6 +38,25 @@ func (a *LoginAction) CheckLoginStatus(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// CheckLoginStatusInPlace 只看当前页面的登录态，不做任何导航。
+//
+// 扫码等待期间必须用它：`CheckLoginStatus` 会重新导航到 explore 首页，
+// 把正在等待扫码的登录页整个冲掉，扫码结果就永远回不来。
+// 判据是会话 Cookie——它也正是登录成功后要保存的那份凭据。
+func (a *LoginAction) CheckLoginStatusInPlace(ctx context.Context) (bool, error) {
+	pp := a.page.Context(ctx).Timeout(10 * time.Second)
+	cks, err := pp.Browser().GetCookies()
+	if err != nil {
+		return false, errors.Wrap(err, "read cookies failed")
+	}
+	for _, c := range cks {
+		if c.Name == "web_session" && strings.TrimSpace(c.Value) != "" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // CurrentUser 当前登录用户的基础信息。
 type CurrentUser struct {
 	Nickname string `json:"nickname"`
