@@ -182,6 +182,7 @@ export function LocalAccountPage() {
   const status = useLocalRecords("status");
   const disconnect = useLocalAction("disconnectAccount");
   const remove = useLocalAction("deleteAccount");
+  const clearHold = useLocalAction("clearPlatformHold");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -209,11 +210,38 @@ export function LocalAccountPage() {
       />
 
       {status.data?.platformPause ? (
-        // 取消登录是"先关窗、后台停进程"。如果进程没停干净，暂停状态挂在这里，
-        // 而不是随弹窗一起消失——否则用户会以为一切正常，直到发送被拦。
+        // 取消登录是"等进程确认停止"。没停干净就会写这条持久暂停，而 resume() 拒绝清它——
+        // 不给出口的话，一次未确认停止就把平台功能永久锁死。
         <Alert variant="warning">
-          <AlertDescription>
-            平台操作已暂停，需核对进程状态后再继续。
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>平台操作已暂停，需核对进程状态后再继续。</span>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                  解除暂停
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>解除平台暂停</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    确认没有残留的浏览器进程后再解除；解除后平台操作立即恢复。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>保持暂停</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() =>
+                      clearHold.mutate({
+                        consent: "clear-platform-hold-after-process-check-v1",
+                      })
+                    }
+                  >
+                    已确认，解除
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </AlertDescription>
         </Alert>
       ) : null}

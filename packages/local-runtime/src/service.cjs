@@ -45,6 +45,22 @@ class LocalService {
  notices(input){return this.workspace().notices(input);}
  status(){const p=this.vault?.protector,credentialsAvailable=!!(p&&(p.availableHint?p.availableHint():p.available()));const pause=this.store.db.prepare("SELECT reason FROM safety_state WHERE id='platform' AND reason IS NOT NULL").get()?.reason??null;return {storage:'SQLITE',loginRequired:false,platformPause:pause,initialized:!!this.store.db.prepare("SELECT 1 FROM settings WHERE key='initialized'").get(),modelKeyConfigured:!!this.vault?.has('MODEL_KEY','qwen'),credentialsAvailable,platform:{ready:!!this.workflow.capabilities().collect,reason:this.workflow.capabilities().collect?'LOGIN_COLLECTION_REGISTERED':'DESKTOP_PLATFORM_ADAPTER_PENDING'},version:1};}
  initialize(){return this.store.transaction(()=>{this.store.db.prepare("INSERT INTO settings VALUES('initialized','true',1) ON CONFLICT DO NOTHING").run();this.store.audit('LOCAL_USER','INITIALIZED','installation');return {initialized:true};});}
+ /** 解除平台暂停。停止未确认时写下的 safety_state 之前没有任何清除入口，
+  *  而 resume() 明确拒绝清 platform，等于一次未确认停止就把平台功能永久锁死。
+  *  这里要求调用方显式确认「已核对没有残留进程」——人的判断是唯一凭据，
+  *  所以不依赖 runtime.active（它恰恰在未确认时仍为真）。 */
+ clearPlatformHold({consent}){
+  if(consent!=='clear-platform-hold-after-process-check-v1')throw new LocalError('PLATFORM_HOLD_CONSENT_REQUIRED');
+  if(this.accountService?.attempt)throw new LocalError('PLATFORM_BUSY_OR_PAUSED');
+  if(this.store.active())throw new LocalError('PLATFORM_BUSY_OR_PAUSED');
+  return this.store.transaction(()=>{
+   const row=this.store.db.prepare("SELECT reason FROM safety_state WHERE id='platform' AND reason IS NOT NULL").get();
+   if(!row)return {cleared:false};
+   this.store.audit('LOCAL_USER','PLATFORM_HOLD_CLEARED','installation',{reason:row.reason});
+   this.store.db.prepare("UPDATE safety_state SET reason=NULL,version=version+1 WHERE id='platform'").run();
+   return {cleared:true};
+  });
+ }
  configurations(){return this.store.db.prepare('SELECT * FROM configurations WHERE archived=0 ORDER BY updated_at DESC,id').all().map(x=>({...x,body:JSON.parse(x.body)}));}
  saveConfiguration(input){const value=validateConfiguration(input);return this.store.transaction(()=>{
   const id=input.id||randomUUID();if(typeof id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(id))throw new LocalError('INVALID_CONFIGURATION');
