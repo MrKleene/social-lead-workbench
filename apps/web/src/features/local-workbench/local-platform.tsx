@@ -50,6 +50,8 @@ export function LocalLoginPanel({
   );
   const runtimeReady = !!platform.accounts.data?.runtime.ready;
   const ready = runtimeReady && credentialsAvailable;
+  /** 已经有二维码在等扫码（或本机还留着未完成的登录）：这时提交动作无意义，整块收起。 */
+  const loginPending = !!platform.login || !!platform.accounts.data?.login;
 
   useDraftGuard(
     !!platform.login || !!platform.accounts.data?.login,
@@ -147,20 +149,19 @@ export function LocalLoginPanel({
           </p>
         ) : null}
 
-        {/* 表单动作放页脚右对齐：单独一个按钮贴左边，看起来像没接上表单。 */}
-        <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
-          <Button
-            type="submit"
-            disabled={
-              !ready ||
-              !!platform.login ||
-              !!platform.accounts.data?.login
-            }
-            pending={platform.begin.isPending}
-          >
-            {platform.begin.isPending ? "正在生成二维码…" : "获取登录二维码"}
-          </Button>
-        </div>
+        {/* 表单动作放页脚右对齐：单独一个按钮贴左边，看起来像没接上表单。
+            二维码出来之后整块收掉——按钮已禁用，那条分隔线也没有分隔对象了。 */}
+        {loginPending ? null : (
+          <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
+            <Button
+              type="submit"
+              disabled={!ready}
+              pending={platform.begin.isPending}
+            >
+              {platform.begin.isPending ? "正在生成二维码…" : "获取登录二维码"}
+            </Button>
+          </div>
+        )}
       </form>
 
       {platform.login ? (
