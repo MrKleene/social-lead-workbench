@@ -41,6 +41,7 @@ class LocalService {
  accountDetails(){return this.workspace().accountDetails();}
  updateAccount(input){return this.workspace().updateAccount(input);}
  disconnectAccount(input){const result=this.workspace().disconnectAccount(input);if(result.secretRef)this.vault?.remove('PLATFORM_SESSION',result.secretRef);return {disconnected:true};}
+ deleteAccount(input){const result=this.workspace().deleteAccount(input);if(result.secretRef)this.vault?.remove('PLATFORM_SESSION',result.secretRef);return {deleted:true};}
  notices(input){return this.workspace().notices(input);}
  status(){const p=this.vault?.protector,credentialsAvailable=!!(p&&(p.availableHint?p.availableHint():p.available()));return {storage:'SQLITE',loginRequired:false,initialized:!!this.store.db.prepare("SELECT 1 FROM settings WHERE key='initialized'").get(),modelKeyConfigured:!!this.vault?.has('MODEL_KEY','qwen'),credentialsAvailable,platform:{ready:!!this.workflow.capabilities().collect,reason:this.workflow.capabilities().collect?'LOGIN_COLLECTION_REGISTERED':'DESKTOP_PLATFORM_ADAPTER_PENDING'},version:1};}
  initialize(){return this.store.transaction(()=>{this.store.db.prepare("INSERT INTO settings VALUES('initialized','true',1) ON CONFLICT DO NOTHING").run();this.store.audit('LOCAL_USER','INITIALIZED','installation');return {initialized:true};});}

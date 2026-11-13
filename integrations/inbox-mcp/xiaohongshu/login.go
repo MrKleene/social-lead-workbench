@@ -3,6 +3,8 @@ package xiaohongshu
 import (
 	"context"
 	"encoding/json"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -40,6 +42,7 @@ func (a *LoginAction) CheckLoginStatus(ctx context.Context) (bool, error) {
 type CurrentUser struct {
 	Nickname string `json:"nickname"`
 	UserID   string `json:"userId"`
+	Avatar   string `json:"avatar"`
 }
 
 // CurrentUser 从当前页面的 __INITIAL_STATE__ 读取登录用户信息。
@@ -51,7 +54,9 @@ func (a *LoginAction) CurrentUser(ctx context.Context) (*CurrentUser, error) {
 		const u = window.__INITIAL_STATE__ && window.__INITIAL_STATE__.user;
 		const info = u && u.userInfo && u.userInfo.value !== undefined ? u.userInfo.value : (u && u.userInfo);
 		if (!info || info.guest) return "";
-		return JSON.stringify({nickname: info.nickname, userId: info.userId || info.user_id});
+		// 头像字段在不同版本里叫 avatar / image / avatarUrl，取第一个非空的。
+		const avatar = info.avatar || info.image || info.avatarUrl || "";
+		return JSON.stringify({nickname: info.nickname, userId: info.userId || info.user_id, avatar: avatar});
 	}`)
 	if err != nil {
 		return nil, errors.Wrap(err, "read current user state failed")
@@ -67,7 +72,24 @@ func (a *LoginAction) CurrentUser(ctx context.Context) (*CurrentUser, error) {
 		return nil, errors.Wrap(err, "unmarshal current user failed")
 	}
 
+	user.Avatar = normalizeAvatarURL(user.Avatar)
 	return &user, nil
+}
+
+// normalizeAvatarURL 只放行 https 绝对地址：协议相对的 //host 补成 https，
+// 其余（http、data:、javascript:、相对路径）一律丢弃，交给前端回退到首字。
+func normalizeAvatarURL(raw string) string {
+	s := strings.TrimSpace(raw)
+	if strings.HasPrefix(s, "//") {
+		s = "https:" + s
+	}
+	if len(s) > 2048 || !strings.HasPrefix(s, "https://") {
+		return ""
+	}
+	if _, err := url.Parse(s); err != nil {
+		return ""
+	}
+	return s
 }
 
 func (a *LoginAction) Login(ctx context.Context) error {

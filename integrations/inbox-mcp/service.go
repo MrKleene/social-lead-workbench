@@ -46,6 +46,7 @@ type LoginStatusResponse struct {
 	IsLoggedIn bool   `json:"is_logged_in"`
 	Username   string `json:"username,omitempty"` // 当前登录账号的昵称
 	UserID     string `json:"user_id,omitempty"`  // 用户唯一标识（个人主页 URL 中的 ID）
+	Avatar     string `json:"avatar,omitempty"`   // 头像地址，仅 https 绝对地址
 }
 
 // LoginQrcodeResponse 登录扫码二维码
@@ -129,6 +130,7 @@ func (s *XiaohongshuService) CheckLoginStatus(ctx context.Context) (*LoginStatus
 		} else {
 			response.Username = user.Nickname
 			response.UserID = user.UserID
+			response.Avatar = user.Avatar
 		}
 	}
 
