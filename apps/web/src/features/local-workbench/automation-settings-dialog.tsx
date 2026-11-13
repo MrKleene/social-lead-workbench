@@ -49,11 +49,15 @@ const labels: Record<AutomationSettingsTab, string> = {
   contact: "自动回复",
 };
 
-/** 每个步骤对应的全局配置页与入口文案——放页脚左侧，和主按钮分开。 */
-const manage: Record<AutomationSettingsTab, { to: string; label: string }> = {
-  collect: { to: "/configuration?tab=keywords", label: "管理关键词组" },
-  review: { to: "/configuration?tab=matching", label: "管理评论匹配规则" },
-  contact: { to: "/configuration?tab=templates", label: "管理回复模板" },
+/** 每个步骤对应的全局配置页与入口文案——放页脚左侧，和主按钮分开。
+ *  采集页签多一个「管理账号」：账号不在这个弹窗里配置，只能去账号中心。 */
+const manage: Record<AutomationSettingsTab, { to: string; label: string }[]> = {
+  collect: [
+    { to: "/configuration?tab=keywords", label: "管理关键词组" },
+    { to: "/work/accounts", label: "管理账号" },
+  ],
+  review: [{ to: "/configuration?tab=matching", label: "管理评论匹配规则" }],
+  contact: [{ to: "/configuration?tab=templates", label: "管理回复模板" }],
 };
 
 export function AutomationSettingsDialog({
@@ -142,10 +146,12 @@ export function AutomationSettingsDialog({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" asChild>
-            <Link to={manage[tab].to}>{manage[tab].label}</Link>
-          </Button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {manage[tab].map((entry) => (
+            <Button key={entry.to} variant="outline" asChild>
+              <Link to={entry.to}>{entry.label}</Link>
+            </Button>
+          ))}
           <Button onClick={() => onOpenChange(false)}>完成</Button>
         </div>
       </DialogContent>

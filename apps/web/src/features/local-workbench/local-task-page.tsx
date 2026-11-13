@@ -86,12 +86,16 @@ export function LocalTaskPage() {
   );
 
   const missing: MissingItem[] = [];
+  const accountCount = accounts.data?.accounts.length ?? 0;
   if (!configId) {
     missing.push({ tab: "collect", text: "采集关键词组" });
+  } else if (!accountCount) {
+    // 一个账号都没有时，「采集设置」里只有空下拉——账号只能去账号中心登录。
+    missing.push({ to: "/work/accounts", action: "去登录", text: "采集账号" });
   } else if (!preferences.data?.accountId) {
     missing.push({ tab: "collect", text: "采集账号" });
   } else if (account?.state !== "VERIFIED" || !account?.hasSession) {
-    missing.push({ tab: "collect", text: "采集账号未验证" });
+    missing.push({ to: "/work/accounts", action: "重新登录", text: "采集账号未验证" });
   }
   if (
     (steps.data?.autoReview || steps.data?.autoReply) &&
@@ -107,10 +111,10 @@ export function LocalTaskPage() {
     missing.push({ tab: "contact", text: "回复模板" });
   }
   if (accounts.data && !accounts.data.runtime.ready) {
-    missing.push({ tab: null, text: "平台组件未就绪" });
+    missing.push({ text: "平台组件未就绪" });
   }
   if (status.data && !credentialsAvailable) {
-    missing.push({ tab: null, text: "系统凭据保护未就绪" });
+    missing.push({ text: "系统凭据保护未就绪" });
   }
 
   const setParam = (key: string, value: string) =>
