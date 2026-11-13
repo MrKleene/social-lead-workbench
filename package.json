@@ -49,7 +49,8 @@
     "desktop:build:native": "node scripts/desktop/build-native.mjs",
     "desktop:native:check": "node scripts/desktop/native-status.mjs",
     "desktop:prepare:mcp": "node scripts/desktop/build-mcp.mjs",
-    "desktop:prepare:browser": "node scripts/desktop/prepare-browser.mjs"
+    "desktop:prepare:browser": "node scripts/desktop/prepare-browser.mjs",
+    "desktop:prepare:browser:win": "node scripts/desktop/prepare-browser-windows.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
