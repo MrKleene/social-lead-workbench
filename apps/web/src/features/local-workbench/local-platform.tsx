@@ -187,7 +187,11 @@ export function LocalLoginPanel({
               pending={platform.cancel.isPending}
               onClick={() =>
                 platform.cancel.mutate(undefined, {
-                  onSuccess: () => onCancelled?.(),
+                  // 只有确认停住才关窗。停止未确认时留着弹窗，让 notice 能说清楚，
+                  // 否则关掉就只剩一个"不知道成没成"的结果。
+                  onSuccess: (result) => {
+                    if (result.stopped) onCancelled?.();
+                  },
                 })
               }
             >

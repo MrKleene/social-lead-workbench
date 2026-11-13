@@ -2,7 +2,7 @@ import type {ReplyHistoryItem} from '@crm/contracts';
 import {evidenceMessages} from './local-evidence-messages';
 export type ConfigurationKind='KEYWORDS'|'MATCHING'|'COMMENT_TEMPLATE'|'DM_TEMPLATE';
 export type LocalConfiguration={id:string;kind:ConfigurationKind;name:string;body:{keywords?:string[];excludeWords?:string[];text?:string};revision:number};
-export type LocalStatus={initialized:boolean;storage:'SQLITE';loginRequired:false;modelKeyConfigured:boolean;credentialsAvailable:boolean;platform:{ready:boolean;reason:string}};
+export type LocalStatus={initialized:boolean;platformPause:string|null;storage:'SQLITE';loginRequired:false;modelKeyConfigured:boolean;credentialsAvailable:boolean;platform:{ready:boolean;reason:string}};
 export type LocalJob={id:string;kind:string;state:string;created_at:number};
 export type LocalNotification={id:string;account_id:string;channel:'COMMENT'|'DM';sender_name:string;body:string;post_title:string|null;received_at:number;unread:number;content_type:string};
 export type LocalThread={account_id:string;sender_id:string;account_name:string;sender_name:string;body:string;unread:number};

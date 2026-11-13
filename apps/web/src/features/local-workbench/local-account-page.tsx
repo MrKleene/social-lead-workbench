@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -206,6 +207,16 @@ export function LocalAccountPage() {
         title="账号中心"
         actions={<Button onClick={() => setAddOpen(true)}>添加账号</Button>}
       />
+
+      {status.data?.platformPause ? (
+        // 取消登录是"先关窗、后台停进程"。如果进程没停干净，暂停状态挂在这里，
+        // 而不是随弹窗一起消失——否则用户会以为一切正常，直到发送被拦。
+        <Alert variant="warning">
+          <AlertDescription>
+            平台操作已暂停，需核对进程状态后再继续。
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {failure ? <ErrorNotice error={failure} /> : null}
 
