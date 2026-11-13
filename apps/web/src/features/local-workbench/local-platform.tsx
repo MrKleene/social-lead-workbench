@@ -13,6 +13,7 @@ import { CheckboxField } from "@/components/patterns/checkbox-field";
 import { FormField } from "@/components/patterns/form-field";
 import { useDraftGuard } from "@/features/work/draft-guard";
 import { ErrorNotice } from "@/components/feedback";
+import { cn } from "@/lib/utils";
 import { useLocalPlatform } from "./use-local-platform";
 
 /** 平台组件不可用时，把后端给的原因翻成人话。 */
@@ -168,7 +169,11 @@ export function LocalLoginPanel({
         // 二维码是这一步唯一要看的东西，整块居中：图、有效期、取消按钮都在中轴上。
         <div className="flex flex-col items-center gap-3 border-t pt-4 text-center">
           <img
-            className="w-60 max-w-full rounded-md border bg-qr-surface p-3"
+            className={cn(
+              "w-60 max-w-full rounded-md border bg-qr-surface p-3 transition-opacity",
+              // 取消要等浏览器进程真正退出（最长 10s），期间把二维码压暗，表示"正在作废"。
+              platform.cancel.isPending && "opacity-40",
+            )}
             src={platform.login.image}
             alt="本次小红书登录二维码"
           />
@@ -186,7 +191,7 @@ export function LocalLoginPanel({
                 })
               }
             >
-              取消登录
+              {platform.cancel.isPending ? "正在取消…" : "取消登录"}
             </Button>
           </div>
         </div>
