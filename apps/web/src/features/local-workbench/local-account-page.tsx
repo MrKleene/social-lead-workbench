@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -182,14 +182,19 @@ export function LocalAccountPage() {
   const status = useLocalRecords("status");
   const disconnect = useLocalAction("disconnectAccount");
   const remove = useLocalAction("deleteAccount");
-  const clearHold = useLocalAction("clearPlatformHold");
+  const reconcile = useLocalAction("reconcilePlatform");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [pauseNote, setPauseNote] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   const accounts = data.data ?? [];
+  // 暂停解除后提示一并收起，避免旧结论挂在页面上。
+  useEffect(() => {
+    if (!status.data?.platformPause) setPauseNote(null);
+  }, [status.data?.platformPause]);
   // 从列表里现取：账号被删或数据刷新后抽屉自动失效，不会停在旧快照上。
   const selected = accounts.find((item) => item.id === detailId) ?? null;
   const failure = data.error ?? disconnect.error ?? remove.error;
@@ -210,40 +215,42 @@ export function LocalAccountPage() {
       />
 
       {status.data?.platformPause ? (
-        // 取消登录是"等进程确认停止"。没停干净就会写这条持久暂停，而 resume() 拒绝清它——
-        // 不给出口的话，一次未确认停止就把平台功能永久锁死。
+        // 暂停的判据是「上次的浏览器进程可能没退干净」。这由系统自己核对：主进程在启动时
+        // 和停止未确认后都会对账（会话目录里的 .owner.json），进程不在了就自动清除。
+        // 这里的按钮只是重新触发一次对账，不要求用户声明"我已核对"。
         <Alert variant="warning">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-            <span>平台操作已暂停，需核对进程状态后再继续。</span>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button size="sm" variant="outline">
-                  解除暂停
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>解除平台暂停</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    确认没有残留的浏览器进程后再解除；解除后平台操作立即恢复。
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>保持暂停</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() =>
-                      clearHold.mutate({
-                        consent: "clear-platform-hold-after-process-check-v1",
-                      })
-                    }
-                  >
-                    已确认，解除
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <span>平台操作已暂停：上次的浏览器进程未确认退出。</span>
+            <Button
+              size="sm"
+              variant="outline"
+              pending={reconcile.isPending}
+              onClick={() =>
+                reconcile.mutate(
+                  {},
+                  {
+                    onSuccess: (result) =>
+                      setPauseNote(
+                        result.cleared
+                          ? null
+                          : result.live
+                            ? "仍有浏览器进程在运行，退出后会自动恢复。"
+                            : "暂时无法确认，稍后会自动重试。",
+                      ),
+                  },
+                )
+              }
+            >
+              重新检查
+            </Button>
           </AlertDescription>
         </Alert>
+      ) : null}
+
+      {pauseNote ? (
+        <p role="status" className="text-caption text-muted-foreground">
+          {pauseNote}
+        </p>
       ) : null}
 
       {failure ? <ErrorNotice error={failure} /> : null}

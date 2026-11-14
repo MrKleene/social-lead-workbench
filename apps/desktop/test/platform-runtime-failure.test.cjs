@@ -13,3 +13,20 @@ test('Windows ACL failure cleans only the newly owned directory and releases bus
 test('missing Windows ACL callback fails closed without permanent busy state',async t=>{const f=runtime(t);await assert.rejects(()=>f.r.open('LOGIN',null,new AbortController().signal),/WINDOWS_ACL_CHECK_REQUIRED/);assert.equal(f.r.status().busy,false);assert.deepEqual(fs.readdirSync(f.dir),[]);assert.equal(f.spawns(),0);});
 test('exclusive directory creation failure preserves an existing unrelated path',async t=>{const f=runtime(t,{collide:true,checkPrivateDirectory:()=>{throw Error('must not reach ACL');}});await assert.rejects(()=>f.r.open('LOGIN',null,new AbortController().signal),/EEXIST/);assert.equal(f.r.status().busy,false);assert.equal(fs.readFileSync(path.join(f.dir,f.operation,'not-owned'),'utf8'),'keep');assert.equal(f.spawns(),0);});
 test('Mac credential-file write failure releases local state and removes only its own temporary directory',async t=>{const f=runtime(t,{platform:'darwin',failedWrite:true});await assert.rejects(()=>f.r.open('LOGIN','synthetic-cookie',new AbortController().signal),/EACCES/);assert.equal(f.r.status().busy,false);assert.deepEqual(fs.readdirSync(f.dir),[]);assert.equal(f.spawns(),0);});
+// 会话目录里记着我们拉起的进程号；对账只看这份事实，不问用户。
+function reconciler(t,running){
+ const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'desktop-reconcile-')));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ const context={module:{exports:{}},require:name=>name==='./owned-process.cjs'?{spawnOwned:()=>{throw Error('no native process allowed');}}:realRequire(name),process:{platform:'darwin',kill:pid=>{if(!running.includes(pid))throw Object.assign(Error('gone'),{code:'ESRCH'});}},AbortSignal,AbortController,URL,Buffer,setTimeout,clearTimeout};
+ vm.runInNewContext(fs.readFileSync(file,'utf8'),context,{filename:file});
+ return {r:new context.module.exports.DesktopPlatformRuntime(dir,{status:()=>({ready:true}),inspect:()=>({})},{},{}),dir};
+}
+test('leftover sessions are judged by recorded pids, not by asking the user',t=>{
+ const dead=reconciler(t,[]),gone=path.join(dead.dir,'gone');
+ fs.mkdirSync(gone);fs.writeFileSync(path.join(gone,'.owner.json'),JSON.stringify({helper:4101,child:4102}));
+ assert.deepEqual({...dead.r.reconcileProcessState()},{sessions:1,live:0,settled:true});
+ assert.equal(fs.existsSync(gone),false);
+ const live=reconciler(t,[4102]),alive=path.join(live.dir,'running');
+ fs.mkdirSync(alive);fs.writeFileSync(path.join(alive,'.owner.json'),JSON.stringify({helper:4101,child:4102}));
+ assert.deepEqual({...live.r.reconcileProcessState()},{sessions:1,live:1,settled:false});
+ assert.equal(fs.existsSync(alive),true);
+});

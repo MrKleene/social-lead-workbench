@@ -52,10 +52,15 @@ async function main(){
  const checkPrivateFile=file=>{if(process.platform==='win32')windowsNative(app,{operation:'file',path:file});};
  const vault=new CredentialStore(credentials,protector,{checkPrivateFile}),dataManager=new LocalDataManager(data,{checkPrivateFile});store=new LocalDatabase(dataManager.activeFile(),{checkPrivateFile});
  const resources=new NativeResources(app.isPackaged?path.join(process.resourcesPath,'native',process.platform+'-'+process.arch):path.join(root,'apps/desktop/dist/native',process.platform+'-'+process.arch),{windowsCheck:(file,directory)=>windowsNative(app,{operation:directory?'resource-directory':'executable',path:file})});
- const nativeReady=!fixture&&resources.status().ready,platformRuntime=nativeReady?new DesktopPlatformRuntime(privateDirectory(path.join(data,'native-sessions')),resources,vault,{checkPrivateFile,checkPrivateDirectory:directory=>windowsNative(app,{operation:'directory',path:directory,create:false}),onUnsafeStop:()=>store.transaction(()=>{const event=store.audit('RECOVERY','PLATFORM_PROCESS_STOP_UNCONFIRMED','installation');store.db.prepare("INSERT INTO safety_state VALUES('platform',1,?,'PLATFORM_PROCESS_STOP_UNCONFIRMED',?) ON CONFLICT(id) DO UPDATE SET version=version+1,event_id=excluded.event_id,reason=excluded.reason").run(event,store.clock());})}):{status:()=>({ready:false,reason:fixture?'SYNTHETIC_TEST_MODE':resources.status().reason}),available:()=>false};
+ const nativeReady=!fixture&&resources.status().ready,platformRuntime=nativeReady?new DesktopPlatformRuntime(privateDirectory(path.join(data,'native-sessions')),resources,vault,{checkPrivateFile,checkPrivateDirectory:directory=>windowsNative(app,{operation:'directory',path:directory,create:false}),onUnsafeStop:()=>{store.transaction(()=>{const event=store.audit('RECOVERY','PLATFORM_PROCESS_STOP_UNCONFIRMED','installation');store.db.prepare("INSERT INTO safety_state VALUES('platform',1,?,'PLATFORM_PROCESS_STOP_UNCONFIRMED',?) ON CONFLICT(id) DO UPDATE SET version=version+1,event_id=excluded.event_id,reason=excluded.reason").run(event,store.clock());});setTimeout(()=>{try{reconcilePlatform();}catch{}},4000);}}):{status:()=>({ready:false,reason:fixture?'SYNTHETIC_TEST_MODE':resources.status().reason}),available:()=>false};
  const bindRuntime=()=>{accounts=new LocalAccounts(store,vault,platformRuntime);service=new LocalService(store,vault,{accounts,diagnostic:new(require('@crm/local-runtime/post-diagnostic').PostDiagnostic)(store,vault,platformRuntime),evidence:new LocalEvidence(store,vault,platformRuntime,evidenceWire),capabilities:()=>({review:!fixture,collect:nativeReady,inbox:nativeReady,send:nativeReady})});runner=new LocalRunner(store,fixture?{}:{REVIEW:new LocalModelExecutor(store,vault),...(nativeReady?{SEND:new LocalSendExecutor(store,vault,platformRuntime,sendWire),COLLECT:new LocalCollectionExecutor(store,vault,platformRuntime),INBOX:new LocalInboxExecutor(store,platformRuntime,{wireFactory:(endpoint,sender,signal)=>new DesktopInboxWire(endpoint,sender,signal)})}:{})});runner.recoverStartup();};
  const startTicker=()=>{ticker=setInterval(()=>{if(!closing)void runner.tick().catch(()=>{});},1000);ticker.unref();};
  bindRuntime();startTicker();
+ // 停止未确认时写下的平台暂停，由系统自己判断是否还成立：会话目录里记着我们拉起的
+ // helper / 浏览器进程号（.owner.json），全部不在了就说明确实停住了，直接对账清除。
+ // 用户不需要、也无法替系统做这个判断。
+ const reconcilePlatform=()=>{try{const state=platformRuntime.reconcileProcessState?platformRuntime.reconcileProcessState():{sessions:0,live:0,settled:false};if(!state.settled||state.live)return {...state,cleared:false};return {...state,cleared:!!service?.reconcilePlatformHold({liveProcesses:0,sessions:state.sessions}).cleared};}catch{return {sessions:0,live:0,settled:false,cleared:false};}};
+ reconcilePlatform();
  const web=path.join(root,'apps/web/dist-desktop');
  protocol.handle('workbench',request=>{
   const url=new URL(request.url);if(url.hostname!=='app'||request.method!=='GET')return new Response('',{status:403});
@@ -81,6 +86,8 @@ async function main(){
    if(method==='cancelPostDiagnostic')return {ok:true,data:service.cancelPostDiagnostic()};
    if(method==='cancelEvidence')return {ok:true,data:service.cancelEvidence()};
    if(method==='cancelLogin')return {ok:true,data:await service.cancelLogin(input)};
+   // 只触发对账：真正清不清由主进程核对进程表决定，渲染层给不了这个判断。
+   if(method==='reconcilePlatform')return {ok:true,data:reconcilePlatform()};
    // Serialize renderer mutations with backup/restore. No token or secret is sent in URLs.
    const operation=operations.then(async()=>{
     if(method==='backup'){

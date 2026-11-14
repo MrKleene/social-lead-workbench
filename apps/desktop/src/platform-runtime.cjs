@@ -6,14 +6,31 @@ const {readOwnedJournal}=require('./owned-journal.cjs');
 async function freePort(){const server=net.createServer();await new Promise((ok,no)=>{server.once('error',no);server.listen(0,'127.0.0.1',ok);});const port=server.address().port;await new Promise(ok=>server.close(ok));return [18060,18061].includes(port)?freePort():port;}
 async function boundedJson(response){if(!response.ok)throw new LocalError(response.status===429?'PLATFORM_RATE_LIMITED':response.status===403?'PLATFORM_RESTRICTED':'PLATFORM_UNAVAILABLE');let size=0,parts=[];for await(const chunk of response.body){size+=chunk.length;if(size>1500000)throw new LocalError('PLATFORM_RESPONSE_TOO_LARGE');parts.push(chunk);}return JSON.parse(Buffer.concat(parts).toString('utf8'));}
 class DesktopPlatformRuntime{
- constructor(directory,resources,vault,{onUnsafeStop=()=>{},checkPrivateFile,checkPrivateDirectory}={}){this.onUnsafeStop=onUnsafeStop;this.checkPrivateFile=checkPrivateFile;this.checkPrivateDirectory=checkPrivateDirectory;this.directory=directory;this.resources=resources;this.vault=vault;this.active=null;if(!fs.existsSync(directory))fs.mkdirSync(directory,{mode:0o700});const s=fs.lstatSync(directory);if(!s.isDirectory()||s.isSymbolicLink()||fs.realpathSync(directory)!==directory||process.platform!=='win32'&&(s.mode&0o077))throw new LocalError('UNSAFE_SESSION_DIRECTORY');}
+ constructor(directory,resources,vault,{onUnsafeStop=()=>{},checkPrivateFile,checkPrivateDirectory}={}){this.onUnsafeStop=onUnsafeStop;this.checkPrivateFile=checkPrivateFile;this.checkPrivateDirectory=checkPrivateDirectory;this.directory=directory;this.resources=resources;this.vault=vault;this.active=null;this.unsafe=null;if(!fs.existsSync(directory))fs.mkdirSync(directory,{mode:0o700});const s=fs.lstatSync(directory);if(!s.isDirectory()||s.isSymbolicLink()||fs.realpathSync(directory)!==directory||process.platform!=='win32'&&(s.mode&0o077))throw new LocalError('UNSAFE_SESSION_DIRECTORY');}
+ /** 上次运行留下的会话目录：每个目录都是一次没有确认停止的会话（确认停止才会删）。 */
+ staleSessions(){try{return fs.readdirSync(this.directory,{withFileTypes:true}).filter(entry=>entry.isDirectory()).map(entry=>path.join(this.directory,entry.name));}catch{return[];}}
+ static recordedPids(directory){try{const owner=JSON.parse(fs.readFileSync(path.join(directory,'.owner.json'),'utf8'));return [owner.helper,owner.child].filter(Number.isInteger);}catch{return[];}}
+ static running(pid){try{process.kill(pid,0);return true;}catch(error){return error.code==='EPERM';}}
+ /** 进程对账：判断没停干净的会话到底还在不在，而不是让用户声明"我已核对"。
+  *  会话目录里记着我们拉起的 helper / 浏览器进程号（.owner.json），逐个 ping：
+  *  全部不在 → 会话确实结束，删掉残留目录、释放 active，返回 settled:true；
+  *  还有活着的 → 什么都不动，返回 live 让上层保留平台暂停。
+  *  当前会话健康在跑（active 且未标记 unsafe）时不动任何东西。 */
+ reconcileProcessState(){
+  const sessions=this.staleSessions(),live=[];
+  for(const directory of sessions)for(const pid of DesktopPlatformRuntime.recordedPids(directory))if(DesktopPlatformRuntime.running(pid))live.push(pid);
+  if(live.length||this.active&&!this.unsafe)return {sessions:sessions.length,live:live.length,settled:false};
+  for(const directory of sessions)try{fs.rmSync(directory,{recursive:true,force:true});}catch{}
+  if(this.unsafe){if(this.active?.id===this.unsafe.id)this.active=null;this.unsafe=null;}
+  return {sessions:sessions.length,live:0,settled:true};
+ }
  available(purpose){return ['LOGIN','COLLECT','INBOX','DM','COMMENT','PREFLIGHT','VERIFY','DMVERIFY'].includes(purpose)&&this.resources.status().ready;}
  status(){return {...this.resources.status(),busy:!!this.active};}
  async openLogin(signal){return this.open('LOGIN',null,signal);}
  async openSaved(scope,signal){if(!['COLLECT','INBOX','DM','COMMENT','PREFLIGHT','VERIFY','DMVERIFY'].includes(scope.purpose))throw new LocalError('PLATFORM_PURPOSE_UNAVAILABLE');const secret=this.vault.get('PLATFORM_SESSION',scope.sessionRef),saved=JSON.parse(secret);if(saved.accountId!==scope.accountId||saved.senderId!==scope.senderId||!protocol.validSession(saved.payload))throw new LocalError('PLATFORM_SESSION_IDENTITY_MISMATCH');return this.open(scope.purpose,JSON.stringify(saved.payload),signal);}
  async open(purpose,cookies,signal){
   if(this.active||signal.aborted)throw new LocalError('PLATFORM_BUSY_OR_CANCELLED');const resources=this.resources.inspect(),id=randomUUID();this.active={id};let owned,transport,directoryCreated=false;const directory=path.join(this.directory,id);const cookieFile=path.join(directory,'cookies.json');let stopped,journalCapture;
-  const stop=afterStopped=>stopped??=(async()=>{try{await transport?.close().catch(()=>{});const confirmed=owned?await owned.stop(async()=>{if(journalCapture)await journalCapture();if(afterStopped)await afterStopped();}):true;if(!confirmed)this.onUnsafeStop();if(confirmed){if(directoryCreated&&fs.existsSync(directory))fs.rmSync(directory,{recursive:true});if(this.active?.id===id)this.active=null;}return confirmed;}finally{signal.removeEventListener('abort',abort);}})();
+  const stop=afterStopped=>stopped??=(async()=>{try{await transport?.close().catch(()=>{});const confirmed=owned?await owned.stop(async()=>{if(journalCapture)await journalCapture();if(afterStopped)await afterStopped();}):true;if(!confirmed){this.unsafe={id,directory};this.onUnsafeStop();}if(confirmed){if(directoryCreated&&fs.existsSync(directory))fs.rmSync(directory,{recursive:true});if(this.active?.id===id)this.active=null;}return confirmed;}finally{signal.removeEventListener('abort',abort);}})();
   const abort=()=>{void stop().catch(()=>{});};
   try{
    // Creation/ACL failures are part of the owned lifecycle, before any secret write.

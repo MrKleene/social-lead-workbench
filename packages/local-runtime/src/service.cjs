@@ -45,18 +45,18 @@ class LocalService {
  notices(input){return this.workspace().notices(input);}
  status(){const p=this.vault?.protector,credentialsAvailable=!!(p&&(p.availableHint?p.availableHint():p.available()));const pause=this.store.db.prepare("SELECT reason FROM safety_state WHERE id='platform' AND reason IS NOT NULL").get()?.reason??null;return {storage:'SQLITE',loginRequired:false,platformPause:pause,initialized:!!this.store.db.prepare("SELECT 1 FROM settings WHERE key='initialized'").get(),modelKeyConfigured:!!this.vault?.has('MODEL_KEY','qwen'),credentialsAvailable,platform:{ready:!!this.workflow.capabilities().collect,reason:this.workflow.capabilities().collect?'LOGIN_COLLECTION_REGISTERED':'DESKTOP_PLATFORM_ADAPTER_PENDING'},version:1};}
  initialize(){return this.store.transaction(()=>{this.store.db.prepare("INSERT INTO settings VALUES('initialized','true',1) ON CONFLICT DO NOTHING").run();this.store.audit('LOCAL_USER','INITIALIZED','installation');return {initialized:true};});}
- /** 解除平台暂停。停止未确认时写下的 safety_state 之前没有任何清除入口，
-  *  而 resume() 明确拒绝清 platform，等于一次未确认停止就把平台功能永久锁死。
-  *  这里要求调用方显式确认「已核对没有残留进程」——人的判断是唯一凭据，
-  *  所以不依赖 runtime.active（它恰恰在未确认时仍为真）。 */
- clearPlatformHold({consent}){
-  if(consent!=='clear-platform-hold-after-process-check-v1')throw new LocalError('PLATFORM_HOLD_CONSENT_REQUIRED');
+ /** 对账后清除平台暂停。前提由桌面主进程从进程表得出（会话目录里的 .owner.json，
+  *  见 DesktopPlatformRuntime.reconcileProcessState），**不再要求用户声明"我已核对"**——
+  *  "进程还在不在"是系统能查的事实，不是用户的义务。
+  *  这个方法不经 IPC 暴露：渲染层只能触发对账，不能直接把暂停清掉。 */
+ reconcilePlatformHold({liveProcesses,sessions}){
+  if(liveProcesses!==0)throw new LocalError('PLATFORM_PROCESS_STILL_RUNNING');
   if(this.accountService?.attempt)throw new LocalError('PLATFORM_BUSY_OR_PAUSED');
   if(this.store.active())throw new LocalError('PLATFORM_BUSY_OR_PAUSED');
   return this.store.transaction(()=>{
    const row=this.store.db.prepare("SELECT reason FROM safety_state WHERE id='platform' AND reason IS NOT NULL").get();
    if(!row)return {cleared:false};
-   this.store.audit('LOCAL_USER','PLATFORM_HOLD_CLEARED','installation',{reason:row.reason});
+   this.store.audit('RECOVERY','PLATFORM_HOLD_RECONCILED','installation',{reason:row.reason,sessions:sessions??0,liveProcesses:0});
    this.store.db.prepare("UPDATE safety_state SET reason=NULL,version=version+1 WHERE id='platform'").run();
    return {cleared:true};
   });

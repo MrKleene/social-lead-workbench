@@ -26,3 +26,25 @@ test('configuration that already produced collection history cannot be deleted',
  assert.throws(()=>service.deleteConfiguration({id:'config',revision}),/CONFIGURATION_HAS_HISTORY/);
  assert.equal(f.store.db.prepare("SELECT count(*) n FROM configurations WHERE id='config'").get().n,1);
 });
+test('platform hold clears only from process reconciliation, never from a caller assertion',t=>{
+ const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'local-service-hold-'))),db=new LocalDatabase(path.join(dir,'db.sqlite'));t.after(()=>{db.close();fs.rmSync(dir,{recursive:true,force:true});});
+ const service=new LocalService(db);
+ db.db.prepare("INSERT INTO safety_state VALUES('platform',1,NULL,'PLATFORM_PROCESS_STOP_UNCONFIRMED',0)").run();
+ assert.equal(service.status().platformPause,'PLATFORM_PROCESS_STOP_UNCONFIRMED');
+ assert.throws(()=>service.reconcilePlatformHold({liveProcesses:1}),/PLATFORM_PROCESS_STILL_RUNNING/);
+ assert.equal(service.status().platformPause,'PLATFORM_PROCESS_STOP_UNCONFIRMED');
+ assert.equal(service.reconcilePlatformHold({liveProcesses:0,sessions:1}).cleared,true);
+ assert.equal(service.status().platformPause,null);
+ assert.equal(db.db.prepare("SELECT count(*) n FROM audit_events WHERE action='PLATFORM_HOLD_RECONCILED'").get().n,1);
+});
+test('platform hold clears only from process reconciliation, never from a caller assertion',t=>{
+ const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'local-service-hold-'))),db=new LocalDatabase(path.join(dir,'db.sqlite'));t.after(()=>{db.close();fs.rmSync(dir,{recursive:true,force:true});});
+ const service=new LocalService(db);
+ db.db.prepare("INSERT INTO safety_state VALUES('platform',1,NULL,'PLATFORM_PROCESS_STOP_UNCONFIRMED',0)").run();
+ assert.equal(service.status().platformPause,'PLATFORM_PROCESS_STOP_UNCONFIRMED');
+ assert.throws(()=>service.reconcilePlatformHold({liveProcesses:1}),/PLATFORM_PROCESS_STILL_RUNNING/);
+ assert.equal(service.status().platformPause,'PLATFORM_PROCESS_STOP_UNCONFIRMED');
+ assert.equal(service.reconcilePlatformHold({liveProcesses:0,sessions:1}).cleared,true);
+ assert.equal(service.status().platformPause,null);
+ assert.equal(db.db.prepare("SELECT count(*) n FROM audit_events WHERE action='PLATFORM_HOLD_RECONCILED'").get().n,1);
+});
