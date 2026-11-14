@@ -56,7 +56,9 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-action"
       className={cn(
-        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
+        // 动作区可能有多个按钮，必须是 flex 容器：上游这里是普通 div，多个
+        // inline 按钮会紧贴在一起。gap-3 按 DESIGN §4「按钮组 12px」。
+        "col-start-2 row-span-2 row-start-1 flex flex-wrap items-center justify-end gap-3 self-start justify-self-end",
         className
       )}
       {...props}
