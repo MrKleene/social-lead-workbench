@@ -98,6 +98,10 @@
       "source": "./src/backup.cjs",
       "default": "./dist/backup.cjs"
     },
+    "./builtin-configurations": {
+      "source": "./src/builtin-configurations.cjs",
+      "default": "./dist/builtin-configurations.cjs"
+    },
     "./bundles/collection-provider": {
       "types": "./dist/bundles/collection-provider.d.ts",
       "source": "./src/bundles/collection-provider.ts",

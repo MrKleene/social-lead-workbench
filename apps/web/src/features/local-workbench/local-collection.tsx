@@ -51,7 +51,7 @@ export function LocalCollectionPanel({
 
   const body = (
     <>
-      <FilterField label="关键词配置">
+      <FilterField label="采集关键词配置">
         <Select
           value={id}
           disabled={choose.isPending || selection.isPending || saving}
@@ -65,11 +65,11 @@ export function LocalCollectionPanel({
           }
           }}
         >
-          <SelectTrigger aria-label="关键词配置">
+          <SelectTrigger aria-label="采集关键词配置">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={SELECT_EMPTY}>选择关键词配置</SelectItem>
+            <SelectItem value={SELECT_EMPTY}>选择采集关键词配置</SelectItem>
             {configs.data
             ?.filter((config) => config.kind === "KEYWORDS")
             .map((config) => (

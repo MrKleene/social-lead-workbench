@@ -22,7 +22,7 @@ class LocalCollection {
     const rules=scope.strictStages.contactRules??[];
     if(!Array.isArray(rules)||rules.length>100||new Set(rules.map(r=>r.id)).size!==rules.length)throw new LocalError('INVALID_CONTACT_RULES');
     for(const ref of rules){const r=new (require('./contact.cjs').LocalContact)(this.store).frozen(ref);if(!stages.policies.some(p=>p.id===r.policy_id&&p.revision===r.policy_revision))throw new LocalError('CONTACT_RULE_POLICY_MISSING');}
-    const spec=policy.configInput.parse({name:configuration.name,platform:'XHS',mode:'XHS_MCP',keywords:JSON.parse(configuration.body).keywords,excludeWords:JSON.parse(configuration.body).excludeWords||[],batchLimit:plan.batchLimit,enabled:true});
+    const spec=policy.configInput.parse({name:configuration.name,platform:'XHS',mode:'XHS_MCP',keywords:JSON.parse(configuration.body).keywords,batchLimit:plan.batchLimit,enabled:true});
     const existing=this.db.prepare('SELECT id,status FROM collection_runs WHERE job_id=?').get(job.id);
     if(existing){if(existing.status!=='RUNNING')throw new LocalError('COLLECTION_ALREADY_FINISHED');return existing.id;}
     this.db.prepare("INSERT INTO collection_runs(id,job_id,config_id,revision,account_id,account_revision,snapshot,read_plan,status,created_at) VALUES(?,?,?,?,?,?,?,?,'RUNNING',?)")

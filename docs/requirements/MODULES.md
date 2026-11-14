@@ -187,6 +187,9 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 **关键约束**
 
 - 默认只读，显式新增或编辑
+- 内置配置（`configurations.builtin=1`）由应用维护：不可编辑、不可删除；启动时按
+  `packages/local-runtime/src/builtin-configurations.cjs` 的定义强制同步，内容变化会连带
+  使该匹配规则的审核与自动化授权失效，需要用户重新确认
 - 分组分别保存，没有跨接口原子提交，也不提示"全部保存成功"
 - 切换页签保留草稿，关闭需确认丢弃；保存失败保留该组草稿并报错
 - 启动校验只要求已开启阶段的必要条件；读取失败不能误判为"开关关闭"

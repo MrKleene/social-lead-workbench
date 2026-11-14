@@ -12,6 +12,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Cpu, Filter, MessageSquare, Send, Tag } from "lucide-react";
@@ -74,15 +75,11 @@ function Editor({
   const [text, setText] = useState(
     item?.body.keywords?.join("\n") ?? item?.body.text ?? "",
   );
-  const [exclude, setExclude] = useState(
-    item?.body.excludeWords?.join("\n") ?? "",
-  );
   const [error, setError] = useState("");
 
   const dirty =
     name !== (item?.name ?? "") ||
-    text !== (item?.body.keywords?.join("\n") ?? item?.body.text ?? "") ||
-    exclude !== (item?.body.excludeWords?.join("\n") ?? "");
+    text !== (item?.body.keywords?.join("\n") ?? item?.body.text ?? "");
 
   useDraftGuard(dirty, "modal");
   useDraftGuard(pending, "pending");
@@ -108,10 +105,7 @@ function Editor({
         ...item,
         kind,
         name,
-        body:
-          kind === "KEYWORDS"
-            ? { keywords: keywordWords(text), excludeWords: keywordWords(exclude) }
-            : { text },
+        body: kind === "KEYWORDS" ? { keywords: keywordWords(text) } : { text },
       });
     } catch {
       /* mutation error remains visible */
@@ -141,15 +135,6 @@ function Editor({
           required
         />
       </FormField>
-      {kind === "KEYWORDS" ? (
-        <FormField label="排除词">
-          <Textarea
-            rows={3}
-            value={exclude}
-            onChange={(event) => setExclude(event.target.value)}
-          />
-        </FormField>
-      ) : null}
       {error ? (
         <Alert variant="destructive">
         <AlertDescription>{error}</AlertDescription>
@@ -261,8 +246,13 @@ export function LocalConfigurations() {
                         }
                       }}
                     >
-                      <span className="text-body font-semibold break-words">
-                        {item.name}
+                      <span className="flex w-full flex-wrap items-center gap-2">
+                        <span className="text-body font-semibold break-words">
+                          {item.name}
+                        </span>
+                        {item.builtin ? (
+                          <Badge variant="outline">系统默认</Badge>
+                        ) : null}
                       </span>
                       <small className="line-clamp-2 text-caption leading-relaxed text-muted-foreground break-words">
                         {item.body.keywords?.join(" / ") ?? item.body.text}
@@ -279,10 +269,18 @@ export function LocalConfigurations() {
                       ? editor === "new"
                         ? "新增配置"
                         : "编辑配置"
-                      : (selected?.name ?? "配置详情")
+                      : selected ? (
+                          <span className="flex flex-wrap items-center gap-2">
+                            {selected.name}
+                            {selected.builtin ? (
+                              <Badge variant="outline">系统默认</Badge>
+                            ) : null}
+                          </span>
+                        )
+                      : "配置详情"
                   }
                   actions={
-                    !editor && selected ? (
+                    !editor && selected && !selected.builtin ? (
                       <>
                         <Button
                           variant="outline"
@@ -356,11 +354,6 @@ export function LocalConfigurations() {
                               selected.body.text}
                           </span>
                         </DetailItem>
-                        {kind === "KEYWORDS" ? (
-                          <DetailItem label="排除词">
-                            {selected.body.excludeWords?.join("、") || "未设置"}
-                          </DetailItem>
-                        ) : null}
                       </DetailList>
 
                       {workbench.remove.error ? (

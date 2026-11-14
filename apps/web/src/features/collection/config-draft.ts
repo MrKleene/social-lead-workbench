@@ -12,7 +12,6 @@ export function keywordDraft(name: string, content: string, config?: Config, def
         mode: config?.mode ?? defaults?.mode ?? 'MOCK',
         batchLimit: config?.batchLimit ?? 1,
         enabled: config?.enabled ?? true,
-        excludeWords: config?.excludeWords ?? [],
         defaultExecutionAccountId: config?.defaultExecutionAccountId ?? null,
         defaultReplyTemplateId: config?.defaultReplyTemplateId ?? null,
         ...(config?.legacyMatchingEnabled !== undefined ? {legacyMatchingEnabled: config.legacyMatchingEnabled} : {}),

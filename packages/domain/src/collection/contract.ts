@@ -10,13 +10,14 @@ export const configInput = z.object({
     commentRules: commentRulesSchema.nullable().optional(),
     name: z.string().trim().min(1).max(80), platform: z.enum(["XHS", "DOUYIN"]),
     mode: z.enum(["MOCK", "XHS_FIXTURE", "XHS_MCP"]), keywords: z.array(word).min(1).max(100),
-    excludeWords: z.array(word).max(20), batchLimit: z.number().int().min(1).max(10),
+    // 排除词已从产品移除（只被校验和保存，从未参与采集或匹配）。保留可选字段仅为
+    // 解析历史 run 快照，任何新写入都不应再带它。
+    excludeWords: z.array(word).max(20).optional(), batchLimit: z.number().int().min(1).max(10),
     enabled: z.boolean(),
     defaultExecutionAccountId: z.string().min(1).max(100).nullable().optional(),
     defaultReplyTemplateId: z.string().min(1).max(100).nullable().optional(),
 }).strict().refine(v => v.mode === "MOCK" || v.platform === "XHS", "MCP只支持小红书")
-    .refine(v => new Set(v.keywords.map(normalize)).size === v.keywords.length, "关键词不能重复")
-    .refine(v => !v.legacyMatchingEnabled || !!v.semanticRules || !!v.commentRules || !v.keywords.some(k => v.excludeWords.some(e => normalize(k).includes(normalize(e)))), "排除词不能覆盖搜索关键词");
+    .refine(v => new Set(v.keywords.map(normalize)).size === v.keywords.length, "关键词不能重复");
 export type ConfigInput = z.infer<typeof configInput>;
 /** Private run metadata is not a public collection configuration field. */
 export function runConfigSnapshot(value:unknown){if(!value||typeof value!=='object'||Array.isArray(value))return value;const {strictStages:_,...config}=value as Record<string,unknown>;return config;}
@@ -65,11 +66,3 @@ export interface ReadAdapter {
     replies(post: Post, parentId: string, cursor: string | undefined, signal: AbortSignal): Promise<Page<Comment>>;
 }
 export const limits = { requests: 32, pagesPerStream: 4, comments: 100, callMs: 3000, runMs: 20000 } as const;
-export function classify(text: string, keywords: string[], exclude: string[]) {
-    const normalized = normalize(text);
-    const hits = keywords.filter(k => normalized.includes(normalize(k)));
-    if (!hits.length || exclude.some(w => normalized.includes(normalize(w))))
-        return null;
-    const help = /请问|求助|如何|怎么|需要|求推荐|能否|可以.*吗/.test(normalized);
-    return { keywords: hits, classification: help ? "POSSIBLE_HELP" : "RELATED_ONLY" };
-}

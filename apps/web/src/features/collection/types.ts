@@ -9,7 +9,6 @@ export type ConfigDraft = {
     platform: Platform;
     mode: 'MOCK' | 'XHS_FIXTURE' | 'XHS_MCP';
     keywords: string[];
-    excludeWords: string[];
     batchLimit: number;
     enabled: boolean;
     defaultExecutionAccountId?: string | null;

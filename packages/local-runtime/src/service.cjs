@@ -3,15 +3,20 @@ const {randomUUID}=require('node:crypto');
 const {LocalError,canonical}=require('./database.cjs');
 const {LocalInbox}=require('./inbox.cjs');
 const {LocalWorkflow}=require('./workflow.cjs');
+const {definitions:builtinDefinitions}=require('./builtin-configurations.cjs');
 const KINDS=new Set(['KEYWORDS','MATCHING','COMMENT_TEMPLATE','DM_TEMPLATE']);
+// MATCHING 配置与 review_policies 是 1:1 的：任何内容变更都必须让旧授权失效。
+function syncReviewPolicy(store,id,name,target){
+ store.db.prepare('INSERT INTO review_policies(id,name,target) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,target=excluded.target,revision=revision+1,version=version+1,enabled=0,model_version=NULL').run(id,name,target);
+ store.db.prepare('UPDATE contact_rules SET enabled=0,version=version+1,authorization_hash=NULL WHERE policy_id=?').run(id);
+}
 function validateConfiguration(input){
  if(!input||!KINDS.has(input.kind)||typeof input.name!=='string'||!input.name.trim()||input.name.trim().length>100||!input.body||Object.getPrototypeOf(input.body)!==Object.prototype)throw new LocalError('INVALID_CONFIGURATION');
  if(Buffer.byteLength(canonical(input.body))>32768)throw new LocalError('CONFIGURATION_TOO_LARGE');
  if(input.kind==='KEYWORDS'){
   const keywords=input.body.keywords;if(!Array.isArray(keywords)||!keywords.length||keywords.length>100||keywords.some(x=>typeof x!=='string'||!x.trim()||[...x.trim()].length>40))throw new LocalError('INVALID_KEYWORDS');
   if(new Set(keywords.map(x=>x.trim().normalize('NFKC').toLowerCase())).size!==keywords.length)throw new LocalError('DUPLICATE_KEYWORDS');
-  if(Object.keys(input.body).some(x=>!['keywords','excludeWords'].includes(x)))throw new LocalError('INVALID_CONFIGURATION');
-  if(input.body.excludeWords!==undefined&&(!Array.isArray(input.body.excludeWords)||input.body.excludeWords.length>100||input.body.excludeWords.some(x=>typeof x!=='string'||!x.trim()||[...x.trim()].length>40)))throw new LocalError('INVALID_KEYWORDS');
+  if(Object.keys(input.body).some(x=>x!=='keywords'))throw new LocalError('INVALID_CONFIGURATION');
  }else if(typeof input.body.text!=='string'||!input.body.text.trim()||input.body.text.length>4000||Object.keys(input.body).some(x=>x!=='text'))throw new LocalError('INVALID_CONFIGURATION');
  if(input.kind==='MATCHING'&&!require('@crm/local-runtime/policy').reviewPolicySaveSchema.safeParse({version:0,name:input.name,target:input.body.text}).success)throw new LocalError('INVALID_MATCHING_TARGET');
  return {kind:input.kind,name:input.name.trim(),body:input.body};
@@ -61,19 +66,42 @@ class LocalService {
    return {cleared:true};
   });
  }
+ /** 写入系统内置配置：缺失则补，内容与当前定义不一致则强制覆盖。
+  *  内置项对用户只读，内容完全由应用维护，所以这里不需要判断「用户改过」。
+  *  内容相同时不写库——否则每次启动都会 bump revision 并连带吊销审核授权。
+  *  内容真的变了会走 syncReviewPolicy，使旧的审核/自动化授权失效，需要用户重新确认。
+  *  只在桌面装配启动时调用一次，不经 IPC 暴露。 */
+ ensureBuiltinConfigurations(){return this.store.transaction(()=>{
+  let created=0,updated=0;
+  for(const definition of builtinDefinitions){
+   const value=validateConfiguration(definition),now=this.store.clock();
+   const row=this.store.db.prepare('SELECT * FROM configurations WHERE id=?').get(definition.id);
+   if(!row){
+    this.store.db.prepare('INSERT INTO configurations(id,kind,name,body,builtin,updated_at) VALUES(?,?,?,?,1,?)').run(definition.id,value.kind,value.name,canonical(value.body),now);
+    if(value.kind==='MATCHING')syncReviewPolicy(this.store,definition.id,value.name,value.body.text.trim());
+    created++;continue;
+   }
+   // id 被用户自己的配置占用（理论上不会发生）：不接管、不覆盖。
+   if(!row.builtin)continue;
+   if(row.kind===value.kind&&row.name===value.name&&canonical(JSON.parse(row.body))===canonical(value.body))continue;
+   this.store.db.prepare('UPDATE configurations SET kind=?,name=?,body=?,revision=revision+1,updated_at=? WHERE id=?').run(value.kind,value.name,canonical(value.body),now,definition.id);
+   if(value.kind==='MATCHING')syncReviewPolicy(this.store,definition.id,value.name,value.body.text.trim());
+   updated++;
+  }
+  if(created||updated)this.store.audit('LOCAL_USER','BUILTIN_CONFIGURATIONS_SYNCED','installation',{created,updated});
+  return {created,updated};
+ });}
  configurations(){return this.store.db.prepare('SELECT * FROM configurations WHERE archived=0 ORDER BY updated_at DESC,id').all().map(x=>({...x,body:JSON.parse(x.body)}));}
  saveConfiguration(input){const value=validateConfiguration(input);return this.store.transaction(()=>{
   const id=input.id||randomUUID();if(typeof id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(id))throw new LocalError('INVALID_CONFIGURATION');
   const old=this.store.db.prepare('SELECT * FROM configurations WHERE id=?').get(id);
-  if(old){if(old.archived||old.kind!==value.kind||old.revision!==input.revision)throw new LocalError('CONFIGURATION_CHANGED');this.store.db.prepare('UPDATE configurations SET name=?,body=?,revision=revision+1,updated_at=? WHERE id=?').run(value.name,canonical(value.body),this.store.clock(),id);}
+  if(old){if(old.builtin)throw new LocalError('BUILTIN_CONFIGURATION_READ_ONLY');if(old.archived||old.kind!==value.kind||old.revision!==input.revision)throw new LocalError('CONFIGURATION_CHANGED');this.store.db.prepare('UPDATE configurations SET name=?,body=?,revision=revision+1,updated_at=? WHERE id=?').run(value.name,canonical(value.body),this.store.clock(),id);}
   else{if(input.id||input.revision!==undefined)throw new LocalError('CONFIGURATION_NOT_FOUND');this.store.db.prepare('INSERT INTO configurations(id,kind,name,body,updated_at) VALUES(?,?,?,?,?)').run(id,value.kind,value.name,canonical(value.body),this.store.clock());}
-  if(value.kind==='MATCHING'){
-   this.store.db.prepare('INSERT INTO review_policies(id,name,target) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,target=excluded.target,revision=revision+1,version=version+1,enabled=0,model_version=NULL').run(id,value.name,value.body.text.trim());
-   this.store.db.prepare('UPDATE contact_rules SET enabled=0,version=version+1,authorization_hash=NULL WHERE policy_id=?').run(id);
-  }
+  if(value.kind==='MATCHING')syncReviewPolicy(this.store,id,value.name,value.body.text.trim());
   this.store.audit('LOCAL_USER','CONFIGURATION_SAVED',id,{kind:value.kind});return {id};
  });}
  deleteConfiguration({id,revision}){return this.store.transaction(()=>{
+  if(this.store.db.prepare('SELECT 1 FROM configurations WHERE id=? AND archived=0 AND builtin=1').get(id))throw new LocalError('BUILTIN_CONFIGURATION_READ_ONLY');
   const row=this.store.db.prepare('SELECT * FROM configurations WHERE id=? AND revision=? AND archived=0').get(id,revision);
   if(!row)throw new LocalError('CONFIGURATION_CHANGED');
   const hit=(sql)=>!!this.store.db.prepare(sql).get(id);
