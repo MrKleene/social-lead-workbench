@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -32,10 +32,13 @@ function platformReason(reason: string) {
 
 export function LocalLoginPanel({
   credentialsAvailable,
+  defaultAccountId,
   onVerified,
   onCancelled,
 }: {
   credentialsAvailable: boolean;
+  /** 从账号详情点「重新登录」进来时预选该账号；不传就是添加新账号。 */
+  defaultAccountId?: string;
   /** 扫码核验通过后回调——「添加账号」弹窗用它自动关闭。 */
   onVerified?: () => void;
   /** 用户取消登录后回调——取消等于放弃这次添加，弹窗一起关掉。 */
@@ -45,6 +48,20 @@ export function LocalLoginPanel({
   const [accountId, setAccountId] = useState("");
   const [name, setName] = useState("");
   const [limit, setLimit] = useState("10");
+  /** 账号列表是异步来的：只补一次初值，之后用户自己选什么就是什么。 */
+  const seeded = useRef(false);
+
+  useEffect(() => {
+    if (seeded.current || !defaultAccountId) return;
+    const target = platform.accounts.data?.accounts.find(
+      (item) => item.id === defaultAccountId,
+    );
+    if (!target) return;
+    seeded.current = true;
+    setAccountId(target.id);
+    setName(target.name);
+    setLimit(String(target.daily_limit));
+  }, [defaultAccountId, platform.accounts.data]);
 
   const selected = platform.accounts.data?.accounts.find(
     (item) => item.id === accountId,
@@ -171,15 +188,17 @@ export function LocalLoginPanel({
           <img
             className={cn(
               "w-60 max-w-full rounded-md border bg-qr-surface p-3 transition-opacity",
-              // 取消要等浏览器进程真正退出（最长 10s），期间把二维码压暗，表示"正在作废"。
-              platform.cancel.isPending && "opacity-40",
+              // 取消要等浏览器进程真正退出（最长 10s），期间把二维码压暗，表示"正在作废"；
+              // 扫上码之后二维码也没用了，一并压暗，把视线让给下面那句状态。
+              (platform.cancel.isPending || platform.scanned) && "opacity-40",
             )}
             src={platform.login.image}
             alt="本次小红书登录二维码"
           />
-          <p className="text-body leading-relaxed text-muted-foreground break-words">
-            有效期至 {new Date(platform.login.expiresAt).toLocaleTimeString()}
-            。请核对扫码账号。
+          <p role="status" className="text-body leading-relaxed text-muted-foreground break-words">
+            {platform.scanned
+              ? "已扫码，正在核验账号…"
+              : `有效期至 ${new Date(platform.login.expiresAt).toLocaleTimeString()}。请核对扫码账号。`}
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <Button

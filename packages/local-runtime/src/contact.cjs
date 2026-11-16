@@ -60,8 +60,10 @@ class LocalContact {
   if(hash(plan.scope)!==hash(s)||grant?.issuer!=='AUTOMATION'||grant.parent_proof!==canonical(plan.parent))throw new LocalError('AUTOMATIC_AUTHORIZATION_CHANGED');return plan;
  }
  enqueue(reviewId,ruleId,channel,accountId){return this.store.transaction(()=>this.enqueueInTransaction(reviewId,ruleId,channel,accountId));}
- enqueueInTransaction(reviewId,ruleId,channel,accountId){if(!this.db.isTransaction)throw new LocalError('TRANSACTION_REQUIRED');
-  const plan=this.plan(reviewId,ruleId,channel,accountId),s=plan.scope,key='auto:'+hash({runId:plan.parent.runId,reviewId,ruleId,version:s.basis.ruleVersion,channel});
+ /** 自动任务的 request_key。额度不足重排时要在同一前缀下加代次后缀，所以单独暴露。 */
+ autoKey({runId,reviewId,ruleId,ruleVersion,channel}){return 'auto:'+hash({runId,reviewId,ruleId,version:ruleVersion,channel});}
+ enqueueInTransaction(reviewId,ruleId,channel,accountId,requestKey){if(!this.db.isTransaction)throw new LocalError('TRANSACTION_REQUIRED');
+  const plan=this.plan(reviewId,ruleId,channel,accountId),s=plan.scope,key=requestKey??this.autoKey({runId:plan.parent.runId,reviewId,ruleId,ruleVersion:s.basis.ruleVersion,channel});
   // An attempt cannot silently switch account or be recreated after failure/UNKNOWN.
   const existing=this.db.prepare('SELECT id FROM jobs WHERE request_key=?').get(key);if(existing)return existing.id;
   const now=this.store.clock(),expires=Math.min(now+900000,Math.floor((now+28800000)/86400000)*86400000+86400000-28800000),grant=randomUUID(),id=randomUUID();

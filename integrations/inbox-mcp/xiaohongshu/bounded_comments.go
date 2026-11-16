@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"time"
 	"unicode/utf16"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Independent, mandatory finite budgets. Legacy full-load flags cannot be combined.
@@ -255,9 +257,13 @@ func boundedError(ctx context.Context, err error) string {
 	if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
 		return "CANCELLED"
 	}
-	if err != nil && err.Error() == "PLATFORM_LIMIT" {
-		return "PLATFORM_LIMIT"
+	if err != nil {
+		switch err.Error() {
+		case "PLATFORM_LIMIT", "IDENTITY_CONFLICT", "INVALID_RESPONSE":
+			return err.Error()
+		}
 	}
+	logrus.Errorf("bounded read failed: %v", err)
 	return "READ_FAILED"
 }
 func boundedReplies(s CoverageSample) (gap, unknown bool) {

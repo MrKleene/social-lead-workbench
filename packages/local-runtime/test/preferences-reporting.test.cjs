@@ -16,9 +16,12 @@ test('per-configuration defaults persist with CAS, do not grant execution, and n
 test('step toggles persist with CAS and drop selections that no longer exist',t=>{
  const f=fixture(t),p=new LocalPreferences(f.store);
  f.store.db.exec("INSERT INTO configurations(id,kind,name,body,updated_at) VALUES('ct','COMMENT_TEMPLATE','评论模板','{\"text\":\"合成评论回复\"}',0),('dt','DM_TEMPLATE','私信模板','{\"text\":\"合成私信\"}',0)");
- assert.deepEqual(p.steps(),{version:0,autoReview:false,policyId:null,autoReply:false,commentTemplateId:null,dmTemplateId:null,threshold:80});
- const saved=p.saveSteps({version:0,autoReview:true,policyId:'policy',autoReply:true,commentTemplateId:'ct',dmTemplateId:'dt',threshold:85});
+ assert.deepEqual(p.steps(),{version:0,autoReview:false,policyId:null,autoReply:false,commentTemplateId:null,dmTemplateId:null,replyAccountIds:[],threshold:80});
+ const saved=p.saveSteps({version:0,autoReview:true,policyId:'policy',autoReply:true,commentTemplateId:'ct',dmTemplateId:'dt',replyAccountIds:['account'],threshold:85});
  assert.equal(saved.version,1);assert.equal(saved.commentTemplateId,'ct');assert.equal(saved.dmTemplateId,'dt');assert.equal(saved.threshold,85);
+ assert.deepEqual(saved.replyAccountIds,['account']);
+ assert.throws(()=>p.saveSteps({...saved,replyAccountIds:['missing']}),/PREFERRED_ACCOUNT_UNAVAILABLE/);
+ assert.throws(()=>p.saveSteps({...saved,replyAccountIds:['account','account']}),/INVALID_AUTOMATION_STEPS/);
  assert.equal(new LocalPreferences(f.store).steps().threshold,85);
  assert.throws(()=>p.saveSteps({...saved,version:0}),/PREFERENCE_CHANGED/);
  assert.throws(()=>p.saveSteps({...saved,threshold:101}),/INVALID_AUTOMATION_STEPS/);
@@ -27,6 +30,7 @@ test('step toggles persist with CAS and drop selections that no longer exist',t=
  assert.throws(()=>p.saveSteps({...saved,commentTemplateId:'dt'}),/CONTACT_TEMPLATE_CHANGED/);
  f.store.db.exec("UPDATE configurations SET archived=1 WHERE id='ct'");
  const cleared=p.steps();assert.equal(cleared.commentTemplateId,null);assert.equal(cleared.dmTemplateId,'dt');
+ f.store.db.exec("UPDATE accounts SET state='ARCHIVED'");assert.deepEqual(p.steps().replyAccountIds,[]);
 });
 
 test('legacy defaults are restored as selections only and survive restart without restoring grants',t=>{

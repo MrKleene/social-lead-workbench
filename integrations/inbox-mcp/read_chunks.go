@@ -41,7 +41,7 @@ func (s *XiaohongshuService) chunkedDetail(ctx context.Context, id, ref string, 
 		if l == nil {
 			return nil, errors.New("CONTINUATION_EXPIRED")
 		}
-		if time.Since(l.created) > 2*time.Minute {
+		if time.Since(l.created) > 30*time.Minute {
 			m.clear()
 			return nil, errors.New("CONTINUATION_EXPIRED")
 		}
@@ -83,7 +83,7 @@ func (s *XiaohongshuService) chunkedDetail(ctx context.Context, id, ref string, 
 	}
 	l.handle = token
 	result.Chunk.Token = token
-	if time.Since(l.created) >= 2*time.Minute {
+	if time.Since(l.created) >= 30*time.Minute {
 		result.Chunk.CanContinue = false
 	}
 	if l.timer != nil {

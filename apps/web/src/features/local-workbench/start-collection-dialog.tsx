@@ -31,7 +31,8 @@ export function StartCollectionDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   credentialsAvailable: boolean;
-  onStarted: () => void;
+  /** 参数是「本轮没带上的后续步骤」的原因，没有就传 null。 */
+  onStarted: (replySkipped: string | null) => void;
 }) {
   const client = useQueryClient();
   const selection = useLocalRecords("workspaceSelection", undefined, {
@@ -47,7 +48,7 @@ export function StartCollectionDialog({
     enabled: open && !!configId,
   });
   const steps = useLocalRecords("automationSteps", undefined, { enabled: open });
-  const accounts = useLocalRecords("accountOverview", undefined, {
+  const accounts = useLocalRecords("accountDetails", undefined, {
     enabled: open,
   });
   const workflow = useLocalRecords("workflowOverview", undefined, {
@@ -57,17 +58,27 @@ export function StartCollectionDialog({
   const start = useMutation({
     mutationFn: async (input: {
       accountId: string;
-      accountVersion: number;
-      accountDailyLimit: number;
       batchLimit: number;
       policyId: string | null;
       policyRevision: number;
       threshold: number;
+      replyAccounts: { id: string; version: number; dailyLimit: number }[];
       plans: { channel: "DM" | "COMMENT"; content: string; templateId: string; templateVersion: number }[];
     }) => {
-      const ruleIds = input.plans.length
-        ? [await syncReplyRule(input)]
-        : [];
+      // 采集与回复解耦：回复账号受限时只放弃本轮的自动回复，采集照常开始。
+      // 未选匹配规则属于配置缺失，仍然阻断——那不是「回复暂时发不出去」。
+      if (input.plans.length && !input.policyId) {
+        throw new Error("未选择评论匹配规则");
+      }
+      let ruleIds: string[] = [];
+      let replySkipped: string | null = null;
+      if (input.plans.length) {
+        try {
+          ruleIds = [await syncReplyRule(input)];
+        } catch (error) {
+          replySkipped = error instanceof Error ? error.message : "自动回复未加入本轮";
+        }
+      }
       const preview = await localApi("previewCollection", {
         configId,
         accountId: input.accountId,
@@ -75,7 +86,7 @@ export function StartCollectionDialog({
         policyIds: input.policyId ? [input.policyId] : [],
         ruleIds,
       });
-      return localApi("authorizeCollection", {
+      const result = await localApi("authorizeCollection", {
         scope: preview.scope,
         previewHash: preview.previewHash,
         requestKey: crypto.randomUUID(),
@@ -83,21 +94,27 @@ export function StartCollectionDialog({
           ? "bounded-read-with-frozen-contact-v1"
           : "bounded-platform-read-once-v1",
       });
+      return { id: result.id, replySkipped };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       void client.invalidateQueries({ queryKey: ["local"] });
-      onStarted();
+      onStarted(result.replySkipped);
       onOpenChange(false);
     },
   });
 
   const config = configs.data?.find((item) => item.id === configId);
-  const account = accounts.data?.accounts.find(
+  const account = accounts.data?.find(
     (item) => item.id === preferences.data?.accountId,
   );
   const policyId = steps.data?.policyId ?? null;
   const policy = workflow.data?.policies.find((item) => item.id === policyId);
   const plans = replyPlans(configs.data, steps.data);
+  /** 回复账号按设置里的顺序取；账号被删或刷新后失效的会自然掉出列表。 */
+  const replyAccounts = (steps.data?.replyAccountIds ?? []).flatMap((id) => {
+    const item = accounts.data?.find((account) => account.id === id);
+    return item ? [item] : [];
+  });
   const verified = account?.state === "VERIFIED" && !!account.hasSession;
 
   /** 缺配置由页面统一拦在「需要先完成配置」弹窗里，这里只做确认。 */
@@ -138,6 +155,21 @@ export function StartCollectionDialog({
                     : "未选择"
                 }
               />
+              {plans.length ? (
+                <ScopeRow
+                  label="回复账号"
+                  value={
+                    replyAccounts.length
+                      ? replyAccounts
+                          .map(
+                            (item) =>
+                              item.name + (item.holds.length ? " · 受限" : ""),
+                          )
+                          .join("、")
+                      : "未选择"
+                  }
+                />
+              ) : null}
               <ScopeRow
                 label="笔记上限"
                 value={`${preferences.data.batchLimit} 篇`}
@@ -168,12 +200,15 @@ export function StartCollectionDialog({
             onClick={() =>
               start.mutate({
                 accountId: preferences.data!.accountId!,
-                accountVersion: account?.revision ?? 1,
-                accountDailyLimit: account?.daily_limit ?? 10,
                 batchLimit: preferences.data!.batchLimit,
                 policyId,
                 policyRevision: policy?.revision ?? 1,
                 threshold: steps.data?.threshold ?? 80,
+                replyAccounts: replyAccounts.map((item) => ({
+                  id: item.id,
+                  version: item.revision,
+                  dailyLimit: item.daily_limit,
+                })),
                 plans,
               })
             }
@@ -215,17 +250,18 @@ function replyPlans(
 /**
  * 把三步设置翻译成一条自动联系规则并授权。
  * 界面上不再暴露「规则」，所以每次开始前按当前设置同步一次，id 固定为 auto-reply。
+ * 发送账号来自「自动回复」里选的回复账号池，与采集账号无关。
  */
 async function syncReplyRule(input: {
   accountId: string;
-  accountVersion: number;
-  accountDailyLimit: number;
   policyId: string | null;
   policyRevision: number;
   threshold: number;
+  replyAccounts: { id: string; version: number; dailyLimit: number }[];
   plans: { channel: "DM" | "COMMENT"; content: string; templateId: string; templateVersion: number }[];
 }) {
   if (!input.policyId) throw new Error("未选择评论匹配规则");
+  if (!input.replyAccounts.length) throw new Error("未选择回复账号");
   const existing = (await localApi("automationRules")).find(
     (rule) => rule.id === "auto-reply",
   );
@@ -241,13 +277,7 @@ async function syncReplyRule(input: {
       channel: input.plans[0].channel,
       content: input.plans[0].content,
       channelPlans: input.plans,
-      accounts: [
-        {
-          id: input.accountId,
-          version: input.accountVersion,
-          dailyLimit: input.accountDailyLimit,
-        },
-      ],
+      accounts: input.replyAccounts,
     },
   });
   const preview = await localApi("previewAutomationRule", {

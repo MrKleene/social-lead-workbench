@@ -112,7 +112,14 @@ func (c *localCookie) write(cks []byte, seed int) error {
 		}
 	}
 
-	return os.WriteFile(c.path, data, 0644)
+	// 会话文件是凭据：桌面端在封存前会拒绝 group/other 可读的文件，
+	// 这里必须落成 0600。WriteFile 的 mode 只在创建时生效，所以已存在的
+	// 文件要再 chmod 一次，否则旧文件会一直是更宽松的权限。
+	if err := os.WriteFile(c.path, data, 0600); err != nil {
+		return errors.Wrap(err, "write session file failed")
+	}
+
+	return os.Chmod(c.path, 0600)
 }
 
 // DeleteCookies 删除 cookies 文件。

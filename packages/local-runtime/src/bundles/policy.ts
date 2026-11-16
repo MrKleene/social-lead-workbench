@@ -16,7 +16,7 @@ export {prepareXhsReply,verifyXhsReplyResult,XHS_REPLY_PROTOCOL} from '@crm/doma
 export {reviewPolicySaveSchema,reviewUseConsent} from '@crm/contracts';
 export {qwenModel,qwenModelChoices} from '@crm/domain/collection/qwen-models';
 export {validateChunk,checkpointHash,commentDigest} from '@crm/domain/collection/comment-checkpoint';
-export {commentChunkSchema,commentCheckpointSchema} from '@crm/contracts';
+export {commentChunkSchema,commentCheckpointSchema,commentCollectionLimits} from '@crm/contracts';
 
 export {safeImageDiagnostics,safeBoundedReadReport} from '@crm/contracts';
 

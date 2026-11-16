@@ -15,9 +15,19 @@ type browserConfig struct {
 	fingerprintSeed int
 	// proxy 代理地址；非空时启用。
 	proxy string
+	// noSandbox 受限环境（无 GUI session、容器、CI）里关闭 Chromium 沙箱。
+	// 产品默认不关；调用方按环境变量显式开启。
+	noSandbox bool
 }
 
 type Option func(*browserConfig)
+
+// WithNoSandbox 关闭 Chromium 沙箱。只给无法提供 setuid sandbox 的运行环境用。
+func WithNoSandbox() Option {
+	return func(c *browserConfig) {
+		c.noSandbox = true
+	}
+}
 
 // WithProxy 设置代理（http/https/socks5）。空字符串视为不启用。
 func WithProxy(proxy string) Option {
@@ -62,6 +72,14 @@ func NewBrowser(headless bool, options ...Option) *headless_browser.Browser {
 		panic(fmt.Sprintf("内置浏览器不可用，拒绝启动: %v", err))
 	}
 
+	// 受限环境（无 GUI session、容器、CI）里 Chromium 的 setuid sandbox 起不来，
+	// 进程启动即 EOF。只在调用方显式要求时关闭，产品默认仍然启用沙箱。
+	extra := map[string]string{"fingerprint-brand": "Chrome"}
+	if cfg.noSandbox {
+		extra["no-sandbox"] = "true"
+		logrus.Warnf("chromium sandbox disabled for this run")
+	}
+
 	opts := []headless_browser.Option{
 		headless_browser.WithHeadless(headless),
 		// 用内置浏览器的默认配置，不强制 UA。
@@ -70,7 +88,7 @@ func NewBrowser(headless bool, options ...Option) *headless_browser.Browser {
 		headless_browser.WithLanguage("zh-CN"), // 面向小红书
 		// 品牌报 Chrome。
 		// 注：hardware-concurrency 不设，交给 seed 派生。
-		headless_browser.WithExtraFlags(map[string]string{"fingerprint-brand": "Chrome"}),
+		headless_browser.WithExtraFlags(extra),
 	}
 	opts = append(opts, headless_browser.WithChromeBinPath(binPath))
 

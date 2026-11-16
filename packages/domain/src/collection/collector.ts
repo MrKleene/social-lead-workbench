@@ -2,7 +2,7 @@ import {summarizePartial} from './run-coverage';
 import { z } from "zod";
 import {searchAttemptSchema,type SearchAttempt,type CollectionDiagnostic} from "@crm/contracts";
 import {diagnose,invalidSource} from "./diagnostics";
-import { Comment, Post, Page, ReadAdapter, ReadFailure, ConfigInput, commentSchema, postSchema, limits } from "./contract";
+import { Comment, Post, Page, ReadAdapter, ReadFailure, ConfigInput, commentSchema, postSchema, limits, isReadFailure } from "./contract";
 export type PostRead = {
     chunk?:import("@crm/contracts").CommentChunkReceipt;
     chunkComments?:Comment[];
@@ -40,7 +40,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     let comments = 0, postOrdinal=0,keywordOrdinal=0;
     let stage:CollectionDiagnostic['stage']='prepare';
     const checkpoint=async()=>{const previous=stage;stage='checkpoint';await observe?.(stage);await progress?.(result);stage=previous;};
-    const checkCancelled=async()=>{try{return await cancelled();}catch(error){throw new ReadFailure(error instanceof ReadFailure?error.code:'INVALID_DATA',error instanceof ReadFailure?error.retryAfterMs:undefined,diagnose(error,'authorization'));}};
+    const checkCancelled=async()=>{try{return await cancelled();}catch(error){throw new ReadFailure(isReadFailure(error)?error.code:'INVALID_DATA',isReadFailure(error)?error.retryAfterMs:undefined,diagnose(error,'authorization'));}};
     async function call<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
         if (await checkCancelled())
             throw new ReadFailure("PAUSED");
@@ -59,7 +59,7 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
                         if (checking) return;
                         checking = true;
                         try { if (await checkCancelled()) { reject(new ReadFailure("PAUSED")); controller.abort(); } }
-                        catch (error) { reject(error instanceof ReadFailure ? error : new ReadFailure("INVALID_DATA")); controller.abort(); }
+                        catch (error) { reject(isReadFailure(error) ? error : new ReadFailure("INVALID_DATA")); controller.abort(); }
                         finally { checking = false; }
                     }, 100);
                 })]);
@@ -161,7 +161,10 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
                 if(reason==='PLATFORM_LIMIT')throw new ReadFailure('RESTRICTED');
                 if(reason==='CANCELLED')throw new ReadFailure('PAUSED');
                 if(reason==='TIMEOUT')throw new ReadFailure('TIMEOUT');
-                if(['READ_FAILED','INVALID_RESPONSE','IDENTITY_CONFLICT','DEPTH_LIMIT'].includes(reason)){result.status='FAILED';break;}
+                // 页面状态丢失（READ_FAILED）说明这一篇读不下去，但已读内容有效：
+                // 按覆盖不完整继续下一篇，不要因为单篇把整轮作废。
+                if(reason==='READ_FAILED'){result.status='PARTIAL';result.reason=reason;continue;}
+                if(['INVALID_RESPONSE','IDENTITY_CONFLICT','DEPTH_LIMIT'].includes(reason)){result.status='FAILED';break;}
                 await postFinished?.(entry);
                 continue;
             }
@@ -205,8 +208,8 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
             const observation=result.diagnostic.searchObservation;
             (result.searchAttempts??=[]).push({keywordOrdinal,requestStep:result.requests,evidence:'AVAILABLE',returnedCount:observation.acceptedCount,observation});
         }
-        result.reason = error instanceof ReadFailure ? error.code : "INVALID_DATA";
-        if (error instanceof ReadFailure) result.retryAfterMs = error.retryAfterMs;
+        result.reason = isReadFailure(error) ? error.code : "INVALID_DATA";
+        if (isReadFailure(error)) result.retryAfterMs = error.retryAfterMs;
         if (result.reason === "INVALID_DATA") {result.discarded=result.posts.length>0;result.posts = [];}
         result.status = result.reason === "PAUSED" ? "PAUSED" : result.reason === "BUDGET" ? "PARTIAL" : "FAILED";
     }

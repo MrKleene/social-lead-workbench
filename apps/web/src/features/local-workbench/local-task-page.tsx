@@ -110,6 +110,18 @@ export function LocalTaskPage() {
   ) {
     missing.push({ tab: "contact", text: "回复模板" });
   }
+  if (steps.data?.autoReply && !steps.data.replyAccountIds.length) {
+    missing.push({ tab: "contact", text: "回复账号" });
+  } else if (steps.data?.autoReply && accounts.data) {
+    // 账号池里有一个掉登录就不放行：池子的意义是配额耗尽后换号，不是拿不可用账号顶。
+    const unusable = steps.data.replyAccountIds.some((id) => {
+      const item = accounts.data?.accounts.find((entry) => entry.id === id);
+      return !item || item.state !== "VERIFIED" || !item.hasSession;
+    });
+    if (unusable) {
+      missing.push({ to: "/work/accounts", action: "重新登录", text: "回复账号未验证" });
+    }
+  }
   if (accounts.data && !accounts.data.runtime.ready) {
     missing.push({ text: "平台组件未就绪" });
   }
@@ -131,8 +143,15 @@ export function LocalTaskPage() {
   /**
    * 一次算完两个改动：`setParams` 基于本次渲染的 params 快照，同一 tick 里连调两次
    * 会让后一次覆盖前一次。
+   *
+   * `replySkipped` 非空表示这轮采集起来了、但自动回复没进去（例如回复账号受限）。
    */
-  const handleStarted = () =>
+  const handleStarted = (replySkipped: string | null) => {
+    setNotice(
+      replySkipped
+        ? `已加入队列 · 本轮未包含自动回复 · ${replySkipped}`
+        : "已加入队列",
+    );
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
@@ -142,6 +161,7 @@ export function LocalTaskPage() {
       },
       { replace: true },
     );
+  };
 
   return (
     <>
@@ -228,10 +248,7 @@ export function LocalTaskPage() {
         open={startOpen}
         onOpenChange={setStartOpen}
         credentialsAvailable={credentialsAvailable}
-        onStarted={() => {
-          setNotice("已加入队列");
-          handleStarted();
-        }}
+        onStarted={handleStarted}
       />
     </>
   );
@@ -261,8 +278,10 @@ function RunWorkspace({
   const jobs = data?.jobs ?? [];
   const reviewReady = !!data?.reviewReady;
   const collectActive = ACTIVE_RUN.includes(runStatus);
+  // 采到了笔记但评论树被读取预算截断：仍是有效轮次，不能一直显示「等待采集完成」。
+  const collectPartial = runStatus === "PARTIAL" && (data?.posts ?? 0) > 0;
   const collectSettled =
-    (runStatus === "COMPLETE" || runStatus === "PARTIAL") && !data?.run.reason;
+    (runStatus === "COMPLETE" && !data?.run.reason) || collectPartial;
   const reviewActive =
     (reviews.DISPATCHED ?? 0) > 0 ||
     (stage === "review" && !!data && !reviewReady);
@@ -408,8 +427,14 @@ function RunWorkspace({
           steps={steps}
           selected={stage}
           onSelect={onStage}
-          caption={data?.run.reason ? "本轮已停止" : "进行中"}
-          attention={!!data?.run.reason}
+          caption={
+            collectPartial
+              ? "已采集 · 覆盖不完整"
+              : data?.run.reason
+                ? "本轮已停止"
+                : "进行中"
+          }
+          attention={!!data?.run.reason && !collectPartial}
           details={data?.run.reason ? [data.run.reason] : []}
         />
       </SectionCard>

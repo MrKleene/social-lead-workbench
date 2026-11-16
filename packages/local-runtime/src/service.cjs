@@ -157,8 +157,12 @@ class LocalService {
  authorizeAutomationRule(input){return this.automation.authorize(input);}
  revokeAutomationRule(input){return this.automation.revoke(input);}
  automationDecisions(input){return this.automation.decisions(input);}
+ pendingContacts(input){return this.automation.pending(input);}
+ retryPendingContact(input){return this.automation.retry(input);}
+ dismissPendingContact(input){return this.automation.dismiss(input);}
  inboxReceivers(){return this.store.db.prepare('SELECT r.account_id,a.name,r.state,r.reason,r.expires_at,r.updated_at,r.comment_mode,r.dm_mode,j.state job_state FROM inbox_receivers r JOIN accounts a ON a.id=r.account_id JOIN jobs j ON j.id=r.job_id ORDER BY a.name').all();}
  accountOverview(){return this.accountService.overview();}
+ checkReplyEligibility(input){return this.accountService.checkReplyEligibility(input);}
  beginLogin(input){return this.accountService.begin(input);}
  pollLogin(input){return this.accountService.poll(input);}
  cancelLogin(input){return this.accountService.cancel(input);}

@@ -9,7 +9,9 @@ function canonical(value){
  if(value===null||typeof value==='boolean'||typeof value==='string')return JSON.stringify(value);
  if(typeof value==='number'&&Number.isFinite(value))return JSON.stringify(value);
  if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';
- if(value&&Object.getPrototypeOf(value)===Object.prototype)return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';
+ // 校验器会保留「键存在、值为 undefined」的可选字段（适配器读不到某字段时就是这样）。
+ // undefined 等于字段不存在，不能当作非法值：否则整笔采集事务会在写库时回滚。
+ if(value&&Object.getPrototypeOf(value)===Object.prototype)return '{'+Object.keys(value).filter(k=>value[k]!==undefined).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';
  throw new LocalError('INVALID_JSON');
 }
 const hash=value=>createHash('sha256').update(canonical(value)).digest('hex');

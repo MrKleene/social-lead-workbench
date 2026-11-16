@@ -1,4 +1,4 @@
-import {savedReplyTarget,replyTargetSchema} from '@crm/contracts';
+import {savedReplyTarget,replyTargetSchema,commentCollectionLimits} from '@crm/contracts';
 import { boundedReadReportSchema, coverageDiagnosticSchema, safeCoverageDiagnostic, commentRulesSchema, semanticRulesSchema, safePostCoverUrl, savedNickname, safeAvatarUrl, savedPublishedAt, safeImageDiagnostics, imageDiagnosticsSchema } from '@crm/contracts';
 import { z } from "zod";
 import {postReferenceSchema} from "./post-reference";
@@ -26,11 +26,13 @@ export const scenarioSchema = z.enum(["BASELINE", "NEW", "PARTIAL", "TIMEOUT", "
 export type Scenario = z.infer<typeof scenarioSchema>;
 export type Failure = "TIMEOUT" | "LOGIN_EXPIRED" | "RESTRICTED" | "INVALID_DATA" | "BUDGET" | "PAUSED" | "REAL_DISABLED" | "UNSUPPORTED" | "RATE_LIMITED" | "ENDPOINT_INVALID" | "PROFILE_MISMATCH" | "MCP_PROTOCOL" | "MCP_TOOLS_MISSING" | "MCP_SESSION_EXPIRED" | "SOURCE_UNAVAILABLE" | "DEVICE_UNAVAILABLE" | "ACCOUNT_CHANGED" | "IDENTITY_MISMATCH" | "AUTHORIZATION_ENDED";
 export class ReadFailure extends Error {
+    /** 打包后同一个类会有多份副本（collection-provider 与 policy 各一份），instanceof 会失效。 */
+    readonly readFailure=true;
     constructor(public code: Failure, public retryAfterMs?: number, public diagnostic?:import('@crm/contracts').CollectionDiagnostic) { super(code); }
 }
 const imageDiagnostics=z.preprocess(safeImageDiagnostics,imageDiagnosticsSchema.optional());
 const displayFields={imageDiagnostics,authorNickname:z.preprocess(savedNickname,z.string().optional()),authorAvatarUrl:z.preprocess(safeAvatarUrl,z.string().optional()),publishedAt:z.preprocess(savedPublishedAt,z.string().optional())};
-export const postSchema = z.object({ boundedRead:boundedReadReportSchema.optional(), boundedReadWindows:z.array(boundedReadReportSchema).max(8).optional(), coverageDiagnostic:z.preprocess(safeCoverageDiagnostic,coverageDiagnosticSchema.optional()), sourceReference:postReferenceSchema.optional(), id: z.string().min(1).max(200), title: z.string().max(500), body: z.string().max(20000).optional(), coverUrl:z.preprocess(safePostCoverUrl,z.string().optional()),...displayFields });
+export const postSchema = z.object({ boundedRead:boundedReadReportSchema.optional(), boundedReadWindows:z.array(boundedReadReportSchema).max(commentCollectionLimits.windowsPerPost).optional(), coverageDiagnostic:z.preprocess(safeCoverageDiagnostic,coverageDiagnosticSchema.optional()), sourceReference:postReferenceSchema.optional(), id: z.string().min(1).max(200), title: z.string().max(500), body: z.string().max(20000).optional(), coverUrl:z.preprocess(safePostCoverUrl,z.string().optional()),...displayFields });
 export const commentSchema = z.object({
     id: z.string().min(1).max(200), userId: z.string().min(1).max(200), nickname: z.preprocess(v=>savedNickname(v)??'',z.string().max(200)),
     replyTarget:z.preprocess(savedReplyTarget,replyTargetSchema.optional()),replyTargetConflict:z.literal(true).optional(),
@@ -39,6 +41,10 @@ export const commentSchema = z.object({
     text: z.string().max(10000), parentId: z.string().max(200).optional(), hasReplies: z.boolean().default(false),
 });
 export type Post = z.infer<typeof postSchema>;
+/** 跨 bundle 的错误判定：同一 ReadFailure 在打包后可能有两个类副本，只能按标记认。 */
+export function isReadFailure(value:unknown):value is ReadFailure{
+    return value instanceof ReadFailure||(typeof value==='object'&&value!==null&&(value as {readFailure?:unknown}).readFailure===true);
+}
 export type Comment = z.infer<typeof commentSchema>;
 export type Page<T> = {
     searchEvidence?:Pick<import('@crm/contracts').SearchAttempt,'evidence'|'returnedCount'|'observation'>;

@@ -1,7 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { CallToolResultSchema, ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
-import { ReadFailure } from '@crm/domain/collection/contract';
+import { ReadFailure, isReadFailure } from '@crm/domain/collection/contract';
 import { endpointUrl, loginCheckOnly, McpMode, ReadTool, toolArguments } from './policy';
 export interface ReadOnlyMcpTransport {
   supportsBoundedComments?():boolean;
@@ -42,7 +42,7 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
         // The client does not subscribe to unsolicited events or auto-reconnect.
         if (init?.method === 'GET') return new Response(null, { status: 405 });
         if (!['POST', 'DELETE'].includes(init?.method || '')) throw new ReadFailure('UNSUPPORTED');
-        if (++this.requests > 40) throw new ReadFailure('BUDGET');
+        if (++this.requests > (owned ? 10300 : 40)) throw new ReadFailure('BUDGET');
         const headers = new Headers(init?.headers);
         if (headers.has('cookie') || headers.has('authorization')) throw new ReadFailure('UNSUPPORTED');
         if (this.authToken) headers.set('authorization', `Bearer ${this.authToken}`);
@@ -82,7 +82,7 @@ export class XhsHttpTransport implements ReadOnlyMcpTransport {
     this.operation = signal;
     try { return await fn(); }
     catch (error) {
-      if (error instanceof ReadFailure) throw error;
+      if (isReadFailure(error)) throw error;
       if (signal.aborted || (error instanceof McpError && error.code === ErrorCode.RequestTimeout)) throw new ReadFailure('TIMEOUT');
       // Never return SDK/server error text: it can contain URLs or response tokens.
       throw new ReadFailure('MCP_PROTOCOL');

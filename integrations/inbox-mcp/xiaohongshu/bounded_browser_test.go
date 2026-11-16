@@ -288,3 +288,36 @@ func TestChunksBrowserDelayedParentReplies(t *testing.T) {
 		t.Fatalf("%+v", result.BoundedRead)
 	}
 }
+
+// One large expansion, generic button text, Vue refs and a temporarily missing
+// state after clicking. Recover by observing, never by clicking twice.
+func TestChunksBrowserStateRecoveryAndFullExpansion(t *testing.T) {
+	binary := os.Getenv("CRM_OFFLINE_CHROMIUM")
+	if binary == "" { t.Skip("explicit local Chromium required") }
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!doctype html><meta charset="utf-8"><style>.note-scroller{height:180px;overflow:auto}.comment-item{height:25px}</style><div class="note-scroller"></div><script>
+ const leaf=id=>({id,content:'synthetic',userInfo:{userId:'u'},subCommentCount:'0',subComments:[]});
+ const root={...leaf('root'),subCommentCount:'161'};
+ const map={'synthetic-post':{note:{value:{noteId:'synthetic-post',title:'synthetic',interactInfo:{commentCount:'162'}}},comments:{_rawValue:{hasMore:false,list:[root]}}}};
+ const state={note:{value:{noteDetailMap:{_rawValue:map}}}};window.__INITIAL_STATE__=state;window.clicks=0;
+ const box=document.querySelector('.note-scroller');
+ function draw(){box.innerHTML='<div class="parent-comment"><div class="comment-item">root</div>'+root.subComments.map(()=>'<div class="comment-item">reply</div>').join('')+(root.subComments.length<161?'<button class="show-more">'+(root.subComments.length===0?'展开160条回复':'展开更多回复')+'</button>':'')+'</div><div class="end-container">THE END</div>';
+ const b=box.querySelector('button');if(b)b.onclick=()=>{window.clicks++;window.__INITIAL_STATE__=null;setTimeout(()=>{const n=root.subComments.length;root.subComments.push(...Array.from({length:n===0?160:1},(_,i)=>leaf('child'+(n+i))));window.__INITIAL_STATE__=state;draw()},700)}}draw();</script>`))
+	}))
+	defer server.Close()
+	l := launcher.New().Bin(binary).UserDataDir(t.TempDir()).Headless(true).Leakless(false).Set("no-sandbox").Set("disable-background-networking").Set("disable-component-update")
+	url, err := l.Context(ctx).Launch(); if err != nil { t.Fatal(err) }; defer l.Cleanup()
+	b := rod.New().ControlURL(url).Context(ctx); if err=b.Connect();err!=nil {t.Fatal(err)};defer b.Close()
+	p := b.MustPage(server.URL); p.MustWaitLoad()
+	s,_:=NewCommentChunkSession(nil); seen:=map[string]bool{};var result *FeedDetailResponse
+	for i:=0;i<10;i++ {
+		result,err=s.ReadPage(ctx,p,"synthetic-post",chunkConfig());if err!=nil {t.Fatal(err)}
+		for _,row:=range result.Chunk.Rows {if seen[row.Comment.ID]{t.Fatal("duplicate comment")};seen[row.Comment.ID]=true}
+		if err=s.Ack(result.Chunk.Hash);err!=nil {t.Fatal(err)}
+		if !result.Chunk.CanContinue {break}
+	}
+	if len(seen)!=162||result.BoundedRead.State!="COMPLETE"||p.MustEval(`()=>window.clicks`).Int()!=2 {t.Fatalf("saved=%d state=%s reason=%s",len(seen),result.BoundedRead.State,result.BoundedRead.Reason)}
+}

@@ -3,6 +3,7 @@ const {randomUUID}=require('node:crypto');
 const {LocalError,hash}=require('./database.cjs');
 const {LocalQueue}=require('./queue.cjs');
 const {LocalCollection}=require('./collection.cjs');
+const policy=require('@crm/local-runtime/policy');
 const {collect,runCoverage,XhsMcpAdapter,readWindow}=require('@crm/local-runtime/collection-provider');
 // Session runtime is a reviewed, packaged native resource owner. It is never a
 // URL, process path, Cookie or transport object supplied by a renderer.
@@ -39,11 +40,23 @@ class LocalCollectionExecutor {
      return {...entry,sourceReferenceRef:id??null};
     });this.collection.checkpoint(lease,runId,entries);
    };
-   const result=await collect(adapter,config,async()=>{try{await guard();return false;}catch{return true;}},{requests:32,pagesPerStream:4,comments:800-restored.length,callMs:40000,runMs:180000},save,selected);
-   if(result.discarded||result.status==='FAILED'||result.status==='PAUSED')throw new LocalError('COLLECTION_INCOMPLETE');
+   const result=await collect(adapter,config,async()=>{try{await guard();return false;}catch{return true;}},{requests:10240,pagesPerStream:4,comments:policy.commentCollectionLimits.commentsPerPost*config.batchLimit-restored.length,callMs:40000,runMs:1800000},save,selected);
+   if(result.discarded||result.status==='FAILED'||result.status==='PAUSED'){
+    // collect 已经把真实失败原因和阶段诊断算出来了，不能在这里丢掉换成笼统码。
+    const failure=new LocalError('COLLECTION_INCOMPLETE');
+    failure.reason=result.reason??null;failure.diagnostic=result.diagnostic??null;
+    failure.progress={posts:result.posts.length,requests:result.requests,status:result.status};
+    throw failure;
+   }
    await save(result);const coverage=runCoverage(result);if(!coverage)throw new LocalError('COLLECTION_COVERAGE_UNAVAILABLE');
    this.collection.finish(lease,runId,{status:result.status,reason:result.reason??null,coverage});return {runId,status:result.status,posts:result.posts.length,requests:result.requests};
-  }catch(error){try{this.collection.fail(lease,runId,error?.code==='ACCOUNT_IDENTITY_CHANGED'?'ACCOUNT_IDENTITY_CHANGED':'COLLECTION_INTERRUPTED');}catch{}throw new LocalError('COLLECTION_INTERRUPTED');}
+  }catch(error){
+   // run.reason 直接写真实失败码（界面「查看原因」显示的就是它）；诊断写审计，便于事后定位到阶段与字段。
+   const code=typeof error?.code==='string'?error.code:(error?.name||'UNKNOWN');
+   const detail={code,...(error?.reason?{reason:error.reason}:{}),...(error?.diagnostic?{diagnostic:error.diagnostic}:{}),...(error?.progress?error.progress:{})};
+   try{this.store.audit('AUTOMATION','COLLECTION_FAILED',runId,detail);}catch{}
+   const reason=error?.code==='ACCOUNT_IDENTITY_CHANGED'?'ACCOUNT_IDENTITY_CHANGED':error?.code==='COLLECTION_INCOMPLETE'&&error?.reason?error.reason:'COLLECTION_INTERRUPTED';
+   try{this.collection.fail(lease,runId,reason);}catch{}throw new LocalError('COLLECTION_INTERRUPTED');}
   finally{await adapter?.close().catch(()=>{});if(session&&!await Promise.resolve().then(()=>session.stop()).catch(()=>false)){
    this.store.transaction(()=>{const event=this.store.audit('RECOVERY','PLATFORM_PROCESS_STOP_UNCONFIRMED',runId);this.store.db.prepare("INSERT INTO safety_state VALUES('platform',1,?,'PLATFORM_PROCESS_STOP_UNCONFIRMED',?) ON CONFLICT(id) DO UPDATE SET version=version+1,event_id=excluded.event_id,reason=excluded.reason,created_at=excluded.created_at").run(event,this.store.clock());});
    try{this.collection.fail(lease,runId,'PLATFORM_PROCESS_STOP_UNCONFIRMED');}catch{}

@@ -22,6 +22,9 @@ class NativeResources{
   if(!allowUnvalidated){const proof=read('windows-validation.json'),license=path.join(this.root,'BROWSER-LICENSES.txt');if(proof.protocol!=='desktop-windows-offline-validation-v1'||proof.platform!=='win32'||proof.arch!=='x64'||proof.mcp!==mcp.binary||proof.helper!==supervisor.binary||proof.browserManifest!==hash(path.join(this.root,'browser-build.json'))||proof.licenses!==hash(license)||!['privateAcl','localKeyDerivation','ownedTree','localPage','noExternalCalls'].every(k=>proof[k]===true))throw Error('WINDOWS_NATIVE_RUNTIME_VALIDATION_REQUIRED');}
   return {binary,binaryHash:mcp.binary,helper,helperHash:supervisor.binary,browser:path.join(this.root,browser.binary)};
  }
- status(){try{this.inspect();return {ready:true,reason:'PACKAGED_NATIVE_RESOURCES_VERIFIED'};}catch{return {ready:false,reason:process.platform==='win32'?'WINDOWS_NATIVE_RUNTIME_VALIDATION_REQUIRED':'PACKAGED_NATIVE_RESOURCES_UNAVAILABLE'};}}
+ // 状态查询只回答「组件是否就绪」：整树哈希校验一次就够，结果在进程内缓存。
+ // 每次轮询都重算几百个文件的 SHA-256 会长期占住主进程（实测 228ms/次），
+ // 真正启动 helper 的 openSaved 仍然走 inspect() 全量校验，不会漏掉运行期篡改。
+ status(){if(!this.statusResult){try{this.inspect();this.statusResult={ready:true,reason:'PACKAGED_NATIVE_RESOURCES_VERIFIED'};}catch{this.statusResult={ready:false,reason:process.platform==='win32'?'WINDOWS_NATIVE_RUNTIME_VALIDATION_REQUIRED':'PACKAGED_NATIVE_RESOURCES_UNAVAILABLE'};}}return this.statusResult;}
 }
 module.exports={NativeResources};

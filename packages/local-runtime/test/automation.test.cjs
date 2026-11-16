@@ -13,4 +13,37 @@ test('comment rule configuration does not replace fresh capability required at s
 test('account pool allocates once by remaining shared quota including queued jobs without fallback after risk',t=>{const f=fixture(t);f.store.db.prepare("INSERT INTO accounts(id,platform,platform_user_id,name,session_ref,state,daily_limit) VALUES('second','XHS',?,'第二合成账号','synthetic','VERIFIED',10)").run('d'.repeat(24));const a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'pool',name:'合成账号池',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成池内容',accounts:[{id:'account',version:1,dailyLimit:1},{id:'second',version:1,dailyLimit:1}]}});const ref=a.authorize({...a.preview({id:'pool',version:1}),consent:'automatic-contact-frozen-run-v1'}),e=entry('c'.repeat(24),['想请教学习方法','想请教选题指导']);e.comments[1].userId='e'.repeat(24);const run=collect(f,[e],{contactRules:[ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);assert.equal(a.afterReview(run.runId).queued,2);assert.deepEqual(f.store.db.prepare("SELECT json_extract(payload,'$.accountId') account FROM jobs WHERE kind='SEND' ORDER BY created_at,rowid").all().map(x=>x.account),['account','second']);assert.equal(a.afterReview(run.runId).queued,0);});
 test('account-pool risk never falls through to another authorized account',t=>{const f=fixture(t);f.store.db.prepare("INSERT INTO accounts(id,platform,platform_user_id,name,session_ref,state,daily_limit) VALUES('second','XHS',?,'第二合成账号','synthetic','VERIFIED',10)").run('d'.repeat(24));const a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'risk-pool',name:'风险核验',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成池内容',accounts:[{id:'account',version:1,dailyLimit:1},{id:'second',version:1,dailyLimit:1}]}});const ref=a.authorize({...a.preview({id:'risk-pool',version:1}),consent:'automatic-contact-frozen-run-v1'}),run=collect(f,[entry()],{contactRules:[ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);f.store.db.exec("INSERT INTO account_holds VALUES('hold','account',NULL,'RETAINED_RISK','hash',0)");assert.equal(a.afterReview(run.runId).queued,0);assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND'").get().n,0);assert.match(a.decisions().items[0].reason,/RETAINED_RESTRICTION/);});
 
+test('quota-exhausted decisions surface as pending replies and can be requeued or dismissed',t=>{
+ const f=setup(t),{dayAt}=require('../dist/send-safety.cjs'),day=dayAt(f.store.clock());
+ f.store.db.prepare('INSERT INTO account_days(account_id,day,occupied) VALUES(?,?,20) ON CONFLICT(account_id,day) DO UPDATE SET occupied=20').run('account',day);
+ const e=entry('c'.repeat(24),['想请教学习方法','想请教选题指导']);e.comments[1].userId='e'.repeat(24);
+ const run=collect(f,[e],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ assert.deepEqual(f.automation.afterReview(run.runId),{queued:0,skipped:2});
+ const pending=f.automation.pending();
+ assert.equal(pending.total,2);assert.equal(pending.remaining,0);
+ assert.equal(pending.items[0].channel,'DM');assert.equal(pending.items[0].reason,'ACCOUNT_POOL_QUOTA_EXHAUSTED');
+ assert.equal(pending.items[0].content,'合成联系内容');assert.ok(pending.items[0].postTitle);
+ assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND'").get().n,0);
+ f.store.db.prepare('UPDATE account_days SET occupied=0 WHERE account_id=? AND day=?').run('account',day);
+ assert.equal(f.automation.pending().remaining,20);
+ const requeued=f.automation.retry({id:pending.items[0].id});
+ assert.equal(requeued.queued,true);
+ assert.equal(f.store.db.prepare('SELECT state FROM automation_decisions WHERE id=?').get(pending.items[0].id).state,'QUEUED');
+ assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND' AND state='QUEUED'").get().n,1);
+ assert.equal(f.automation.pending().total,1);
+ assert.deepEqual(f.automation.dismiss({id:pending.items[1].id}),{dismissed:true});
+ assert.equal(f.automation.pending().total,0);
+ assert.throws(()=>f.automation.dismiss({id:pending.items[1].id}),/PENDING_CONTACT_CHANGED/);
+});
+
+test('pending replies stay visible when their queued job dies before sending',t=>{
+ const f=setup(t),run=collect(f,[entry()],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ assert.deepEqual(f.automation.afterReview(run.runId),{queued:1,skipped:0});assert.equal(f.automation.pending().total,0);
+ f.store.db.prepare("UPDATE jobs SET state='CANCELLED' WHERE kind='SEND'").run();
+ const pending=f.automation.pending();assert.equal(pending.total,1);assert.equal(pending.items[0].jobState,'CANCELLED');
+ assert.equal(f.automation.retry({id:pending.items[0].id}).queued,true);
+ assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND'").get().n,2);
+ assert.equal(f.automation.pending().total,0);
+});
+
 test('rule reporting filters derivations and current job outcome without treating cancellation as sending',t=>{const f=setup(t),run=collect(f,[entry('post-a'),entry('post-b')],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);f.advance(120001);evaluate(f,run.runId,f.collection.posts(run.runId)[1].id);f.automation.afterReview(run.runId);const r=new(require('../dist/reporting.cjs').LocalReporting)(f.store);assert.equal(r.automation({runId:run.runId,ruleId:'rule',state:'QUEUED',channel:'DM'}).total,1);assert.equal(r.automation({state:'SKIPPED'}).total,1);assert.equal(r.automation({channel:'COMMENT'}).total,0);f.automation.revoke({id:'rule'});assert.equal(r.automation({state:'QUEUED'}).items[0].job_state,'CANCELLED');assert.equal(r.automation().summary.reduce((n,s)=>n+s.count,0),2);assert.ok(!JSON.stringify(r.automation()).includes('合成联系内容'));});

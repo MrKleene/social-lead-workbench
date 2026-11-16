@@ -21,6 +21,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { Switch, SwitchThumb } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ErrorNotice } from "@/components/feedback";
 import { cn } from "@/lib/utils";
 import type { JourneyStage } from "@/features/work/journey-model";
@@ -37,7 +38,7 @@ import { useLocalRecords } from "./use-local-records";
  * 每组「必须配好才能开始」的东西：
  * - 采集：关键词组
  * - 评论匹配：开自动审核就必须选一个评论匹配规则
- * - 自动回复：开自动回复就必须选渠道（私信/评论）+ 该渠道下的一条规则
+ * - 自动回复：开自动回复就必须选至少一个回复账号 + 该账号要用的模板
  */
 export type AutomationSettingsTab = JourneyStage;
 
@@ -57,7 +58,11 @@ const manage: Record<AutomationSettingsTab, { to: string; label: string }[]> = {
     { to: "/work/accounts", label: "管理账号" },
   ],
   review: [{ to: "/configuration?tab=matching", label: "管理评论匹配规则" }],
-  contact: [{ to: "/configuration?tab=templates", label: "管理回复模板" }],
+  contact: [
+    { to: "/configuration?tab=templates", label: "管理回复模板" },
+    // 日额度是账号属性，只能在账号中心改；这里只读展示。
+    { to: "/work/accounts", label: "管理账号" },
+  ],
 };
 
 export function AutomationSettingsDialog({
@@ -89,7 +94,8 @@ export function AutomationSettingsDialog({
         : "未配置",
     contact: !steps.data?.autoReply
       ? "已关闭"
-      : steps.data.commentTemplateId || steps.data.dmTemplateId
+      : (steps.data.replyAccountIds.length > 0 &&
+          (steps.data.commentTemplateId || steps.data.dmTemplateId))
         ? "已配置"
         : "未配置",
   };
@@ -316,13 +322,18 @@ function MatchingTab() {
 function ReplyTab() {
   const configs = useLocalRecords("configurations");
   const steps = useLocalRecords("automationSteps");
+  const accounts = useLocalRecords("accountDetails");
   const save = useSaveSteps();
   const [text, setText] = useState("");
 
   const current = steps.data;
   const comment = configs.data?.filter((item) => item.kind === "COMMENT_TEMPLATE") ?? [];
   const dm = configs.data?.filter((item) => item.kind === "DM_TEMPLATE") ?? [];
-  const error = configs.error ?? steps.error ?? save.error;
+  const selected = current?.replyAccountIds ?? [];
+  const blocked = (accounts.data ?? []).some(
+    (item) => selected.includes(item.id) && item.holds.length > 0,
+  );
+  const error = configs.error ?? steps.error ?? accounts.error ?? save.error;
 
   const persist = (patch: Partial<NonNullable<typeof current>>) => {
     if (!current) return;
@@ -334,6 +345,14 @@ function ReplyTab() {
     setText("");
     if (!Number.isInteger(next) || next < 0 || next > 100) return;
     if (next !== current?.threshold) persist({ threshold: next });
+  };
+
+  const toggleAccount = (id: string, checked: boolean) => {
+    persist({
+      replyAccountIds: checked
+        ? [...selected, id]
+        : selected.filter((value) => value !== id),
+    });
   };
 
   return (
@@ -361,6 +380,56 @@ function ReplyTab() {
           onBlur={commitThreshold}
         />
       </FormField>
+
+      {/* 账号池：顺序即配额耗尽后的取用顺序；日额度是账号属性，只在这里展示。 */}
+      <div className="flex min-w-0 flex-col gap-2">
+        <span className="text-body">回复账号</span>
+        {accounts.data?.length ? (
+          <div className="flex flex-col divide-y rounded-md border">
+            {accounts.data.map((item) => {
+              const usable = item.state === "VERIFIED" && !!item.hasSession;
+              const restricted = item.holds.length > 0;
+              const chosen = selected.includes(item.id);
+              return (
+                <label
+                  key={item.id}
+                  className="flex cursor-pointer items-start gap-2 px-4 py-2"
+                >
+                  <Checkbox
+                    checked={chosen}
+                    disabled={save.isPending || (!chosen && (!usable || restricted))}
+                    onCheckedChange={(checked) =>
+                      toggleAccount(item.id, checked === true)
+                    }
+                    className="mt-0.5"
+                  />
+                  <span className="flex min-w-0 flex-col gap-1">
+                    <span className="text-body break-words">
+                      {item.nickname ?? item.name}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-caption break-words",
+                        usable && !restricted
+                          ? "text-muted-foreground"
+                          : "text-attention",
+                      )}
+                    >
+                      每日 {item.daily_limit} 条
+                      {restricted ? " · 受限" : ""}
+                      {usable ? "" : " · 需重新登录"}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-body text-muted-foreground">
+            {accounts.isPending ? "正在读取…" : "还没有账号"}
+          </p>
+        )}
+      </div>
 
       <FormField label="评论回复模板">
         <Select
@@ -403,6 +472,10 @@ function ReplyTab() {
       {current?.autoReply && !current.commentTemplateId && !current.dmTemplateId ? (
         <Hint>请选择至少一个自动回复模式</Hint>
       ) : null}
+      {current?.autoReply && !selected.length ? (
+        <Hint>未选择回复账号</Hint>
+      ) : null}
+      {blocked ? <Hint>已选账号存在未解除的回复限制</Hint> : null}
     </div>
   );
 }

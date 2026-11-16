@@ -172,3 +172,23 @@ func TestSaveCookies_CreatesParentDir(t *testing.T) {
 	assert.NoError(t, json.Unmarshal(got, &cks))
 	assert.Equal(t, "a", cks[0]["name"])
 }
+
+// TestSaveCookies_PrivateMode 会话文件是凭据：桌面端封存前会拒绝 group/other
+// 可读的文件（st.mode&0o077 != 0 → INVALID_SAVED_SESSION），所以落盘必须是 0600。
+// 已存在的旧文件也要收紧，WriteFile 的 mode 参数管不到它。
+func TestSaveCookies_PrivateMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cookies.json")
+	c := NewLoadCookie(path)
+
+	assert.NoError(t, c.SaveCookies([]byte(`[{"name":"web_session","value":"x"}]`)))
+	info, err := os.Stat(path)
+	assert.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+
+	// 模拟历史遗留的宽松文件：再次保存必须收紧
+	assert.NoError(t, os.Chmod(path, 0o644))
+	assert.NoError(t, c.SaveCookies([]byte(`[{"name":"web_session","value":"y"}]`)))
+	info, err = os.Stat(path)
+	assert.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+}

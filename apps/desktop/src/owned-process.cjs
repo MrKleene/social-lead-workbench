@@ -24,7 +24,11 @@ function spawnOwned({helper,helperHash,binary,binaryHash,directory,guard,args,en
   const proof=await Promise.race([stopped,delay(10000)]);let savedError;
   try{if(proof&&afterStopped)await afterStopped();}catch(error){savedError=error;}
   finally{if(!control.destroyed)control.end('D');}
-  const cleaned=await Promise.race([exit,delay(10000)]);if(savedError)throw savedError;return proof&&cleaned&&exitCode===0;
+  const cleaned=await Promise.race([exit,delay(10000)]);
+  // savedError 是"存盘内容"的失败，不是"进程没停"。把停住的结论挂在错误上，
+  // 否则上层会把 INVALID_SAVED_SESSION 之类误判成停止未确认，进而挂上平台暂停。
+  if(savedError){savedError.stopped=proof&&cleaned&&exitCode===0;throw savedError;}
+  return proof&&cleaned&&exitCode===0;
  })()};
 }
 module.exports={spawnOwned,verified};

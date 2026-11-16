@@ -15,7 +15,9 @@ import (
 	"unicode/utf16"
 )
 
-const chunkLedgerLimit = 2000
+// Resource bounds are explicit incomplete exits, never completion evidence.
+const chunkLedgerLimit = 10000
+const chunkWindowLimit = 1024
 
 type CommentMark struct {
 	ID     string `json:"id"`
@@ -228,7 +230,7 @@ func (s *CommentChunkSession) Remaining() int {
 // put in a checkpoint. Flat rows preserve the actual containment parent only.
 func chunkSnapshot(raw []byte, id string) (FeedDetail, []chunkRecord, error) {
 	var note FeedDetail
-	if len(raw) > 2*1024*1024 {
+	if len(raw) > 16*1024*1024 {
 		return note, nil, errors.New("RESPONSE_LIMIT")
 	}
 	feed := coverageObject(coverageObject(raw)[id])
@@ -315,7 +317,7 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 	if s.pending != nil {
 		return s.pending, nil
 	} // Lost response can be reread without another page action.
-	if !c.Valid() || s.windows >= 8 {
+	if !c.Valid() || s.windows >= chunkWindowLimit {
 		return nil, errors.New("CONTINUATION_LIMIT")
 	}
 	s.windows++
@@ -334,6 +336,7 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 	var ready CoverageReady
 	awaiting := ""
 	var actionDeadline time.Time
+	var recoveryDeadline time.Time
 	var hydrationDeadline time.Time
 	hydrationObservation := ""
 	chunkBytes := 0
@@ -343,17 +346,43 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 			break
 		}
 		b, r, e := p.Snapshot(ctx)
+		if ctx.Err() != nil {
+			report.Reason = boundedError(ctx, ctx.Err())
+			break
+		}
 		if e != nil {
+			if errors.Is(e, errCoverageStateUnavailable) {
+				// 状态恢复只重观察；重复失败不能延长期限或重发页面动作。
+				if recoveryDeadline.IsZero() {
+					if awaiting != "" {
+						recoveryDeadline = actionDeadline
+					} else {
+						recoveryDeadline = time.Now().Add(5 * time.Second)
+					}
+				}
+				if time.Now().Before(recoveryDeadline) {
+					waitCtx, cancelWait := context.WithDeadline(ctx, recoveryDeadline)
+					waited := chunkWait(waitCtx)
+					cancelWait()
+					if waited {
+						continue
+					}
+					if ctx.Err() != nil {
+						e = ctx.Err()
+					}
+				}
+			}
 			report.Reason = boundedError(ctx, e)
 			break
 		}
-		raw, ready = b, r
-		n, records, e := chunkSnapshot(raw, id)
+		n, records, e := chunkSnapshot(b, id)
 		if e != nil {
 			report.Reason = e.Error()
 			break
 		}
+		raw, ready = b, r
 		note = n
+		recoveryDeadline = time.Time{}
 		if awaiting != "" {
 			if chunkObservation(records, raw, id, ready) == awaiting {
 				if !time.Now().Before(actionDeadline) {
@@ -460,7 +489,7 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 				report.ReplyStop = "VISIBLE_WINDOW_READ"
 				report.Actions.ReplyClicks++
 				awaiting = chunkObservation(records, raw, id, ready)
-				actionDeadline = time.Now().Add(2200 * time.Millisecond)
+				actionDeadline = time.Now().Add(5 * time.Second)
 				if !chunkWait(ctx) {
 					report.Reason = boundedError(ctx, ctx.Err())
 					break
@@ -543,7 +572,7 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 		report.Actions.RootScrolls++
 		report.RootStop = "VISIBLE_WINDOW_READ"
 		awaiting = chunkObservation(records, raw, id, ready)
-		actionDeadline = time.Now().Add(2200 * time.Millisecond)
+		actionDeadline = time.Now().Add(5 * time.Second)
 		if !chunkWait(ctx) {
 			report.Reason = boundedError(ctx, ctx.Err())
 			break
@@ -569,7 +598,7 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 	}
 	report.Actions.AddedRoots = newRoots
 	report.Actions.AddedReplies = len(delta) - newRoots
-	can := s.windows < 8 && (len(delta) > 0 || s.Remaining() < replayBefore || report.Actions.RootScrolls+report.Actions.ReplyClicks > 0)
+	can := s.windows < chunkWindowLimit && (len(delta) > 0 || s.Remaining() < replayBefore || report.Actions.RootScrolls+report.Actions.ReplyClicks > 0)
 	switch report.Reason {
 	case "CHUNK_READY", "ROOT_PAGE_BUDGET", "REPLY_CLICK_BUDGET", "TIMEOUT":
 	default:

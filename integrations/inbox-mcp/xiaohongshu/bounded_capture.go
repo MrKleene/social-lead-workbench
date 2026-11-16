@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/sirupsen/logrus"
 	"regexp"
 	"strconv"
 )
@@ -22,12 +23,17 @@ type boundedRodPage struct {
 }
 
 func (p *boundedRodPage) guard(ctx context.Context) error {
-	v, e := p.page.Context(ctx).Eval(`() => [...document.querySelectorAll('.access-wrapper,.error-wrapper,.not-found-wrapper,.blocked-wrapper,.captcha-container,.login-container')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0)`)
+	v, e := p.page.Context(ctx).Eval(`post => {
+		if([...document.querySelectorAll('.access-wrapper,.error-wrapper,.not-found-wrapper,.blocked-wrapper,.captcha-container,.login-container')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0))return 'PLATFORM_LIMIT';
+		if(location.hostname==='www.xiaohongshu.com'&&location.pathname!=='/explore/'+post)return 'IDENTITY_CONFLICT';
+		return 'OK';
+	}`, p.feedID)
 	if e != nil {
+		logrus.Errorf("guard eval failed: %v", e)
 		return errors.New("READ_FAILED")
 	}
-	if v.Value.Bool() {
-		return errors.New("PLATFORM_LIMIT")
+	if v.Value.Str() != "OK" {
+		return errors.New(v.Value.Str())
 	}
 	return nil
 }
@@ -37,7 +43,8 @@ func (p *boundedRodPage) Snapshot(ctx context.Context) ([]byte, CoverageReady, e
 	}
 	raw, ready, e := captureCoveragePage(p.page.Context(ctx))
 	if e != nil {
-		return nil, ready, errors.New("READ_FAILED")
+		logrus.Errorf("capture coverage failed: %v", e)
+		return nil, ready, e
 	}
 	{ // Re-resolve after every page-state snapshot; retained handles may detach.
 		p.refreshRoots = false
@@ -71,6 +78,7 @@ func (p *boundedRodPage) ScrollRoots(ctx context.Context) error {
 	if e := p.guard(ctx); e != nil {
 		return e
 	}
+	// Only scroll the known comment containers; missing scope is not proof of exhaustion.
 	v, e := p.page.Context(ctx).Eval(`() => {const e=[...document.querySelectorAll('.note-scroller,.comments-container')].find(x=>x.scrollHeight>x.clientHeight+1);if(!e)return false;e.scrollTo({top:e.scrollHeight,behavior:'instant'});return true}`)
 	if e != nil || !v.Value.Bool() {
 		return errors.New("READ_FAILED")
@@ -79,7 +87,8 @@ func (p *boundedRodPage) ScrollRoots(ctx context.Context) error {
 	return nil
 }
 
-var boundedReplyLabel = regexp.MustCompile(`^展开\s*(\d+)\s*条回复$`)
+var boundedReplyLabel = regexp.MustCompile(`^(?:展开|查看)\s*(\d+)\s*条回复$`)
+var moreReplyLabel = regexp.MustCompile(`^(?:展开更多回复|查看更多回复|更多回复)$`)
 
 func (p *boundedRodPage) ExpandReply(ctx context.Context, remaining, maxPerRoot int) (string, error) {
 	if e := p.guard(ctx); e != nil {
@@ -103,7 +112,7 @@ func (p *boundedRodPage) ExpandReply(ctx context.Context, remaining, maxPerRoot 
 		if e != nil {
 			return "CLICK_FAILED", nil
 		}
-		for _, button := range buttons {
+		for buttonIndex, button := range buttons {
 			visible, e := button.Visible()
 			if e != nil {
 				return "CLICK_FAILED", nil
@@ -116,18 +125,26 @@ func (p *boundedRodPage) ExpandReply(ctx context.Context, remaining, maxPerRoot 
 				return "CLICK_FAILED", nil
 			}
 			m := boundedReplyLabel.FindStringSubmatch(label)
-			if m == nil {
+			if m == nil && !(p.chunkMode && moreReplyLabel.MatchString(label)) {
 				reason = "UNKNOWN_REPLY_COUNT"
 				continue
 			}
-			n, e := strconv.Atoi(m[1])
-			if e != nil || n < 1 {
-				reason = "UNKNOWN_REPLY_COUNT"
-				continue
+			if m != nil {
+				n, parseErr := strconv.Atoi(m[1])
+				if parseErr != nil || n < 1 {
+					reason = "UNKNOWN_REPLY_COUNT"
+					continue
+				}
+				// Chunking limits what is emitted, not what one expansion may reveal.
+				// Never skip an accessible discussion just because its label says >30.
+				if !p.chunkMode && (n > remaining || loaded+n > maxPerRoot) {
+					reason = "REPLY_THRESHOLD"
+					continue
+				}
 			}
-			if n > remaining || (!p.chunkMode && loaded+n > maxPerRoot) || (p.chunkMode && n > maxPerRoot) {
-				reason = "REPLY_THRESHOLD"
-				continue
+			owned, ownershipErr := root.Eval(`function(i){const b=this.querySelectorAll('.show-more')[i];return !!b&&b.closest('.parent-comment')===this}`, buttonIndex)
+			if ownershipErr != nil || !owned.Value.Bool() {
+				return "DOM_SCOPE_UNKNOWN", nil
 			}
 			// Scroll only an already-admitted root's reply control into view. Any incidental
 			// new roots in page state are excluded by the merger, never silently admitted.

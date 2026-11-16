@@ -86,7 +86,8 @@ func TestChunkCachedAckAndBindingsNeverOpenBrowser(t *testing.T) {
 	if e == nil {
 		t.Fatal("altered ACK")
 	}
-	s.reads.lease.created = time.Now().Add(-3 * time.Minute)
+	// 分块续读租约现在给长帖留 30 分钟；用超过新上限的时间点验证过期。
+	s.reads.lease.created = time.Now().Add(-31 * time.Minute)
 	_, e = s.chunkedDetail(context.Background(), "synthetic", "reference", c)
 	if e == nil || closed != 1 {
 		t.Fatal("expired lease", e)

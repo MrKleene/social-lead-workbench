@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -18,10 +21,20 @@ import (
 	"github.com/xpzouying/xiaohongshu-mcp/xiaohongshu"
 )
 
+// 扫码会话的身份抓取进度。状态查询据此决定是"再等等"（报已登录、让界面显示已扫码）
+// 还是"自己去读一次"（抓取已经失败，只能新起浏览器兜底）。
+const (
+	captureIdle int32 = iota
+	captureRunning
+	captureDone
+	captureFailed
+)
+
 // XiaohongshuService 小红书业务服务
 type XiaohongshuService struct {
-	logins loginSessions
- reads readContinuations
+	logins  loginSessions
+	reads   readContinuations
+	capture atomic.Int32
 }
 
 // NewXiaohongshuService 创建小红书服务实例
@@ -104,8 +117,56 @@ func (s *XiaohongshuService) DeleteCookies(ctx context.Context) error {
 	return cookieLoader.DeleteCookies()
 }
 
+// sessionDirectory 本次平台会话的私有目录：cookies 与身份缓存都放在这里，随会话删除。
+func sessionDirectory() string {
+	return filepath.Dir(cookies.GetCookiesFilePath())
+}
+
+// hasSessionCookie 只看会话文件里有没有 web_session，不启动浏览器。
+//
+// 这就是扫码成功的判据：它和封存时要保存的是同一份凭据，只是从文件读而不是从
+// 浏览器读。轮询每 2 秒一次，起一个 Chromium 只为看一个 Cookie 是 5-10 秒的空等。
+func hasSessionCookie() bool {
+	data, err := cookies.NewLoadCookie(cookies.GetCookiesFilePath()).LoadCookies()
+	if err != nil {
+		return false
+	}
+	var cks []struct {
+		Name  string `json:"name"`
+		Value string `json:"value"`
+	}
+	if err := json.Unmarshal(data, &cks); err != nil {
+		return false
+	}
+	for _, c := range cks {
+		if c.Name == "web_session" && strings.TrimSpace(c.Value) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // CheckLoginStatus 检查登录状态
 func (s *XiaohongshuService) CheckLoginStatus(ctx context.Context) (*LoginStatusResponse, error) {
+	desktopLogin := os.Getenv("CRM_DESKTOP_MODE") == "LOGIN"
+	if desktopLogin {
+		// 扫码轮询的快路径：会话文件里没有 web_session 就是还没扫，直接答"未登录"；
+		// 有会话且身份已缓存就整份返回。两条路都不起浏览器，扫码结果因此能立刻被看到。
+		if !hasSessionCookie() {
+			return &LoginStatusResponse{IsLoggedIn: false}, nil
+		}
+		if user, ok := xiaohongshu.LoadLoginIdentity(sessionDirectory()); ok {
+			return &LoginStatusResponse{IsLoggedIn: true, Username: user.Nickname, UserID: user.UserID, Avatar: user.Avatar}, nil
+		}
+		// 有会话、身份还在抓：先答"已登录"，界面据此显示"已扫码，正在核验"。
+		// 这里再起一个浏览器去读，正是扫码后十几秒空等的来源，不能这么干。
+		if s.capture.Load() == captureRunning {
+			return &LoginStatusResponse{IsLoggedIn: true}, nil
+		}
+		// 抓取已经失败（页面读不到身份）才回落到浏览器兜底。
+		logrus.Warnf("identity capture not available; falling back to a fresh browser read")
+	}
+
 	b := newBrowser()
 	defer b.Close()
 
@@ -114,12 +175,19 @@ func (s *XiaohongshuService) CheckLoginStatus(ctx context.Context) (*LoginStatus
 
 	loginAction := xiaohongshu.NewLogin(page)
 
-	// 扫码等待期间（桌面端 LOGIN 模式）不能导航：CheckLoginStatus 会跳回 explore，
-	// 把登录页冲掉，扫码结果就回不来。改用只看 Cookie 的就地判断。
+	// 扫码等待期间（桌面端 LOGIN 模式）只按 Cookie 判登录态：这是登录成功后要保存的
+	// 同一份凭据，判据和持久化口径一致。判出登录后补加载一次首页——身份只能从登录态
+	// 页面的 __INITIAL_STATE__ 读，而这次请求的页面是空白页；它和二维码页不是同一个
+	// 浏览器进程，导航不会冲掉二维码。
 	var isLoggedIn bool
 	var err error
-	if os.Getenv("CRM_DESKTOP_MODE") == "LOGIN" {
+	if desktopLogin {
 		isLoggedIn, err = loginAction.CheckLoginStatusInPlace(ctx)
+		if err == nil && isLoggedIn {
+			if loadErr := loginAction.LoadLoggedInPage(ctx); loadErr != nil {
+				logrus.Warnf("failed to load logged-in page for identity: %v", loadErr)
+			}
+		}
 	} else {
 		isLoggedIn, err = loginAction.CheckLoginStatus(ctx)
 	}
@@ -192,6 +260,7 @@ func (s *XiaohongshuService) waitScanInBackground(
 ) {
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), timeout)
 	seq := s.logins.start(cancel)
+	s.capture.Store(captureRunning)
 	logrus.Infof("等待扫码登录，会话 #%d，超时 %s", seq, timeout)
 
 	go func() {
@@ -202,13 +271,38 @@ func (s *XiaohongshuService) waitScanInBackground(
 		if loginAction.WaitForLogin(ctxTimeout) {
 			if err := saveCookies(page); err != nil {
 				logrus.Errorf("扫码成功但保存 cookies 失败，会话 #%d: %v", seq, err)
+				if s.logins.isCurrent(seq) {
+					s.capture.Store(captureFailed)
+				}
 				return
 			}
-			logrus.Infof("扫码登录成功，cookies 已保存，会话 #%d", seq)
+			// 扫码成功时页面已经是登录态：就地等身份出现再落盘，状态查询直接命中。
+			// 二维码页常常没有头像，ReadIdentity 会补一次首页导航再读——否则缓存里
+			// 留下的是空头像，之后状态查询命中缓存，头像永远补不上。
+			user, err := loginAction.ReadIdentity(ctxTimeout, 5*time.Second)
+			if err == nil && user != nil && user.Avatar == "" {
+				// 读不到头像时打印页面结构（只有键名/计数/路径），便于定位是结构变了还是确实没有。
+				logrus.Warnf("头像未读到，页面结构：%s", loginAction.AvatarDiagnostic(ctxTimeout))
+			}
+			state := captureDone
+			if err != nil {
+				logrus.Warnf("扫码成功但读取账号身份失败，会话 #%d: %v", seq, err)
+				state = captureFailed
+			} else if err := xiaohongshu.SaveLoginIdentity(sessionDirectory(), user); err != nil {
+				logrus.Warnf("写入账号身份缓存失败，会话 #%d: %v", seq, err)
+				state = captureFailed
+			}
+			if s.logins.isCurrent(seq) {
+				s.capture.Store(state)
+			}
+			logrus.Infof("扫码登录成功，cookies 已保存，会话 #%d，头像=%v", seq, err == nil && user != nil && user.Avatar != "")
 			return
 		}
 
 		// 没等到扫码：要么超时，要么被新取的二维码取代
+		if s.logins.isCurrent(seq) {
+			s.capture.Store(captureIdle)
+		}
 		logrus.Infof("登录会话 #%d 结束，未检测到扫码（超时或已被新的二维码取代）", seq)
 	}()
 }
@@ -640,10 +734,16 @@ func (s *XiaohongshuService) ReplyNotification(ctx context.Context, commentID, c
 }
 
 func newBrowser() *headless_browser.Browser {
-	return browser.NewBrowser(configs.IsHeadless(),
+	opts := []browser.Option{
 		browser.WithFingerprintSeed(configs.FingerprintSeed()),
 		browser.WithProxy(configs.Proxy()),
-	)
+	}
+	// 无 GUI session / 容器 / CI 里 Chromium 的 setuid sandbox 起不来（启动即 EOF）。
+	// 只在显式设置时关闭，默认仍然启用沙箱。
+	if os.Getenv("WORKBENCH_CHROMIUM_NO_SANDBOX") == "1" {
+		opts = append(opts, browser.WithNoSandbox())
+	}
+	return browser.NewBrowser(configs.IsHeadless(), opts...)
 }
 
 func saveCookies(page *rod.Page) error {

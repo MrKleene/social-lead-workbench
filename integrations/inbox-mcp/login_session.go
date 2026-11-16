@@ -30,6 +30,15 @@ func (l *loginSessions) start(cancel func()) uint64 {
 	return seq
 }
 
+// isCurrent 本次会话是否仍是当前会话。用于收尾时判断该不该写共享状态，
+// 避免被取代的旧会话覆盖后来者的登记。
+func (l *loginSessions) isCurrent(seq uint64) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	return l.seq == seq
+}
+
 // finish 会话自己结束时清理登记。仅当它仍是当前会话才清，
 // 否则会把后来者的登记抹掉，导致后来者永远不会被 start 关闭。
 func (l *loginSessions) finish(seq uint64) {

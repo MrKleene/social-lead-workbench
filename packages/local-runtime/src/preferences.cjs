@@ -33,20 +33,25 @@ class LocalPreferences{
    autoReply:saved.autoReply===true,
    commentTemplateId:validId(saved.commentTemplateId)&&this.template(saved.commentTemplateId,'COMMENT')?saved.commentTemplateId:null,
    dmTemplateId:validId(saved.dmTemplateId)&&this.template(saved.dmTemplateId,'DM')?saved.dmTemplateId:null,
+   // 回复账号池：数组顺序即配额耗尽后的取用顺序；账号被删除后自动摘掉，不静默换号。
+   replyAccountIds:Array.isArray(saved.replyAccountIds)?saved.replyAccountIds.filter(id=>validId(id)&&this.account(id)):[],
    threshold:Number.isInteger(saved.threshold)&&saved.threshold>=0&&saved.threshold<=100?saved.threshold:80};
  }
- saveSteps({version,autoReview,policyId,autoReply,commentTemplateId,dmTemplateId,threshold}){
-  if(!Number.isInteger(version)||version<0||typeof autoReview!=='boolean'||typeof autoReply!=='boolean'||policyId!==null&&!validId(policyId)||commentTemplateId!==null&&!validId(commentTemplateId)||dmTemplateId!==null&&!validId(dmTemplateId)||!Number.isInteger(threshold)||threshold<0||threshold>100)throw new LocalError('INVALID_AUTOMATION_STEPS');
+ saveSteps({version,autoReview,policyId,autoReply,commentTemplateId,dmTemplateId,replyAccountIds,threshold}){
+  const accounts=replyAccountIds??[];
+  if(!Number.isInteger(version)||version<0||typeof autoReview!=='boolean'||typeof autoReply!=='boolean'||policyId!==null&&!validId(policyId)||commentTemplateId!==null&&!validId(commentTemplateId)||dmTemplateId!==null&&!validId(dmTemplateId)||!Array.isArray(accounts)||accounts.length>100||accounts.some(x=>!validId(x))||new Set(accounts).size!==accounts.length||!Number.isInteger(threshold)||threshold<0||threshold>100)throw new LocalError('INVALID_AUTOMATION_STEPS');
   return this.store.transaction(()=>{
    if(this.steps().version!==version)throw new LocalError('PREFERENCE_CHANGED');
    if(policyId&&!this.policy(policyId))throw new LocalError('REVIEW_POLICY_CHANGED');
    if(commentTemplateId&&!this.template(commentTemplateId,'COMMENT'))throw new LocalError('CONTACT_TEMPLATE_CHANGED');
    if(dmTemplateId&&!this.template(dmTemplateId,'DM'))throw new LocalError('CONTACT_TEMPLATE_CHANGED');
-   this.put('automation-steps',{autoReview,policyId,autoReply,commentTemplateId,dmTemplateId,threshold},version+1);
-   this.store.audit('LOCAL_USER','AUTOMATION_STEPS_SAVED',policyId??'none',{version:version+1,autoReview,policyId,autoReply,commentTemplateId,dmTemplateId,threshold});
+   for(const id of accounts)if(!this.account(id))throw new LocalError('PREFERRED_ACCOUNT_UNAVAILABLE');
+   this.put('automation-steps',{autoReview,policyId,autoReply,commentTemplateId,dmTemplateId,replyAccountIds:accounts,threshold},version+1);
+   this.store.audit('LOCAL_USER','AUTOMATION_STEPS_SAVED',policyId??'none',{version:version+1,autoReview,policyId,autoReply,commentTemplateId,dmTemplateId,replyAccountIds:accounts,threshold});
    return this.steps();
   });
  }
+ account(id){return this.db.prepare("SELECT id FROM accounts WHERE id=? AND state<>'ARCHIVED'").get(id);}
  policy(id){return this.db.prepare('SELECT id FROM review_policies WHERE id=? AND NOT EXISTS(SELECT 1 FROM configurations c WHERE c.id=review_policies.id AND c.archived=1)').get(id);}
  template(id,channel){return this.db.prepare('SELECT id FROM configurations WHERE id=? AND kind=? AND archived=0').get(id,channel+'_TEMPLATE');}
 }

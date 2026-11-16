@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -325,5 +326,202 @@ func TestChunksHydrationHonorsCancellation(t *testing.T) {
 	r, e := s.Read(ctx, f, "note", chunkConfig())
 	if e != nil || r.BoundedRead.State == "COMPLETE" || r.BoundedRead.Reason != "TIMEOUT" || len(r.Chunk.Rows) != 1 {
 		t.Fatalf("%+v %v", r, e)
+	}
+}
+
+// 包装纯内存 fixture，失败快照故意携带不可用数据，不能覆盖已验证证据。
+type chunkStateFixture struct {
+	chunkFixture
+	snapshotErr                              error
+	failSnapshots                            int
+	failInitially, clickReply, noProgress    bool
+	snapshotCalls, failureCalls, expandCalls int
+	delayFirstFailure                        time.Duration
+	onFailure                                func()
+	lastRaw                                  []byte
+	lastReady                                CoverageReady
+}
+
+func (f *chunkStateFixture) Snapshot(ctx context.Context) ([]byte, CoverageReady, error) {
+	f.snapshotCalls++
+	if (f.failInitially || f.clicks+f.scrolls > 0) && (f.failSnapshots < 0 || f.failureCalls < f.failSnapshots) {
+		if f.failureCalls == 0 && f.delayFirstFailure > 0 {
+			timer := time.NewTimer(f.delayFirstFailure)
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+				return nil, CoverageReady{}, ctx.Err()
+			case <-timer.C:
+			}
+		}
+		f.failureCalls++
+		if f.onFailure != nil {
+			f.onFailure()
+		}
+		return []byte(`{"invalid":true}`), CoverageReady{}, f.snapshotErr
+	}
+	b, r, e := f.chunkFixture.Snapshot(ctx)
+	if e == nil {
+		f.lastRaw, f.lastReady = b, r
+	}
+	return b, r, e
+}
+
+func (f *chunkStateFixture) ExpandReply(ctx context.Context, maxComments, maxReplies int) (string, error) {
+	f.expandCalls++
+	if f.clickReply && f.clicks == 0 {
+		f.clicks++
+		if !f.noProgress {
+			f.perRoot = 2
+		}
+		return "CLICKED", nil
+	}
+	return f.chunkFixture.ExpandReply(ctx, maxComments, maxReplies)
+}
+
+func TestChunksStateUnavailableRecoversWithoutExtraActions(t *testing.T) {
+	for _, action := range []string{"reply", "scroll", "initial"} {
+		t.Run(action, func(t *testing.T) {
+			f := &chunkStateFixture{
+				chunkFixture:  chunkFixture{roots: 1, visible: 1, explicitEnd: true},
+				snapshotErr:   fmt.Errorf("状态暂不可读: %w", errCoverageStateUnavailable),
+				failSnapshots: 3, clickReply: action == "reply", failInitially: action == "initial",
+			}
+			wantRows, wantClicks, wantScrolls := 1, 0, 0
+			if action == "reply" {
+				wantRows, wantClicks = 3, 1
+			} else if action == "scroll" {
+				f.roots = 2
+				wantRows, wantScrolls = 2, 1
+			}
+			s, _ := NewCommentChunkSession(nil)
+			r, e := s.Read(context.Background(), f, "note", chunkConfig())
+			if e != nil {
+				t.Fatal(e)
+			}
+			if r.BoundedRead.State != "COMPLETE" || len(r.Chunk.Rows) != wantRows || len(r.Chunk.Checkpoint.Marks) != wantRows || f.failureCalls != 3 || f.clicks != wantClicks || f.scrolls != wantScrolls || r.BoundedRead.Actions.ReplyClicks != wantClicks || r.BoundedRead.Actions.RootScrolls != wantScrolls {
+				t.Fatalf("恢复结果或动作计数不符: %+v, fixture=%+v", r, f)
+			}
+			if action == "reply" && (r.Chunk.Rows[1].Parent != "r0" || r.Chunk.Rows[2].Parent != "r0") {
+				t.Fatal("恢复后漏掉回复或父子关系")
+			}
+		})
+	}
+}
+
+func TestChunksStateUnavailableUsesFixedActionDeadline(t *testing.T) {
+	f := &chunkStateFixture{
+		chunkFixture: chunkFixture{roots: 1, visible: 1, explicitEnd: true},
+		snapshotErr:  errCoverageStateUnavailable, failSnapshots: -1, clickReply: true,
+		delayFirstFailure: time.Second,
+	}
+	s, _ := NewCommentChunkSession(nil)
+	start := time.Now()
+	r, e := s.Read(context.Background(), f, "note", chunkConfig())
+	if e != nil {
+		t.Fatal(e)
+	}
+	elapsed := time.Since(start)
+	if r.BoundedRead.State != "PARTIAL" || r.BoundedRead.Reason != "READ_FAILED" || r.Chunk.CanContinue || len(r.Chunk.Rows) != 1 || f.clicks != 1 || f.scrolls != 0 || f.expandCalls != 1 || f.failureCalls < 2 || elapsed < 4500*time.Millisecond || elapsed > 6*time.Second {
+		t.Fatalf("未复用固定动作期限或重复动作: %+v, fixture=%+v, elapsed=%v", r, f, elapsed)
+	}
+	_, records, err := chunkSnapshot(f.lastRaw, "note")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(r.BoundedRead.Final, inspectCoverage(f.lastRaw, "note", f.lastReady)) || !reflect.DeepEqual(r.BoundedRead.Retained, r.BoundedRead.Final) || !reflect.DeepEqual(r.BoundedRead.ChunkSummary, chunkCoverage(records, f.lastRaw, "note", f.lastReady)) {
+		t.Fatal("失败快照覆盖了已验证覆盖证据")
+	}
+	before := f.snapshotCalls
+	again, e := s.Read(context.Background(), f, "note", chunkConfig())
+	if e != nil || again != r || f.snapshotCalls != before || f.clicks != 1 {
+		t.Fatal("未确认的失败窗口重放触发了页面动作")
+	}
+}
+
+func TestChunksStateUnavailableWithoutActionIsBounded(t *testing.T) {
+	f := &chunkStateFixture{snapshotErr: errCoverageStateUnavailable, failSnapshots: -1, failInitially: true}
+	s, _ := NewCommentChunkSession(nil)
+	start := time.Now()
+	r, e := s.Read(context.Background(), f, "note", chunkConfig())
+	elapsed := time.Since(start)
+	if r != nil || e == nil || e.Error() != "READ_FAILED" || f.failureCalls < 2 || f.expandCalls != 0 || f.scrolls != 0 || elapsed < 4500*time.Millisecond || elapsed > 6*time.Second {
+		t.Fatalf("无动作恢复未有界退出: response=%+v, err=%v, fixture=%+v, elapsed=%v", r, e, f, elapsed)
+	}
+}
+
+func TestChunksStateUnavailableRecoveryDoesNotCompleteWithoutProgress(t *testing.T) {
+	f := &chunkStateFixture{
+		chunkFixture: chunkFixture{roots: 1, visible: 1, explicitEnd: true},
+		snapshotErr:  errCoverageStateUnavailable, failSnapshots: 2, clickReply: true, noProgress: true,
+	}
+	s, _ := NewCommentChunkSession(nil)
+	start := time.Now()
+	r, e := s.Read(context.Background(), f, "note", chunkConfig())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if r.BoundedRead.State != "PARTIAL" || r.BoundedRead.Reason != "NO_PROGRESS" || len(r.Chunk.Rows) != 1 || f.failureCalls != 2 || f.clicks != 1 || f.expandCalls != 1 || f.scrolls != 0 || time.Since(start) > 6*time.Second {
+		t.Fatalf("恢复被误判为完成或延长动作等待: %+v, fixture=%+v", r, f)
+	}
+}
+
+func TestChunksSnapshotFatalErrorsDoNotRetry(t *testing.T) {
+	for _, tc := range []struct {
+		name, reason string
+		err          error
+	}{
+		{"platform", "PLATFORM_LIMIT", errors.New("PLATFORM_LIMIT")},
+		{"protocol", "READ_FAILED", errors.New("READ_FAILED")},
+		{"invalid_error", "INVALID_RESPONSE", errors.New("INVALID_RESPONSE")},
+		{"identity", "IDENTITY_CONFLICT", errors.New("IDENTITY_CONFLICT")},
+		{"same_text_not_sentinel", "READ_FAILED", errors.New("PAGE_STATE_UNAVAILABLE")},
+		{"invalid_data", "INVALID_RESPONSE", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &chunkStateFixture{
+				chunkFixture: chunkFixture{roots: 1, visible: 1, explicitEnd: true},
+				snapshotErr:  tc.err, failSnapshots: -1, clickReply: true,
+			}
+			s, _ := NewCommentChunkSession(nil)
+			r, e := s.Read(context.Background(), f, "note", chunkConfig())
+			if e != nil {
+				t.Fatal(e)
+			}
+			if r.BoundedRead.State != "PARTIAL" || r.BoundedRead.Reason != tc.reason || len(r.Chunk.Rows) != 1 || f.failureCalls != 1 || f.snapshotCalls != 2 || f.clicks != 1 || f.expandCalls != 1 || f.scrolls != 0 || !reflect.DeepEqual(r.BoundedRead.Final, inspectCoverage(f.lastRaw, "note", f.lastReady)) {
+				t.Fatalf("致命快照失败被重试或丢失数据: %+v, fixture=%+v", r, f)
+			}
+		})
+	}
+}
+
+func TestChunksStateUnavailableHonorsContext(t *testing.T) {
+	for _, reason := range []string{"CANCELLED", "TIMEOUT"} {
+		t.Run(reason, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			f := &chunkStateFixture{
+				chunkFixture: chunkFixture{roots: 1, visible: 1, explicitEnd: true},
+				snapshotErr:  errCoverageStateUnavailable, failSnapshots: -1, clickReply: true,
+			}
+			c := chunkConfig()
+			c.TimeoutMs = 1000
+			if reason == "CANCELLED" {
+				f.onFailure = func() {
+					if f.failureCalls == 2 {
+						cancel()
+					}
+				}
+			}
+			s, _ := NewCommentChunkSession(nil)
+			start := time.Now()
+			r, e := s.Read(ctx, f, "note", c)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if r.BoundedRead.State != "PARTIAL" || r.BoundedRead.Reason != reason || len(r.Chunk.Rows) != 1 || f.clicks != 1 || f.expandCalls != 1 || f.scrolls != 0 || time.Since(start) > 2*time.Second {
+				t.Fatalf("未尊重上下文或丢失已验证数据: %+v, fixture=%+v", r, f)
+			}
+		})
 	}
 }
