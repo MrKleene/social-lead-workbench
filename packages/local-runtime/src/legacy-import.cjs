@@ -2,7 +2,9 @@
 const {randomUUID}=require('node:crypto');
 const {LocalError,canonical,hash}=require('./database.cjs');
 const {historicalSendHold,legacyAccountRestricted}=require('./account-safety.cjs');
-const allowed=new Set(['PlatformAccount','PlatformIdentity','SourcePost','SourceComment','AuditLog','ReplyTemplate','CollectionConfig','CollectionRun','MonitorPost','CommentObservation','SourceMatch','AccountDay','ContactLedger','ContactAttempt','SemanticReview','SemanticModelCall','SemanticControl','CapturedPost','CapturedComment','CommentReadCheckpoint','AutoReviewJob','CommentReviewPolicy','CommentReviewPolicyVersion','ManualReviewJob','AutoContactRule','AutoContactControl','AutoContactJob','PostAvailability','PostAvailabilityEvent','AutomationPreferences','NormalAutomationAcceptance','NormalAcceptancePost','ManualReplyRequest','HistoryArchiveBatch','HistoryArchiveItem','InboxReceiver','InboxMessage','InboxRead']);
+// Lead/FollowUp/Task 已退出产品，不再有界面和写入方。Lead 仍留在白名单里只为两件事：
+// 归档历史行，以及把 doNotContact / 已联系证据转成 contact_ledger 阻断，避免升级后重复联系。
+const allowed=new Set(['PlatformAccount','PlatformIdentity','SourcePost','SourceComment','Lead','FollowUp','Task','AuditLog','ReplyTemplate','CollectionConfig','CollectionRun','MonitorPost','CommentObservation','SourceMatch','CollectionNotice','NoticeRead','AccountDay','ContactLedger','ContactAttempt','SemanticReview','SemanticModelCall','SemanticControl','CapturedPost','CapturedComment','CommentReadCheckpoint','AutoReviewJob','CommentReviewPolicy','CommentReviewPolicyVersion','ManualReviewJob','AutoContactRule','AutoContactControl','AutoContactJob','PostAvailability','PostAvailabilityEvent','AutomationPreferences','NormalAutomationAcceptance','NormalAcceptancePost','ManualReplyRequest','HistoryArchiveBatch','HistoryArchiveItem','InboxReceiver','InboxMessage','InboxRead']);
 const excluded=new Set(['User','Session','RefreshGrant','RefreshToken','LoginBucket','AccountLogin','AccountSessionReference','ExecutionDevice','DeviceExecutionLease','ModelSettings']);
 const credentialFields=new Set(['password','leasetoken','sourcereference','sourcereferenceref','passwordhash','encryptedkey','csrftoken','cookies','cookie','authorization','loginSessionKey'.toLowerCase(),'sessionkey','tokenhash','xsec_token','xsectoken','privatekey','secret','accesstoken','refreshtoken','token']);
 function clean(value,report){
@@ -57,6 +59,9 @@ function importLegacySnapshot(store,snapshot){
    const i=identities.get(identityId);if(!i||typeof i.platformUserId!=='string'||!i.platformUserId)throw new LocalError('LEGACY_CONTACT_IDENTITY_MISSING');if(i.platform!=='XHS')return;
    for(const channel of channels)store.db.prepare('INSERT INTO contact_ledger(platform,channel,recipient_id,blocked,first_contact_blocked,reason) VALUES(?,?,?,?,1,?) ON CONFLICT(platform,channel,recipient_id) DO UPDATE SET blocked=max(blocked,excluded.blocked),first_contact_blocked=1,reason=CASE WHEN excluded.blocked=1 OR blocked=0 THEN excluded.reason ELSE reason END').run(i.platform,channel,i.platformUserId,hard?1:0,reason);
   }
+  // Lead 已退出产品，但旧线索上的 doNotContact / 已联系证据仍是升级后不得重复联系的依据：
+  // 这里只读转为 contact_ledger 阻断，不写回任何线索记录。
+  for(const lead of tables.Lead||[])if(lead.doNotContact||(!lead.isDemo&&(lead.contactedAt||['CONTACTED','INTERESTED'].includes(lead.contactStage))))block(lead.identityId,['COMMENT','DM'],lead.doNotContact?'LEGACY_DO_NOT_CONTACT':'LEGACY_CONTACT_EVIDENCE',!!lead.doNotContact);
   for(const attempt of tables.ContactAttempt||[]){if(attempt.mode!=='REAL'||attempt.outcome==='CANCELLED')continue;const ledger=ledgers.get(attempt.ledgerId);if(!ledger)throw new LocalError('LEGACY_LEDGER_MISSING');const uncertain=['RESERVED','ATTEMPTED','UNKNOWN'].includes(attempt.outcome);block(ledger.identityId,uncertain||!['COMMENT','DM'].includes(attempt.channel)?['COMMENT','DM']:[attempt.channel],'LEGACY_CONTACT_EVIDENCE',uncertain);}
   // Native history is view-only until an exact observation binds its receiver.
   // Per-user read markers remain in the archive; isNew is preserved conservatively.
