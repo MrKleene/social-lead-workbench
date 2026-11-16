@@ -211,8 +211,9 @@ npm run typecheck -w @crm/web
 
 ## 10. 认知索引（AOCI）
 
-改动 `apps/` `packages/` `integrations/` `scripts/` 下的文件后，交付前跑一次 `npm run aoci:sync`，
-按返回的批次补条目；返回孤儿条目（文件已删）时一并裁决。纯文案、纯样式微调不需要。
+改动 `apps/` `packages/` `integrations/` `scripts/` 下的文件后，交付前跑一次 `npm run aoci:sync` 看债；
+CLI 不生成语义，条目要在会话里用 `aoci_maintain` 领取机器签发的候选批次，逐项创作后由 `aoci_update_entry` 提交。
+返回孤儿条目（文件已删）时一并裁决。纯文案、纯样式微调不需要。
 
 `npm run aoci:check` 只读校验，不改索引。索引状态 `invalid` 时 `aoci_overview` 会如实标记不可靠，
 不会拿旧认知冒充当前结构。
