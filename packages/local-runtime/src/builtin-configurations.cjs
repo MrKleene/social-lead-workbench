@@ -20,11 +20,11 @@ const definitions=Object.freeze([
  {id:'builtin-comment-template',kind:'COMMENT_TEMPLATE',name:'系统默认评论回复模板1',body:{text:'童靴， 开题   各种 资料 模板 🈚️长 需要发你嘛'}},
  {id:'builtin-comment-template-2',kind:'COMMENT_TEMPLATE',name:'系统默认评论回复模板2',body:{text:'宝儿，🈚️ 常滴    选题   开题报告  需要帮助嘛'}},
  {id:'builtin-comment-template-3',kind:'COMMENT_TEMPLATE',name:'系统默认评论回复模板3',body:{text:'宝宝，不要 💰    选题   开题报告  需要嘛'}},
- {id:'builtin-comment-template-4',kind:'COMMENT_TEMPLATE',name:'系统默认评论回复模板4',body:{text:'宝子需要无常选题嘛  我这边可以跟进专业帮你推荐几个好写的哦'}},
+ {id:'builtin-comment-template-4',kind:'COMMENT_TEMPLATE',name:'系统默认评论回复模板4',body:{text:'宝子需要无常选题嘛  我这边可以专业帮你推荐几个好写的哦'}},
  // 私信模板与评论模板同文案：两条渠道各存一份，改一边不会同步另一边。
  {id:'builtin-dm-template',kind:'DM_TEMPLATE',name:'系统默认私信模板1',body:{text:'童靴， 开题   各种 资料 模板 🈚️长 需要发你嘛'}},
  {id:'builtin-dm-template-2',kind:'DM_TEMPLATE',name:'系统默认私信模板2',body:{text:'宝儿，🈚️ 常滴    选题   开题报告  需要帮助嘛'}},
  {id:'builtin-dm-template-3',kind:'DM_TEMPLATE',name:'系统默认私信模板3',body:{text:'宝宝，不要 💰    选题   开题报告  需要嘛'}},
- {id:'builtin-dm-template-4',kind:'DM_TEMPLATE',name:'系统默认私信模板4',body:{text:'宝子需要无常选题嘛  我这边可以跟进专业帮你推荐几个好写的哦'}}
+ {id:'builtin-dm-template-4',kind:'DM_TEMPLATE',name:'系统默认私信模板4',body:{text:'宝子需要无常选题嘛  我这边可以专业帮你推荐几个好写的哦'}}
 ].map(definition=>Object.freeze(definition)));
 module.exports={definitions};

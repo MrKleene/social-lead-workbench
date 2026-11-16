@@ -6,7 +6,7 @@ export type WelcomeDestination = '/work/accounts' | '/work'
 const steps = [
   { title: '连接平台账号', description: '扫码连接账号，确认平台登录状态。', icon: ScanLine },
   { title: '配置模型', description: '按需添加模型服务，用于内容分析与回复。', icon: Layers },
-  { title: '创建采集任务', description: '设置关键词，开始整理你的第一批线索。', icon: ListChecks },
+  { title: '创建采集任务', description: '设置关键词，开始整理你的第一批笔记与评论。', icon: ListChecks },
 ]
 
 type WelcomeProps = {
