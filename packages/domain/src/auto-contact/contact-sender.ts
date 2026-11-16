@@ -1,9 +1,6 @@
 import { z } from 'zod';
 import type { ContactTarget } from './contact-policy';
 
-/** Mirrors the API actor shape. The desktop runtime has no session layer, so the
- * type is declared here instead of pulling in auth/security. */
-export type Actor = { id: string; name: string; email: string; role: 'ADMIN' | 'SALES' };
 export type SendRequest = ContactTarget & {
     accountId: string;
     platform: string;
@@ -28,8 +25,6 @@ export interface ContactSender {
     readonly mode: 'REAL' | 'SIMULATION';
     capability(platform: string, channel: string): boolean;
     healthy(accountId: string, channel?:string): Promise<boolean>;
-    /** Bounded read-only qualification for an authorized rule, before reserving quota. */
-    prepare?(actor: Actor, accountId: string,channel?:string,onChecking?:()=>Promise<void>): Promise<boolean>;
     send(request: SendRequest, signal?: AbortSignal): Promise<SendResult>;
     reconcile?(request: SendRequest, receipt: string): Promise<SendResult>;
 }

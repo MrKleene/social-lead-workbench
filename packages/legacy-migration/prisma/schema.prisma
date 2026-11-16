@@ -5,30 +5,9 @@ datasource db {
   provider = "postgresql"
   url = env("DATABASE_URL")
 }
-enum Role {
-  ADMIN
-  SALES
-}
 enum Platform {
   XHS
   DOUYIN
-}
-enum LeadStatus {
-  PENDING_REVIEW
-  FOLLOWING
-  CLOSED
-}
-enum ContactStage {
-  MATCHED
-  TO_CONTACT
-  CONTACTED
-  INTERESTED
-  IGNORED
-}
-enum TaskStatus {
-  PENDING
-  DONE
-  PAUSED
 }
 enum AccountStatus {
   UNCONNECTED
@@ -40,15 +19,11 @@ model User {
   email String @unique
   name String
   passwordHash String
-  role Role @default(SALES)
   active Boolean @default(true)
   createdAt DateTime @default(now())
   sessions Session[]
   refreshGrants RefreshGrant[]
-  leads Lead[]
-  followups FollowUp[]
   audits AuditLog[]
-  noticeReads NoticeRead[]
   inboxReceivers InboxReceiver[]
   inboxReads InboxRead[]
 }
@@ -124,7 +99,6 @@ model PlatformIdentity {
   platformUserId String
   nickname String
   isDemo Boolean @default(true)
-  lead Lead?
   contactLedger ContactLedger[]
   comments SourceComment[]
   @@unique([platform, platformUserId])
@@ -151,59 +125,7 @@ model SourceComment {
   observedAt DateTime @default(now())
   isDemo Boolean @default(true)
   matches SourceMatch[]
-  notice CollectionNotice?
   @@unique([platform, platformCommentId])
-}
-// Retired CRM storage: kept only for historical foreign keys and contact safety. No management API.
-model Lead {
-  id String @id @default(cuid())
-  identityId String @unique
-  identity PlatformIdentity @relation(fields:[identityId],references:[id])
-  summary String
-  evidence String
-  status LeadStatus @default(PENDING_REVIEW)
-  contactStage ContactStage @default(MATCHED)
-  doNotContact Boolean @default(false)
-  contactNote String?
-  contactedAt DateTime?
-  ownerId String?
-  owner User? @relation(fields:[ownerId],references:[id])
-  reviewedAt DateTime?
-  reviewNote String?
-  nextFollowUpAt DateTime?
-  isDemo Boolean @default(true)
-  version Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  followups FollowUp[]
-  tasks Task[]
-  notices CollectionNotice[]
-  @@index([ownerId,status,nextFollowUpAt])
-}
-// Retired storage, no active follow-up feature.
-model FollowUp {
-  id String @id @default(cuid())
-  leadId String
-  lead Lead @relation(fields:[leadId],references:[id])
-  authorId String
-  author User @relation(fields:[authorId],references:[id])
-  content String
-  nextFollowUpAt DateTime?
-  createdAt DateTime @default(now())
-  @@index([leadId,createdAt])
-}
-// Retired human CRM task storage, not automation jobs.
-model Task {
-  id String @id @default(cuid())
-  leadId String
-  lead Lead @relation(fields:[leadId],references:[id])
-  title String
-  kind String @default("HUMAN_REVIEW")
-  status TaskStatus @default(PENDING)
-  dueAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  @@index([leadId,status])
 }
 model AuditLog {
   id String @id @default(cuid())
@@ -334,26 +256,6 @@ model SourceMatch {
   createdAt DateTime @default(now())
   @@unique([configId,revision,commentId])
 }
-model CollectionNotice {
-  id String @id @default(cuid())
-  commentId String @unique
-  comment SourceComment @relation(fields:[commentId],references:[id],onDelete:Cascade)
-  leadId String
-  lead Lead @relation(fields:[leadId],references:[id],onDelete:Cascade)
-  title String
-  createdAt DateTime @default(now())
-  reads NoticeRead[]
-  @@index([leadId,createdAt])
-}
-model NoticeRead {
-  noticeId String
-  notice CollectionNotice @relation(fields:[noticeId],references:[id],onDelete:Cascade)
-  userId String
-  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
-  readAt DateTime @default(now())
-  @@id([noticeId,userId])
-}
-
 // Shared usage by explicit mode/timezone/day; an override expires with that bucket.
 model AccountDay {
   accountId String
@@ -596,7 +498,7 @@ model ModelSettings {
 }
 
 // Recovery metadata only. Public IDs/fingerprints, never cookies or access URLs.
-// No cascade into account, CRM, or source records.
+// No cascade into account or source records.
 model CommentReadCheckpoint {
  id String @id @default(cuid())
  configId String

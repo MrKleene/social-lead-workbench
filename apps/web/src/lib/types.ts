@@ -1,10 +1,3 @@
-import type {Assessment} from '@crm/contracts';
-export type User = {
-  id: string;
-  name: string;
-  email: string;
-  role: "ADMIN" | "SALES";
-};
 export type Platform = "XHS" | "DOUYIN";
 export const platformLabel: Record<Platform, string> = {
   XHS: "小红书",

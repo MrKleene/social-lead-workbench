@@ -7,7 +7,6 @@ export const journeyStages = [
 ] as const;
 export type JourneyStage = typeof journeyStages[number]['id'];
 export function journeyStage(value: string | null): JourneyStage {
-  if(value==='handoff') return 'contact'; // Old fourth-step links retain the selected run at its final valid step.
   return journeyStages.find(stage => stage.id === value)?.id ?? 'collect';
 }
 /** A saved selection is scoped to its configuration. Never infer a run from another scope. */
