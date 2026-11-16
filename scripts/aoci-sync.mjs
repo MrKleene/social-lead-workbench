@@ -33,19 +33,24 @@ try {
 }
 
 const findings = Array.isArray(report.findings) ? report.findings : [];
-if (report.ok && findings.length === 0) {
-    console.log('AOCI 索引已对齐：没有待处理 finding。');
+// code_skipped 是 aoci 对二进制（图标等）的终态结论：它永远不会生成条目，也无法靠创作消除。
+// 把它当债务会让脚本永远失败，真正的对齐信号以 report.ok 为准。
+const blocking = findings.filter((finding) => finding?.code !== 'code_skipped');
+const skipped = findings.length - blocking.length;
+
+if (report.ok && blocking.length === 0) {
+    console.log(skipped ? `AOCI 索引已对齐：没有待处理 finding（${skipped} 个二进制被跳过）。` : 'AOCI 索引已对齐：没有待处理 finding。');
     process.exit(0);
 }
 
 const byCode = new Map();
-for (const finding of findings) {
+for (const finding of blocking) {
     const code = finding?.code ?? 'UNKNOWN';
     if (!byCode.has(code)) byCode.set(code, []);
     byCode.get(code).push(finding?.target ?? '');
 }
 
-console.log(`AOCI 索引未对齐：${findings.length} 项 finding`);
+console.log(`AOCI 索引未对齐：${blocking.length} 项 finding`);
 for (const [code, targets] of [...byCode].sort((a, b) => b[1].length - a[1].length)) {
     console.log(`  ${code}: ${targets.length}`);
     for (const target of targets.slice(0, 5)) console.log(`    - ${target}`);
