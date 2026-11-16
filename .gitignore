@@ -63,3 +63,6 @@ generated_images/
 
 # CodeGraph local index database (rebuild with `codegraph init -i`, never versioned)
 .codegraph/
+
+# MemSearch 本地记忆索引（可由会话重建，不入库）
+.memsearch/
