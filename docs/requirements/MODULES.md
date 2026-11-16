@@ -12,7 +12,6 @@
 | 合成验证 | 有隔离测试（mock / fixture / 本地库），**未碰真实平台** |
 | 真实未验收 | 需要真账号、真平台确认，当前没有证据 |
 | 仅预览 | 只能本地读数据生成结果，不能发 |
-| 已移除 | 代码与页面已删，只保留数据库历史 |
 
 ## 证据等级（不要混用）
 
@@ -97,7 +96,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 - 评论与私信分别选模板，模板按渠道隔离
 - 双选派生各渠道任务，**不回填历史**
-- 账号锁、共享日额度（`AccountDay`）、跨渠道去重、勿联系/已联系检查都在服务端执行
+- 账号锁、共享日额度（`AccountDay`）、跨渠道去重、已联系检查都在服务端执行
 - 未知结果保留占用与去重，不盲目重发；未知不当失败
 - 平台限流、验证、封禁后即停，不自动换号绕验证
 - 保存规则保持关闭；发送需独立授权
@@ -246,19 +245,6 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 ---
 
-## 10. 已退出模块
-
-线索池、销售分配、销售跟进、人工 CRM 任务、旧模拟联系、线索通知：
-
-- 前后端入口与执行代码已删除，相关 API 没有处理器
-- `Lead`、`FollowUp`、`Task`、`CollectionNotice` 等表仅为历史外键、归档与审计兼容保留
-- 没有管理界面，也不写入新记录
-- 发送侧仍**只读**检查勿联系/已联系与 `ContactLedger`，防止升级后重复联系
-
-不要为了"文件名零命中"移除这些只读检查。
-
----
-
 ## 页面与模块对照
 
 当前页面统一由 `apps/web/src/features/local-workbench` 的 `Local*` 组件承载。
@@ -283,8 +269,5 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 ## 已知不一致（待处理）
 
-1. `README.md` 提到 `apps/worker`，该目录不存在。
-2. `docs/ARCHITECTURE.md` 提到 `packages/domain/src/replies`，该目录不存在；`auth`、`audit`、`agents`、
-   `leads`、`followups`、`sources`、`tasks` 是空目录。
-3. `REQUIREMENTS.md` 写"评论与私信可分别选择"，但私信实际只有本地预览，没有发送通道。
+1. `REQUIREMENTS.md` 写"评论与私信可分别选择"，但私信实际只有本地预览，没有发送通道。
    按模块 6 理解，不要据需求文档认为 DM 已可发。

@@ -62,8 +62,8 @@ npm run check:legacy      # 可选：生成旧 Prisma 客户端并检查兼容�
 原生平台测试按可用资源执行，跳过项不等于已验收。原生构建、系统凭据与安装包验证命令见
 [桌面说明](docs/requirements/DESKTOP-LOCAL.md)。Windows 真机、签名和真实平台验收仍须单独完成。
 
-[文档索引](docs/README.md) · [当前需求](docs/requirements/REQUIREMENTS.md) · [模块说明](docs/requirements/MODULES.md) · [实现状态](docs/requirements/IMPLEMENTATION-STATUS.md) · [验收](docs/requirements/ACCEPTANCE.md)
+[文档索引](docs/README.md) · [状态总览](docs/requirements/OVERVIEW.md) · [当前需求](docs/requirements/REQUIREMENTS.md) · [模块说明](docs/requirements/MODULES.md) · [实现状态](docs/requirements/IMPLEMENTATION-STATUS.md) · [验收](docs/requirements/ACCEPTANCE.md)
 
-线索分配、销售跟进、人工 CRM 任务已退出产品，前后端入口及执行代码已移除。数据库中既有历史表和审计不物理删除；发送仍只读检查历史勿联系和已联系证据，防止升级造成重复联系。没有新的线索或跟进记录写入。2026-10 之前的带日期交付报告已删除，只保留在 git 历史中，不定义当前需求。
+2026-10 之前的带日期交付报告已删除，只保留在 git 历史中，不定义当前需求。
 
 本仓库不包含登录凭据、Cookie、模型密钥或真实消息内容。模拟测试不等于最新版本真实全流程验收。部署服务器和桌面打包的能力需要单独核验，不因本机通过即承诺支持。

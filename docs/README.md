@@ -5,15 +5,17 @@
 
 | 目录 | 回答的问题 |
 | --- | --- |
-| [`requirements/`](requirements/README.md) | 产品该做什么、边界在哪、现在做到哪 |
+| [`requirements/`](requirements/README.md) | 产品该做什么、边界在哪、现在做到哪（一页状态见 [OVERVIEW](requirements/OVERVIEW.md)） |
 | [`design/`](design/README.md) | 各模块怎么实现的、关键约束是什么 |
 
 ## 阅读路径
 
-**想快速了解这个产品** → [requirements/REQUIREMENTS.md](requirements/REQUIREMENTS.md)（6 个能力各一行）
+**想快速了解这个产品** → [requirements/OVERVIEW.md](requirements/OVERVIEW.md)（一页状态快照）
+→ [requirements/REQUIREMENTS.md](requirements/REQUIREMENTS.md)（6 个能力各一行）
 → [requirements/MODULES.md](requirements/MODULES.md)（10 个模块的职责与代码入口）
 
-**想知道某个功能现在能不能用** → [requirements/IMPLEMENTATION-STATUS.md](requirements/IMPLEMENTATION-STATUS.md)
+**想知道某个功能现在能不能用** → [requirements/OVERVIEW.md](requirements/OVERVIEW.md)（能力矩阵：代码状态 / 自动化证据 / 真实验收）
+→ [requirements/IMPLEMENTATION-STATUS.md](requirements/IMPLEMENTATION-STATUS.md)
 → [requirements/ACCEPTANCE.md](requirements/ACCEPTANCE.md)
 
 **想改代码** → 先看 `design/` 里对应模块的说明，再按 [工程结构](design/project-structure.md) 找到对应模块的源码与测试
