@@ -4,7 +4,7 @@
 .gitattributes[FV4T]: F:声明全仓库行尾归一策略，文本一律 LF 检出 | R:- | A:- | S:`* text=auto eol=lf` 是 AOCI 原始字节基线成立的前提；去掉它会让 Windows 检出整棵树被判 stale，全部 Entry 失效
 .gitignore[FS6T]: F:排除构建产物、本机数据、凭据与客户导出，只放行 schema 与迁移 SQL | R:code:.gitattributes | A:- | S:`!packages/local-runtime/src/schema.sql` 与 `!packages/local-runtime/src/migrations/*.sql` 是 SQL 进 Git 的唯一通道；新迁移目录不在白名单内会被静默忽略
 AGENTS.md[SU9M]: F:前端落地的强制约束：颜色与组件改法、六档字号、间距圆角、响应式、遗留方言棘轮、shadcn-admin 外壳边界、文案只写状态与动作 | R:code:apps/web/DESIGN.md,code:scripts/check-ui-conventions.mjs | A:必读顺序,禁止项,提交前检查 | S:§6.1 的 shadcn-admin 外壳文件不做任何豁免，上游写法不合规要就地改并在偏离表登记（现 6 个：search/config-drawer/theme-switch/command-menu/skip-to-main/ui.sidebar），同步上游后必须重放这张表，app-title.tsx 已删；§7 的 ui:check 批准例外只剩 styles/index.css 的 !important 一条，删文件必须同步删例外；§9 禁止解释性文案，判据是删掉这句用户还能不能完成操作
-README.md[SG5T]: F:产品定位、当前功能边界、本机开发命令与工程目录职责表 | R:code:docs/design/project-structure.md,code:apps/web/DESIGN.md | A:- | S:线索分配、销售跟进、人工 CRM 已退出产品，但数据库历史表与审计不物理删除；发送仍只读检查历史勿联系证据，防止重复联系
+README.md[SG5T]: F:产品定位、当前功能边界、本机开发命令与工程目录职责表 | R:code:docs/design/project-structure.md,code:apps/web/DESIGN.md | A:- | S:发送前仍只读 contact_ledger 的 blocked 与 first_contact_blocked，防止重复联系；2026-10 前的带日期交付报告只在 git 历史，不定义当前需求
 package-lock.json[FV9L]: F:npm 锁文件：锁定全部工作区与第三方依赖的解析结果与完整性哈希 | R:code:package.json | A:- | S:由 npm 生成，手改会让 CI 的 npm ci 直接失败；根 package.json 的 overrides 会在这里固化成解析结果，改 overrides 必须重新生成
 package.json[FV8T]: F:根工作区清单：apps 与 packages 两类通配工作区、Node ≥24.11、构建检查打包与 aoci 脚本入口 | R:code:packages/contracts/package.json,code:scripts/check-structure.mjs | A:- | S:workspaces 用通配符，新目录放进 apps 或 packages 即自动成为工作区；pretest 会先 build:core 再编测试用原生件，跳过它会让测试跑旧产物；engines 低于 24.11 直接不满足
 tsconfig.base.json[FV6T]: F:全仓 TS 基础配置：ES2022 目标、strict、esModuleInterop 与 JSON 模块解析 | R:code:packages/contracts/tsconfig.json | A:- | S:strict 为真，关掉会让未定义访问与空值穿透进运行时代码；各包只覆盖 module/moduleResolution/outDir，不要在这里放路径别名
@@ -180,7 +180,7 @@ welcome.tsx[CU5T]: F:首次使用引导页：三步说明（连接账号、配�
 ===/Users/kleene/projects/social-lead-workbench/apps/web/src/features/work/===
 auto-apply-status.tsx[CU3T]: F:自动保存失败时的行内重试提示，成功态只用 sr-only role=status 播报 | R:code:apps/web/src/features/work/use-auto-apply.ts,code:apps/web/src/components/feedback.tsx | A:AutoApplyStatus | S:成功不弹可见提示，避免每次改动都闪一次；只在非 busy 且有 error 时渲染重试
 draft-guard.tsx[AU7T]: F:未保存草稿守卫：登记 retained/modal/pending 三类草稿，路由切换与关闭窗口前弹确认 | R:code:apps/web/src/lib/router-compat.tsx,code:apps/web/src/features/work/navigation-policy.ts,code:apps/web/src/features/configuration/configuration-route.ts | A:DraftGuardProvider,useDraftGuard,useConfirmWorkspaceLeave,useConfirmDiscard | S:confirm 同一时刻只允许一个待决问题，重入直接返回 false；pending 类草稿一律禁止离开，它代表已提交未完成的写操作；deciding 标志防 blocker 连环触发，去掉会重复弹窗
-journey-model.ts[AD6T]: F:任务三阶段定义（采集、评论匹配、自动回复）与阶段解析、轮次选择规则 | R:code:apps/web/src/features/work/journey-step-state.ts,code:apps/web/src/features/collection/types.ts | A:journeyStages,journeyStage,selectedJourneyRun | S:历史链接里的 handoff 是已删除的第四步，必须映射到 contact 而不是回退 collect；selectedJourneyRun 在 config 缺失时返回 undefined，不能跨配置推断轮次
+journey-model.ts[AD6T]: F:任务三阶段定义（采集、评论匹配、自动回复）与阶段解析、轮次选择规则 | R:code:apps/web/src/features/work/journey-step-state.ts,code:apps/web/src/features/collection/types.ts | A:journeyStages,journeyStage,selectedJourneyRun | S:journeyStage 只认 collect/review/contact，其它值一律回落 collect；selectedJourneyRun 在 config 缺失时返回 undefined，不能跨配置推断轮次
 journey-step-state.ts[AD8T]: F:由轮次、JourneySummary 与开关推导三个步骤的状态、当前步、提示语与是否需要关注 | R:code:apps/web/src/features/work/journey-model.ts,code:apps/web/src/features/comment-review/run-review-model.ts,code:apps/web/src/features/collection/collection-outcome.ts | A:journeyStepState,JourneyStep,StepState | S:live 事件超过 15 秒或时间戳比现在早 5 秒以上即判 stale 并降级 unavailable；contacts.UNKNOWN 必须提示“勿重发”，不得回退成 failed；durable stages 的 ready 门禁优先于统计推断，否则排队中的审核会被显示成可执行
 journey-stepper.tsx[CU5S]: F:步骤条：按 state 选图标与圆标配色，aria-pressed 标记当前查看步，必要时挂状态条 | R:code:apps/web/src/features/work/journey-step-state.ts,code:apps/web/src/components/status-notice.tsx | A:JourneyStepper | S:只有 running 与 loading 加旋转类，并用 motion-reduce:animate-none 在减弱动效下停掉；details 非空、存在 unknown 步，或 attention 且全部 idle 时都必须渲染 StatusNotice
 navigation-policy.ts[AD6T]: F:判断 retained 类草稿是否会因为这次跳转真的丢失 | R:code:apps/web/src/features/work/draft-guard.tsx | A:shouldProtectDrafts | S:设置与模板页在工作区内保持挂载，只有离开 /work 才算风险；/configuration 单独按路径不等判断，不能套用 /work 前缀规则
@@ -266,10 +266,10 @@ DESKTOP-LOCAL.md[SB7S]: F:单人本地桌面版的实现范围与验证状态：
 IMPLEMENTATION-STATUS.md[SB5T]: F:当前实现范围与验证限制：入口引导、六个能力模块的现状与未验收项 | R:code:docs/requirements/MODULES.md | A:- | S:本文件只描述源码范围，不推断实时开关或账号状态；历史单次成功、mock 或 UI 开关都不能证明平台链路真实可用
 MODULES.md[SB7M]: F:十个模块的职责、输入输出、关键约束与代码入口，附状态词表与证据等级 | R:code:docs/requirements/REQUIREMENTS.md,code:docs/requirements/IMPLEMENTATION-STATUS.md | A:- | S:文档与代码冲突时以代码和测试为准并回头修本文；MOCK 与 XHS_FIXTURE 通过不代表平台可用，SIMULATED_SUCCESS 与真实回执是两种证据；配置管理的「内置配置」不可编辑不可删除，升级时按代码定义强制同步
 README.md[SB5T]: F:需求层索引与阅读顺序，以及四份主文档的维护时机 | R:code:docs/requirements/REQUIREMENTS.md,code:docs/README.md | A:- | S:需求与实现状态必须分开写，不能把“计划”写成“已支持”；新增需求先改 REQUIREMENTS 再改 MODULES，最后记 IMPLEMENTATION-STATUS
-REQUIREMENTS.md[SB6T]: F:产品范围与六项能力的验收边界，以及权限、数据与界面要求 | R:code:docs/requirements/MODULES.md | A:- | S:线索分配、销售跟进与人工 CRM 已不在范围内，但历史数据与风险证据不得删除；配置编辑、模型调用、采集与外发授权互不替代
+REQUIREMENTS.md[SB6T]: F:产品范围与六项能力的验收边界，以及权限、数据与界面要求 | R:code:docs/requirements/MODULES.md | A:- | S:本地桌面不使用账号角色模拟安全边界；配置编辑、模型调用、采集与外发授权互不替代；联系风险数据与审计保留，不重置业务状态
 direct-messages.md[SB5T]: F:私信只有预览的原因与放开的前置条件：入口、必须保持的限制、验证方式 | R:code:docs/design/dm-templates-and-day-limit.md | A:- | S:旧导入消息、昵称、标题或历史平台 ID 本身不授予回复资格；预览不产生发送授权、队列任务或额度预留，数据变化后旧预览失效
 inbox-reception.md[SB5T]: F:只接收件：15 分钟窗口、四个固定工具、RWP 推送与历史上限 | R:code:docs/design/conversation-replies.md | A:- | S:安装、开页与重启都不会自动启动收件；每个浏览器在 5 分钟租约到期前轮换，整窗 15 分钟；读消息会改变平台未读状态，系统未读独立存储
-three-step-automation.md[SB5T]: F:采集→匹配→回复三阶段流程与统一自动化设置的三组配置 | R:code:docs/requirements/MODULES.md | A:- | S:三组分别保存，没有跨组原子提交，也不能提示“全部保存成功”；保存规则默认关闭，切页签保留草稿但关闭需确认丢弃；旧 stage=handoff 链接用 replace 转 contact
+three-step-automation.md[SB5T]: F:采集→匹配→回复三阶段流程与统一自动化设置的三组配置 | R:code:docs/requirements/MODULES.md | A:- | S:三组分别保存，没有跨组原子提交，也不能提示“全部保存成功”；保存规则默认关闭，切页签保留草稿但关闭需确认丢弃
 
 ===/Users/kleene/projects/social-lead-workbench/integrations/desktop-mcp/===
 browser_path.go[IR7T]: F:桌面模式下定位随包浏览器：必须是绝对路径的普通文件，并按平台与文件名白名单校验 | R:code:integrations/inbox-mcp/browser/browser.go | A:desktopBrowser | S:绝不回退到用户缓存、系统浏览器或自动下载；只接受 darwin/arm64 的 Chromium 与 windows/amd64 的 chrome.exe，其他组合返回 PACKAGED_BROWSER_PLATFORM_UNSUPPORTED
@@ -444,7 +444,7 @@ account-execution-policy.ts[DB7T]: F:账号执行策略：区分历史回复限�
 
 ===/Users/kleene/projects/social-lead-workbench/packages/domain/src/auto-contact/===
 contact-policy.ts[DB8T]: F:自动联系的判定证据与目标：审核证据、配额桶与上海日界 | R:code:packages/contracts/src/auto-contact.ts,code:packages/domain/src/common/semantic-hash.ts | A:quotaBucket,shanghaiDay,ContactTarget,ReviewEvidence | S:配额桶固定 REAL:Asia/Shanghai:YYYY-MM-DD 形式，日界按 UTC+8 计算；判定只吃这里声明的证据字段，不能额外读库
-contact-sender.ts[DB7T]: F:发送请求与结果类型，以及发送前重验的接口契约 | R:code:packages/domain/src/auto-contact/contact-policy.ts | A:Actor,SendRequest,SendResult | S:桌面运行时没有会话层，Actor 只在本文件声明，不能反向引入 auth；BLOCKED/STOP_UNCONFIRMED 与 CONFIRMED 必须区分，未知不能当成功
+contact-sender.ts[DB7T]: F:发送请求与结果类型，以及发送前重验的接口契约 | R:code:packages/domain/src/auto-contact/contact-policy.ts | A:SendRequest,SendResult | S:桌面运行时没有会话层，本文件只声明发送数据与结果类型，不引入 auth；BLOCKED/STOP_UNCONFIRMED 与 CONFIRMED 必须区分，未知不能当成功
 selection-evidence.ts[DS6T]: F:选择证据的 zod schema：视口、框架、目标基数、绑定形态与编辑器状态等固定枚举 | R:code:integrations/inbox-mcp/exactreply/selection.go | A:selectionEvidenceSchema | S:这些字段只是诊断提示，绝不能用来授权输入、提交或确认；枚举值是封闭集合，加自由文本字段就破坏“不含正文/ID/URL”的前提
 xhs-reply-protocol.ts[DB8S]: F:小红书精确回复的纯协议校验：协议常量、ID 形态、请求与结果 schema | R:code:packages/domain/src/auto-contact/contact-sender.ts | A:XHS_REPLY_PROTOCOL | S:只做纯校验，信封只能由单独受审的传输层提供；platformId 必须是 24 位十六进制、digest 必须 64 位；协议常量改一个字符就等于换协议
 
@@ -486,7 +486,7 @@ tsconfig.test.json[FV4T]: F:迁移包测试编译配置：rootDir 改根、noEmi
 vitest.config.ts[FV3T]: F:迁移包测试配置，直接复用根 vitest 配置 | R:code:vitest.config.ts | A:- | S:只做转出，本地覆盖会让覆盖率与别名与其它包不一致
 
 ===/Users/kleene/projects/social-lead-workbench/packages/legacy-migration/prisma/===
-schema.prisma[PD9L]: F:旧 PostgreSQL 数据模型：线索、账号、采集、审核、发送、收件等表与枚举 | R:code:packages/legacy-migration/src/common/db.ts | A:- | S:只用于类型与显式导出，桌面写入路径不走这里；含已退出产品的 Lead 与跟进表，删表会丢失历史证据
+schema.prisma[PD9L]: F:旧 PostgreSQL 数据模型的只读镜像：账号、身份、采集、审核、发送与收件表及枚举 | R:code:packages/legacy-migration/src/common/db.ts | A:- | S:只用于类型与显式导出，桌面写入路径不走这里；表集合与 local-runtime 导入白名单对齐，白名单外实体导入整体拒绝
 
 ===/Users/kleene/projects/social-lead-workbench/packages/legacy-migration/scripts/===
 export.mjs[PO6T]: F:操作员专用的旧库导出：只读事务内逐表导出并受行数上限约束 | R:code:packages/legacy-migration/prisma/schema.prisma | A:exportLegacy | S:导入本模块不会连接数据库，必须显式传入 client；事务内先 SET TRANSACTION READ ONLY；默认行数上限 2000000
@@ -616,7 +616,7 @@ post-diagnostic.test.cjs[TR5T]: F:单帖诊断的测试：受管会话、只读�
 post-versions.test.cjs[TD5T]: F:笔记版本对比的测试：同 ID 文本变化、单侧观测与跨帖拒绝 | R:code:packages/local-runtime/src/post-versions.cjs | A:- | S:断言单侧缺失不得推断为删除；不同帖子比较必须 VERSION_POST_MISMATCH
 preferences-reporting.test.cjs[TO6T]: F:偏好、报表与工作台的测试：版本化写入、模板归档清理、日期范围与分页筛选 | R:code:packages/local-runtime/src/reporting.cjs | A:- | S:断言偏好写入要带版本，日期范围非法即拒绝，模型统计不带原文与成本；归档模板会让三步设置里的对应选择自动清空
 process-recovery.test.cjs[TR6T]: F:进程级恢复的测试：子进程写入后崩溃，重启能对账未决工作 | R:code:packages/local-runtime/src/queue.cjs | A:- | S:用 child_process 起独立进程写入再杀掉，验证 fence 与过期租约的对账；不依赖同一进程内的状态
-recovery.test.cjs[TR6T]: F:恢复预览与恢复的测试：保留账号与联系限制、变更后预览失效 | R:code:packages/local-runtime/src/recovery.cjs | A:- | S:断言恢复只解除暂停、不清除 account_holds 与勿联系台账；新任务出现后旧 previewHash 必须失效
+recovery.test.cjs[TR6T]: F:恢复预览与恢复的测试：保留账号与联系限制、变更后预览失效 | R:code:packages/local-runtime/src/recovery.cjs | A:- | S:断言恢复只解除暂停、不清除 account_holds 与 contact_ledger 的 blocked 记录；新任务出现后旧 previewHash 必须失效
 run-review.test.cjs[TB6T]: F:整轮批量审核的测试：授权绑定、预算原子拒绝与未知阻断 | R:code:packages/local-runtime/src/run-review.cjs | A:- | S:断言预算不足时在任何请求入队前就拒绝；出现 UNKNOWN 后剩余新请求全部阻断
 send-executor.test.cjs[TS6T]: F:发送执行器的测试：评论与私信两条路径、回执校验与停止证明 | R:code:packages/local-runtime/src/send-executor.cjs | A:- | S:断言回执不匹配时不标记成功；停止未确认时不得交接凭据
 service.test.cjs[TD5T]: F:配置服务的测试：初始化、100 条关键词保存、审核决定不产生发送授权、真删除与历史保护 | R:code:packages/local-runtime/src/service.cjs | A:- | S:断言初始化后 initialized 为真且无需登录身份；审核决定必须带版本且不新增任何授权记录；有采集历史的配置删除必须被拒
