@@ -233,7 +233,7 @@ export function ReplyHistoryDetail({ item }: { item: ReplyHistoryItem }) {
                 href={item.postUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="underline underline-offset-4"
+                className="text-primary underline-offset-4 hover:underline"
               >
                 查看原帖
               </a>

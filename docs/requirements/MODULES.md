@@ -228,7 +228,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 ## 9. 任务进度显示
 
-**职责**：读取持久化的任务与阶段状态，让页面显示当前动作、完成、暂停、失败与未知。
+**职责**：读取持久化的任务与阶段状态，让页面显示当前动作、完成、暂停、失败与未知；首屏仪表盘聚合采集笔记、审核结论、已回复与收到回复。
 
 **关键约束**
 
@@ -236,6 +236,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 任务列表每 2 秒刷新，通用记录查询每 5 秒刷新；不依赖旧 PostgreSQL SSE 服务
 - 历史查看与执行授权分离，刷新页面不能启动或重放任务
 - 失败、暂停、部分结果与 UNKNOWN 按实际持久化证据显示
+- 仪表盘「收到回复」只认同对象已确认发送且回复晚于发送的记录，普通评论不冒充回复成果；`/work` 永久重定向到 `/`
 
 **代码**：`apps/web/src/features/local-workbench/use-local-workbench.ts`、`use-local-records.ts`；
 `apps/desktop/src/preload.cjs`；`packages/local-runtime/src/workspace.cjs`
@@ -252,7 +253,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 | 路由 | 组件 | 对应模块 |
 | --- | --- | --- |
-| `/` | 跳转工作台概览；未初始化时显示首次使用引导 | — |
+| `/` | `LocalOverview` 仪表盘；未初始化时显示首次使用引导 | 9 任务进度显示（首屏聚合） |
 | `/welcome` | 使用引导，可从侧栏底部菜单重新打开 | 本地初始化不授予平台或模型执行权限 |
 | `/automation` | `LocalTaskPage` | 1 / 2 / 3 三步自动化 |
 | `/comment-review` | `LocalHistory` | 2 评论匹配（历史与审核） |
@@ -263,7 +264,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 | `/platforms` | `LocalCapabilities` | 8 账号与设备 |
 | `/reply-history` | `LocalReplyHistory` | 3 回复记录 |
 | `/data` | `LocalDataPage` | 数据与导出 |
-| `/work` | `LocalOverview` | 工作台总览 |
+| `/work` | 重定向到 `/` | — |
 | `/work/accounts` | `LocalAccountPage` | 8 账号 |
 | `/work/archive` | `LocalHistory` | 历史归档 |
 | `/work/notices` | `LocalNotices` | 本地通知记录 |

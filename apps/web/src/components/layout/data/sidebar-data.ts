@@ -38,7 +38,7 @@ export const sidebarData: SidebarData = {
     {
       title: '工作区',
       items: [
-        { title: '概览', url: '/work', icon: SquareStack },
+        { title: '仪表盘', url: '/', icon: SquareStack },
         { title: '自动化任务', url: '/automation', icon: PlayCircle },
         { title: '采集历史', url: '/work/archive', icon: Archive },
       ],

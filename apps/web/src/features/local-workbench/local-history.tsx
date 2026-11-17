@@ -338,9 +338,9 @@ export function LocalHistory({
                 ))}
                 <Link
                   to={`/automation?run=${review.run_id}&stage=review`}
-                  className="mt-2 inline-block text-caption underline underline-offset-4"
+                  className="mt-2 inline-block text-caption text-primary underline-offset-4 hover:underline"
                 >
-                  返回来源轮次 →
+                  返回来源轮次
                 </Link>
               </Disclosure>
             </RecordItem>

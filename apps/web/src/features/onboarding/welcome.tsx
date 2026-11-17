@@ -1,7 +1,7 @@
 import { ArrowRight, Layers, ListChecks, Monitor, ScanLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-export type WelcomeDestination = '/work/accounts' | '/work'
+export type WelcomeDestination = '/work/accounts' | '/'
 
 const steps = [
   { title: '连接平台账号', description: '扫码连接账号，确认平台登录状态。', icon: ScanLine },
@@ -54,7 +54,7 @@ export function Welcome({ onContinue, pending = false, error }: WelcomeProps) {
           <Button size='lg' pending={pending} onClick={() => onContinue('/work/accounts')}>
             连接账号 <ArrowRight aria-hidden='true' />
           </Button>
-          <Button size='lg' variant='outline' pending={pending} onClick={() => onContinue('/work')}>
+          <Button size='lg' variant='outline' pending={pending} onClick={() => onContinue('/')}>
             先进入工作台
           </Button>
         </div>

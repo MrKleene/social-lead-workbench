@@ -335,9 +335,9 @@ export function LocalUnreviewed() {
               {comment.error_code ? <p>{comment.error_code}</p> : null}
               <Link
                 to={`/automation?run=${comment.run_id}&stage=review`}
-                className="text-body underline underline-offset-4"
+                className="text-body text-primary underline-offset-4 hover:underline"
               >
-                查看原轮次审核与保护状态 →
+                查看原轮次审核与保护状态
               </Link>
             </RecordItem>
           ))}

@@ -40,7 +40,7 @@ class LocalService {
  modelHistory(input){return this.reporting().model(input);}
  automationReport(input){return this.reporting().automation(input);}
  workspace(){return new(require('./workspace.cjs').LocalWorkspace)(this.store);}
- workspaceOverview(){return this.workspace().overview();}
+ workspaceOverview(){return this.workspace().dashboard();}
  jobHistory(input){return this.workspace().jobs(input);}
  replyHistory(input){return this.workspace().replies(input);}
  accountDetails(){return this.workspace().accountDetails();}

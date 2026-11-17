@@ -296,7 +296,7 @@ export function LocalJobs({ runId }: { runId?: string }) {
               {job.run_id ? (
                 <Link
                   to={`/automation?run=${job.run_id}`}
-                  className="underline underline-offset-4"
+                  className="text-primary underline-offset-4 hover:underline"
                 >
                   查看本轮流程
                 </Link>
@@ -304,7 +304,7 @@ export function LocalJobs({ runId }: { runId?: string }) {
               {job.state === "UNKNOWN" ? (
                 <Link
                   to="/auto-contact/pending"
-                  className="underline underline-offset-4"
+                  className="text-primary underline-offset-4 hover:underline"
                 >
                   核对未知结果
                 </Link>
@@ -434,8 +434,11 @@ export function LocalNotices() {
             当前没有记录的全局暂停。
           </p>
         )}
-        <Link to="/data" className="text-body underline underline-offset-4">
-          查看数据与安全核对 →
+        <Link
+          to="/data"
+          className="text-body text-primary underline-offset-4 hover:underline"
+        >
+          查看数据与安全核对
         </Link>
       </SectionCard>
 

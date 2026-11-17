@@ -1,6 +1,7 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { LocalOverview } from '@/features/local-workbench/local-overview'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/_workbench/work/')({
-  component: LocalOverview,
+  beforeLoad: () => {
+    throw redirect({ to: '/', replace: true })
+  },
 })
