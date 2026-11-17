@@ -70,7 +70,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 - 只用可靠的本轮成员，不混入历史评论
 - 整轮采集完成后才开始（阶段屏障）
-- 展示全部评论与真实分数，不人为截断；超过模型容量时整帖停止，不偷偷抽样
+- 展示全部评论与真实分数，不人为截断；按 50 条/批调用，单批失败最多自动重试 3 次，耗尽后暂停等待人工恢复，不偷偷抽样
 - 模型失败与费用按实际调用记录，不用估算冒充账单
 - 审核目标带版本，目标版本变化后回复草稿必须显式确认
 
@@ -79,7 +79,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 `packages/local-runtime/src/adapters/collection/qwen-provider.ts`；
 `packages/local-runtime/src/automatic-review.cjs`、`review.cjs`、`run-review.cjs`
 
-**状态**：已接入 + 合成验证；付费模型调用需单独授权，未做真实付费验收
+**状态**：已接入 + 合成验证 + 真实单轮验证（2026-11-18，单账号 3 帖 427 条评论）；付费模型调用仍需单独授权，多轮与发送未验收
 
 **延伸**：[qwen-comment-matching.md](../design/qwen-comment-matching.md)、[model-settings-security.md](../design/model-settings-security.md)
 

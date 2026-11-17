@@ -11,6 +11,7 @@
 | [comment-reply-target.md](comment-reply-target.md) | 回复目标怎么选：直接目标取 `targetComment`，`subComments` 是讨论关系不是目标；嵌套语义仍待真实页面比对 |
 | [dm-templates-and-day-limit.md](dm-templates-and-day-limit.md) | 私信模板独立分类；`AccountDay.dailyLimitOverride` 只作用于 `REAL:Asia/Shanghai:YYYY-MM-DD` 单日桶，不动永久额度与占用数 |
 | [qwen-comment-matching.md](qwen-comment-matching.md) | 模型调用节奏：全局并发 1、两次开始至少间隔 1 秒、429 后退避 60 秒；脱敏、预算与证据守卫 |
+| [review-batching.md](review-batching.md) | 评论审核分批：50 条/批、单批最多 3 次尝试、可重试错误、耗尽暂停、结果未知暂停、评论级完成判定与失败原因展示 |
 | [model-settings-security.md](model-settings-security.md) | 桌面模型凭据：系统保护、保存与授权边界、备份和跨设备恢复 |
 | [dashboard.md](dashboard.md) | 首屏仪表盘：只读本机 SQLite 聚合，`/` 入口；「收到回复」必须有同对象 CONFIRMED 发送且回复晚于发送，14 天趋势与最近 5 条同口径；`/work` 重定向到 `/` |
 | [search-plan.md](search-plan.md) | 每轮采集在预览时打乱全部关键词、冻结 32 位种子与平台筛选（最多点赞 + 一周内），写进 scope 的 `readPlan.keywordPlan`；执行按种子确定性抽每词 1~剩余篇数配额，词间停 3~8 秒，每个词只读一页，搜完不足 batchLimit 时记「结果不足」 |
