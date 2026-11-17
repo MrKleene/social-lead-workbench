@@ -32,10 +32,10 @@ export const searchObservationSchema=z.object({
 });
 export type SearchObservation=z.infer<typeof searchObservationSchema>;
 export function safeSearchObservation(v:unknown):SearchObservation|undefined{const p=searchObservationSchema.safeParse(v);return p.success?p.data:undefined;}
-export const searchAttemptSchema=z.object({keywordOrdinal:z.number().int().min(1).max(8),requestStep:z.number().int().min(1).max(32),evidence:z.enum(['AVAILABLE','LEGACY_UNAVAILABLE','INVALID_DIAGNOSTIC']),returnedCount:count.nullable(),observation:searchObservationSchema.optional()}).strict().superRefine((v,c)=>{
+export const searchAttemptSchema=z.object({keywordOrdinal:z.number().int().min(1).max(10),requestStep:z.number().int().min(1).max(32),evidence:z.enum(['AVAILABLE','LEGACY_UNAVAILABLE','INVALID_DIAGNOSTIC']),returnedCount:count.nullable(),observation:searchObservationSchema.optional()}).strict().superRefine((v,c)=>{
  if((v.evidence==='AVAILABLE')!==!!v.observation||(v.observation&&v.returnedCount!==v.observation.acceptedCount))c.addIssue({code:'custom',message:'Inconsistent search attempt'});
 });
-export const searchAttemptsSchema=z.array(searchAttemptSchema).max(8).superRefine((rows,ctx)=>{
+export const searchAttemptsSchema=z.array(searchAttemptSchema).max(10).superRefine((rows,ctx)=>{
  if(rows.some((r,i)=>i>0&&(r.keywordOrdinal<=rows[i-1].keywordOrdinal||r.requestStep<=rows[i-1].requestStep)))ctx.addIssue({code:'custom',message:'Repeated or unordered search evidence'});
 });
 export type SearchAttempt=z.infer<typeof searchAttemptSchema>;

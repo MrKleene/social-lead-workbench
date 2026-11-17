@@ -59,9 +59,18 @@ const statusLabels: Record<string, string> = {
 };
 
 /** 采集轮次状态。颜色只表达状态，不表达层级（DESIGN.md §7）。 */
-function RunStatus({ status }: { status: string }) {
+function RunStatus({
+  status,
+  reason,
+}: {
+  status: string;
+  reason: string | null;
+}) {
   if (status === "COMPLETE")
     return <Badge variant="success">已完整采集</Badge>;
+  // 结果不足不是异常：平台按筛选条件就没有更多帖子了。
+  if (status === "PARTIAL" && reason === "SEARCH_EXHAUSTED")
+    return <Badge variant="secondary">结果不足</Badge>;
   if (status === "PARTIAL") return <Badge variant="warning">部分完成</Badge>;
   if (status === "FAILED") return <Badge variant="destructive">失败</Badge>;
   if (status === "RUNNING") return <Badge variant="secondary">进行中</Badge>;
@@ -365,7 +374,7 @@ export function LocalHistory({
                   {run.comments}
                 </TableCell>
                 <TableCell>
-                  <RunStatus status={run.status} />
+                  <RunStatus status={run.status} reason={run.reason} />
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">

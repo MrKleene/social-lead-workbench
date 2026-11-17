@@ -1,5 +1,5 @@
 import {savedReplyTarget,replyTargetSchema,commentCollectionLimits} from '@crm/contracts';
-import { boundedReadReportSchema, coverageDiagnosticSchema, safeCoverageDiagnostic, commentRulesSchema, semanticRulesSchema, safePostCoverUrl, savedNickname, safeAvatarUrl, savedPublishedAt, safeImageDiagnostics, imageDiagnosticsSchema } from '@crm/contracts';
+import { boundedReadReportSchema, coverageDiagnosticSchema, safeCoverageDiagnostic, commentRulesSchema, semanticRulesSchema, safePostCoverUrl, savedNickname, safeAvatarUrl, savedPublishedAt, safeImageDiagnostics, imageDiagnosticsSchema, searchFilterSchema, type SearchFilters } from '@crm/contracts';
 import { z } from "zod";
 import {postReferenceSchema} from "./post-reference";
 const normalize = (value: string) => value.normalize("NFKC").toLowerCase();
@@ -13,11 +13,17 @@ export const configInput = z.object({
     // 排除词已从产品移除（只被校验和保存，从未参与采集或匹配）。保留可选字段仅为
     // 解析历史 run 快照，任何新写入都不应再带它。
     excludeWords: z.array(word).max(20).optional(), batchLimit: z.number().int().min(1).max(10),
+    // 旧版权重计划：有关键词配额时 keywords 是计划顺序的子集。新计划不再使用。
+    keywordLimits:z.array(z.number().int().min(1).max(10)).max(100).optional(),
+    // 本轮随机搜索计划的种子与筛选；keywords 即计划冻结的关键词顺序。
+    searchSeed:z.string().regex(/^[a-f0-9]{32}$/).optional(),
+    searchFilters:searchFilterSchema.optional(),
     enabled: z.boolean(),
     defaultExecutionAccountId: z.string().min(1).max(100).nullable().optional(),
     defaultReplyTemplateId: z.string().min(1).max(100).nullable().optional(),
 }).strict().refine(v => v.mode === "MOCK" || v.platform === "XHS", "MCP只支持小红书")
-    .refine(v => new Set(v.keywords.map(normalize)).size === v.keywords.length, "关键词不能重复");
+    .refine(v => new Set(v.keywords.map(normalize)).size === v.keywords.length, "关键词不能重复")
+    .refine(v => !v.keywordLimits || v.keywordLimits.length === v.keywords.length, "关键词配额必须与关键词一一对应");
 export type ConfigInput = z.infer<typeof configInput>;
 /** Private run metadata is not a public collection configuration field. */
 export function runConfigSnapshot(value:unknown){if(!value||typeof value!=='object'||Array.isArray(value))return value;const {strictStages:_,...config}=value as Record<string,unknown>;return config;}
@@ -64,7 +70,7 @@ export interface ReadAdapter {
     confirmCheckpoint?(post:Post):void;
     finishChunks?(post:Post,signal:AbortSignal):Promise<void>;
     receivedComments?(post:Post):Comment[];
-    search(keyword: string, cursor: string | undefined, signal: AbortSignal): Promise<Page<Post>>;
+    search(keyword: string, cursor: string | undefined, signal: AbortSignal, filters?: SearchFilters): Promise<Page<Post>>;
     post(post: Post, signal: AbortSignal, remainingComments?:number): Promise<Post>;
     canContinuePost?(post:Post):boolean;
     continuePost?(post:Post,signal:AbortSignal,remainingComments?:number):Promise<Post>;

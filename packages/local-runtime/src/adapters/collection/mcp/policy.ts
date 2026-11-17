@@ -5,7 +5,14 @@ export const mcpModes = ['XHS_FIXTURE', 'XHS_MCP'] as const;
 export type McpMode = typeof mcpModes[number];
 export const toolArguments = {
   check_login_status: z.object({}).strict(),
-  search_feeds: z.object({ keyword: z.string().trim().min(1).max(40) }).strict(),
+  search_feeds: z.object({
+    keyword: z.string().trim().min(1).max(40),
+    // 平台搜索面板的筛选；Go 端按文本点选，值必须与页面文案完全一致。
+    filters: z.object({
+      sort_by: z.enum(['综合', '最新', '最多点赞', '最多评论', '最多收藏']).optional(),
+      publish_time: z.enum(['不限', '一天内', '一周内', '半年内']).optional(),
+    }).strict().optional(),
+  }).strict(),
   get_feed_detail: z.object({read_chunks:commentChunkRequestSchema.optional(),read_continuation:z.discriminatedUnion("mode",[z.object({mode:z.literal("START")}).strict(),z.object({mode:z.literal("RESUME"),token:z.string().regex(/^[a-f0-9]{64}$/)}).strict()]).optional(), read_window:boundedReadConfigSchema.optional(), feed_id: z.string().min(1).max(200), xsec_token: z.string().min(1).max(4096), load_all_comments: z.literal(false), click_more_replies: z.literal(false) }).strict(),
 };
 export type ReadTool = keyof typeof toolArguments;

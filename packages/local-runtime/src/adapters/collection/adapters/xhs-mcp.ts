@@ -77,9 +77,11 @@ export class XhsMcpAdapter implements ReadAdapter {
         const body=text(await this.transport.call(name,args,signal),stage);
         try{return JSON.parse(body) as unknown;}catch{throw invalidSource(stage,'JSON_PARSE');}
     }
-    async search(keyword: string, cursor: string | undefined, signal: AbortSignal): Promise<Page<Post>> {
+    async search(keyword: string, cursor: string | undefined, signal: AbortSignal, filters?: {sortBy?: string; publishTime?: string}): Promise<Page<Post>> {
         if (cursor) throw new ReadFailure("UNSUPPORTED");
-        const data = parseSource(z.object({ searchObservation:z.unknown().optional(),feeds: z.array(z.object({ id: rawId, xsecToken: z.string().min(1).max(4096), noteCard: z.object({ displayTitle: z.string().max(500).nullish(), cover:z.unknown().optional() }).optional() })).max(200).nullable() }),await this.read("search_feeds", { keyword }, signal),"search");
+        const args: Record<string, unknown> = { keyword };
+        if (filters) args.filters = { ...(filters.sortBy ? { sort_by: filters.sortBy } : {}), ...(filters.publishTime ? { publish_time: filters.publishTime } : {}) };
+        const data = parseSource(z.object({ searchObservation:z.unknown().optional(),feeds: z.array(z.object({ id: rawId, xsecToken: z.string().min(1).max(4096), noteCard: z.object({ displayTitle: z.string().max(500).nullish(), cover:z.unknown().optional() }).optional() })).max(200).nullable() }),await this.read("search_feeds", args, signal),"search");
         const observation=safeSearchObservation(data.searchObservation);
         const count=data.feeds?.length||0;
         const consistent=observation&&observation.acceptedCount===count;

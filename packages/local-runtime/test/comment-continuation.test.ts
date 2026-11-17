@@ -14,6 +14,20 @@ describe('live comment continuation: synthetic, no browser/platform',()=>{
  expect(t.call.mock.calls.filter(c=>c[0]==='get_feed_detail')).toHaveLength(3);
  expect(result.status).toBe('PARTIAL');expect(result.posts[0].complete).toBe(false);
  });
+ it('stops on a platform limit as a partial run and keeps what it already read',async()=>{
+ const t=fixture();
+ t.call.mockImplementation(async(name:string,args:Record<string,unknown>)=>{
+  if(name==='check_login_status')return {content:[{type:'text',text:'✅ 已登录\n'}]};
+  if(name==='search_feeds')return {content:[{type:'text',text:JSON.stringify({feeds:[{id:'synthetic',xsecToken:'SYNTHETIC_REFERENCE'}]})}]};
+  expect(args.read_continuation).toEqual({mode:'START'});
+  return {content:[{type:'text',text:JSON.stringify({feed_id:'synthetic',data:{note:{noteId:'synthetic',title:'合成'},comments:{list:[{id:'root0',content:'合成正文0',userInfo:{userId:'synthetic-user'},subComments:[]},{id:'root1',content:'合成正文1',userInfo:{userId:'synthetic-user'},subComments:[]}]},boundedRead:{...report(1,2,false),state:'PARTIAL',reason:'PLATFORM_LIMIT',rootStop:'NOT_RUN',replyStop:'NOT_RUN'},continuation:{state:'ENDED'}}})}]};
+ });
+ const a=new XhsMcpAdapter(t,true,'XHS_MCP',window);
+ const r=await collect(a,spec,async()=>false);
+ expect(r.reason).toBe('PLATFORM_LIMIT');expect(r.status).toBe('PARTIAL');expect(r.posts[0].comments).toHaveLength(2);
+ expect(runCoverage(r)?.reasons).toContain('PLATFORM_LIMIT');
+ expect(t.call.mock.calls.filter(c=>c[0]==='get_feed_detail')).toHaveLength(1);
+ });
  it('does not repeat an uncertain failed continuation and keeps prior checkpoint',async()=>{
  const t=fixture(2),a=new XhsMcpAdapter(t,true,'XHS_MCP',window),saved:any[]=[];
  const r=await collect(a,spec,async()=>false,undefined,async p=>{saved.push(structuredClone(p));});

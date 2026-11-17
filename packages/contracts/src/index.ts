@@ -48,6 +48,8 @@ export * from './bounded-read';
 
 export * from './search-observation';
 
+export * from './search-plan';
+
 export * from './run-coverage';
 
 export * from './comment-checkpoint';
@@ -59,7 +61,7 @@ export * from './reply-target';
 export * from './comment-review';
 export * from './semantic-output-errors';
 
-export {rootScopedRepliesExhausted} from './root-reply-scope';
+export {rootScopedRepliesConsistent,rootScopedRepliesExhausted} from './root-reply-scope';
 export {observedReadCounts} from './observed-read';
 export * from './auto-contact';
 

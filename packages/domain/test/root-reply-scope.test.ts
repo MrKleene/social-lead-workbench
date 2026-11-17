@@ -1,11 +1,13 @@
 import {describe,it,expect} from 'vitest';
 import {safeBoundedReadReport} from '@crm/contracts';
-import {rootScopedRepliesExhausted} from '@crm/contracts';
+import {rootScopedRepliesConsistent,rootScopedRepliesExhausted} from '@crm/contracts';
 const exact=(value:any)=>({state:'EXACT' as const,value}),missing=()=>({state:'MISSING' as const,value:null});
 function sample(){return {status:'OK',list:'EXACT',ready:{document:'complete',container:true,rootEndVisible:true,rootScopeExact:true,replyControls:0},total:exact(6),hasMore:exact(false),cursor:'NONEMPTY',loaded:{roots:3,replies:3,uniqueKnown:6,missingIds:0,duplicateIds:0,invalidNodes:0},groups:Array.from({length:3},(_,i)=>[{ordinal:i*2+1,parent:null,depth:0,declared:exact(1),loaded:exact(1)},{ordinal:i*2+2,parent:i*2+1,depth:1,declared:missing(),loaded:missing()}]).flat(),findings:[]} as any;}
 function report(s=sample()){return {version:1,state:'COMPLETE',reason:'DECLARED_TREE_EXHAUSTED',rootStop:'ROOT_END',replyStop:'DECLARED_REPLIES_LOADED',rootActions:0,replyActions:1,excludedRoots:0,elapsedMs:9,initial:s,final:s,retained:s} as any;}
 describe('root-scoped flat replies, synthetic closure evidence',()=>{
  it('accepts three closed roots without inventing leaf zero counters',()=>{const s=sample(),before=JSON.stringify(s);expect(rootScopedRepliesExhausted(s)).toBe(true);expect(safeBoundedReadReport(report(s))?.state).toBe('COMPLETE');expect(JSON.stringify(s)).toBe(before);});
+ it('accepts a closed tree when the platform total lags',()=>{const s=sample();s.total=exact(7);expect(rootScopedRepliesExhausted(s)).toBe(false);expect(rootScopedRepliesConsistent(s)).toBe(true);});
+ it('accepts chunk evidence whose platform total exceeds loaded comments',()=>{const s=sample();s.total=exact(7);const d=report(s);d.chunkSummary={roots:3,replies:3,unique:6,declared:exact(7),hasMore:exact(false),unknownReplyGroups:3,rootScopedLeafGroups:3,replyDeficit:0,replyExcess:0,rootEndVisible:true,replyControls:0,scopeExact:true,emptyVisible:false};expect(safeBoundedReadReport(d)?.state).toBe('COMPLETE');});
  it.each([
   ['observed sample without end',(s:any)=>s.ready.rootEndVisible=false],
   ['unknown root',(s:any)=>s.groups[0].declared=missing()],

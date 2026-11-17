@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { safeRunCoverage } from "@crm/contracts";
 import { Disclosure } from "@/components/disclosure";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +41,9 @@ export function LocalPosts({
     posts.setPlan(null);
     posts.setConsent(false);
   };
+  const searchPlan = posts.progress.data
+    ? safeRunCoverage(posts.progress.data.run.coverage)?.searchPlan
+    : undefined;
 
   return (
     <div className="flex flex-col gap-3 border-t pt-4">
@@ -49,6 +53,15 @@ export function LocalPosts({
           收起笔记
         </Button>
       </div>
+
+      {searchPlan?.length ? (
+        <p className="break-words text-body text-muted-foreground">
+          本轮关键词：
+          {searchPlan
+            .map((item) => item.keyword + "（" + item.found + " 篇）")
+            .join("、")}
+        </p>
+      ) : null}
 
       {posts.error ? (
         <ErrorNotice error={posts.error} />

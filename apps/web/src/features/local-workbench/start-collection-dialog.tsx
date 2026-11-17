@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,33 @@ export function StartCollectionDialog({
   const workflow = useLocalRecords("workflowOverview", undefined, {
     enabled: open,
   });
+  /** 本轮搜索计划由本机随机抽取并冻结；每次打开弹窗重新抽一次，展示的和授权的是同一份。 */
+  const [planRound, setPlanRound] = useState(0);
+  useEffect(() => {
+    if (open) setPlanRound((round) => round + 1);
+  }, [open]);
+  const planPreview = useQuery({
+    queryKey: [
+      "local",
+      "collectionPlan",
+      configId,
+      preferences.data?.accountId ?? null,
+      preferences.data?.batchLimit ?? 0,
+      planRound,
+    ],
+    queryFn: () =>
+      localApi("previewCollection", {
+        configId,
+        accountId: preferences.data!.accountId,
+        batchLimit: preferences.data!.batchLimit,
+        policyIds: [],
+        ruleIds: [],
+      }),
+    enabled: open && !!configId && !!preferences.data?.accountId,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+  const keywordPlan = planPreview.data?.keywordPlan;
 
   const start = useMutation({
     mutationFn: async (input: {
@@ -85,6 +113,7 @@ export function StartCollectionDialog({
         batchLimit: input.batchLimit,
         policyIds: input.policyId ? [input.policyId] : [],
         ruleIds,
+        keywordPlan,
       });
       const result = await localApi("authorizeCollection", {
         scope: preview.scope,
@@ -121,7 +150,11 @@ export function StartCollectionDialog({
   const ready = !!preferences.data;
 
   const failure =
-    selection.error ?? preferences.error ?? configs.error ?? start.error;
+    selection.error ??
+    preferences.error ??
+    configs.error ??
+    planPreview.error ??
+    start.error;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -195,7 +228,7 @@ export function StartCollectionDialog({
             取消
           </Button>
           <Button
-            disabled={!ready}
+            disabled={!ready || planPreview.isPending}
             pending={start.isPending}
             onClick={() =>
               start.mutate({

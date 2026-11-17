@@ -4,7 +4,7 @@ const {LocalError,hash}=require('./database.cjs');
 const {LocalQueue}=require('./queue.cjs');
 const {LocalCollection}=require('./collection.cjs');
 const policy=require('@crm/local-runtime/policy');
-const {collect,runCoverage,XhsMcpAdapter,readWindow}=require('@crm/local-runtime/collection-provider');
+const {collect,runCoverage,XhsMcpAdapter,readWindow,postTimeBudget,longReadPacing,roundTimeBudget}=require('@crm/local-runtime/collection-provider');
 // Session runtime is a reviewed, packaged native resource owner. It is never a
 // URL, process path, Cookie or transport object supplied by a renderer.
 class LocalCollectionExecutor {
@@ -40,7 +40,12 @@ class LocalCollectionExecutor {
      return {...entry,sourceReferenceRef:id??null};
     });this.collection.checkpoint(lease,runId,entries);
    };
-   const result=await collect(adapter,config,async()=>{try{await guard();return false;}catch{return true;}},{requests:10240,pagesPerStream:4,comments:policy.commentCollectionLimits.commentsPerPost*config.batchLimit-restored.length,callMs:40000,runMs:1800000},save,selected);
+   // The round ceiling follows the per-post budgets; the hard cap is the last backstop
+   // for a pathological batch of huge posts. The queue stays strictly serial, so this
+   // is the only time bound a round can rely on.
+   const batch=Number.isFinite(config.batchLimit)&&config.batchLimit>0?config.batchLimit:1;
+   const runMs=Math.min(roundTimeBudget.hardMaxMs,postTimeBudget.maxMs*batch+roundTimeBudget.overheadMs);
+   const result=await collect(adapter,config,async()=>{try{await guard();return false;}catch{return true;}},{requests:10240,pagesPerStream:4,comments:policy.commentCollectionLimits.commentsPerPost*config.batchLimit-restored.length,callMs:40000,runMs,postBudget:postTimeBudget,pacing:longReadPacing},save,selected);
    if(result.discarded||result.status==='FAILED'||result.status==='PAUSED'){
     // collect 已经把真实失败原因和阶段诊断算出来了，不能在这里丢掉换成笼统码。
     const failure=new LocalError('COLLECTION_INCOMPLETE');

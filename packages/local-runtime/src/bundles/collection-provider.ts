@@ -2,4 +2,4 @@
 export {collect} from '@crm/domain/collection/collector';
 export {runCoverage} from '@crm/domain/collection/run-coverage';
 export {XhsMcpAdapter} from '../adapters/collection/adapters/xhs-mcp';
-export {readWindow} from '@crm/domain/collection/comment-read-policy';
+export {readWindow,postTimeBudget,longReadPacing,roundTimeBudget} from '@crm/domain/collection/comment-read-policy';

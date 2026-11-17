@@ -19,6 +19,8 @@ import { LocalReviewDialog } from "./local-review-dialog";
 import { LocalRunReview } from "./local-run-review";
 import { StartCollectionDialog } from "./start-collection-dialog";
 import { localApi, type LocalMethods } from "./local-api";
+import { safeRunCoverage } from "@crm/contracts";
+import { reasonLabels } from "../collection/types";
 import { useLocalRecords } from "./use-local-records";
 
 const STAGES = ["collect", "review", "contact"] as const;
@@ -280,6 +282,13 @@ function RunWorkspace({
   const collectActive = ACTIVE_RUN.includes(runStatus);
   // 采到了笔记但评论树被读取预算截断：仍是有效轮次，不能一直显示「等待采集完成」。
   const collectPartial = runStatus === "PARTIAL" && (data?.posts ?? 0) > 0;
+  // 有界搜索会保留 PARTIAL，但每篇帖子的评论读取可能都已完整；两种状态要分开表达。
+  const coverage = data ? safeRunCoverage(data.run.coverage) : undefined;
+  const postsComplete =
+    !!coverage &&
+    !!data &&
+    coverage.posts.length === data.posts &&
+    coverage.posts.every((post) => post.complete);
   const collectSettled =
     (runStatus === "COMPLETE" && !data?.run.reason) || collectPartial;
   const reviewActive =
@@ -429,13 +438,19 @@ function RunWorkspace({
           onSelect={onStage}
           caption={
             collectPartial
-              ? "已采集 · 覆盖不完整"
+              ? postsComplete
+                ? `已采集 · ${data?.posts ?? 0} 篇`
+                : "已采集 · 覆盖不完整"
               : data?.run.reason
                 ? "本轮已停止"
                 : "进行中"
           }
           attention={!!data?.run.reason && !collectPartial}
-          details={data?.run.reason ? [data.run.reason] : []}
+          details={
+            data?.run.reason
+              ? [reasonLabels[data.run.reason] ?? data.run.reason]
+              : []
+          }
         />
       </SectionCard>
 
