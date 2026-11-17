@@ -10,9 +10,8 @@ import { RecordItem, RecordList } from "@/components/patterns/record-list";
 import { SectionCard } from "@/components/patterns/section-card";
 import { ErrorNotice } from "@/components/feedback";
 import type { DashboardReply } from "./local-api";
-import { LocalDataManagement } from "./local-data-management";
+import { LocalTestDataReset } from "./local-test-data-reset";
 import { useLocalRecords } from "./use-local-records";
-import { useLocalWorkbench } from "./use-local-workbench";
 
 export function LocalOverview() {
   const query = useLocalRecords("workspaceOverview");
@@ -318,37 +317,12 @@ function RecentReply({ reply }: { reply: DashboardReply }) {
 export { LocalInboxPage } from "./local-inbox-page";
 
 export function LocalDataPage() {
-  const workbench = useLocalWorkbench();
   return (
     <>
-      <PageHeader title="数据与恢复" />
-      {workbench.error ? (
-        <ErrorNotice error={workbench.error} />
-      ) : null}
-      {workbench.notice ? (
-        <p role="status" className="text-body text-muted-foreground">
-          {workbench.notice}
-        </p>
-      ) : null}
-      <SectionCard title="备份与恢复">
-        <div className="flex flex-wrap gap-3">
-          <Button
-            variant="outline"
-            pending={workbench.backup.isPending}
-            onClick={() => workbench.backup.mutate()}
-          >
-            创建本地备份
-          </Button>
-          <Button
-            variant="outline"
-            pending={workbench.restore.isPending}
-            onClick={() => workbench.restore.mutate()}
-          >
-            校验并恢复副本
-          </Button>
-        </div>
+      <PageHeader title="数据管理" />
+      <SectionCard title="删除测试数据">
+        <LocalTestDataReset />
       </SectionCard>
-      <LocalDataManagement />
     </>
   );
 }

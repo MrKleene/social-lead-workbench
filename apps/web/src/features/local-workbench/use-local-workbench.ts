@@ -12,7 +12,5 @@ export function useLocalWorkbench(){
  const remove=useMutation({mutationFn:(input:{id:string;revision:number})=>localApi('deleteConfiguration',input),onSuccess:refresh});
  const key=useMutation({mutationFn:(value:string)=>localApi('saveModelKey',{key:value}),onSuccess:()=>{setNotice('模型密钥已由系统保护后保存。');void refresh();}});
  const cancel=useMutation({mutationFn:(id:string)=>localApi('cancelJob',{id}),onSuccess:()=>{setNotice('已请求取消。');void refresh();}});
- const backup=useMutation({mutationFn:()=>localApi('backup'),onSuccess:r=>setNotice('备份已保存：'+r.name)});
- const restore=useMutation({mutationFn:()=>localApi('restore'),onSuccess:r=>{if(r.restored){setNotice('已恢复到独立副本，待核对：'+r.name);void refresh();}}});
- return {status,configs,jobs,initialize,save,remove,key,backup,restore,cancel,notice,error:status.error||configs.error||jobs.error||initialize.error||save.error||remove.error||key.error||backup.error||restore.error||cancel.error};
+ return {status,configs,jobs,initialize,save,remove,key,cancel,notice,error:status.error||configs.error||jobs.error||initialize.error||save.error||remove.error||key.error||cancel.error};
 }

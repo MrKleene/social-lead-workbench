@@ -62,7 +62,7 @@ export const sidebarData: SidebarData = {
         { title: '账号中心', url: '/work/accounts', icon: UsersRound },
         { title: '运行异常', url: '/work/notices', icon: Archive },
         { title: '平台能力', url: '/platforms', icon: ShieldCheck },
-        { title: '数据与恢复', url: '/data', icon: Database },
+        { title: '数据管理', url: '/data', icon: Database },
       ],
     },
   ],

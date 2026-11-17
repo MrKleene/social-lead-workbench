@@ -24,6 +24,7 @@ import {
   ReplyHistoryTable,
 } from "@/features/auto-contact/reply-history-content";
 import { LocalEvidence } from "./local-evidence";
+import { LocalRecoveryCheck } from "./local-recovery-hold";
 import { useLocalAction, useLocalRecords } from "./use-local-records";
 
 const labels: Record<string, string> = {
@@ -434,13 +435,9 @@ export function LocalNotices() {
             当前没有记录的全局暂停。
           </p>
         )}
-        <Link
-          to="/data"
-          className="text-body text-primary underline-offset-4 hover:underline"
-        >
-          查看数据与安全核对
-        </Link>
       </SectionCard>
+
+      <LocalRecoveryCheck />
 
       <SectionCard title="异常与恢复历史">
         {items.length ? (
