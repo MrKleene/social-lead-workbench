@@ -16,9 +16,9 @@ test('per-configuration defaults persist with CAS, do not grant execution, and n
 test('step toggles persist with CAS and drop selections that no longer exist',t=>{
  const f=fixture(t),p=new LocalPreferences(f.store);
  f.store.db.exec("INSERT INTO configurations(id,kind,name,body,updated_at) VALUES('ct','COMMENT_TEMPLATE','评论模板','{\"text\":\"合成评论回复\"}',0),('dt','DM_TEMPLATE','私信模板','{\"text\":\"合成私信\"}',0)");
- assert.deepEqual(p.steps(),{version:0,autoReview:false,policyId:null,autoReply:false,commentTemplateId:null,dmTemplateId:null,replyAccountIds:[],threshold:80});
- const saved=p.saveSteps({version:0,autoReview:true,policyId:'policy',autoReply:true,commentTemplateId:'ct',dmTemplateId:'dt',replyAccountIds:['account'],threshold:85});
- assert.equal(saved.version,1);assert.equal(saved.commentTemplateId,'ct');assert.equal(saved.dmTemplateId,'dt');assert.equal(saved.threshold,85);
+ assert.deepEqual(p.steps(),{version:0,autoReview:false,policyId:null,autoReply:false,commentTemplateIds:[],dmTemplateIds:[],replyAccountIds:[],threshold:80});
+ const saved=p.saveSteps({version:0,autoReview:true,policyId:'policy',autoReply:true,commentTemplateIds:['ct'],dmTemplateIds:['dt'],replyAccountIds:['account'],threshold:85});
+ assert.equal(saved.version,1);assert.deepEqual(saved.commentTemplateIds,['ct']);assert.deepEqual(saved.dmTemplateIds,['dt']);assert.equal(saved.threshold,85);
  assert.deepEqual(saved.replyAccountIds,['account']);
  assert.throws(()=>p.saveSteps({...saved,replyAccountIds:['missing']}),/PREFERRED_ACCOUNT_UNAVAILABLE/);
  assert.throws(()=>p.saveSteps({...saved,replyAccountIds:['account','account']}),/INVALID_AUTOMATION_STEPS/);
@@ -26,10 +26,11 @@ test('step toggles persist with CAS and drop selections that no longer exist',t=
  assert.throws(()=>p.saveSteps({...saved,version:0}),/PREFERENCE_CHANGED/);
  assert.throws(()=>p.saveSteps({...saved,threshold:101}),/INVALID_AUTOMATION_STEPS/);
  assert.throws(()=>p.saveSteps({...saved,policyId:'missing'}),/REVIEW_POLICY_CHANGED/);
- assert.throws(()=>p.saveSteps({...saved,commentTemplateId:'missing'}),/CONTACT_TEMPLATE_CHANGED/);
- assert.throws(()=>p.saveSteps({...saved,commentTemplateId:'dt'}),/CONTACT_TEMPLATE_CHANGED/);
+ assert.throws(()=>p.saveSteps({...saved,commentTemplateIds:['missing']}),/CONTACT_TEMPLATE_CHANGED/);
+ assert.throws(()=>p.saveSteps({...saved,commentTemplateIds:['dt']}),/CONTACT_TEMPLATE_CHANGED/);
+ assert.throws(()=>p.saveSteps({...saved,commentTemplateIds:['ct','ct']}),/INVALID_AUTOMATION_STEPS/);
  f.store.db.exec("UPDATE configurations SET archived=1 WHERE id='ct'");
- const cleared=p.steps();assert.equal(cleared.commentTemplateId,null);assert.equal(cleared.dmTemplateId,'dt');
+ const cleared=p.steps();assert.deepEqual(cleared.commentTemplateIds,[]);assert.deepEqual(cleared.dmTemplateIds,['dt']);
  f.store.db.exec("UPDATE accounts SET state='ARCHIVED'");assert.deepEqual(p.steps().replyAccountIds,[]);
 });
 
@@ -41,7 +42,7 @@ test('legacy defaults are restored as selections only and survive restart withou
 });
 
 test('local account diagnostics retain channel risks, zero quota and unknown without exposing a session',t=>{
- const f=fixture(t),r=new LocalReporting(f.store);f.store.db.exec("UPDATE accounts SET daily_limit=0; INSERT INTO account_holds VALUES('h','account','COMMENT','REPLY_DISABLED','synthetic',0)");const d=r.account({accountId:'account'});assert.equal(d.platformSessionVerified,false);assert.equal(d.remaining,0);assert.ok(d.channels[0].reasons.includes('ACCOUNT_HAS_RETAINED_RESTRICTION'));assert.ok(!d.channels[1].reasons.includes('ACCOUNT_HAS_RETAINED_RESTRICTION'));assert.ok(d.channels.every(c=>c.reasons.includes('DAILY_QUOTA_EXHAUSTED')));assert.ok(!JSON.stringify(d).includes('fixture-session'));assert.equal(f.store.db.prepare('SELECT count(*) n FROM jobs').get().n,0);
+ const f=fixture(t),r=new LocalReporting(f.store);f.store.db.exec("UPDATE accounts SET daily_limit=0; INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES('h','account','COMMENT','REPLY_DISABLED','synthetic',0)");const d=r.account({accountId:'account'});assert.equal(d.platformSessionVerified,false);assert.equal(d.remaining,0);assert.ok(d.channels[0].reasons.includes('ACCOUNT_HAS_RETAINED_RESTRICTION'));assert.ok(!d.channels[1].reasons.includes('ACCOUNT_HAS_RETAINED_RESTRICTION'));assert.ok(d.channels.every(c=>c.reasons.includes('DAILY_QUOTA_EXHAUSTED')));assert.ok(!JSON.stringify(d).includes('fixture-session'));assert.equal(f.store.db.prepare('SELECT count(*) n FROM jobs').get().n,0);
 });
 
 test('model statistics distinguish occupancy and completion, unreviewed rows and published dates',t=>{

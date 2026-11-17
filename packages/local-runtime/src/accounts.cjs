@@ -15,13 +15,13 @@ class LocalAccounts{
   this.store.transaction(()=>{
    const old=this.db.prepare('SELECT * FROM accounts WHERE id=?').get(aid);if(accountId&&(!old||old.state==='ARCHIVED'||old.revision!==revision))throw new LocalError('ACCOUNT_IDENTITY_CHANGED');
    expectedSender=old?.platform_user_id;accountRevision=(old?.revision??0)+1;
-   if(old){this.db.prepare("UPDATE accounts SET name=?,daily_limit=?,revision=?,state=CASE WHEN state='RESTRICTED' THEN state ELSE 'UNVERIFIED' END,session_ref=NULL WHERE id=?").run(name.trim(),dailyLimit,accountRevision,aid);this.db.prepare('DELETE FROM account_capabilities WHERE account_id=?').run(aid);this.db.exec('UPDATE contact_rules SET enabled=0,version=version+1,authorization_hash=NULL');}
+   if(old){this.db.prepare("UPDATE accounts SET name=?,daily_limit=?,revision=?,state=CASE WHEN state='RESTRICTED' THEN state ELSE 'UNVERIFIED' END,session_ref=NULL WHERE id=?").run(name.trim(),dailyLimit,accountRevision,aid);this.db.prepare('DELETE FROM account_capabilities WHERE account_id=?').run(aid);}
    else{this.db.prepare("INSERT INTO accounts(id,platform,name,state,daily_limit) VALUES(?,'XHS',?,'UNVERIFIED',?)").run(aid,name.trim(),dailyLimit);created=true;}
    this.db.prepare('INSERT INTO account_leases VALUES(?,?,1,?)').run(aid,'login:'+id,now+300000);this.store.audit('LOCAL_USER','ACCOUNT_LOGIN_AUTHORIZED',aid,{attempt:id,revision:accountRevision});
   });
   // created：这一行是本次扫码新建的。扫码没成功就回滚掉——「添加账号」只有扫码核验通过才算数。
   const attempt=this.attempt={id,accountId:aid,accountRevision,expectedSender,created,verified:false,scannedAt:null,abort:new AbortController(),expiresAt:now+240000,session:null};
-  try{attempt.session=await this.runtime.openLogin(attempt.abort.signal);const qr=await attempt.session.qr();attempt.expiresAt=Math.min(attempt.expiresAt,this.store.clock()+qr.seconds*1000);attempt.timer=setTimeout(()=>{void this.cancel({id}).catch(()=>{});},Math.max(1,attempt.expiresAt-this.store.clock()));attempt.timer.unref();return {id,accountId:aid,image:qr.image,expiresAt:attempt.expiresAt};}
+  try{attempt.session=await this.runtime.openLogin(attempt.abort.signal,aid);const qr=await attempt.session.qr();attempt.expiresAt=Math.min(attempt.expiresAt,this.store.clock()+qr.seconds*1000);attempt.timer=setTimeout(()=>{void this.cancel({id}).catch(()=>{});},Math.max(1,attempt.expiresAt-this.store.clock()));attempt.timer.unref();return {id,accountId:aid,image:qr.image,expiresAt:attempt.expiresAt};}
   catch{await this.finish(attempt,false);throw new LocalError('PLATFORM_LOGIN_START_FAILED');}
  }
  current(id){const a=this.attempt;if(!a||a.id!==id||a.abort.signal.aborted||this.store.clock()>=a.expiresAt)throw new LocalError('LOGIN_ATTEMPT_EXPIRED');const row=this.db.prepare('SELECT * FROM accounts WHERE id=? AND revision=?').get(a.accountId,a.accountRevision);if(!row||row.state==='ARCHIVED')throw new LocalError('ACCOUNT_IDENTITY_CHANGED');return a;}
@@ -34,7 +34,7 @@ class LocalAccounts{
   const duplicate=this.db.prepare('SELECT id FROM accounts WHERE platform_user_id=? AND id<>?').get(observed.userId,a.accountId);if(duplicate){await this.finish(a,false);throw new LocalError('PLATFORM_ACCOUNT_ALREADY_EXISTS');}
   const ref=randomUUID();let sealed=false,stopped=false;
   try{stopped=await a.session.saveAfterStop(payload=>{this.current(id);this.vault.put('PLATFORM_SESSION',ref,JSON.stringify({version:1,accountId:a.accountId,senderId:observed.userId,payload}));sealed=true;});if(!sealed||!stopped)throw new LocalError('PLATFORM_STOP_UNCONFIRMED');this.current(id);
-   this.store.transaction(()=>{this.db.prepare("UPDATE accounts SET platform_user_id=?,session_ref=?,nickname=?,avatar_url=?,state=CASE WHEN state='RESTRICTED' THEN state ELSE 'VERIFIED' END WHERE id=? AND revision=?").run(observed.userId,ref,observed.nickname??null,observed.avatar??null,a.accountId,a.accountRevision);if(historicalSendHold(observed.userId))this.db.prepare('INSERT INTO account_holds VALUES(?,?,NULL,?,?,?)').run(randomUUID(),a.accountId,'LEGACY_REPLY_RESTRICTION',require('./database.cjs').hash({sender:observed.userId}),this.store.clock());this.store.audit('LOCAL_USER','PLATFORM_IDENTITY_VERIFIED',a.accountId,{revision:a.accountRevision,credentialsSealed:true});});
+   this.store.transaction(()=>{this.db.prepare("UPDATE accounts SET platform_user_id=?,session_ref=?,nickname=?,avatar_url=?,state=CASE WHEN state='RESTRICTED' THEN state ELSE 'VERIFIED' END WHERE id=? AND revision=?").run(observed.userId,ref,observed.nickname??null,observed.avatar??null,a.accountId,a.accountRevision);if(historicalSendHold(observed.userId))this.db.prepare('INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES(?,?,NULL,?,?,?)').run(randomUUID(),a.accountId,'LEGACY_REPLY_RESTRICTION',require('./database.cjs').hash({sender:observed.userId}),this.store.clock());this.store.audit('LOCAL_USER','PLATFORM_IDENTITY_VERIFIED',a.accountId,{revision:a.accountRevision,credentialsSealed:true});});
    a.verified=true;await this.finish(a,true);
    // 登录成功不等于能回复：后台再查一次主页限制，看到封禁/禁言就记一条风险记录。
    // 不 await——扫码后不该为这次探测多等十几秒；账号列表轮询会把它刷出来。
@@ -53,7 +53,7 @@ class LocalAccounts{
   if(!this.inspection||!this.runtime.available('ACCOUNT_CHECK'))throw new LocalError('ACCOUNT_CHECK_UNAVAILABLE');
   const result=await this.inspectReplyEligibility(id,row.platform_user_id);
   if(!result)throw new LocalError('ACCOUNT_CHECK_UNAVAILABLE');
-  return {checked:true,restricted:!!result.reason,reason:result.reason??null,code:result.code};
+  return {checked:true,restricted:!!result.reason,reason:result.reason??null,code:result.code,released:result.released??0};
  }
  /**
   * 登录后的一次只读「主页限制检查」。只在明确看到限制提示时落库，看不到什么都不写——
@@ -67,11 +67,11 @@ class LocalAccounts{
    session=await this.runtime.openSaved({accountId,senderId,sessionRef:row.session_ref,purpose:'ACCOUNT_CHECK'},abort.signal);
    const result=await this.inspection(session,{accountId,senderId});
    const code=[result.code,...result.warnings].find(c=>REPLY_BLOCKING[c]);
-   if(!code)return {code:result.code,reason:null};
+   if(!code){const released=this.store.transaction(()=>require('./account-safety.cjs').releaseAccountRiskInTransaction(this.store,accountId,null,'ELIGIBILITY_RECHECK_PASSED'));return {code:result.code,reason:null,released};}
    const reason=REPLY_BLOCKING[code];
    this.store.transaction(()=>{
     if(this.db.prepare('SELECT 1 FROM account_holds WHERE account_id=? AND reason=?').get(accountId,reason))return;
-    this.db.prepare('INSERT INTO account_holds VALUES(?,?,NULL,?,?,?)').run(randomUUID(),accountId,reason,require('./database.cjs').hash({accountId,senderId,code}),this.store.clock());
+    this.db.prepare('INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES(?,?,NULL,?,?,?)').run(randomUUID(),accountId,reason,require('./database.cjs').hash({accountId,senderId,code}),this.store.clock());
     this.store.audit('LOCAL_USER','REPLY_ELIGIBILITY_RESTRICTED',accountId,{code,reason});
    });
    return {code,reason};

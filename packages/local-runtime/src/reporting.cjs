@@ -6,15 +6,35 @@ function range(from='',to=''){
  const time=(v,end)=>{if(!v)return null;if(!/^\d{4}-\d{2}-\d{2}$/.test(v))throw new LocalError('INVALID_DATE_RANGE');const n=Date.parse(v+'T00:00:00+08:00');if(!Number.isFinite(n)||new Date(n+28800000).toISOString().slice(0,10)!==v)throw new LocalError('INVALID_DATE_RANGE');return n+(end?86400000:0);};
  const a=time(from,false),b=time(to,true);if(a!==null&&b!==null&&a>=b)throw new LocalError('INVALID_DATE_RANGE');return [a,b];
 }
+/**
+ * 账号为什么不能发：把内部原因码归成三档，界面只讲「原因 + 下一步」。
+ * PLATFORM = 平台限制（只能等或换号）；LOCAL = 我们这边的问题（可以自己解决）；
+ * UNKNOWN = 判断不了（没见过明确提示，需要人看一次证据）。
+ */
+const VERDICT={
+ ACCOUNT_HAS_RETAINED_RESTRICTION:['PLATFORM','RECHECK_ACCOUNT'],
+ ACCOUNT_RESTRICTED_TODAY:['PLATFORM','WAIT_NEXT_DAY'],
+ UNKNOWN_SEND_REQUIRES_EVIDENCE:['UNKNOWN','DISCARD_UNKNOWN_SEND'],
+ ACCOUNT_REQUIRES_LOGIN:['LOCAL','RELOGIN'],
+ ACCOUNT_IDENTITY_UNVERIFIED:['LOCAL','RELOGIN'],
+ COMMENT_CAPABILITY_REQUIRED:['LOCAL','RECHECK_ACCOUNT'],
+ ACCOUNT_HAS_ACTIVE_TASKS:['LOCAL','WAIT_TASK'],
+ DAILY_QUOTA_EXHAUSTED:['LOCAL','WAIT_NEXT_DAY'],
+ SENDING_PAUSED:['LOCAL','CLEAR_PAUSE'],
+ TARGET_PREFLIGHT_REQUIRED:['LOCAL','SEND_ONE'],
+};
+const ORDER=['PLATFORM','LOCAL','UNKNOWN'];
+function verdictOf(reasons){for(const level of ORDER){const reason=reasons.find(r=>VERDICT[r]?.[0]===level);if(reason)return {level,reason,nextStep:VERDICT[reason][1]};}return null;}
 class LocalReporting{
  constructor(store){this.store=store;this.db=store.db;}
  account({accountId}){
   filterText([accountId]);const a=this.db.prepare("SELECT * FROM accounts WHERE id=? AND state<>'ARCHIVED'").get(accountId);if(!a)throw new LocalError('ACCOUNT_NOT_FOUND');
   const day=dayAt(this.store.clock()),usage=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(a.id,day),occupied=usage?.occupied??0,limit=usage?.daily_limit_override??a.daily_limit;
-  const holds=this.db.prepare('SELECT channel,reason,created_at FROM account_holds WHERE account_id=?').all(a.id),pauses=this.db.prepare('SELECT id,reason FROM safety_state WHERE reason IS NOT NULL').all(),busy=this.db.prepare("SELECT id,kind,state FROM jobs WHERE state IN('QUEUED','RUNNING') AND json_extract(payload,'$.accountId')=? ORDER BY created_at LIMIT 30").all(a.id);
+  const holds=this.db.prepare('SELECT channel,reason,created_at,detail FROM account_holds WHERE account_id=?').all(a.id).map(h=>({...h,detail:h.detail?JSON.parse(h.detail):null})),pauses=this.db.prepare('SELECT id,reason FROM safety_state WHERE reason IS NOT NULL').all(),busy=this.db.prepare("SELECT id,kind,state FROM jobs WHERE state IN('QUEUED','RUNNING') AND json_extract(payload,'$.accountId')=? ORDER BY created_at LIMIT 30").all(a.id);
   const base=[];if(a.state!=='VERIFIED'||!a.session_ref)base.push('ACCOUNT_REQUIRES_LOGIN');if(!/^[a-f0-9]{24}$/.test(a.platform_user_id??''))base.push('ACCOUNT_IDENTITY_UNVERIFIED');if(busy.length)base.push('ACCOUNT_HAS_ACTIVE_TASKS');
-  const channels=['COMMENT','DM'].map(channel=>{const reasons=[...base];if(require('./account-safety.cjs').historicalSendHold(a.platform_user_id)||holds.some(h=>!h.channel||h.channel===channel)||a.state==='RESTRICTED')reasons.push('ACCOUNT_HAS_RETAINED_RESTRICTION');if(occupied>=limit)reasons.push('DAILY_QUOTA_EXHAUSTED');if(pauses.some(p=>['sending','platform'].includes(p.id)))reasons.push('SENDING_PAUSED');const unknown=this.db.prepare("SELECT count(*) n FROM send_attempts WHERE account_id=? AND channel=? AND state='UNKNOWN'").get(a.id,channel).n;if(unknown)reasons.push('UNKNOWN_SEND_REQUIRES_EVIDENCE');return {channel,reasons,unknown,targetPreflightRequired:channel==='COMMENT'};});
-  return {accountId:a.id,day,occupied,limit,remaining:Math.max(0,limit-occupied),checkedAt:this.store.clock(),localOnly:true,platformSessionVerified:false,channels,holds,activeJobs:busy};
+  const channels=['COMMENT','DM'].map(channel=>{const reasons=[...base];if(require('./account-safety.cjs').historicalSendHold(a.platform_user_id)||holds.some(h=>!h.channel||h.channel===channel)||a.state==='RESTRICTED')reasons.push('ACCOUNT_HAS_RETAINED_RESTRICTION');if(occupied>=limit)reasons.push('DAILY_QUOTA_EXHAUSTED');if(pauses.some(p=>['sending','platform'].includes(p.id)))reasons.push('SENDING_PAUSED');const unknown=this.db.prepare("SELECT count(*) n FROM send_attempts WHERE account_id=? AND channel=? AND state='UNKNOWN'").get(a.id,channel).n;if(unknown)reasons.push('UNKNOWN_SEND_REQUIRES_EVIDENCE');return {channel,reasons,unknown,targetPreflightRequired:channel==='COMMENT',verdict:verdictOf(reasons)};});
+  const restrictedToday=require('./account-safety.cjs').restricted(this.store,a.id),pool=require('./account-safety.cjs').restrictedToday(this.store);
+  return {accountId:a.id,day,occupied,limit,remaining:Math.max(0,limit-occupied),checkedAt:this.store.clock(),localOnly:true,platformSessionVerified:false,channels,holds,activeJobs:busy,restrictedToday,poolRestrictedToday:pool.length,poolStopped:pool.length>=2};
  }
  model({page:current=1,state='',runId='',from='',to=''}={}){
   page(current);filterText([runId]);if(!['','RESERVED','DISPATCHED','COMPLETED','FAILED','UNKNOWN','CANCELLED'].includes(state))throw new LocalError('INVALID_REPORT_FILTER');const [start,end]=range(from,to);

@@ -11,7 +11,43 @@ test('registered review runner derives sends only after persisting complete synt
 test('collection with automatic rules requires its own explicit combined consent',t=>{const f=setup(t),{LocalWorkflow}=require('../dist/workflow.cjs'),w=new LocalWorkflow(f.store,null,{capabilities:()=>({collect:true,send:true})}),p=w.previewCollection({configId:'config',accountId:'account',policyIds:['policy'],ruleIds:['rule']});assert.equal(p.automaticRules,1);assert.throws(()=>w.authorizeCollection({...p,requestKey:'collect-auto',consent:'bounded-platform-read-once-v1'}),/COLLECTION_CONSENT_REQUIRED/);assert.ok(w.authorizeCollection({...p,requestKey:'collect-auto',consent:'bounded-read-with-frozen-contact-v1'}).id);});
 test('comment rule configuration does not replace fresh capability required at send reservation',t=>{const f=fixture(t),a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'comment-rule',name:'合成评论',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'COMMENT',content:'合成评论内容',accounts:[{id:'account',version:1,dailyLimit:1}]}});const ref=a.authorize({...a.preview({id:'comment-rule',version:1}),consent:'automatic-contact-frozen-run-v1'}),run=collect(f,[entry('c'.repeat(24))],{contactRules:[ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);assert.equal(a.afterReview(run.runId).queued,1);assert.throws(()=>new (require('../dist/send-safety.cjs').SendSafety)(f.store).reserve(f.queue.claim('send')),/COMMENT_CAPABILITY_REQUIRED/);});
 test('account pool allocates once by remaining shared quota including queued jobs without fallback after risk',t=>{const f=fixture(t);f.store.db.prepare("INSERT INTO accounts(id,platform,platform_user_id,name,session_ref,state,daily_limit) VALUES('second','XHS',?,'第二合成账号','synthetic','VERIFIED',10)").run('d'.repeat(24));const a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'pool',name:'合成账号池',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成池内容',accounts:[{id:'account',version:1,dailyLimit:1},{id:'second',version:1,dailyLimit:1}]}});const ref=a.authorize({...a.preview({id:'pool',version:1}),consent:'automatic-contact-frozen-run-v1'}),e=entry('c'.repeat(24),['想请教学习方法','想请教选题指导']);e.comments[1].userId='e'.repeat(24);const run=collect(f,[e],{contactRules:[ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);assert.equal(a.afterReview(run.runId).queued,2);assert.deepEqual(f.store.db.prepare("SELECT json_extract(payload,'$.accountId') account FROM jobs WHERE kind='SEND' ORDER BY created_at,rowid").all().map(x=>x.account),['account','second']);assert.equal(a.afterReview(run.runId).queued,0);});
-test('account-pool risk never falls through to another authorized account',t=>{const f=fixture(t);f.store.db.prepare("INSERT INTO accounts(id,platform,platform_user_id,name,session_ref,state,daily_limit) VALUES('second','XHS',?,'第二合成账号','synthetic','VERIFIED',10)").run('d'.repeat(24));const a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'risk-pool',name:'风险核验',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成池内容',accounts:[{id:'account',version:1,dailyLimit:1},{id:'second',version:1,dailyLimit:1}]}});const ref=a.authorize({...a.preview({id:'risk-pool',version:1}),consent:'automatic-contact-frozen-run-v1'}),run=collect(f,[entry()],{contactRules:[ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);f.store.db.exec("INSERT INTO account_holds VALUES('hold','account',NULL,'RETAINED_RISK','hash',0)");assert.equal(a.afterReview(run.runId).queued,0);assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND'").get().n,0);assert.match(a.decisions().items[0].reason,/RETAINED_RESTRICTION/);});
+test('account-level risk stops only that account and the rest continues on the next account',t=>{
+ const f=fixture(t);f.store.db.prepare("INSERT INTO accounts(id,platform,platform_user_id,name,session_ref,state,daily_limit) VALUES('second','XHS',?,'第二合成账号','synthetic','VERIFIED',10)").run('d'.repeat(24));
+ const a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'risk-pool',name:'风险核验',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成池内容',accounts:[{id:'account',version:1,dailyLimit:1},{id:'second',version:1,dailyLimit:1}]}});
+ const ref=a.authorize({...a.preview({id:'risk-pool',version:1}),consent:'automatic-contact-frozen-run-v1'}),run=collect(f,[entry()],{contactRules:[ref]});
+ evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ f.store.db.exec("INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES('hold','account',NULL,'RETAINED_RISK','hash',0)");
+ assert.equal(a.afterReview(run.runId).queued,1);
+ const job=f.store.db.prepare("SELECT json_extract(payload,'$.accountId') account,available_at FROM jobs WHERE kind='SEND'").get();
+ assert.equal(job.account,'second');
+});
+test('a restricted account hands its queued sends to the next account with a 3-5 minute gap',t=>{
+ const f=fixture(t);f.store.db.prepare("INSERT INTO accounts(id,platform,platform_user_id,name,session_ref,state,daily_limit) VALUES('second','XHS',?,'第二合成账号','synthetic','VERIFIED',10)").run('d'.repeat(24));
+ const a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'switch',name:'换号续发',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成池内容',accounts:[{id:'account',version:1,dailyLimit:10},{id:'second',version:1,dailyLimit:10}]}});
+ const ref=a.authorize({...a.preview({id:'switch',version:1}),consent:'automatic-contact-frozen-run-v1'}),e=entry('c'.repeat(24),['想请教学习方法','想请教选题指导']);e.comments[1].userId='e'.repeat(24);
+ const run=collect(f,[e],{contactRules:[ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ assert.equal(a.afterReview(run.runId).queued,2);
+ const first=f.store.db.prepare("SELECT id FROM jobs WHERE kind='SEND' AND json_extract(payload,'$.accountId')='account' ORDER BY created_at,rowid LIMIT 1").get();
+ // 第二个账号先占住位置，让换号后的排期落在它后面。
+ f.store.db.exec("INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES('hold','account',NULL,'RATE_LIMITED','hash',"+f.store.clock()+")");
+ assert.equal(a.reallocate({jobId:first.id,accountId:'account',runId:run.runId}).moved,2);
+ const moved=f.store.db.prepare("SELECT available_at FROM jobs WHERE kind='SEND' AND state='QUEUED' AND json_extract(payload,'$.accountId')='second' ORDER BY available_at").all();
+ assert.equal(moved.length,2);
+ // 换号后的第一条间隔 3-5 分钟，同账号随后的条目间隔 30-60 秒。
+ assert.ok(moved[0].available_at-f.store.clock()>=180000&&moved[0].available_at-f.store.clock()<=300000);
+ assert.ok(moved[1].available_at-moved[0].available_at>=30000&&moved[1].available_at-moved[0].available_at<=60000);
+ assert.match(a.decisions().items.filter(d=>d.reason==='ACCOUNT_SWITCHED').map(d=>d.reason).join(),/ACCOUNT_SWITCHED/);
+});
+test('a second restricted account stops the whole pool and keeps the rest as pending replies',t=>{
+ const f=fixture(t);f.store.db.prepare("INSERT INTO accounts(id,platform,platform_user_id,name,session_ref,state,daily_limit) VALUES('second','XHS',?,'第二合成账号','synthetic','VERIFIED',10)").run('d'.repeat(24));
+ const a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'pool-stop',name:'整池停止',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成池内容',accounts:[{id:'account',version:1,dailyLimit:1},{id:'second',version:1,dailyLimit:1}]}});
+ const ref=a.authorize({...a.preview({id:'pool-stop',version:1}),consent:'automatic-contact-frozen-run-v1'}),run=collect(f,[entry()],{contactRules:[ref]});
+ evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ f.store.db.exec("INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES('h1','account',NULL,'RESTRICTED','hash',0),('h2','second',NULL,'RESTRICTED','hash2',0)");
+ assert.deepEqual(a.afterReview(run.runId),{queued:0,skipped:1});
+ assert.equal(a.decisions().items[0].reason,'ACCOUNT_POOL_RESTRICTED');
+ assert.equal(a.pending().total,1);assert.equal(a.pending().items[0].reason,'ACCOUNT_POOL_RESTRICTED');
+});
 
 test('quota-exhausted decisions surface as pending replies and can be requeued or dismissed',t=>{
  const f=setup(t),{dayAt}=require('../dist/send-safety.cjs'),day=dayAt(f.store.clock());

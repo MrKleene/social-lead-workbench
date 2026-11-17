@@ -1,5 +1,5 @@
 'use strict';
-const {randomUUID}=require('node:crypto');
+const {randomUUID,randomInt}=require('node:crypto');
 const {LocalError,canonical,hash}=require('./database.cjs');
 const {LocalReview}=require('./review.cjs');
 const {assertConfiguredSendAccount}=require('./account-safety.cjs');
@@ -41,7 +41,13 @@ class LocalContact {
   const r=this.db.prepare('SELECT * FROM contact_rules WHERE id=?').get(ref?.id);
   if(!r?.enabled||r.version!==ref.version||r.authorization_hash!==ref.hash||hash(definition(r))!==ref.hash)throw new LocalError('CONTACT_RULE_AUTHORIZATION_CHANGED');return r;
  }
- plan(reviewId,ruleId,channel,accountId){
+ /**
+  * 选这一条要用的模板。同一渠道可以配多条模板，发送时从冻结模板池里随机取一条，
+  * 且不与这个账号上一条重复（轮换）。池里只有一条时就是它。
+  */
+ pick(rule,channel,accountId){const pool=JSON.parse(rule.plans).filter(p=>p.channel===channel);if(!pool.length)return null;const last=this.lastTemplate(accountId,channel),fresh=pool.length>1?pool.filter(p=>p.templateId!==last):pool,list=fresh.length?fresh:pool;return list[randomInt(list.length)];}
+ lastTemplate(accountId,channel){const row=this.db.prepare('SELECT template_id FROM send_attempts WHERE account_id=? AND channel=? ORDER BY created_at DESC,rowid DESC LIMIT 1').get(accountId,channel);return row?.template_id??null;}
+ plan(reviewId,ruleId,channel,accountId,{templateId}={}){
   const row=this.db.prepare('SELECT r.*,b.run_id,b.policy_id,b.policy_revision,b.model,c.platform_id,c.user_id,c.body,c.post_id,c.source_hash current_source_hash,p.platform_id post_platform_id FROM review_results r JOIN review_batches b ON b.id=r.batch_id JOIN run_comments c ON c.id=r.comment_id JOIN run_posts p ON p.id=c.post_id WHERE r.id=?').get(reviewId);
   if(!row||!row.automatic_contact_allowed||!['PENDING','APPROVED'].includes(row.review_status)||row.context!=='SUFFICIENT'||row.decision!=='MATCH'||row.source_hash!==row.current_source_hash)throw new LocalError('AUTOMATIC_CONTACT_INELIGIBLE');
   if(!new LocalReview(this.store).barrier(row.run_id).ready)throw new LocalError('REVIEW_BARRIER_NOT_READY');
@@ -49,26 +55,29 @@ class LocalContact {
   if(row.policy_id!==r.policy_id||row.policy_revision!==r.policy_revision||row.model!==r.model||row.score<r.threshold)throw new LocalError('AUTOMATIC_CONTACT_INELIGIBLE');
   const snapshot=JSON.parse(row.snapshot),evidence=JSON.parse(row.evidence);
   if(!evidence.some(e=>e.source==='COMMENT'&&typeof e.quote==='string'&&e.quote.trim()&&row.body.includes(e.quote))||snapshot.comment!==row.body||snapshot.userId!==row.user_id)throw new LocalError('CONTACT_EVIDENCE_CHANGED');
-  const plan=JSON.parse(r.plans).find(p=>p.channel===channel),a=JSON.parse(r.accounts).find(a=>a.id===accountId);
+  const pool=JSON.parse(r.plans).filter(p=>p.channel===channel);
+  if(templateId!==undefined&&templateId!==null&&!pool.some(p=>p.templateId===templateId))throw new LocalError('CONTACT_TEMPLATE_CHANGED');
+  const plan=templateId?pool.find(p=>p.templateId===templateId):this.pick(r,channel,accountId),a=JSON.parse(r.accounts).find(a=>a.id===accountId);
   if(!plan||!a||!a.dailyLimit)throw new LocalError('CONTACT_ACCOUNT_OR_CHANNEL_NOT_AUTHORIZED');this.templates([plan]);assertConfiguredSendAccount(this.store,a.id,a.version,channel);
-  const basis={type:'AUTOMATIC',reviewId,ruleId,ruleVersion:r.version,eligibilityHash:hash({ruleHash:ref.hash,reviewVersion:row.version,sourceHash:row.source_hash,score:row.score,decision:row.decision,context:row.context,evidence})};
+  // basis 里记下这一条用了哪个模板：授权绑定它，发送记录也按它落库。
+  const basis={type:'AUTOMATIC',reviewId,ruleId,ruleVersion:r.version,templateId:plan.templateId??null,templateVersion:plan.templateVersion??null,eligibilityHash:hash({ruleHash:ref.hash,reviewVersion:row.version,sourceHash:row.source_hash,score:row.score,decision:row.decision,context:row.context,evidence})};
   return {scope:{platform:'XHS',channel,accountId,accountRevision:a.version,recipientId:row.user_id,content:plan.content,target:channel==='DM'?{recipientId:row.user_id}:{postId:row.post_platform_id,commentId:row.platform_id,recipientId:row.user_id},basis},dailyLimit:a.dailyLimit,parent:{runId:row.run_id,ruleId,ruleVersion:r.version,ruleHash:ref.hash}};
  }
  assertScope(s,grant){
   if(s.basis?.type!=='AUTOMATIC')throw new LocalError('INVALID_AUTOMATIC_SCOPE');
-  const plan=this.plan(s.basis.reviewId,s.basis.ruleId,s.channel,s.accountId);
+  const plan=this.plan(s.basis.reviewId,s.basis.ruleId,s.channel,s.accountId,{templateId:s.basis.templateId});
   if(hash(plan.scope)!==hash(s)||grant?.issuer!=='AUTOMATION'||grant.parent_proof!==canonical(plan.parent))throw new LocalError('AUTOMATIC_AUTHORIZATION_CHANGED');return plan;
  }
- enqueue(reviewId,ruleId,channel,accountId){return this.store.transaction(()=>this.enqueueInTransaction(reviewId,ruleId,channel,accountId));}
+ enqueue(reviewId,ruleId,channel,accountId,options){return this.store.transaction(()=>this.enqueueInTransaction(reviewId,ruleId,channel,accountId,null,options));}
  /** 自动任务的 request_key。额度不足重排时要在同一前缀下加代次后缀，所以单独暴露。 */
  autoKey({runId,reviewId,ruleId,ruleVersion,channel}){return 'auto:'+hash({runId,reviewId,ruleId,version:ruleVersion,channel});}
- enqueueInTransaction(reviewId,ruleId,channel,accountId,requestKey){if(!this.db.isTransaction)throw new LocalError('TRANSACTION_REQUIRED');
-  const plan=this.plan(reviewId,ruleId,channel,accountId),s=plan.scope,key=requestKey??this.autoKey({runId:plan.parent.runId,reviewId,ruleId,ruleVersion:s.basis.ruleVersion,channel});
+ enqueueInTransaction(reviewId,ruleId,channel,accountId,requestKey,{availableAt,templateId}={}){if(!this.db.isTransaction)throw new LocalError('TRANSACTION_REQUIRED');
+  const plan=this.plan(reviewId,ruleId,channel,accountId,{templateId}),s=plan.scope,key=requestKey??this.autoKey({runId:plan.parent.runId,reviewId,ruleId,ruleVersion:s.basis.ruleVersion,channel});
   // An attempt cannot silently switch account or be recreated after failure/UNKNOWN.
   const existing=this.db.prepare('SELECT id FROM jobs WHERE request_key=?').get(key);if(existing)return existing.id;
-  const now=this.store.clock(),expires=Math.min(now+900000,Math.floor((now+28800000)/86400000)*86400000+86400000-28800000),grant=randomUUID(),id=randomUUID();
+  const now=this.store.clock(),at=Math.max(now,Number.isInteger(availableAt)?availableAt:now),expires=Math.min(now+900000,Math.floor((now+28800000)/86400000)*86400000+86400000-28800000),grant=randomUUID(),id=randomUUID();
   this.db.prepare("INSERT INTO authorizations(id,purpose,scope,scope_hash,state,created_at,expires_at,issuer,parent_proof) VALUES(?,'SEND',?,?,'ACTIVE',?,?,'AUTOMATION',?)").run(grant,canonical(s),hash(s),now,expires,canonical(plan.parent));
-  this.db.prepare("INSERT INTO jobs(id,request_key,kind,payload,payload_hash,authorization_id,state,available_at,created_at,updated_at) VALUES(?,?,'SEND',?,?,?,'QUEUED',?,?,?)").run(id,key,canonical(s),hash(s),grant,now,now,now);
+  this.db.prepare("INSERT INTO jobs(id,request_key,kind,payload,payload_hash,authorization_id,state,available_at,created_at,updated_at) VALUES(?,?,'SEND',?,?,?,'QUEUED',?,?,?)").run(id,key,canonical(s),hash(s),grant,at,now,now);
   this.store.audit('AUTOMATION','CONTACT_RULE_JOB_DERIVED',id,{...plan.parent,scopeHash:hash(s)});return id;
  }
 }

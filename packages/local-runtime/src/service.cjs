@@ -121,6 +121,10 @@ class LocalService {
   this.store.audit('LOCAL_USER','CONFIGURATION_DELETED',id,{kind:row.kind});return {deleted:true};
  });}
  deleteTestData(input){return new(require('./reset.cjs').LocalReset)(this.store).delete(input);}
+ review(){return new(require('./review.cjs').LocalReview)(this.store);}
+ automationProgress(input){return this.automation.progress(input);}
+ unknownModelSubmissions(){return this.review().unknown();}
+ discardModelSubmission(input){return this.review().discard(input);}
  saveModelKey({key}){if(typeof key!=='string'||! /^[\x21-\x7e]{16,512}$/.test(key))throw new LocalError('INVALID_MODEL_KEY');if(!this.vault)throw new LocalError('OS_CREDENTIAL_PROTECTION_UNAVAILABLE');
   // Revoke before replacing the secret: an interrupted write must not leave old
   // grants authorizing a different provider account/workspace.

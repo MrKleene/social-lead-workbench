@@ -31,7 +31,7 @@ class SendSafety {
   if((usage?.occupied||0)>=Math.min(usage?.daily_limit_override??account.daily_limit,ruleLimit))throw new LocalError('DAILY_LIMIT');
   this.db.prepare('INSERT INTO contact_ledger(platform,channel,recipient_id) VALUES(?,?,?) ON CONFLICT DO NOTHING').run(s.platform,s.channel,s.recipientId);
   this.db.prepare('INSERT INTO account_days(account_id,day,occupied) VALUES(?,?,1) ON CONFLICT(account_id,day) DO UPDATE SET occupied=occupied+1').run(s.accountId,day);
-  const id=randomUUID();this.db.prepare("INSERT INTO send_attempts(id,request_key,platform,channel,recipient_id,account_id,account_revision,authorization_id,scope_hash,content,target,quota_day,state,created_at,updated_at,intent,inbound_message_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'RESERVED',?,?,?,?)").run(id,job.request_key,s.platform,s.channel,s.recipientId,s.accountId,s.accountRevision,grant.id,hash(s),s.content,canonical(s.target),day,now,now,s.intent||'FIRST_CONTACT',s.intent==='INBOX_REPLY'?s.target.inboxMessageId:null);
+  const id=randomUUID();this.db.prepare("INSERT INTO send_attempts(id,request_key,platform,channel,recipient_id,account_id,account_revision,authorization_id,scope_hash,content,target,quota_day,state,created_at,updated_at,intent,inbound_message_id,template_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'RESERVED',?,?,?,?,?)").run(id,job.request_key,s.platform,s.channel,s.recipientId,s.accountId,s.accountRevision,grant.id,hash(s),s.content,canonical(s.target),day,now,now,s.intent||'FIRST_CONTACT',s.intent==='INBOX_REPLY'?s.target.inboxMessageId:null,s.basis?.templateId??null);
   this.db.prepare('UPDATE send_attempts SET sender_id=? WHERE id=?').run(account.platform_user_id,id);
   this.store.audit('AUTOMATION','SEND_RESERVED',id,{jobId:job.id,scopeHash:hash(s)});return id;
  });}
@@ -76,16 +76,16 @@ class SendSafety {
   return {...command,attemptId:a.id};
  }
  resultComment(lease,attemptId,command,raw){return this.store.transaction(()=>{
-  let evidence={kind:'UNKNOWN'},risk;
+  let evidence={kind:'UNKNOWN'},risk,platformReason=null;
   try{
    const expected=this.commandForComment(attemptId,command.postReference);if(hash(expected)!==hash(command))throw new LocalError('COMMENT_COMMAND_CHANGED');
    const r=require('@crm/local-runtime/policy').verifyXhsReplyResult(expected,raw),a=this.db.prepare('SELECT scope_hash FROM send_attempts WHERE id=?').get(attemptId);
    if(r.kind==='CONFIRMED')evidence={kind:'CONFIRMED',scopeHash:a.scope_hash,receipt:r.receipt,submissions:1,stopped:true};
    else if(r.kind==='FAILED')evidence={kind:'NOT_SUBMITTED',submissions:0,stopped:true};
-   else if(r.kind==='RISK')risk={RATE_LIMITED:'RATE_LIMITED',VERIFICATION:'VERIFY_REQUIRED',BANNED:'RESTRICTED',PLATFORM_REFUSED:'PLATFORM_REFUSED'}[r.reason];
+   else if(r.kind==='RISK'){risk={RATE_LIMITED:'RATE_LIMITED',VERIFICATION:'VERIFY_REQUIRED',BANNED:'RESTRICTED',PLATFORM_REFUSED:'PLATFORM_REFUSED'}[r.reason];platformReason=r.text??r.message??null;}
   }catch{/* Unknown evidence never refunds an occupied send. */}
   const state=this.resultInTransaction(lease,attemptId,evidence);
-  if(risk)require('./account-safety.cjs').retainAccountRiskInTransaction(this.store,command.accountId,'COMMENT',risk,{attemptId,reason:risk});
+  if(risk)require('./account-safety.cjs').retainAccountRiskInTransaction(this.store,command.accountId,'COMMENT',risk,{attemptId,reason:risk,recipientId:command.recipientId,platformReason});
   return state;
  });}
  result(lease,attemptId,result){return this.store.transaction(()=>this.resultInTransaction(lease,attemptId,result));}
@@ -99,6 +99,8 @@ class SendSafety {
   else if(result.kind==='NOT_SUBMITTED'&&result.submissions===0&&result.stopped===true)state='NOT_SUBMITTED';
   else state='UNKNOWN';
   const now=this.store.clock(),evidence={kind:state,submissions:result.submissions??null,stopped:result.stopped===true};
+  // 发送真的成功了：说明这个账号的限制已经不存在，清掉它这一渠道的风险记录（解决后自动删除）。
+  if(state==='CONFIRMED')require('./account-safety.cjs').releaseAccountRiskInTransaction(this.store,a.account_id,a.channel,'SEND_CONFIRMED');
   this.db.prepare('UPDATE send_attempts SET state=?,receipt=?,evidence=?,updated_at=? WHERE id=?').run(state,state==='CONFIRMED'?result.receipt:null,canonical(evidence),now,a.id);
   if(state==='NOT_SUBMITTED')this.db.prepare('UPDATE account_days SET occupied=occupied-1 WHERE account_id=? AND day=? AND occupied>0').run(a.account_id,a.quota_day);
   if(state==='UNKNOWN')this.pause('SUBMISSION_UNKNOWN',a.id);

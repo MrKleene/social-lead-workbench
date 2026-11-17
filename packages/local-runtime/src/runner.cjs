@@ -16,6 +16,8 @@ class LocalRunner {
   // Explicit standing automatic-review consent alone retains validated, never-started work.
   this.store.transaction(()=>{this.store.db.exec("UPDATE evidence_checks SET state='INTERRUPTED' WHERE state='RUNNING'; UPDATE post_diagnostics SET state='INTERRUPTED' WHERE state='RUNNING'; UPDATE authorizations SET state='REVOKED' WHERE state='ACTIVE' AND id NOT IN(SELECT j.authorization_id FROM jobs j JOIN automatic_review_tasks t ON t.job_id=j.id WHERE j.state='QUEUED' AND j.dispatch_started=0 AND j.cancel_requested=0); UPDATE jobs SET state='INTERRUPTED',cancel_requested=1 WHERE state='QUEUED' AND id NOT IN(SELECT job_id FROM automatic_review_tasks WHERE job_id IS NOT NULL); UPDATE jobs SET lease_until=0 WHERE state='RUNNING'; DELETE FROM account_leases WHERE owner LIKE 'login:%'");this.store.audit('RECOVERY','DESKTOP_SESSION_RECOVERED','installation');});
   this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();
+  // 未解决的风控记录 7 天后自动清掉，不让一条旧记录永久占着账号。
+  require('./account-safety.cjs').expireAccountHolds(this.store);
  }
  async runOne(){
   this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();if(this.executors.REVIEW)new(require('./automatic-review.cjs').AutomaticReview)(this.store).reconcile();const lease=this.queue.claim(this.owner);if(!lease)return false;
@@ -36,11 +38,20 @@ class LocalRunner {
     command=lease.payload.channel==='DM'?this.sends.commandForDm(attemptId):(commentCommand=this.sends.commandForComment(attemptId,reference));
    }else if(lease.kind==='REVIEW'){batchId=this.reviews.reserve(lease);command=this.reviews.dispatch(lease,batchId);}else this.queue.beginDispatch(lease);
    dispatched=true;const result=await executor.execute(command,abort.signal,{lease});
-   if(lease.kind==='SEND'){if(lease.payload.channel==='DM')this.sends.resultDm(lease,attemptId,result);else this.sends.resultComment(lease,attemptId,commentCommand,result);}else if(lease.kind==='REVIEW'){this.reviews.complete(lease,batchId,result);try{new (require('./automation.cjs').LocalAutomation)(this.store,{enabled:()=>!!this.executors.SEND}).afterReview(lease.payload.runId);}catch{this.store.transaction(()=>this.store.audit('RECOVERY','AUTOMATION_COORDINATION_INTERRUPTED',lease.payload.runId));}}else if(lease.kind==='INBOX'&&result?.reason==='YIELDED_FOR_SEND'&&!this.stopping&&!this.queue.current(lease).cancel_requested)this.queue.yieldInbox(lease);else this.queue.finish(lease,abort.signal.aborted||this.queue.current(lease).cancel_requested?'CANCELLED':'SUCCEEDED',result);
+   if(lease.kind==='SEND'){if(lease.payload.channel==='DM')this.sends.resultDm(lease,attemptId,result);else this.sends.resultComment(lease,attemptId,commentCommand,result);this.afterSendAccount(lease);}else if(lease.kind==='REVIEW'){this.reviews.complete(lease,batchId,result);try{new (require('./automation.cjs').LocalAutomation)(this.store,{enabled:()=>!!this.executors.SEND}).afterReview(lease.payload.runId);}catch{this.store.transaction(()=>this.store.audit('RECOVERY','AUTOMATION_COORDINATION_INTERRUPTED',lease.payload.runId));}}else if(lease.kind==='INBOX'&&result?.reason==='YIELDED_FOR_SEND'&&!this.stopping&&!this.queue.current(lease).cancel_requested)this.queue.yieldInbox(lease);else this.queue.finish(lease,abort.signal.aborted||this.queue.current(lease).cancel_requested?'CANCELLED':'SUCCEEDED',result);
   }catch{
    try{if(attemptId)this.sends.result(lease,attemptId,dispatched?{kind:'UNKNOWN'}:{kind:'NOT_SUBMITTED',submissions:0,stopped:true});else if(batchId)this.reviews.fail(lease,batchId);else this.queue.finish(lease,dispatched&&['SEND','REVIEW'].includes(lease.kind)?'UNKNOWN':!['SEND','REVIEW'].includes(lease.kind)&&(abort.signal.aborted||this.queue.current(lease).cancel_requested)?'CANCELLED':'FAILED',{code:'EXECUTION_INTERRUPTED'});}catch{/* Expired leases are handled by recovery; never overwrite a newer owner. */}
   }finally{clearInterval(heartbeat);this.abort=null;await executor.close?.();}
   return true;
+ }
+ /** 发送之后如果这个账号被平台限制，把本轮还剩在它身上的条目挪到下一个账号；两个账号都被限制就整池停。 */
+ afterSendAccount(lease){
+  const accountId=lease.payload.accountId;
+  try{
+   const hold=this.store.db.prepare('SELECT 1 FROM account_holds WHERE account_id=? AND created_at>=?').get(accountId,require('./account-safety.cjs').dayStart(this.store.clock()));
+   if(!hold)return;
+   new(require('./automation.cjs').LocalAutomation)(this.store,{enabled:()=>!!this.executors.SEND}).reallocate({jobId:lease.id,accountId,runId:lease.payload.basis?.runId});
+  }catch{this.store.transaction(()=>this.store.audit('RECOVERY','ACCOUNT_SWITCH_INTERRUPTED',accountId));}
  }
  async stop(){this.stopping=true;this.abort?.abort();await this.pending;}
 }

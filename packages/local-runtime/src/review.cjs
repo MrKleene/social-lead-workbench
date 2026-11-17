@@ -104,6 +104,26 @@ class LocalReview {
     this.db.prepare('UPDATE jobs SET state=?,result=?,lease_owner=NULL,lease_until=NULL,updated_at=? WHERE id=?').run(state==='CANCELLED'?'FAILED':state,canonical({batchId,code}),this.store.clock(),job.id);
     this.store.audit('AUTOMATION','MODEL_BATCH_STOPPED',batchId,{state,code});return {state};
   });}
+  /** 卡住的模型请求：提交结果未知、又没有对账证据的批次。作废通道只列这些。 */
+  unknown(){return this.db.prepare("SELECT b.id,b.run_id,b.post_id,b.created_at,b.error_code,j.id job_id FROM review_batches b LEFT JOIN jobs j ON j.id=b.job_id WHERE b.state='UNKNOWN' ORDER BY b.created_at").all().map(r=>({batchId:r.id,runId:r.run_id,postId:r.post_id,jobId:r.job_id??null,createdAt:r.created_at,errorCode:r.error_code??null}));}
+  /**
+  * 作废一次结果未知的模型请求：用户明确放弃这些结果，解除模型对账暂停。
+  * 只处理 UNKNOWN 批次，不碰已确认的对账证据；被作废的批次记为 FAILED，不再重试。
+  */
+  discard({batchId,consent}){
+   if(consent!=='discard-unknown-model-submission-v1')throw new LocalError('MODEL_DISCARD_CONSENT_REQUIRED');
+   if(typeof batchId!=='string'||!batchId||batchId.length>200)throw new LocalError('INVALID_MODEL_RESULT');
+   return this.store.transaction(()=>{
+    const batch=this.db.prepare("SELECT * FROM review_batches WHERE id=? AND state='UNKNOWN'").get(batchId);
+    if(!batch)throw new LocalError('MODEL_BATCH_NOT_DISCARDABLE');
+    this.db.prepare("UPDATE review_batches SET state='FAILED',error_code='DISCARDED_BY_USER',finished_at=? WHERE id=? AND state='UNKNOWN'").run(this.store.clock(),batchId);
+    if(batch.job_id)this.db.prepare("UPDATE jobs SET state='FAILED',result=?,lease_owner=NULL,lease_until=NULL,updated_at=? WHERE id=? AND state IN('UNKNOWN','RUNNING')").run(canonical({batchId,state:'DISCARDED_BY_USER'}),this.store.clock(),batch.job_id);
+    // 没有其他未知批次时才能解除暂停，否则下一次审核还会被同一道闸门拦住。
+    if(!this.db.prepare("SELECT 1 FROM review_batches WHERE state='UNKNOWN'").get())this.db.prepare("DELETE FROM safety_state WHERE id='model'").run();
+    this.store.audit('LOCAL_USER','MODEL_UNKNOWN_DISCARDED',batchId,{runId:batch.run_id,postId:batch.post_id});
+    return {discarded:true,batchId,remaining:this.unknown().length};
+   });
+  }
   pause(id){const event=this.store.audit('RECOVERY','MODEL_RECONCILIATION_REQUIRED',id);this.db.prepare("INSERT INTO safety_state VALUES('model',1,?,'MODEL_SUBMISSION_UNKNOWN',?) ON CONFLICT(id) DO UPDATE SET version=version+1,event_id=excluded.event_id,reason=excluded.reason,created_at=excluded.created_at").run(event,this.store.clock());}
   recover(){return this.store.transaction(()=>{
     const rows=this.db.prepare("SELECT b.* FROM review_batches b JOIN jobs j ON j.id=b.job_id WHERE b.state IN('RESERVED','DISPATCHED') AND (j.state<>'RUNNING' OR j.lease_until<=?)").all(this.store.clock());
