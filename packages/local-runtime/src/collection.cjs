@@ -36,6 +36,8 @@ class LocalCollection {
       .run(job.id,job.id,configuration.id,configuration.revision,scope.accountId,scope.accountRevision,canonical({...spec,strictStages:scope.strictStages}),canonical(plan),this.store.clock());
     this.store.audit('AUTOMATION','COLLECTION_STARTED',job.id,{configurationRevision:configuration.revision});return job.id;
   });}
+  /** 历史已完整采集的平台帖子 ID；只用于选帖跳过，不改变历史数据。 */
+  completedPostIds(){return new Set(this.db.prepare("SELECT DISTINCT platform_id FROM run_posts WHERE coverage='COMPLETE'").all().map(row=>row.platform_id));}
   current(lease,runId){
     const job=this.queue.current(lease),run=this.db.prepare('SELECT * FROM collection_runs WHERE id=? AND job_id=?').get(runId,job.id);
     if(job.kind!=='COLLECT'||job.cancel_requested||!run||run.cancel_requested||run.status!=='RUNNING')throw new LocalError('COLLECTION_NOT_RUNNING');

@@ -45,7 +45,8 @@ class LocalCollectionExecutor {
    // is the only time bound a round can rely on.
    const batch=Number.isFinite(config.batchLimit)&&config.batchLimit>0?config.batchLimit:1;
    const runMs=Math.min(roundTimeBudget.hardMaxMs,postTimeBudget.maxMs*batch+roundTimeBudget.overheadMs);
-   const result=await collect(adapter,config,async()=>{try{await guard();return false;}catch{return true;}},{requests:10240,pagesPerStream:4,comments:policy.commentCollectionLimits.commentsPerPost*config.batchLimit-restored.length,callMs:40000,runMs,postBudget:postTimeBudget,pacing:longReadPacing},save,selected);
+   const completedPostIds=this.collection.completedPostIds();
+   const result=await collect(adapter,config,async()=>{try{await guard();return false;}catch{return true;}},{requests:10240,pagesPerStream:4,comments:policy.commentCollectionLimits.commentsPerPost*config.batchLimit-restored.length,callMs:40000,runMs,postBudget:postTimeBudget,pacing:longReadPacing,completedPostIds},save,selected);
    if(result.discarded||result.status==='FAILED'||result.status==='PAUSED'){
     // collect 已经把真实失败原因和阶段诊断算出来了，不能在这里丢掉换成笼统码。
     const failure=new LocalError('COLLECTION_INCOMPLETE');

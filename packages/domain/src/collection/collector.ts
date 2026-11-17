@@ -68,6 +68,8 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
     postBudget?: PostTimeBudget;
     pacing?: LongReadPacing;
     searchGap?: SearchGap;
+    /** 历史已完整采集（run_posts.coverage='COMPLETE'）的帖子 ID；搜索选帖时直接跳过，PARTIAL 不在其中。 */
+    completedPostIds?: ReadonlySet<string>;
 } = limits, progress?: (result:ReadResult)=>Promise<void>, selectedPost?:Post,beforePost?:(post:Post)=>Promise<void>,postFinished?:(post:PostRead)=>Promise<void>,selectPost?:(post:Post)=>boolean,observe?:(stage:CollectionDiagnostic['stage'])=>Promise<void>): Promise<ReadResult> {
     if (adapter.mode !== config.mode || adapter.platform !== config.platform)
         throw new ReadFailure("REAL_DISABLED");
@@ -158,7 +160,11 @@ export async function collect(adapter: ReadAdapter, config: ConfigInput, cancell
                 // A planned keyword only contributes its own quota; unused slots roll to the next keyword.
                 if (found.size >= config.batchLimit || (quota !== undefined && addedHere >= quota))
                     break;
-                if (!selectPost||selectPost(p)) { found.set(p.id, p); addedHere++; }
+                if (!selectPost||selectPost(p)) {
+                    // 历史已完整读过的帖子不再重复打开；PARTIAL 记录不在集合里，允许本轮重采补齐。
+                    if (budget.completedPostIds?.has(p.id)) continue;
+                    found.set(p.id, p); addedHere++;
+                }
             } }, adapter.mode==="MOCK"?limits.pagesPerStream:1);
             if (seeded)
                 result.searchPlanUsage = [...(result.searchPlanUsage ?? []), { keyword, found: addedHere }];
