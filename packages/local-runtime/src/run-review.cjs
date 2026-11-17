@@ -8,7 +8,10 @@ class RunReview{
  for(const post of this.db.prepare('SELECT id FROM run_posts WHERE run_id=? ORDER BY ordinal').all(runId))for(const p of frozen.policies){
   // Bulk processing never retries an existing model batch, including failed/unknown.
   if(this.db.prepare('SELECT 1 FROM review_batches WHERE run_id=? AND post_id=? AND policy_id=?').get(runId,post.id,p.id)||this.db.prepare("SELECT 1 FROM jobs WHERE kind='REVIEW' AND state IN('QUEUED','RUNNING','UNKNOWN') AND json_extract(payload,'$.runId')=? AND json_extract(payload,'$.postId')=? AND json_extract(payload,'$.policyId')=?").get(runId,post.id,p.id)){skipped++;continue;}
-  const plan=this.review.plan(runId,post.id,p.id);if(plan.empty){skipped++;continue;}batches.push({scope:plan.scope,comments:plan.inputs.length,estimatedMicros:plan.estimate.estimatedMicros});
+  // A reread run repeats already reviewed comments; never pay twice for the same
+  // platform comment and source hash under the same policy revision.
+  const reviewed=this.db.prepare('SELECT c.platform_id platform_id,c.source_hash source_hash FROM review_results r JOIN review_batches b ON b.id=r.batch_id JOIN run_comments c ON c.id=r.comment_id WHERE b.policy_id=? AND b.policy_revision=?').all(p.id,p.revision).map(r=>r.platform_id+'\u0000'+r.source_hash);
+  const plan=this.review.plan(runId,post.id,p.id,undefined,reviewed);if(plan.empty){skipped++;continue;}batches.push({scope:plan.scope,comments:plan.inputs.length,estimatedMicros:plan.estimate.estimatedMicros});
  }
  if(batches.length>100)throw new LocalError('RUN_REVIEW_BATCH_LIMIT');const scope={runId,batches,automaticRules:(frozen.contactRules||[]).length};if(Buffer.byteLength(canonical(scope))>60000)throw new LocalError('RUN_REVIEW_BATCH_LIMIT');return {scope,previewHash:hash(scope),requests:batches.length,comments:batches.reduce((n,b)=>n+b.comments,0),estimatedMicros:batches.some(b=>b.estimatedMicros===null)?null:batches.reduce((n,b)=>n+b.estimatedMicros,0),skipped,minutes:15};
  }

@@ -94,7 +94,7 @@ export function LocalPostComparison({
             .map((version) => (
             <SelectItem key={version.id} value={version.id}>
             {new Date(version.created_at).toLocaleString()} ·{" "}
-            {version.coverage === "COMPLETE" ? "完整" : "部分或未知"}
+            {version.coverage === "COMPLETE" ? "完整" : "待补读"}
             </SelectItem>
             ))}
           </SelectContent>

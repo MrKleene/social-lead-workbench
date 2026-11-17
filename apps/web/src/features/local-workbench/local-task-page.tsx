@@ -289,6 +289,9 @@ function RunWorkspace({
     !!data &&
     coverage.posts.length === data.posts &&
     coverage.posts.every((post) => post.complete);
+  const postsPending = coverage
+    ? Math.max(0, (data?.posts ?? 0) - coverage.posts.filter((post) => post.complete).length)
+    : 0;
   const collectSettled =
     (runStatus === "COMPLETE" && !data?.run.reason) || collectPartial;
   const reviewActive =
@@ -440,7 +443,7 @@ function RunWorkspace({
             collectPartial
               ? postsComplete
                 ? `已采集 · ${data?.posts ?? 0} 篇`
-                : "已采集 · 覆盖不完整"
+                : `已采集 · ${data?.posts ?? 0} 篇 · 待补读 ${postsPending} 篇`
               : data?.run.reason
                 ? "本轮已停止"
                 : "进行中"
@@ -464,9 +467,9 @@ function RunWorkspace({
           <LocalReviewDialog runId={runId} onClose={() => onStage("collect")} />
           <Link
             to={`/comment-review?run=${runId}`}
-            className="text-body underline underline-offset-4"
+            className="text-body text-primary underline-offset-4 hover:underline"
           >
-            查看本轮审核结果 →
+            查看本轮审核结果
           </Link>
         </>
       ) : null}
@@ -475,15 +478,15 @@ function RunWorkspace({
         <SectionCard title="本轮回复">
           <Link
             to={`/reply-history?run=${runId}`}
-            className="text-body underline underline-offset-4"
+            className="text-body text-primary underline-offset-4 hover:underline"
           >
-            查看本轮回复记录 →
+            查看本轮回复记录
           </Link>
           <Link
             to="/auto-contact/pending"
-            className="text-body underline underline-offset-4"
+            className="text-body text-primary underline-offset-4 hover:underline"
           >
-            查看待处理及未知结果 →
+            查看待处理及未知结果
           </Link>
         </SectionCard>
       ) : null}

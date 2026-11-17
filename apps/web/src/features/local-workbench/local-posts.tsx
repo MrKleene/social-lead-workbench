@@ -78,7 +78,7 @@ export function LocalPosts({
             <RecordItem
               key={post.id}
               title={post.title || "无标题笔记"}
-              meta={`${post.comments} 条评论 · ${post.coverage === "COMPLETE" ? "完整" : "完整性未确认"} · ${post.observedAt ? new Date(post.observedAt).toLocaleString() : "历史时间未知"}`}
+              meta={`${post.comments} 条评论 · ${post.coverage === "COMPLETE" ? "完整" : post.readAvailable ? "待补读" : "完整性未确认"} · ${post.observedAt ? new Date(post.observedAt).toLocaleString() : "历史时间未知"}`}
               action={
                 <>
                   <Button

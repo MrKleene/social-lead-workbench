@@ -7,7 +7,7 @@ const policy=require('@crm/local-runtime/policy');
 const dayAt=timestamp=>new Date(timestamp+8*3600000).toISOString().slice(0,10);
 class LocalReview {
   constructor(store){this.store=store;this.db=store.db;this.queue=new LocalQueue(store);this.collection=new LocalCollection(store);}
-  plan(runId,postId,policyId,reviewMode){
+  plan(runId,postId,policyId,reviewMode,reviewedKeys){
     if(reviewMode!==undefined&&reviewMode!=='INDEPENDENT')throw new LocalError('INVALID_REVIEW_MODE');
     const independent=reviewMode==='INDEPENDENT';
     const barrier=independent?this.independentSource(runId,postId):this.collection.barrier(runId);if(!barrier.ready)throw new LocalError('COLLECTION_BARRIER_NOT_READY');
@@ -17,7 +17,8 @@ class LocalReview {
     if(!post||!independent&&(!config||config.archived||config.revision!==run.revision))throw new LocalError('REVIEW_SOURCE_CHANGED');
     if(!selected?.enabled||(!independent&&(!frozen||selected.version!==frozen.version||selected.revision!==frozen.revision||selected.model_version!==frozen.modelVersion)))throw new LocalError('REVIEW_POLICY_CHANGED');
     if(!model?.authorized||model.version!==(independent?selected.model_version:frozen.modelVersion)||model.consent!=='beijing-original-comments-v2')throw new LocalError('MODEL_AUTHORIZATION_REQUIRED');
-    const comments=this.collection.comments(runId,postId);
+    const skip=reviewedKeys&&new Set(reviewedKeys);
+    const comments=this.collection.comments(runId,postId).filter(c=>!skip||!skip.has(c.platform_id+'\u0000'+c.source_hash));
     const inputs=comments.map(c=>({id:c.id,snapshot:c.snapshot,rules:{target:selected.target}}));
     const payload={...policy.prepareOutbound(inputs,true),requestPolicy:policy.wholePostRequestPolicy};
     const estimate=policy.estimateWholePostCost(payload,model.model);

@@ -34,7 +34,7 @@
 
 2026-10-26 复核：[模型市场](https://www.qianwenai.com/models)、[Max 型号、北京端点及标准价格](https://www.qianwenai.com/models/qwen3.8-max)、[结构化输出](https://platform.qianwenai.com/docs/developer-guides/text-generation/structured-output)、[思考模式](https://platform.qianwenai.com/docs/developer-guides/text-generation/thinking)。默认列表仅展示 Flash、Max 和 Max0902 三个文本输出候选；旧3.7型号仍在后端受控目录，已有选择会追加显示并保留原价格版本，不自动替换或改写数据库。新Max采用独立价格版本 `beijing-2026-10-26`，旧确认不能授权它。未知型号/价目仍阻断，不猜费用。未做真实连通性或质量验收。
 
-这些型号默认开启思考；本项目所有请求 `enable_thinking=false`、严格 JSON Schema、最多2500输出token。业务输出保持符合/不符合/待确认、排序分、理由、上下文程度及引用。服务端复核结构与脱敏原文，缺上下文强制待确认。分数不是校准概率。保留2500输出token上限以限制请求；若因此截断，按无效结果失败，不补猜或自动重试。
+这些型号默认开启思考；本项目所有请求 `enable_thinking=false`、严格 JSON Schema、最多2500输出token。业务输出保持符合/不符合/待确认、排序分、理由（简体中文）、上下文程度及引用。服务端复核结构与脱敏原文，缺上下文强制待确认。分数不是校准概率。保留2500输出token上限以限制请求；若因此截断，按无效结果失败，不补猜或自动重试。
 
 核对日期2026-10-21：[Qwen3.8-Flash官方模型页与接口](https://www.qianwenai.com/models/qwen3.8-flash#api-reference)、[JSON Schema支持](https://platform.qianwenai.com/docs/developer-guides/text-generation/structured-output)、[非思考模式参数](https://help.aliyun.com/zh/model-studio/deep-thinking)、[业务空间与Key](https://platform.qianwenai.com/docs/developer-guides/administration/workspace)、[其他型号价格](https://help.aliyun.com/zh/model-studio/model-pricing)。官方支持不等于本项目真实连通性或语义质量验收。3.8-flash是官方提供的型号名，未声称它是不可变快照；若服务商更新同名模型，需更新本地上下文版本以重新验收。
 
