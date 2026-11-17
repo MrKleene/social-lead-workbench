@@ -19,11 +19,17 @@ type chunkFixture struct {
 	fail                                    bool
 	reverse                                 bool
 	invalidTotal, emptyVisible, explicitEnd bool
+	loading                                 int
 }
 
 func (f *chunkFixture) Snapshot(context.Context) ([]byte, CoverageReady, error) {
 	if f.fail {
 		return nil, CoverageReady{}, errors.New("PLATFORM_LIMIT")
+	}
+	if f.loading > 0 {
+		f.loading--
+		b, _ := json.Marshal(map[string]any{"note": map[string]any{"note": map[string]any{"noteId": "note"}, "comments": map[string]any{"list": []any{}, "hasMore": false}}})
+		return b, CoverageReady{Document: "complete", Container: true, CommentsLoading: true}, nil
 	}
 	rows := []any{}
 	for i := 0; i < f.visible; i++ {
@@ -196,6 +202,36 @@ func TestChunksEmptyExplicitAndUnknown(t *testing.T) {
 	}
 }
 
+func TestChunksWaitsForLoadingBeforeEmpty(t *testing.T) {
+	f := &chunkFixture{roots: 0, visible: 0, invalidTotal: true, emptyVisible: true, loading: 3}
+	s, _ := NewCommentChunkSession(nil)
+	r, e := s.Read(context.Background(), f, "note", chunkConfig())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if r.BoundedRead.State != "COMPLETE" || r.BoundedRead.Reason != "DECLARED_TREE_EXHAUSTED" || !r.BoundedRead.Final.Ready.EmptyVisible {
+		t.Fatalf("loading settled empty tree: %s/%s", r.BoundedRead.State, r.BoundedRead.Reason)
+	}
+	if len(r.Chunk.Rows) != 0 {
+		t.Fatal("loading placeholder produced rows")
+	}
+}
+
+func TestChunksLoadingPastDeadlineStaysUnknown(t *testing.T) {
+	wait := commentsLoadingWait
+	commentsLoadingWait = 700 * time.Millisecond
+	defer func() { commentsLoadingWait = wait }()
+	f := &chunkFixture{roots: 0, visible: 0, invalidTotal: true, emptyVisible: true, loading: 1000}
+	s, _ := NewCommentChunkSession(nil)
+	r, e := s.Read(context.Background(), f, "note", chunkConfig())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if r.BoundedRead.State == "COMPLETE" || r.BoundedRead.Reason != "PAGE_NOT_READY" {
+		t.Fatalf("unsettled loading must not certify coverage: %s/%s", r.BoundedRead.State, r.BoundedRead.Reason)
+	}
+}
+
 func TestChunksWireGolden(t *testing.T) {
 	s, _ := NewCommentChunkSession(nil)
 	r, e := s.Read(context.Background(), &chunkFixture{roots: 3, visible: 3, perRoot: 2}, "note", chunkConfig())
@@ -309,13 +345,45 @@ func TestChunksWaitForHydrationWithoutExtraActions(t *testing.T) {
 		t.Fatalf("%+v %v", r, e)
 	}
 }
-func TestChunksUnresolvedCoverageStaysUnknown(t *testing.T) {
+func TestChunksClosedTreeAcceptsLaggingPlatformCount(t *testing.T) {
+	// The platform-wide commentCount can lag behind hidden or deleted comments; the
+	// closed page tree is the completeness proof, and the global count stays evidence.
 	f := &hydrationFixture{chunkFixture: chunkFixture{roots: 6, visible: 1, explicitEnd: true}}
 	s, _ := NewCommentChunkSession(nil)
 	start := time.Now()
 	r, e := s.Read(context.Background(), f, "note", chunkConfig())
-	if e != nil || r.BoundedRead.State != "UNKNOWN" || r.BoundedRead.Reason != "COVERAGE_INSUFFICIENT" || len(r.Chunk.Rows) != 1 || f.scrolls != 0 || r.BoundedRead.ReplyActions > 2 || time.Since(start) > 4*time.Second {
+	if e != nil || r.BoundedRead.State != "COMPLETE" || r.BoundedRead.Reason != "DECLARED_TREE_EXHAUSTED" || len(r.Chunk.Rows) != 1 || f.scrolls != 0 || r.BoundedRead.ReplyActions > 2 || time.Since(start) > 4*time.Second {
 		t.Fatalf("%+v %v", r, e)
+	}
+	if c := r.BoundedRead.ChunkSummary; c == nil || c.Declared.Value == nil || *c.Declared.Value != 6 || c.Unique != 1 {
+		t.Fatalf("platform count not kept as evidence: %+v", c)
+	}
+}
+func TestChunkSummaryTreeCompleteNeedsStructuralEvidence(t *testing.T) {
+	// Relaxing the platform-wide count must not relax any structural proof: every
+	// missing field keeps both predicates closed.
+	declared, closed, controls, yes := 2, false, 0, true
+	base := func() *ChunkCoverageSummary {
+		return &ChunkCoverageSummary{Roots: 2, Unique: 2, Declared: CoverageCount{State: "EXACT", Value: &declared}, HasMore: CoverageBool{State: "EXACT", Value: &closed}, RootEndVisible: &yes, ReplyControls: &controls, ScopeExact: &yes}
+	}
+	if c := base(); !c.Complete() || !c.TreeComplete() {
+		t.Fatal("closed tree with matching count must be complete")
+	}
+	lagging := 1
+	if c := base(); func() bool { c.Declared.Value = &lagging; return c.Complete() || c.TreeComplete() }() {
+		t.Fatal("platform count below loaded comments must stay incomplete")
+	}
+	if c := base(); func() bool { c.RootEndVisible = nil; return c.Complete() || c.TreeComplete() }() {
+		t.Fatal("missing root end evidence must stay incomplete")
+	}
+	if c := base(); func() bool { c.ScopeExact = nil; return c.Complete() || c.TreeComplete() }() {
+		t.Fatal("missing scope evidence must stay incomplete")
+	}
+	if c := base(); func() bool { c.ReplyControls = nil; return c.Complete() || c.TreeComplete() }() {
+		t.Fatal("missing reply controls evidence must stay incomplete")
+	}
+	if c := base(); func() bool { c.Declared.Value = nil; return c.Complete() || c.TreeComplete() }() {
+		t.Fatal("missing platform count must stay incomplete")
 	}
 }
 func TestChunksHydrationHonorsCancellation(t *testing.T) {
@@ -496,6 +564,9 @@ func TestChunksSnapshotFatalErrorsDoNotRetry(t *testing.T) {
 }
 
 func TestChunksStateUnavailableHonorsContext(t *testing.T) {
+	pace, jitter := replyExpandPace, replyExpandJitter
+	replyExpandPace, replyExpandJitter = 0, 0
+	defer func() { replyExpandPace, replyExpandJitter = pace, jitter }()
 	for _, reason := range []string{"CANCELLED", "TIMEOUT"} {
 		t.Run(reason, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())

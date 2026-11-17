@@ -22,12 +22,13 @@ type CoverageBool struct {
 	Value *bool  `json:"value"`
 }
 type CoverageReady struct {
-	RootEndVisible *bool  `json:"rootEndVisible,omitempty"`
-	ReplyControls  *int   `json:"replyControls,omitempty"`
-	RootScopeExact *bool  `json:"rootScopeExact,omitempty"`
-	Document       string `json:"document"`
-	Container      bool   `json:"container"`
-	EmptyVisible   bool   `json:"emptyVisible,omitempty"`
+	RootEndVisible  *bool  `json:"rootEndVisible,omitempty"`
+	ReplyControls   *int   `json:"replyControls,omitempty"`
+	RootScopeExact  *bool  `json:"rootScopeExact,omitempty"`
+	Document        string `json:"document"`
+	Container       bool   `json:"container"`
+	EmptyVisible    bool   `json:"emptyVisible,omitempty"`
+	CommentsLoading bool   `json:"commentsLoading,omitempty"`
 }
 type CoverageLoaded struct {
 	Roots        int `json:"roots"`

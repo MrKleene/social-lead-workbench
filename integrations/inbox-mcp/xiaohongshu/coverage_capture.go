@@ -24,7 +24,8 @@ const coveragePageScript = `() => {
   rootEndVisible: [...document.querySelectorAll('.note-scroller .end-container,.interact-container .end-container')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0&&/^(?:THE\s*END|-\s*THE\s*END\s*-)$/i.test((e.textContent||'').trim())),
   replyControls: Math.min(200,[...document.querySelectorAll('.note-scroller .show-more,.interact-container .show-more')].filter(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0).length),
   container: !!document.querySelector('.interact-container, .note-scroller'),
-  emptyVisible: [...document.querySelectorAll('.note-scroller .no-comments-text,.interact-container .no-comments-text')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0&&(e.textContent||'').trim()==='这是一片荒地')
+  emptyVisible: [...document.querySelectorAll('.note-scroller .no-comments-text,.note-scroller .comments-el,.interact-container .no-comments-text,.interact-container .comments-el')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0&&/^这是一片荒地/.test((e.textContent||'').trim())),
+  commentsLoading: [...document.querySelectorAll('.note-scroller .comments-el,.interact-container .comments-el')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0&&/^加载中/.test((e.textContent||'').trim()))
  }});
 }`
 
@@ -35,8 +36,8 @@ func captureCoveragePage(page *rod.Page) (string, CoverageReady, error) {
 		return "", ready, fmt.Errorf("coverage observation unavailable")
 	}
 	var envelope struct {
-		Notes json.RawMessage `json:"notes"`
-		Ready CoverageReady   `json:"ready"`
+		Notes json.RawMessage                         `json:"notes"`
+		Ready CoverageReady                           `json:"ready"`
 		State struct{ Root, Note, Map, Route string } `json:"state"`
 	}
 	if json.Unmarshal([]byte(v.Value.Str()), &envelope) != nil {
@@ -44,7 +45,7 @@ func captureCoveragePage(page *rod.Page) (string, CoverageReady, error) {
 	}
 	if len(envelope.Notes) == 0 || string(envelope.Notes) == "null" {
 		// Only bounded shape enums, never source text, cookies or URLs.
-		logrus.Warnf("coverage state missing: root=%s note=%s map=%s route=%s document=%s container=%v", envelope.State.Root,envelope.State.Note,envelope.State.Map,envelope.State.Route,envelope.Ready.Document,envelope.Ready.Container)
+		logrus.Warnf("coverage state missing: root=%s note=%s map=%s route=%s document=%s container=%v", envelope.State.Root, envelope.State.Note, envelope.State.Map, envelope.State.Route, envelope.Ready.Document, envelope.Ready.Container)
 		return "", envelope.Ready, errCoverageStateUnavailable
 	}
 	return string(envelope.Notes), envelope.Ready, nil

@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-rod/rod"
+	"github.com/sirupsen/logrus"
+	"math/rand"
 	"time"
 	"unicode/utf16"
 )
@@ -170,8 +172,15 @@ func chunkCoverage(rows []chunkRecord, raw []byte, id string, ready CoverageRead
 	}
 	return c
 }
+
 func (c *ChunkCoverageSummary) Complete() bool {
 	return c != nil && c.HasMore.State == "EXACT" && c.HasMore.Value != nil && !*c.HasMore.Value && c.UnknownReplyGroups == c.RootScopedLeafGroups && c.ReplyDeficit == 0 && c.ReplyExcess == 0 && c.ScopeExact != nil && *c.ScopeExact && c.ReplyControls != nil && *c.ReplyControls == 0 && ((c.Declared.Value != nil && *c.Declared.Value == c.Unique && c.RootEndVisible != nil && *c.RootEndVisible) || (c.Unique == 0 && c.EmptyVisible && c.Declared.Value == nil))
+}
+
+// TreeComplete accepts a closed page tree even when the platform-wide commentCount
+// lags behind deleted or hidden comments. The global count stays evidence-only.
+func (c *ChunkCoverageSummary) TreeComplete() bool {
+	return c != nil && c.HasMore.State == "EXACT" && c.HasMore.Value != nil && !*c.HasMore.Value && c.UnknownReplyGroups == c.RootScopedLeafGroups && c.ReplyDeficit == 0 && c.ReplyExcess == 0 && c.ScopeExact != nil && *c.ScopeExact && c.ReplyControls != nil && *c.ReplyControls == 0 && ((c.Declared.Value != nil && *c.Declared.Value >= c.Unique && c.RootEndVisible != nil && *c.RootEndVisible) || (c.Unique == 0 && c.EmptyVisible && c.Declared.Value == nil))
 }
 
 type chunkRecord struct {
@@ -185,6 +194,7 @@ type CommentChunkSession struct {
 	known     map[string]CommentMark
 	observed  map[string]bool
 	windows   int
+	actions   int
 }
 
 func NewCommentChunkSession(cp *CommentCheckpoint) (*CommentChunkSession, error) {
@@ -270,6 +280,7 @@ func chunkSnapshot(raw []byte, id string) (FeedDetail, []chunkRecord, error) {
 			if n, exists := m["noteId"]; exists {
 				v, ok := boundedString(n)
 				if !ok || v != id {
+					logrus.Warnf("chunk noteId mismatch: want=%s comment=%s got=%v", id, cid, string(n))
 					return errors.New("IDENTITY_CONFLICT")
 				}
 			}
@@ -281,6 +292,7 @@ func chunkSnapshot(raw []byte, id string) (FeedDetail, []chunkRecord, error) {
 			mark := CommentMark{ID: cid, Parent: parent, Digest: hex.EncodeToString(h[:])}
 			if old, exists := seen[cid]; exists {
 				if old != mark {
+					logrus.Warnf("chunk duplicate id changed mark: id=%s oldParent=%q newParent=%q oldDigest=%.8s newDigest=%.8s", cid, old.Parent, mark.Parent, old.Digest, mark.Digest)
 					return errors.New("IDENTITY_CONFLICT")
 				}
 				continue
@@ -339,6 +351,7 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 	var recoveryDeadline time.Time
 	var hydrationDeadline time.Time
 	hydrationObservation := ""
+	var loadingDeadline time.Time
 	chunkBytes := 0
 	for {
 		if ctx.Err() != nil {
@@ -372,11 +385,13 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 					}
 				}
 			}
+			logrus.Warnf("chunk snapshot failed: %v", e)
 			report.Reason = boundedError(ctx, e)
 			break
 		}
 		n, records, e := chunkSnapshot(b, id)
 		if e != nil {
+			logrus.Warnf("chunk snapshot decode failed: %v", e)
 			report.Reason = e.Error()
 			break
 		}
@@ -416,10 +431,27 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 			report.Reason = "PAGE_NOT_READY"
 			break
 		}
+		// A comment list that is still loading is not an empty list. Wait for the
+		// placeholder to settle within one fixed deadline; never page an empty tree.
+		if ready.CommentsLoading {
+			if loadingDeadline.IsZero() {
+				loadingDeadline = time.Now().Add(commentsLoadingWait)
+			}
+			if time.Now().Before(loadingDeadline) {
+				if !chunkWait(ctx) {
+					report.Reason = boundedError(ctx, ctx.Err())
+					break
+				}
+				continue
+			}
+			report.Reason = "PAGE_NOT_READY"
+			break
+		}
 		// All acknowledged anchors must be seen again before new records may be delivered.
 		for _, v := range records {
 			if old, ok := s.known[v.mark.ID]; ok {
 				if old != v.mark {
+					logrus.Warnf("chunk known anchor changed: id=%s oldParent=%q newParent=%q oldDigest=%.8s newDigest=%.8s", v.mark.ID, old.Parent, v.mark.Parent, old.Digest, v.mark.Digest)
 					return nil, errors.New("IDENTITY_CONFLICT")
 				}
 				s.observed[v.mark.ID] = true
@@ -433,6 +465,7 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 				}
 				if old, ok := pendingIDs[v.mark.ID]; ok {
 					if old != v.mark {
+						logrus.Warnf("chunk pending anchor changed: id=%s oldParent=%q newParent=%q oldDigest=%.8s newDigest=%.8s", v.mark.ID, old.Parent, v.mark.Parent, old.Digest, v.mark.Digest)
 						return nil, errors.New("IDENTITY_CONFLICT")
 					}
 					continue
@@ -490,7 +523,7 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 				report.Actions.ReplyClicks++
 				awaiting = chunkObservation(records, raw, id, ready)
 				actionDeadline = time.Now().Add(5 * time.Second)
-				if !chunkWait(ctx) {
+				if !s.paceAction(ctx, replyExpandPace, replyExpandJitter) {
 					report.Reason = boundedError(ctx, ctx.Err())
 					break
 				}
@@ -537,8 +570,16 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 					}
 					continue
 				}
-				report.State = "UNKNOWN"
-				report.Reason = "COVERAGE_INSUFFICIENT"
+				// The page tree is closed; a lagging platform-wide count must not keep
+				// a structurally complete read unknown.
+				if report.ChunkSummary.TreeComplete() && len(s.known)+len(delta) == len(records) {
+					report.State = "COMPLETE"
+					report.Reason = "DECLARED_TREE_EXHAUSTED"
+					report.ReplyStop = "DECLARED_REPLIES_LOADED"
+				} else {
+					report.State = "UNKNOWN"
+					report.Reason = "COVERAGE_INSUFFICIENT"
+				}
 			}
 			break
 		}
@@ -573,7 +614,7 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 		report.RootStop = "VISIBLE_WINDOW_READ"
 		awaiting = chunkObservation(records, raw, id, ready)
 		actionDeadline = time.Now().Add(5 * time.Second)
-		if !chunkWait(ctx) {
+		if !s.paceAction(ctx, rootScrollPace, rootScrollJitter) {
 			report.Reason = boundedError(ctx, ctx.Err())
 			break
 		}
@@ -619,6 +660,50 @@ func chunkFingerprint(rows []chunkRecord) string {
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
+
+// A person reads a note top-down: they expand a few reply threads, pause, then
+// scroll on. Pace every platform-visible action like that reader instead of
+// bursting clicks, and give every readingPauseEvery-th action a longer pause.
+var commentsLoadingWait = 8 * time.Second
+var replyExpandPace = 2500 * time.Millisecond
+var replyExpandJitter = 2500 * time.Millisecond
+var rootScrollPace = 3000 * time.Millisecond
+var rootScrollJitter = 5000 * time.Millisecond
+var readingPauseEvery = 6
+var readingPause = 5000 * time.Millisecond
+var readingPauseJitter = 5000 * time.Millisecond
+
+func paceWait(ctx context.Context, base, jitter time.Duration) bool {
+	d := base
+	if jitter > 0 {
+		d += time.Duration(rand.Int63n(int64(jitter)))
+	}
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+// paceAction sleeps before one platform-visible action (reply expansion or root
+// scroll) and records it; the cadence is the account-level rate limit.
+func (s *CommentChunkSession) paceAction(ctx context.Context, base, jitter time.Duration) bool {
+	if !paceWait(ctx, base, jitter) {
+		return false
+	}
+	s.actions++
+	if readingPauseEvery > 0 && s.actions%readingPauseEvery == 0 {
+		return paceWait(ctx, readingPause, readingPauseJitter)
+	}
+	return true
+}
+
 func chunkWait(ctx context.Context) bool {
 	t := time.NewTimer(250 * time.Millisecond)
 	defer t.Stop()

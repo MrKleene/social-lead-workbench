@@ -7,8 +7,10 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/sirupsen/logrus"
+	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // Candidate driver: no arbitrary page links, API fetches or profile lookups.
@@ -24,18 +26,61 @@ type boundedRodPage struct {
 
 func (p *boundedRodPage) guard(ctx context.Context) error {
 	v, e := p.page.Context(ctx).Eval(`post => {
-		if([...document.querySelectorAll('.access-wrapper,.error-wrapper,.not-found-wrapper,.blocked-wrapper,.captcha-container,.login-container')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0))return 'PLATFORM_LIMIT';
-		if(location.hostname==='www.xiaohongshu.com'&&location.pathname!=='/explore/'+post)return 'IDENTITY_CONFLICT';
+		if([...document.querySelectorAll('.access-wrapper,.error-wrapper,.not-found-wrapper,.blocked-wrapper,.captcha-container,.login-container')].some(e=>e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0))return 'WRAPPER|'+location.href;
+		if(location.hostname==='www.xiaohongshu.com'&&location.pathname!=='/explore/'+post)return 'URL|'+location.href;
 		return 'OK';
 	}`, p.feedID)
 	if e != nil {
 		logrus.Errorf("guard eval failed: %v", e)
 		return errors.New("READ_FAILED")
 	}
-	if v.Value.Str() != "OK" {
-		return errors.New(v.Value.Str())
+	raw := v.Value.Str()
+	if raw == "OK" {
+		return nil
 	}
-	return nil
+	kind, location, _ := strings.Cut(raw, "|")
+	code := "IDENTITY_CONFLICT"
+	if kind == "WRAPPER" {
+		code = "PLATFORM_LIMIT"
+	} else {
+		code = classifyGuardLocation(location)
+	}
+	// Log the path and platform error code only; the query string carries access tokens.
+	logrus.Warnf("guard rejected: %s path=%s error_code=%s", code, guardLogPath(location), guardErrorCode(location))
+	return errors.New(code)
+}
+
+// A redirected page is not always another note: the platform sends rate-limited
+// accounts to its login/error shell (for example error_code=300013), which must
+// stop the read as a platform limit instead of a note identity conflict.
+func classifyGuardLocation(href string) string {
+	u, e := url.Parse(href)
+	if e != nil || u.Host == "" {
+		return "IDENTITY_CONFLICT"
+	}
+	host := strings.ToLower(u.Hostname())
+	if host != "www.xiaohongshu.com" && host != "xiaohongshu.com" {
+		return "IDENTITY_CONFLICT"
+	}
+	path := u.Path
+	if strings.HasPrefix(path, "/website-login") || strings.HasPrefix(path, "/login") || u.Query().Get("error_code") != "" {
+		return "PLATFORM_LIMIT"
+	}
+	return "IDENTITY_CONFLICT"
+}
+
+func guardLogPath(href string) string {
+	if u, e := url.Parse(href); e == nil {
+		return u.Path
+	}
+	return ""
+}
+
+func guardErrorCode(href string) string {
+	if u, e := url.Parse(href); e == nil {
+		return u.Query().Get("error_code")
+	}
+	return ""
 }
 func (p *boundedRodPage) Snapshot(ctx context.Context) ([]byte, CoverageReady, error) {
 	if e := p.guard(ctx); e != nil {
