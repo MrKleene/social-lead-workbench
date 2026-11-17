@@ -107,8 +107,8 @@ export function LocalTaskPage() {
   }
   if (
     steps.data?.autoReply &&
-    !steps.data.commentTemplateId &&
-    !steps.data.dmTemplateId
+    !steps.data.commentTemplateIds.length &&
+    !steps.data.dmTemplateIds.length
   ) {
     missing.push({ tab: "contact", text: "回复模板" });
   }
@@ -253,6 +253,58 @@ export function LocalTaskPage() {
         onStarted={handleStarted}
       />
     </>
+  );
+}
+
+/** 本轮逐条进度：账号、第几条、收件人昵称、结果。只读，跟着任务状态轮询。 */
+const PROGRESS_LABELS: Record<string, string> = {
+  SENT: "已发送",
+  SENDING: "正在发送",
+  QUEUED: "已排队",
+  WAITING: "等待发送间隔",
+  FAILED: "未发送",
+  UNKNOWN: "结果未知",
+};
+
+const PROGRESS_REASONS: Record<string, string> = {
+  ACCOUNT_POOL_QUOTA_EXHAUSTED: "今日额度已用完",
+  ACCOUNT_POOL_RESTRICTED: "今天已有两个账号被限制",
+  ACCOUNT_HAS_RETAINED_RESTRICTION: "账号有未解除的限制",
+  ACCOUNT_REQUIRES_LOGIN: "账号需要重新登录",
+  COMMENT_CAPABILITY_REQUIRED: "账号未通过评论回复能力核验",
+  RECIPIENT_ALREADY_PLANNED_OR_CONTACTED: "已在队列中或已联系过",
+  ACCOUNT_SWITCHED: "已换账号续发",
+};
+
+function LocalReplyProgress({ runId }: { runId: string }) {
+  const data = useLocalRecords(
+    "automationProgress",
+    { runId },
+    { refetchInterval: 2000 },
+  );
+  const items = data.data?.items ?? [];
+  if (!items.length) return null;
+  const summary = data.data?.summary;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-caption text-muted-foreground">
+        共 {summary?.total ?? items.length} 条 · 已发送 {summary?.sent ?? 0} ·
+        待发送 {summary?.pending ?? 0} · 未发送{" "}
+        {(summary?.failed ?? 0) + (summary?.unknown ?? 0)}
+      </p>
+      <ol className="flex flex-col gap-1">
+        {items.map((item) => (
+          <li key={item.decisionId} className="text-body break-words">
+            {item.accountName ?? "未分配账号"} · 第 {item.index} 条 ·{" "}
+            {item.recipientNickname ?? item.recipientId} ·{" "}
+            {item.state === "FAILED" && item.reason
+              ? `${PROGRESS_LABELS[item.state]} · ${PROGRESS_REASONS[item.reason] ?? item.reason}`
+              : PROGRESS_LABELS[item.state]}
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -476,6 +528,7 @@ function RunWorkspace({
 
       {stage === "contact" ? (
         <SectionCard title="本轮回复">
+          <LocalReplyProgress runId={runId} />
           <Link
             to={`/reply-history?run=${runId}`}
             className="text-body text-primary underline-offset-4 hover:underline"

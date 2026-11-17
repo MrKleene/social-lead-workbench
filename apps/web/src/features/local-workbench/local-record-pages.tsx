@@ -25,6 +25,7 @@ import {
 } from "@/features/auto-contact/reply-history-content";
 import { LocalEvidence } from "./local-evidence";
 import { LocalRecoveryCheck } from "./local-recovery-hold";
+import { LocalUnknownModels } from "./local-model-unknown";
 import { useLocalAction, useLocalRecords } from "./use-local-records";
 
 const labels: Record<string, string> = {
@@ -438,6 +439,8 @@ export function LocalNotices() {
       </SectionCard>
 
       <LocalRecoveryCheck />
+
+      <LocalUnknownModels />
 
       <SectionCard title="异常与恢复历史">
         {items.length ? (

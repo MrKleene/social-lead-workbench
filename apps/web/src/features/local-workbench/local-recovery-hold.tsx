@@ -56,7 +56,11 @@ export function LocalRecoveryCheck() {
             </div>
           </>
         ) : (
-          <p className="text-body text-muted-foreground">当前无需解除暂停。</p>
+          <p className="text-body text-muted-foreground">
+            {data.recovery.data?.unknownModels
+              ? "未知模型请求需要先作废，才能继续审核。"
+              : "当前无需解除暂停。"}
+          </p>
         )
       ) : null}
     </SectionCard>

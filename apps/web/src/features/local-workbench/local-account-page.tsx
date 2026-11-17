@@ -50,6 +50,35 @@ const holdLabels: Record<string, string> = {
   PLATFORM_REFUSED: "平台拒绝",
 };
 
+/** 三档判定的界面措辞：平台限制 / 我们这边 / 判断不了。 */
+const verdictLabel: Record<string, string> = {
+  PLATFORM: "平台限制",
+  LOCAL: "本机问题",
+  UNKNOWN: "判断不了",
+};
+
+/** 判定命中的原因码里，有些不在风险记录表里（额度、暂停），这里补齐。 */
+const reasonLabel: Record<string, string> = {
+  DAILY_QUOTA_EXHAUSTED: "今日额度已用完",
+  SENDING_PAUSED: "发送已暂停",
+  ACCOUNT_HAS_ACTIVE_TASKS: "有正在跑的任务",
+  UNKNOWN_SEND_REQUIRES_EVIDENCE: "有一次发送结果未知",
+  TARGET_PREFLIGHT_REQUIRED: "评论回复需要先预检目标",
+};
+
+/** 下一步动作：用户层只说做什么，不解释为什么。 */
+const nextStepLabel: Record<string, string> = {
+  RECHECK_ACCOUNT: "重新检查回复权限",
+  WAIT_NEXT_DAY: "明天再试",
+  RELOGIN: "重新登录",
+  WAIT_TASK: "等当前任务结束",
+  CLEAR_PAUSE: "到运行异常里核对",
+  SEND_ONE: "先单独发一条",
+  DISCARD_UNKNOWN_SEND: "到运行异常里核对未知发送",
+};
+
+const channelLabel: Record<string, string> = { COMMENT: "评论回复", DM: "私信" };
+
 /** 卡片只放基础信息；完整字段与操作在详情抽屉里。
  *
  *  `Card asChild` 把卡片样式落到真正的 `<button>` 上——整张卡可点，且键盘 Tab / Enter /
@@ -215,6 +244,12 @@ export function LocalAccountPage() {
   }, [status.data?.platformPause]);
   // 从列表里现取：账号被删或数据刷新后抽屉自动失效，不会停在旧快照上。
   const selected = accounts.find((item) => item.id === detailId) ?? null;
+  // 抽屉里要讲清「为什么不能发 + 下一步」，这份判定由运行时按三档给出。
+  const diagnostics = useLocalRecords(
+    "accountDiagnostics",
+    { accountId: selected?.id ?? "" },
+    { enabled: !!selected, refetchInterval: 15000 },
+  );
   const failure = data.error ?? disconnect.error ?? remove.error;
   const credentialsAvailable = !!status.data?.credentialsAvailable;
   const checkable = accounts.some((item) => item.hasSession);
@@ -451,6 +486,37 @@ export function LocalAccountPage() {
               <DetailItem label="默认每日上限">
                 {selected.daily_limit}
               </DetailItem>
+              <DetailItem label="能不能发">
+                {diagnostics.data ? (
+                  diagnostics.data.channels.map((channel) => (
+                    <p key={channel.channel} className="break-words">
+                      {channelLabel[channel.channel] ?? channel.channel} ·{" "}
+                      {channel.verdict ? (
+                        <>
+                          {verdictLabel[channel.verdict.level]}
+                          {" · "}
+                          {holdLabels[channel.verdict.reason] ??
+                            reasonLabel[channel.verdict.reason] ??
+                            channel.verdict.reason}
+                          {" · "}
+                          {nextStepLabel[channel.verdict.nextStep] ??
+                            channel.verdict.nextStep}
+                        </>
+                      ) : (
+                        "可以发送"
+                      )}
+                    </p>
+                  ))
+                ) : (
+                  <p>{diagnostics.isPending ? "正在读取…" : "未读取"}</p>
+                )}
+                {diagnostics.data?.poolStopped ? (
+                  <p>
+                    今天已有 {diagnostics.data.poolRestrictedToday}{" "}
+                    个账号被限制，本轮剩余回复转入待处理。
+                  </p>
+                ) : null}
+              </DetailItem>
               <DetailItem label="风险记录">
                 {selected.holds.length ? (
                   selected.holds.map((hold) => (
@@ -502,8 +568,8 @@ export function LocalAccountPage() {
                         setCheckNote(
                           result.restricted
                             ? `已记录回复限制 · ${holdLabels[result.reason ?? ""] ?? result.reason}`
-                            : selected.holds.length
-                              ? `未发现回复限制提示 · 保留 ${selected.holds.length} 条既有风险记录`
+                            : result.released
+                              ? `未发现回复限制提示 · 已解除 ${result.released} 条风险记录`
                               : "未发现回复限制提示",
                         ),
                     },

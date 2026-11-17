@@ -254,30 +254,33 @@ export function StartCollectionDialog({
   );
 }
 
-/** 本轮要用的回复模板：选了哪个渠道就用哪个模板。 */
+/** 本轮要用的回复模板：每个勾选的模板各一条，发送时从同一渠道的池子里随机取。 */
 function replyPlans(
   configs: LocalConfiguration[] | undefined,
   steps: AutomationSteps | undefined,
 ) {
   if (!steps?.autoReply) return [];
   const pairs = [
-    ["COMMENT_TEMPLATE", steps.commentTemplateId, "COMMENT"],
-    ["DM_TEMPLATE", steps.dmTemplateId, "DM"],
+    ["COMMENT_TEMPLATE", steps.commentTemplateIds, "COMMENT"],
+    ["DM_TEMPLATE", steps.dmTemplateIds, "DM"],
   ] as const;
-  return pairs.flatMap(([kind, id, channel]) => {
-    if (!id) return [];
-    const item = configs?.find((config) => config.id === id && config.kind === kind);
-    const content = item?.body.text ?? "";
-    if (!item || !content) return [];
-    return [
-      {
-        channel,
-        content,
-        templateId: item.id,
-        templateVersion: item.revision,
-      },
-    ];
-  });
+  return pairs.flatMap(([kind, ids, channel]) =>
+    ids.flatMap((id) => {
+      const item = configs?.find(
+        (config) => config.id === id && config.kind === kind,
+      );
+      const content = item?.body.text ?? "";
+      if (!item || !content) return [];
+      return [
+        {
+          channel,
+          content,
+          templateId: item.id,
+          templateVersion: item.revision,
+        },
+      ];
+    }),
+  );
 }
 
 /**

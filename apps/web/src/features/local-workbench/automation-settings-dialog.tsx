@@ -25,7 +25,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ErrorNotice } from "@/components/feedback";
 import { cn } from "@/lib/utils";
 import type { JourneyStage } from "@/features/work/journey-model";
-import { localApi } from "./local-api";
+import { localApi, type LocalConfiguration } from "./local-api";
 import { LocalCollectionPanel } from "./local-collection";
 import { useLocalRecords } from "./use-local-records";
 
@@ -95,7 +95,8 @@ export function AutomationSettingsDialog({
     contact: !steps.data?.autoReply
       ? "已关闭"
       : (steps.data.replyAccountIds.length > 0 &&
-          (steps.data.commentTemplateId || steps.data.dmTemplateId))
+          (steps.data.commentTemplateIds.length > 0 ||
+            steps.data.dmTemplateIds.length > 0))
         ? "已配置"
         : "未配置",
   };
@@ -432,44 +433,28 @@ function ReplyTab() {
       </div>
 
       <FormField label="评论回复模板">
-        <Select
-          value={current?.commentTemplateId ?? ""}
-          onValueChange={(value) => persist({ commentTemplateId: value || null })}
-        >
-          <SelectTrigger aria-label="评论回复模板">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={SELECT_EMPTY}>不回复评论</SelectItem>
-            {comment.map((item) => (
-              <SelectItem key={item.id} value={item.id}>
-                模板：{item.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <TemplatePicker
+          name="评论回复模板"
+          items={comment}
+          selected={current?.commentTemplateIds ?? []}
+          disabled={save.isPending}
+          onChange={(ids) => persist({ commentTemplateIds: ids })}
+        />
       </FormField>
 
       <FormField label="私信模板">
-        <Select
-          value={current?.dmTemplateId ?? ""}
-          onValueChange={(value) => persist({ dmTemplateId: value || null })}
-        >
-          <SelectTrigger aria-label="私信模板">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={SELECT_EMPTY}>不发私信</SelectItem>
-            {dm.map((item) => (
-              <SelectItem key={item.id} value={item.id}>
-                模板：{item.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <TemplatePicker
+          name="私信模板"
+          items={dm}
+          selected={current?.dmTemplateIds ?? []}
+          disabled={save.isPending}
+          onChange={(ids) => persist({ dmTemplateIds: ids })}
+        />
       </FormField>
 
-      {current?.autoReply && !current.commentTemplateId && !current.dmTemplateId ? (
+      {current?.autoReply &&
+      !current.commentTemplateIds.length &&
+      !current.dmTemplateIds.length ? (
         <Hint>请选择至少一个自动回复模式</Hint>
       ) : null}
       {current?.autoReply && !selected.length ? (
@@ -495,6 +480,51 @@ function useSaveSteps() {
       void client.invalidateQueries({ queryKey: ["local"] });
     },
   });
+}
+
+/** 多选模板：勾选顺序不影响发送，后端每次从池里随机选一条且不与上一条重复。 */
+function TemplatePicker({
+  name,
+  items,
+  selected,
+  disabled,
+  onChange,
+}: {
+  name: string;
+  items: LocalConfiguration[];
+  selected: string[];
+  disabled: boolean;
+  onChange: (ids: string[]) => void;
+}) {
+  const toggle = (id: string, checked: boolean) =>
+    onChange(
+      checked ? [...selected, id] : selected.filter((value) => value !== id),
+    );
+
+  if (!items.length)
+    return (
+      <p className="text-body text-muted-foreground">还没有可用的{name}</p>
+    );
+
+  return (
+    <div className="flex flex-col divide-y rounded-md border">
+      {items.map((item) => (
+        <label
+          key={item.id}
+          className="flex cursor-pointer items-start gap-2 px-4 py-2"
+        >
+          <Checkbox
+            checked={selected.includes(item.id)}
+            disabled={disabled}
+            onCheckedChange={(checked) => toggle(item.id, checked === true)}
+            className="mt-0.5"
+            aria-label={item.name}
+          />
+          <span className="text-body break-words">{item.name}</span>
+        </label>
+      ))}
+    </div>
+  );
 }
 
 function Hint({ children }: { children: ReactNode }) {
