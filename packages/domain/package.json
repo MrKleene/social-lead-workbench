@@ -78,6 +78,11 @@
       "source": "./src/collection/post-reference.ts",
       "default": "./dist/collection/post-reference.js"
     },
+    "./collection/review-retry-policy": {
+      "types": "./dist/collection/review-retry-policy.d.ts",
+      "source": "./src/collection/review-retry-policy.ts",
+      "default": "./dist/collection/review-retry-policy.js"
+    },
     "./collection/qwen-models": {
       "types": "./dist/collection/qwen-models.d.cts",
       "source": "./src/collection/qwen-models.cjs",

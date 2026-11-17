@@ -3,6 +3,7 @@ const {LocalError,hash}=require('./database.cjs');
 const {LocalQueue}=require('./queue.cjs');
 const {LocalReview}=require('./review.cjs');
 const {requestQwen,qwenSettings}=require('@crm/local-runtime/model-provider');
+const policy=require('@crm/local-runtime/policy');
 // No environment variables, caller-supplied URLs, retry or fallback model. This
 // adapter is registered in the desktop main process. Each batch requires either
 // exact one-shot consent or validated frozen standing consent. Submitted work is never replayed.
@@ -35,8 +36,12 @@ class LocalModelExecutor {
    if(result.usage)this.store.transaction(()=>{this.queue.current(lease);this.store.audit('AUTOMATION','MODEL_USAGE_OBSERVED',batch.id,{inputTokens:result.usage.inputTokens,outputTokens:result.usage.outputTokens});});
    return result.result;
   }catch(error){
+   // 外层已取消时不再把底层任意异常当成模型结果；取消不产生重试与占用变化。
+   if(signal.aborted)throw new LocalError('MODEL_CANCELLED');
    // Provider errors never contain request bodies, secrets or arbitrary upstream text.
-   throw new LocalError(['RATE_LIMIT','AUTH_FAILED','UPSTREAM_FAILED','TIMEOUT'].includes(error?.code)?error.code:'MODEL_RESPONSE_UNVERIFIED');
+   const code=typeof error?.code==='string'&&error.code?error.code:'MODEL_RESPONSE_UNVERIFIED',failure=policy.classifyReviewError(code,error?.httpStatus??null),wrapped=new LocalError(failure.code);
+   wrapped.stage=failure.stage;wrapped.retryable=failure.retryable;wrapped.unknown=failure.unknown;wrapped.httpStatus=failure.httpStatus;
+   throw wrapped;
   }finally{settings.key=undefined;}
  }
 }

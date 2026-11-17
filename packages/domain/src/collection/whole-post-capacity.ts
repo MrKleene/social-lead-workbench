@@ -4,7 +4,7 @@ export const WHOLE_POST_TIMEOUT=300000;
 export const WHOLE_POST_LEASE=360000;
 export const WHOLE_POST_STALE=420000;
 export const WHOLE_POST_RESPONSE_BYTES=2*1024*1024;
-export const wholePostCapacityMessage='整帖超出当前模型的单次输入或完整结果容量（按保守估算检查），未截断评论、未拆分或调用模型。需调整单次容量方案后重新预览；不会自动切换模型。';
+export const wholePostCapacityMessage='本批评论超出当前模型的单次输入或完整结果容量（按保守估算检查），该批未提交、未截断评论。需缩小分批或调整模型容量后重新预览；不会自动切换模型。';
 /** UTF-8 byte count is a conservative token estimate, not the provider tokenizer.
  * Reserve JSON/protocol overhead, and a compact result for EVERY item: reason <=120
  * characters and one exact COMMENT quote <=120 characters. Six escaped bytes per

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {modelOutputFailureCode,type ModelOutputFailureCode} from '@crm/contracts';
-export class QwenError extends Error{constructor(public code:string){super(code);}}
+export class QwenError extends Error{constructor(public code:string,public httpStatus?:number){super(code);}}
 export const qwenResultSchema=z.object({items:z.array(z.object({id:z.string().min(1).max(20),score:z.number().int().min(0).max(100),decision:z.enum(['MATCH','NO_MATCH','UNCERTAIN']),reason:z.string().min(1).max(1000).refine(value=>value.trim().length>0),context:z.enum(['SUFFICIENT','INSUFFICIENT']),evidence:z.array(z.object({source:z.enum(['COMMENT','POST_TITLE','POST_BODY','PARENT_COMMENT']),quote:z.string().min(1).max(500)}).strict()).min(1).max(8)}).strict()).min(1)}).strict();
 export function parseQwenResult(raw:unknown){
  const parsed=qwenResultSchema.safeParse(raw);if(parsed.success)return parsed.data;

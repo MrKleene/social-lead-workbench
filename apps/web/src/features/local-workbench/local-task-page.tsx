@@ -349,6 +349,12 @@ function RunWorkspace({
   const reviewActive =
     (reviews.DISPATCHED ?? 0) > 0 ||
     (stage === "review" && !!data && !reviewReady);
+  const reviewPaused = (data?.reviewPauses ?? []).length > 0;
+  const reviewQueuePaused = (data?.reviewPauses ?? []).some(
+    (pause) => pause.kind === "QUEUE",
+  );
+  const reviewedCount = data?.reviewProgress?.reviewed ?? 0;
+  const reviewTotal = data?.reviewProgress?.total ?? 0;
 
   // 依赖只用原始值：轮询每次都可能返回等价但不同引用的对象，用对象做依赖会重复推进判定。
   useEffect(() => {
@@ -421,20 +427,24 @@ function RunWorkspace({
         ? "loading"
         : reviews.UNKNOWN
           ? "unknown"
-          : (reviews.DISPATCHED ?? 0) > 0
-            ? "running"
-            : reviewReady
-              ? "complete"
-              : "idle",
+          : reviewPaused
+            ? "paused"
+            : (reviews.DISPATCHED ?? 0) > 0
+              ? "running"
+              : reviewReady
+                ? "complete"
+                : "idle",
       status: !data
         ? "正在读取"
         : reviewReady
           ? "整轮审核已完成"
-          : (reviews.DISPATCHED ?? 0) > 0
-            ? "整轮审核进行中"
-            : collectSettled
-              ? "等待本轮审核"
-              : "等待采集完成",
+          : reviewPaused
+            ? `${reviewQueuePaused ? "审核队列已暂停" : "该帖审核已暂停"} · 已审 ${reviewedCount}/${reviewTotal} 条`
+            : (reviews.DISPATCHED ?? 0) > 0
+              ? `整轮审核进行中 · 已审 ${reviewedCount}/${reviewTotal} 条`
+              : collectSettled
+                ? "等待本轮审核"
+                : "等待采集完成",
     },
     {
       id: "contact",

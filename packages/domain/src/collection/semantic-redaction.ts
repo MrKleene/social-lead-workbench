@@ -4,6 +4,8 @@ import type { SemanticInput } from './semantic-evaluator';
 import { parseQwenResult, QwenError } from './qwen-result';
 export const REDACTION_VERSION='contact-redaction-v1';
 const marker='[已脱敏]';
+/** 证据比对时空白按等价处理：原文可能含非常规 Unicode 空白（如 U+2006），模型会写成普通空格。 */
+const evidenceSpace=(text:string)=>text.replace(/\s+/gu,' ').trim();
 export function redactText(text:string,identifiers:string[]=[]){
  let result=text.normalize('NFKC').replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g,'');
  for(const id of identifiers.filter(x=>x.length>=3).sort((a,b)=>b.length-a.length))result=result.split(id).join(marker);
@@ -53,7 +55,8 @@ export function validateQwenEvidence(raw:unknown,payload:SemanticOutbound,inputs
   if(!row.evidence.some(e=>e.source==='COMMENT'))fail('OUTPUT_COMMENT_EVIDENCE_MISSING');
   for(const evidence of row.evidence){
    if(evidence.quote.includes(marker)&&!(payload.inputPolicyVersion===semanticInputPolicy&&evidence.source==='COMMENT'))fail('OUTPUT_CONTEXT_REDACTION_MARKER');
-   if(!texts[evidence.source].includes(evidence.quote))fail('OUTPUT_EVIDENCE_NOT_EXACT');
+   const text=texts[evidence.source],quote=evidenceSpace(evidence.quote);
+   if(!quote||(!text.includes(evidence.quote)&&!evidenceSpace(text).includes(quote)))fail('OUTPUT_EVIDENCE_NOT_EXACT');
   }
   // Reasons are bounded plain text, not a second redaction input. Never execute model text.
   const context=!contextOptional&&(s.missingParent||s.truncated||!s.title&&!s.body)?'INSUFFICIENT':row.context;

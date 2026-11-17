@@ -10,6 +10,7 @@ const input:SemanticInput={id:'fictional-row',rules:{version:1,target:'寻找正
 const payload=prepareOutbound([input]);
 const result={items:[{id:'item1',score:88,decision:'MATCH',reason:'评论明确询问护理选题',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:'护理专业如何选题'}]}]};
 const response=(body:unknown={choices:[{finish_reason:'stop',message:{content:JSON.stringify(result)}}],usage:{prompt_tokens:100,completion_tokens:50}})=>new Response(JSON.stringify(body));
+async function failure(run:()=>Promise<unknown>):Promise<QwenError>{try{await run();}catch(error){return error as QwenError;}throw new Error('EXPECTED_FAILURE');}
 afterEach(()=>vi.useRealTimers());
 describe('Qwen only mocked HTTP, fictional local samples',()=>{
  it('does not read a key before enabled, consent and finite budget; states expose no secrets',()=>{
@@ -76,9 +77,20 @@ describe('Qwen only mocked HTTP, fictional local samples',()=>{
   expect(()=>validateQwenEvidence({items:[{...result.items[0],id:'other'}]},payload,[input])).toThrow();
   expect(previewHash(payload,[{id:'one',version:1}],1)).not.toBe(previewHash(payload,[{id:'one',version:2}],1));
  });
- it.each([401,403,429,500])('HTTP %i never retried, raw body and key never surface',async status=>{
+ it.each([[401,'AUTH_FAILED'],[403,'AUTH_FAILED'],[429,'RATE_LIMIT'],[500,'UPSTREAM_FAILED'],[503,'UPSTREAM_FAILED']] as const)('HTTP %i is classified as %s, never retried and never surfaces the raw body',async(status,code)=>{
   const transport=vi.fn(async()=>new Response('sensitive upstream error',{status}));
-  await expect(requestQwen(qwenSettings(env),payload,transport)).rejects.toBeInstanceOf(QwenError);expect(transport).toHaveBeenCalledTimes(1);
+  const error=await failure(()=>requestQwen(qwenSettings(env),payload,transport));
+  expect(error).toBeInstanceOf(QwenError);expect(error.code).toBe(code);expect(error.httpStatus).toBe(status);expect(error.message).not.toContain('sensitive');expect(transport).toHaveBeenCalledTimes(1);
+ });
+ it('connection failures and local cancellation are distinguishable from unknown results',async()=>{
+  const refused=Object.assign(new TypeError('fetch failed'),{cause:{code:'ECONNREFUSED'}});
+  const network=await failure(()=>requestQwen(qwenSettings(env),payload,async()=>{throw refused;}));
+  expect(network.code).toBe('NETWORK_ERROR');expect(network.httpStatus).toBeUndefined();
+  const aborted=Object.assign(new Error('local abort'),{name:'AbortError'});
+  const cancelled=await failure(()=>requestQwen(qwenSettings(env),payload,async()=>{throw aborted;}));
+  expect(cancelled.code).toBe('MODEL_CANCELLED');
+  const unknown=await failure(()=>requestQwen(qwenSettings(env),payload,async()=>{throw new Error('socket closed after send');}));
+  expect(unknown.code).toBe('MODEL_RESPONSE_UNVERIFIED');
  });
  it('timeout is failure, not score zero, aborts and never retries',async()=>{
   vi.useFakeTimers();let signal:AbortSignal|null|undefined;
@@ -127,6 +139,13 @@ describe('whole post transport capacity and time bounds (synthetic only)',()=>{
   const transport=vi.fn(async(_url:string,init:RequestInit)=>{const b=JSON.parse(init.body as string);expect(JSON.parse(b.messages[1].content).items).toEqual(p.items);expect(b.max_tokens).toBe(wholePostCapacity(p,QWEN_MODEL).outputTokens);expect(b.max_tokens).toBeGreaterThan(2500);expect(b.response_format.json_schema.schema.properties.items.maxItems).toBe(n);return response({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:p.items.map(i=>({...result.items[0],id:i.id,evidence:[{source:'COMMENT',quote:i.comment}]}))})}}]});});
   const value=await requestQwen(qwenSettings(env),p,transport,'comment-first');expect(validateQwenEvidence(value.result,p,source,true)).toHaveLength(n);expect(transport).toHaveBeenCalledTimes(1);
   value.result.items[n-1].evidence[0].quote='forged';expect(()=>validateQwenEvidence(value.result,p,source,true)).toThrow('OUTPUT_EVIDENCE_NOT_EXACT_ITEM_'+n);
+ });
+ it('comment evidence tolerates the model normalizing unusual Unicode whitespace but still rejects forged text',()=>{
+  const source=[{...input,snapshot:{...input.snapshot,comment:'d\u2006d'}}],p=prepareOutbound(source,true);
+  const output={items:[{...result.items[0],id:'item1',evidence:[{source:'COMMENT',quote:'d d'}]}]};
+  expect(validateQwenEvidence(output,p,source,true)[0].evidence[0].quote).toBe('d d');
+  output.items[0].evidence[0].quote='d e';expect(()=>validateQwenEvidence(output,p,source,true)).toThrow('OUTPUT_EVIDENCE_NOT_EXACT_ITEM_1');
+  output.items[0].evidence[0].quote='   ';expect(()=>validateQwenEvidence(output,p,source,true)).toThrow('OUTPUT_EVIDENCE_NOT_EXACT_ITEM_1');
  });
  it('input/output envelope overflow blocks whole request; never silently truncates or splits',async()=>{
   const {wholePostRequestPolicy}=await import('@crm/contracts'),transport=vi.fn(async()=>response());

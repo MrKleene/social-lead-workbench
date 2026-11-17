@@ -1,3 +1,4 @@
+import {modelOutputFailure} from '@crm/contracts';
 import type {RunCommentReview,RunReviewComment,RunReviewJob} from '@crm/contracts';
 export function reviewStateLabel(state:string){return ({EVALUATED:'已评分',UNANALYSED:'待分析',UNCONFIGURED:'尚未配置',PROCESSING:'审核中',FAILED:'审核失败',PENDING:'等待审核',COMPLETED:'处理结束',CANCELLED:'已取消',SKIPPED:'未送审'} as Record<string,string>)[state]||'状态待核查';}
 export function commentReviewLabel(comment:RunReviewComment,jobs:RunReviewJob[]){
@@ -18,6 +19,12 @@ export function runReviewStage(jobs:Record<string,number>,hasComments:boolean,en
  if(Object.keys(jobs).some(k=>jobs[k]>0&&!['COMPLETED','FAILED','PENDING','PROCESSING','RUNNING','CANCELLED','SKIPPED'].includes(k)))return {label:'匹配状态待核查',notice:'匹配状态待核查。'};
  if(jobs.COMPLETED)return {label:'匹配作业已结束',notice:undefined};
  return {label:hasComments?(enabled?'等待匹配记录':'匹配未启用'):'暂无评论',notice:undefined};
+}
+
+export function reviewFailureLabel(failure:{errorCode:string|null;errorDetail?:string|null;errorStage:string|null;httpStatus:number|null;attemptNo:number;state:string}){
+ const code=failure.errorCode??'',stage=failure.errorStage??'',detail=modelOutputFailure(failure.errorDetail);
+ const reason=code==='RATE_LIMIT'||code==='UPSTREAM_FAILED'&&failure.httpStatus===429?'模型服务限流（可重试）':code==='AUTH_FAILED'?'模型鉴权失败（需检查配置）':stage==='NETWORK'?'网络连接失败（可重试）':stage==='PROVIDER'?'模型服务异常（可重试）':stage==='OUTPUT'?'模型返回格式异常（可重试）':stage==='AUTH'?'模型鉴权失败（需检查配置）':stage==='CAPACITY'?'超出模型容量（需调整）':stage==='UNKNOWN'||failure.state==='UNKNOWN'?'请求已发出，结果未知（需人工确认）':stage==='CONFIG'?'审核配置或范围已变化':'审核请求未执行';
+ return `${reason}${detail?` · 第 ${detail.itemIndex??'?'} 条：${detail.message}`:''} · 第 ${failure.attemptNo} 次尝试${failure.httpStatus?` · HTTP ${failure.httpStatus}`:''}`;
 }
 
 export function reviewBatchProgress(jobs:Record<string,number>){
