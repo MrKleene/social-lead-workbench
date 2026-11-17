@@ -94,10 +94,6 @@
       "source": "./src/automation.cjs",
       "default": "./dist/automation.cjs"
     },
-    "./backup": {
-      "source": "./src/backup.cjs",
-      "default": "./dist/backup.cjs"
-    },
     "./builtin-configurations": {
       "source": "./src/builtin-configurations.cjs",
       "default": "./dist/builtin-configurations.cjs"
@@ -137,10 +133,6 @@
     "./credentials": {
       "source": "./src/credentials.cjs",
       "default": "./dist/credentials.cjs"
-    },
-    "./data-manager": {
-      "source": "./src/data-manager.cjs",
-      "default": "./dist/data-manager.cjs"
     },
     "./database": {
       "source": "./src/database.cjs",
@@ -217,6 +209,10 @@
     "./reporting": {
       "source": "./src/reporting.cjs",
       "default": "./dist/reporting.cjs"
+    },
+    "./reset": {
+      "source": "./src/reset.cjs",
+      "default": "./dist/reset.cjs"
     },
     "./review": {
       "source": "./src/review.cjs",

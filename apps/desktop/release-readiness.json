@@ -13,8 +13,8 @@
   "windowsBrowserReview": "pinned-archive-and-76-files-static-checked-native-proof-os-arch-binding-pending-windows",
   "windowsCredentialsAndLifecycle": "acl-resource-journal-job-object-and-local-key-derivation-native-windows-unverified",
   "windowsCleanMachineInstaller": "native-x64-validation-versioned-nsis-artifact-hash-receipt-pipeline-not-executed",
-  "consistentBackupAndCopyRestore": "implemented-with-explicit-copy-activation-synthetic-tested",
-  "offlineLegacyImport": "archive-safety-native-configs-preview-activation-synthetic-tested",
+  "testDataReset": "cascade-delete-idle-guarded-vacuum-synthetic-tested",
+  "offlineLegacyImport": "archive-safety-native-configs-synthetic-tested-cli-only",
   "dependencySecurityReview": "npm-audit-zero-asar-glob-and-unpack-regressions-tested-2026-11-10",
   "desktopFrameworkDecision": "verified",
   "collectionReviewAndInboxRepositories": "implemented-synthetic-tested",
@@ -27,7 +27,7 @@
   "macosArm64Installer": "native-components-bundled-dmg-offline-self-test-passed-unsigned",
   "macosCredentialsAndLifecycle": "synthetic-local-key-derivation-owned-tree-cleanup-and-initialization-failure-recovery-tested-upgrade-pending",
   "windowsMcpBuild": "portable-native-build-environment-tested-mac-crosscompiled-pe-x64-not-run-on-windows",
-  "executionPreferences": "per-config-autoapply-versioned-legacy-defaults-restored-backup-tested-no-grants",
+  "executionPreferences": "per-config-autoapply-versioned-legacy-defaults-restored-no-grants",
   "readOnlyDiagnosticsAndReports": "new-link-owned-session-bounded-diagnostics-cross-version-comparison-and-reporting-synthetic-tested",
   "windowsStaticInputs": "archive-pe-x64-and-428-build-source-hashes-verified-on-mac-native-helper-not-built"
 }

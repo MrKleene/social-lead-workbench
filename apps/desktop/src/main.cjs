@@ -1,10 +1,9 @@
 'use strict';
 const {app,BrowserWindow,protocol,ipcMain,dialog,screen}=require('electron');
-const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const {LocalDatabase,LocalError}=require('@crm/local-runtime/database');
+const fs=require('node:fs'),path=require('node:path');
+const {LocalDatabase}=require('@crm/local-runtime/database');
 const {CredentialStore}=require('@crm/local-runtime/credentials');
 const {LocalService}=require('@crm/local-runtime/service');
-const {LocalDataManager}=require('@crm/local-runtime/data-manager');
 const {validateCall}=require('./ipc-policy.cjs');
 const {createProtector}=require('./local-crypto.cjs');
 const {windowsNative}=require('./windows-native.cjs');
@@ -48,11 +47,11 @@ async function main(){
  await app.whenReady();
  // 开发态没有打包产物，Dock 会显示 Electron 默认图标；显式换成本项目的图标。
  if(process.platform==='darwin'&&!app.isPackaged&&app.dock)app.dock.setIcon(path.join(root,'apps/desktop/build/icon.png'));
- const credentials=privateDirectory(path.join(data,'credentials'));privateDirectory(path.join(data,'backups'));privateDirectory(path.join(data,'restores'));privateDirectory(path.join(data,'imports'));
+ const credentials=privateDirectory(path.join(data,'credentials'));
  // 凭据加密用本机派生密钥，不再依赖 Electron safeStorage / 系统钥匙串，理由见 local-crypto.cjs。
  const protector=createProtector({fixture:!!fixture});
  const checkPrivateFile=file=>{if(process.platform==='win32')windowsNative(app,{operation:'file',path:file});};
- const vault=new CredentialStore(credentials,protector,{checkPrivateFile}),dataManager=new LocalDataManager(data,{checkPrivateFile});store=new LocalDatabase(dataManager.activeFile(),{checkPrivateFile});
+ const vault=new CredentialStore(credentials,protector,{checkPrivateFile});store=new LocalDatabase(path.join(data,'workbench.sqlite'),{checkPrivateFile});
  const resources=new NativeResources(app.isPackaged?path.join(process.resourcesPath,'native',process.platform+'-'+process.arch):path.join(root,'apps/desktop/dist/native',process.platform+'-'+process.arch),{windowsCheck:(file,directory)=>windowsNative(app,{operation:directory?'resource-directory':'executable',path:file})});
  // 未打包时把平台 helper 的 stderr 接到主进程终端：扫码/采集/发送失败能直接看到 Go 侧原因
  // （logrus 默认写 stderr）。每次拉起浏览器都有 4-5 行 info，扫码期间每 2 秒一次会把终端刷满，
@@ -96,33 +95,15 @@ async function main(){
    if(method==='cancelLogin')return {ok:true,data:await service.cancelLogin(input)};
    // 只触发对账：真正清不清由主进程核对进程表决定，渲染层给不了这个判断。
    if(method==='reconcilePlatform')return {ok:true,data:reconcilePlatform()};
-   // Serialize renderer mutations with backup/restore. No token or secret is sent in URLs.
-   const operation=operations.then(async()=>{
-    if(method==='backup'){
-     const file=path.join(data,'backups',crypto.randomUUID()+'.sqlite'),result=await store.snapshot(file);fs.writeFileSync(file+'.json',JSON.stringify(result),{flag:'wx',mode:0o600});return {saved:true,name:path.basename(file)};
-    }
-    if(method==='restore'){
-     const selected=await dialog.showOpenDialog(window,{title:'选择本地备份（恢复到新副本）',properties:['openFile'],filters:[{name:'SQLite backup',extensions:['sqlite']}]});if(selected.canceled)return {cancelled:true};
-     const preview=dataManager.restoreFile(selected.filePaths[0]);return {restored:true,name:preview.id,activated:false};
-    }
-    if(method==='importLegacy'){
-     const selected=await dialog.showOpenDialog(window,{title:'选择已导出的旧工作台业务 JSON（导入新副本）',properties:['openFile'],filters:[{name:'Business export',extensions:['json']}]});if(selected.canceled)return {cancelled:true};return {imported:true,preview:dataManager.importFile(selected.filePaths[0])};
-    }
-    if(method==='dataCopies')return dataManager.list();
-    if(method==='activateDataCopy'){
-     if(store.active())throw new LocalError('BACKUP_REQUIRES_IDLE');clearInterval(ticker);await runner.stop();
-     try{const switched=await dataManager.activate(store,input);store.close();store=switched.store;return switched.result;}
-     finally{bindRuntime();startTicker();}
-    }
-    return service[method](input);
-   });operations=operation.catch(()=>{});return {ok:true,data:await operation};
+   // 渲染层变更串行执行：同一时刻只有一个本地操作在写库。
+   const operation=operations.then(()=>service[method](input));operations=operation.catch(()=>{});return {ok:true,data:await operation};
   }catch(error){const code=typeof error?.code==='string'?error.code:'LOCAL_OPERATION_FAILED';return {ok:false,error:code};}
  });
  if(!smoke)window.once('ready-to-show',()=>window.show());await window.loadURL(devUrl||'workbench://app/');
  if(smoke){
   // Packaged self-test owns a newly created temp directory. It cannot select a
   // user path, read OS credentials, register paid/platform executors or resume work.
-  const result=await window.webContents.executeJavaScript(`(async()=>{const api=window.localWorkbench;const before=await api.status();if(!before.ok||before.data.credentialsAvailable||before.data.initialized)throw Error('SELF_TEST_ISOLATION');await api.initialize();const saved=await api.saveConfiguration({kind:'KEYWORDS',name:'Synthetic packaged self-test',body:{keywords:['synthetic-only']}});const rows=await api.configurations();const backup=await api.backup();if(!saved.ok||!rows.ok||rows.data.length!==${builtinConfigurations.length+1}||!backup.ok)throw Error('SELF_TEST_LOCAL_FLOW');return {initialized:true,configurations:rows.data.length,builtinConfigurations:${builtinConfigurations.length},backup:backup.data.saved,credentialsAvailable:false,externalExecutors:false};})()`);
+  const result=await window.webContents.executeJavaScript(`(async()=>{const api=window.localWorkbench;const before=await api.status();if(!before.ok||before.data.credentialsAvailable||before.data.initialized)throw Error('SELF_TEST_ISOLATION');await api.initialize();const saved=await api.saveConfiguration({kind:'KEYWORDS',name:'Synthetic packaged self-test',body:{keywords:['synthetic-only']}});const rows=await api.configurations();if(!saved.ok||!rows.ok||rows.data.length!==${builtinConfigurations.length+1})throw Error('SELF_TEST_LOCAL_FLOW');return {initialized:true,configurations:rows.data.length,builtinConfigurations:${builtinConfigurations.length},credentialsAvailable:false,externalExecutors:false};})()`);
   console.log('DESKTOP_SELF_TEST '+JSON.stringify({...result,platform:process.platform,arch:process.arch,packaged:app.isPackaged}));app.quit();
  }
 }

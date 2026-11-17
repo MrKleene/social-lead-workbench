@@ -120,6 +120,7 @@ class LocalService {
   this.store.db.prepare('DELETE FROM configurations WHERE id=?').run(id);
   this.store.audit('LOCAL_USER','CONFIGURATION_DELETED',id,{kind:row.kind});return {deleted:true};
  });}
+ deleteTestData(input){return new(require('./reset.cjs').LocalReset)(this.store).delete(input);}
  saveModelKey({key}){if(typeof key!=='string'||! /^[\x21-\x7e]{16,512}$/.test(key))throw new LocalError('INVALID_MODEL_KEY');if(!this.vault)throw new LocalError('OS_CREDENTIAL_PROTECTION_UNAVAILABLE');
   // Revoke before replacing the secret: an interrupted write must not leave old
   // grants authorizing a different provider account/workspace.
@@ -137,8 +138,6 @@ class LocalService {
  reviews(input){return this.workspace().reviews(input);}
  runProgress(input){return this.workspace().runProgress(input); }
  decideReview({id,version,status}){if(typeof id!=='string'||!Number.isInteger(version)||!['APPROVED','REJECTED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_DECISION');return this.store.transaction(()=>{const n=this.store.db.prepare('UPDATE review_results SET review_status=?,version=version+1 WHERE id=? AND version=?').run(status,id,version).changes;if(n!==1)throw new LocalError('REVIEW_CHANGED');this.store.audit('LOCAL_USER','REVIEW_DECISION',id,{status,previousVersion:version});return {updated:true};});}
- legacyOverview(){return {imports:this.store.db.prepare('SELECT id,counts,created_at FROM legacy_imports ORDER BY created_at DESC').all().map(row=>({...row,counts:JSON.parse(row.counts)})),entities:this.store.db.prepare('SELECT entity,count(*) count FROM legacy_records GROUP BY entity ORDER BY entity').all()};}
- legacyPage({entity,page=1}){this.page(page);if(typeof entity!=='string'||!require('./legacy-import.cjs').legacyEntities.includes(entity))throw new LocalError('INVALID_LEGACY_TABLE');return {items:this.store.db.prepare('SELECT import_id,ordinal,body FROM legacy_records WHERE entity=? ORDER BY import_id,ordinal LIMIT 30 OFFSET ?').all(entity,(page-1)*30).map(row=>({import_id:row.import_id,ordinal:row.ordinal,record:JSON.parse(row.body)})),total:this.store.db.prepare('SELECT count(*) n FROM legacy_records WHERE entity=?').get(entity).n,page};}
  page(value){if(!Number.isInteger(value)||value<1||value>100000)throw new LocalError('INVALID_PAGE');}
  evidenceOverview(){return this.evidence.list();}
  previewEvidence(input){return this.evidence.preview(input);}
