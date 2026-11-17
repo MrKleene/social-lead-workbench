@@ -7,11 +7,12 @@
 
 | 文件 | 内容 |
 | --- | --- |
-| [comment-read-through.md](comment-read-through.md) | 评论读取窗口的实际预算：主评滚动 3 次、12 次回复操作、40 根 / 100 唯一 / 15 秒；预算由 `packages/domain/src/collection/comment-read-policy.cjs` 固定，请求方不能扩大 |
+| [comment-read-through.md](comment-read-through.md) | 评论读取窗口的实际预算：主评滚动 3 次、4 次回复操作、40 根 / 100 唯一 / 15 秒；单帖另有按声明评论数计算的兜底时限（60 秒 + 每评 1.2 秒，90 秒~40 分钟）；整轮上限为各帖预算之和加 5 分钟余量、硬顶 150 分钟，连续读取每满 10 分钟插入 20~40 秒停顿；预算由 `packages/domain/src/collection/comment-read-policy.cjs` 固定，请求方不能扩大 |
 | [comment-reply-target.md](comment-reply-target.md) | 回复目标怎么选：直接目标取 `targetComment`，`subComments` 是讨论关系不是目标；嵌套语义仍待真实页面比对 |
 | [dm-templates-and-day-limit.md](dm-templates-and-day-limit.md) | 私信模板独立分类；`AccountDay.dailyLimitOverride` 只作用于 `REAL:Asia/Shanghai:YYYY-MM-DD` 单日桶，不动永久额度与占用数 |
 | [qwen-comment-matching.md](qwen-comment-matching.md) | 模型调用节奏：全局并发 1、两次开始至少间隔 1 秒、429 后退避 60 秒；脱敏、预算与证据守卫 |
 | [model-settings-security.md](model-settings-security.md) | 桌面模型凭据：系统保护、保存与授权边界、备份和跨设备恢复 |
+| [search-plan.md](search-plan.md) | 每轮采集在预览时打乱全部关键词、冻结 32 位种子与平台筛选（最多点赞 + 一周内），写进 scope 的 `readPlan.keywordPlan`；执行按种子确定性抽每词 1~剩余篇数配额，词间停 3~8 秒，每个词只读一页，搜完不足 batchLimit 时记「结果不足」 |
 | [local-runtime.md](local-runtime.md) | `packages/local-runtime/src` 的结构：只用 Node 内置模块，不依赖 Electron / React / Prisma / PostgreSQL / Redis；测试入口 `npm test` |
 | [conversation-replies.md](conversation-replies.md) | 收件会话与回复的边界 |
 
