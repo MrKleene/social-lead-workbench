@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-11T10:57:30Z",
-  "updated_at": "2026-11-18T23:06:15Z",
+  "updated_at": "2026-11-18T23:37:23Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -17507,9 +17507,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "36cfa0a39e809cd442ee5af40ceb90070b00cff749150529ef6d519e08aac0dd",
-      "size": 244818,
-      "normalized_sha256": "36cfa0a39e809cd442ee5af40ceb90070b00cff749150529ef6d519e08aac0dd"
+      "sha256": "6591fce5e55ec234ece60de42b0e5a647eabbe0e43d5134a4eadc5c201603d90",
+      "size": 245248,
+      "normalized_sha256": "6591fce5e55ec234ece60de42b0e5a647eabbe0e43d5134a4eadc5c201603d90"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -17579,9 +17579,9 @@
     },
     "apps/desktop/src/main.cjs": {
       "role": "index",
-      "sha256": "77ae8578aefec27a1713d4b374907256dd194ee585a6e7a693f6d9e0f0e90b36",
-      "size": 13913,
-      "normalized_sha256": "77ae8578aefec27a1713d4b374907256dd194ee585a6e7a693f6d9e0f0e90b36"
+      "sha256": "93e69552e39c4a4d8960d49e6b36df2d78fd4a499d7b319b3610520ed6ec6642",
+      "size": 13934,
+      "normalized_sha256": "93e69552e39c4a4d8960d49e6b36df2d78fd4a499d7b319b3610520ed6ec6642"
     },
     "apps/desktop/src/native-resources.cjs": {
       "role": "index",
@@ -18539,9 +18539,9 @@
     },
     "apps/web/src/features/local-workbench/review-post-card.tsx": {
       "role": "index",
-      "sha256": "54eb76876d6c23baa1cf16912798d309212aba294af0f907da6688b6ac9acbe9",
-      "size": 3596,
-      "normalized_sha256": "54eb76876d6c23baa1cf16912798d309212aba294af0f907da6688b6ac9acbe9"
+      "sha256": "de3cf5ffd22d76734da27bcb3055fd60d0a8e64cb7d2ec0d70aaea543a4cc975",
+      "size": 3802,
+      "normalized_sha256": "de3cf5ffd22d76734da27bcb3055fd60d0a8e64cb7d2ec0d70aaea543a4cc975"
     },
     "apps/web/src/features/local-workbench/review-post-dialog.tsx": {
       "role": "index",
@@ -18947,9 +18947,9 @@
     },
     "docs/design/qwen-comment-matching.md": {
       "role": "index",
-      "sha256": "a9b8e7c9e13e037f699a61d1f6960f8c508add01771b16a72b763bec51f8bd10",
-      "size": 9035,
-      "normalized_sha256": "a9b8e7c9e13e037f699a61d1f6960f8c508add01771b16a72b763bec51f8bd10"
+      "sha256": "eab896d74885a7e1608987fdb333c083134097d8f68a0a2bbb9ad810f8c07c4d",
+      "size": 9277,
+      "normalized_sha256": "eab896d74885a7e1608987fdb333c083134097d8f68a0a2bbb9ad810f8c07c4d"
     },
     "docs/design/review-batching.md": {
       "role": "index",
@@ -20659,9 +20659,9 @@
     },
     "packages/domain/src/collection/semantic-redaction.ts": {
       "role": "index",
-      "sha256": "1030c27c50f5bf1f7e26169dfa3cbe0e335545aef236c351003e22000023b11d",
-      "size": 5742,
-      "normalized_sha256": "1030c27c50f5bf1f7e26169dfa3cbe0e335545aef236c351003e22000023b11d"
+      "sha256": "64628c8e9c2a6b8bbaaa5b52fd55eb12e143f1d995b93a6730fda96dae2aca43",
+      "size": 6731,
+      "normalized_sha256": "64628c8e9c2a6b8bbaaa5b52fd55eb12e143f1d995b93a6730fda96dae2aca43"
     },
     "packages/domain/src/collection/single-post.ts": {
       "role": "index",
@@ -20905,9 +20905,9 @@
     },
     "packages/local-runtime/src/adapters/collection/qwen-provider.ts": {
       "role": "index",
-      "sha256": "aec97dfb02f22b618a67c2a1ec42ca1abea5f9f1585008e8b4f18da69a8823bc",
-      "size": 11387,
-      "normalized_sha256": "aec97dfb02f22b618a67c2a1ec42ca1abea5f9f1585008e8b4f18da69a8823bc"
+      "sha256": "1ef0209d90c0e958e5c95f31a2575ef1164c3f4d93d37b8cfc92801430786a0b",
+      "size": 11804,
+      "normalized_sha256": "1ef0209d90c0e958e5c95f31a2575ef1164c3f4d93d37b8cfc92801430786a0b"
     },
     "packages/local-runtime/src/adapters/direct-messages/dm-readback.ts": {
       "role": "index",
@@ -21493,9 +21493,9 @@
     },
     "packages/local-runtime/test/qwen-provider.test.ts": {
       "role": "observe",
-      "sha256": "59aa3a529bbb5d752778d97f2c52a6409ee26bb1ea85b9fe2cbbc355f73aee18",
-      "size": 18839,
-      "normalized_sha256": "59aa3a529bbb5d752778d97f2c52a6409ee26bb1ea85b9fe2cbbc355f73aee18"
+      "sha256": "d752a1a8c087dee9fdf1624e221119354ad2ff5c105c89f0d9500cd0f1c9f730",
+      "size": 20702,
+      "normalized_sha256": "d752a1a8c087dee9fdf1624e221119354ad2ff5c105c89f0d9500cd0f1c9f730"
     },
     "packages/local-runtime/test/recovery.test.cjs": {
       "role": "index",
