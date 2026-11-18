@@ -32,8 +32,8 @@ export function StartCollectionDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   credentialsAvailable: boolean;
-  /** 参数是「本轮没带上的后续步骤」的原因，没有就传 null。 */
-  onStarted: (replySkipped: string | null) => void;
+  /** `id` 是本轮 COLLECT 任务 id；`replySkipped` 是「本轮没带上的后续步骤」的原因，没有就传 null。 */
+  onStarted: (started: { id: string; replySkipped: string | null }) => void;
 }) {
   const client = useQueryClient();
   const selection = useLocalRecords("workspaceSelection", undefined, {
@@ -127,7 +127,7 @@ export function StartCollectionDialog({
     },
     onSuccess: (result) => {
       void client.invalidateQueries({ queryKey: ["local"] });
-      onStarted(result.replySkipped);
+      onStarted(result);
       onOpenChange(false);
     },
   });
@@ -246,7 +246,7 @@ export function StartCollectionDialog({
               })
             }
           >
-            开始采集
+            {start.isPending ? "正在准备采集" : "开始采集"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -63,6 +63,8 @@ class LocalWorkflow {
  authorizeCollection({scope,previewHash,consent,requestKey}){
   if(!this.capabilities().collect)throw new LocalError('COLLECTION_EXECUTOR_UNAVAILABLE');if(consent!==(scope?.strictStages?.contactRules?.length?'bounded-read-with-frozen-contact-v1':'bounded-platform-read-once-v1')||typeof requestKey!=='string'||!/^[-a-zA-Z0-9_:]{1,100}$/.test(requestKey))throw new LocalError('COLLECTION_CONSENT_REQUIRED');
   if(!scope||hash(scope)!==previewHash)throw new LocalError('COLLECTION_PREVIEW_CHANGED');const old=this.db.prepare('SELECT id,kind,payload_hash FROM jobs WHERE request_key=?').get(requestKey);if(old){if(old.kind!=='COLLECT'||old.payload_hash!==previewHash)throw new LocalError('REQUEST_KEY_CONFLICT');return {id:old.id};}
+  // 队列串行执行：前序任务没结束时直接拒绝新一轮采集，不排队。
+  if(this.queue.busy())throw new LocalError('QUEUE_BUSY');
   const current=this.previewCollection({configId:scope.configId,accountId:scope.accountId,batchLimit:scope.readPlan?.batchLimit,policyIds:scope.strictStages?.policies?.map(p=>p.id),ruleIds:scope.strictStages?.contactRules?.map(r=>r.id)||[],keywordPlan:scope.readPlan?.keywordPlan});if(current.previewHash!==previewHash)throw new LocalError('COLLECTION_PREVIEW_CHANGED');
   const grant=this.queue.authorize('COLLECT',current.scope);return {id:this.queue.enqueue('COLLECT',current.scope,grant,requestKey)};
  }

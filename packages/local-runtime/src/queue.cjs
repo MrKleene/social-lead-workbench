@@ -34,14 +34,27 @@ class LocalQueue {
    if(this.db.prepare("SELECT 1 FROM jobs WHERE state='RUNNING' LIMIT 1").get()||this.db.prepare("SELECT 1 FROM evidence_checks WHERE state='RUNNING'").get())return null;
    if(this.db.prepare("SELECT 1 FROM post_diagnostics WHERE state='RUNNING'").get())return null;
    this.db.prepare("UPDATE jobs SET state='CANCELLED',updated_at=? WHERE state='QUEUED' AND (cancel_requested=1 OR NOT EXISTS(SELECT 1 FROM authorizations a WHERE a.id=jobs.authorization_id AND a.state='ACTIVE' AND a.expires_at>?))").run(now,now);
-   let modelReady=true;
-   if(this.db.prepare("SELECT 1 FROM model_profile WHERE id='qwen'").get()){try{new(require('./review.cjs').LocalReview)(this.store).budget();}catch(error){if(!(error instanceof LocalError))throw error;modelReady=false;}}
+   const modelReady=this.reviewReady();
    const row=this.db.prepare("SELECT * FROM jobs WHERE state='QUEUED' AND available_at<=? AND (?=1 OR kind<>'REVIEW') ORDER BY CASE WHEN kind='SEND' THEN 0 ELSE 1 END,created_at,rowid LIMIT 1").get(now,modelReady?1:0);if(!row)return null;
    this.db.prepare("UPDATE jobs SET state='RUNNING',lease_owner=?,lease_until=?,fence=fence+1,updated_at=? WHERE id=? AND state='QUEUED'").run(owner,now+leaseMs,now,row.id);
    return {...row,state:'RUNNING',lease_owner:owner,lease_until:now+leaseMs,fence:row.fence+1,payload:JSON.parse(row.payload)};
   });
  }
  current(lease){const row=this.db.prepare("SELECT * FROM jobs WHERE id=? AND state='RUNNING' AND lease_owner=? AND fence=? AND lease_until>?").get(lease.id,lease.lease_owner,lease.fence,this.store.clock());if(!row)throw new LocalError('STALE_JOB_LEASE');return row;}
+ /** 模型现在能不能调：与 claim() 用同一个判断，额度耗尽时排队的审核不算前序任务。 */
+ reviewReady(){if(!this.db.prepare("SELECT 1 FROM model_profile WHERE id='qwen'").get())return true;try{new(require('./review.cjs').LocalReview)(this.store).budget();return true;}catch(error){if(!(error instanceof LocalError))throw error;return false;}}
+ /** 前序任务占用队列时返回那个任务，空闲时返回 null；口径与 claim() 一致：运行中的任务、运行中的核对与诊断、现在就能被领取的排队任务。 */
+ busy(){
+  const now=this.store.clock();
+  const running=this.db.prepare("SELECT id,kind FROM jobs WHERE state='RUNNING' ORDER BY created_at,rowid LIMIT 1").get();
+  if(running)return {id:running.id,kind:running.kind};
+  if(this.db.prepare("SELECT 1 FROM evidence_checks WHERE state='RUNNING'").get())return {id:null,kind:'EVIDENCE'};
+  if(this.db.prepare("SELECT 1 FROM post_diagnostics WHERE state='RUNNING'").get())return {id:null,kind:'DIAGNOSTIC'};
+  const queued=this.db.prepare("SELECT id,kind FROM jobs WHERE state='QUEUED' AND available_at<=? AND cancel_requested=0 ORDER BY created_at,rowid").all(now);
+  const ready=queued.some(job=>job.kind==='REVIEW')?this.reviewReady():true;
+  const blocking=queued.find(job=>job.kind!=='REVIEW'||ready);
+  return blocking?{id:blocking.id,kind:blocking.kind}:null;
+ }
  heartbeat(lease,leaseMs=30000){if(!Number.isInteger(leaseMs)||leaseMs<1000||leaseMs>300000)throw new LocalError('INVALID_LEASE');return this.store.transaction(()=>{const row=this.current(lease);if(row.cancel_requested)throw new LocalError('CANCELLED');this.db.prepare('UPDATE jobs SET lease_until=?,updated_at=? WHERE id=?').run(this.store.clock()+leaseMs,this.store.clock(),row.id);});}
  beginDispatch(lease){return this.store.transaction(()=>{
   const row=this.current(lease),grant=this.db.prepare('SELECT * FROM authorizations WHERE id=?').get(row.authorization_id);

@@ -34,6 +34,13 @@ const IDLE_STEPS: JourneyStep[] = [
   { id: "contact", label: "自动回复", state: "idle", status: "等待匹配完成" },
 ];
 
+/** 已授权、等本轮 run 落库时：采集在启动，后两步等采集。 */
+const STARTING_STEPS: JourneyStep[] = [
+  { id: "collect", label: "采集内容", state: "running", status: "正在启动" },
+  { id: "review", label: "评论匹配", state: "idle", status: "等待采集完成" },
+  { id: "contact", label: "自动回复", state: "idle", status: "等待匹配完成" },
+];
+
 /**
  * 自动化任务页。
  *
@@ -53,8 +60,19 @@ export function LocalTaskPage() {
     STAGES.includes(requested as JourneyStage) ? requested : "collect"
   ) as JourneyStage;
 
-  const runs = useLocalRecords("runs");
-  const status = useLocalRecords("status");
+  const [startOpen, setStartOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<JourneyStage>("collect");
+  const [missingOpen, setMissingOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  /** 已授权、等 runner 建出本轮 run 的那一下；期间不展示上一轮，也不重复入队。 */
+  const [startingRunId, setStartingRunId] = useState<string | null>(null);
+
+  // run 行要等 runner 下一个 tick 才建：启动期用 1 秒轮询，其余保持 5 秒。
+  const runs = useLocalRecords("runs", undefined, {
+    refetchInterval: startingRunId ? 1000 : 5000,
+  });
+  const status = useLocalRecords("status", undefined, { refetchInterval: 2000 });
   const selection = useLocalRecords("workspaceSelection");
   const steps = useLocalRecords("automationSteps");
   const latestId = runs.data?.items[0]?.id ?? "";
@@ -65,13 +83,29 @@ export function LocalTaskPage() {
     { enabled: !!runId, refetchInterval: 2000 },
   );
   const credentialsAvailable = !!status.data?.credentialsAvailable;
-  const [startOpen, setStartOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<JourneyStage>("collect");
-  const [missingOpen, setMissingOpen] = useState(false);
-  const [notice, setNotice] = useState("");
-
   const running = ACTIVE_RUN.includes(progress.data?.run.status ?? "");
+  const queueBusy = !!status.data?.queueBusy;
+  const starting =
+    !!startingRunId &&
+    !(runs.data?.items ?? []).some((item) => item.id === startingRunId);
+  /** 兜底：排队期间任务就失败/取消时，别把页面停在「正在准备」。 */
+  const startJob = useLocalRecords(
+    "jobHistory",
+    { page: 1, kind: "COLLECT" },
+    { enabled: starting, refetchInterval: 1000 },
+  );
+  useEffect(() => {
+    if (!startingRunId) return;
+    if (!starting) {
+      setStartingRunId(null);
+      return;
+    }
+    const job = startJob.data?.items.find((item) => item.id === startingRunId);
+    if (job && ["FAILED", "CANCELLED", "INTERRUPTED"].includes(job.state)) {
+      setStartingRunId(null);
+      setNotice("本轮未启动，请重新开始采集。");
+    }
+  }, [startingRunId, starting, startJob.data]);
   const viewingHistory = !!runId && !!latestId && runId !== latestId;
 
   /** 开始采集前必须配好的东西。缺几项就列几项，点「开始自动化采集」时弹出来。 */
@@ -147,10 +181,11 @@ export function LocalTaskPage() {
    *
    * `replySkipped` 非空表示这轮采集起来了、但自动回复没进去（例如回复账号受限）。
    */
-  const handleStarted = (replySkipped: string | null) => {
+  const handleStarted = (started: { id: string; replySkipped: string | null }) => {
+    setStartingRunId(started.id);
     setNotice(
-      replySkipped
-        ? `已加入队列 · 本轮未包含自动回复 · ${replySkipped}`
+      started.replySkipped
+        ? `已加入队列 · 本轮未包含自动回复 · ${started.replySkipped}`
         : "已加入队列",
     );
     setParams(
@@ -183,7 +218,7 @@ export function LocalTaskPage() {
               采集设置
             </Button>
             <Button
-              disabled={running}
+              disabled={running || queueBusy || starting}
               onClick={() => {
                 if (missing.length) {
                   setMissingOpen(true);
@@ -192,7 +227,13 @@ export function LocalTaskPage() {
                 setStartOpen(true);
               }}
             >
-              {running ? "本轮进行中" : "开始自动化采集"}
+              {running
+                ? "本轮进行中"
+                : queueBusy
+                  ? "任务进行中"
+                  : starting
+                    ? "正在准备采集"
+                    : "开始自动化采集"}
             </Button>
           </>
         }
@@ -205,7 +246,17 @@ export function LocalTaskPage() {
         </p>
       ) : null}
 
-      {runId ? (
+      {starting ? (
+        <SectionCard title="本轮进度" description="正在启动">
+          <JourneyStepper
+            steps={STARTING_STEPS}
+            selected="collect"
+            onSelect={() => {}}
+            caption="正在启动"
+            attention={false}
+          />
+        </SectionCard>
+      ) : runId ? (
         <RunWorkspace
           runId={runId}
           stage={stage}
