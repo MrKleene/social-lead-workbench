@@ -142,8 +142,11 @@ class LocalService {
  markRead({id}){return new LocalInbox(this.store).markRead(id);}
  runs(input){return this.reporting().runs(input);}
  reviews(input){return this.workspace().reviews(input);}
+ reviewPosts(input){return this.workspace().reviewPosts(input);}
+ reviewComments(input){return this.workspace().reviewComments(input);}
+ reviewCommentList(input){return this.workspace().reviewCommentList(input);}
  runProgress(input){return this.workspace().runProgress(input); }
- decideReview({id,version,status}){if(typeof id!=='string'||!Number.isInteger(version)||!['APPROVED','REJECTED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_DECISION');return this.store.transaction(()=>{const n=this.store.db.prepare('UPDATE review_results SET review_status=?,version=version+1 WHERE id=? AND version=?').run(status,id,version).changes;if(n!==1)throw new LocalError('REVIEW_CHANGED');this.store.audit('LOCAL_USER','REVIEW_DECISION',id,{status,previousVersion:version});return {updated:true};});}
+ decideReview({id,version,status}){if(typeof id!=='string'||!Number.isInteger(version)||!['APPROVED','REJECTED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_DECISION');return this.store.transaction(()=>{const manual=status==='APPROVED'?'MATCH':status==='REJECTED'?'NO_MATCH':null,n=this.store.db.prepare('UPDATE review_results SET review_status=?,manual_decision=?,version=version+1 WHERE id=? AND version=?').run(status,manual,id,version).changes;if(n!==1)throw new LocalError('REVIEW_CHANGED');this.store.audit('LOCAL_USER','REVIEW_DECISION',id,{status,manualDecision:manual,previousVersion:version});return {updated:true};});}
  page(value){if(!Number.isInteger(value)||value<1||value>100000)throw new LocalError('INVALID_PAGE');}
  evidenceOverview(){return this.evidence.list();}
  previewEvidence(input){return this.evidence.preview(input);}

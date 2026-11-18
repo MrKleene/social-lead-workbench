@@ -16,7 +16,6 @@ import {
 } from "./missing-config-dialog";
 import { LocalCollectProgress } from "./local-collect-progress";
 import { LocalPosts } from "./local-posts";
-import { LocalReviewDialog } from "./local-review-dialog";
 import { LocalRunReview } from "./local-run-review";
 import { StartCollectionDialog } from "./start-collection-dialog";
 import { localApi, type LocalMethods } from "./local-api";
@@ -337,9 +336,9 @@ function RunWorkspace({
   // 有界搜索会保留 PARTIAL，但每篇帖子的评论读取可能都已完整；两种状态要分开表达。
   const collectSettled =
     (runStatus === "COMPLETE" && !data?.run.reason) || collectPartial;
+  const reviewRunning = (reviews.DISPATCHED ?? 0) > 0 || !!data?.reviewActivity;
   const reviewActive =
-    (reviews.DISPATCHED ?? 0) > 0 ||
-    (stage === "review" && !!data && !reviewReady);
+    reviewRunning || (stage === "review" && !!data && !reviewReady);
   const reviewPaused = (data?.reviewPauses ?? []).length > 0;
   const reviewQueuePaused = (data?.reviewPauses ?? []).some(
     (pause) => pause.kind === "QUEUE",
@@ -428,7 +427,7 @@ function RunWorkspace({
           ? "unknown"
           : reviewPaused
             ? "paused"
-            : (reviews.DISPATCHED ?? 0) > 0
+            : reviewRunning
               ? "running"
               : reviewReady
                 ? "complete"
@@ -439,7 +438,7 @@ function RunWorkspace({
           ? "结果未知"
           : reviewPaused
             ? "已暂停"
-            : (reviews.DISPATCHED ?? 0) > 0
+            : reviewRunning
               ? "审核中"
               : reviewReady
                 ? "已完成"
@@ -533,13 +532,6 @@ function RunWorkspace({
       {stage === "review" ? (
         <>
           <LocalRunReview runId={runId} />
-          <LocalReviewDialog runId={runId} onClose={() => onStage("collect")} />
-          <Link
-            to={`/comment-review?run=${runId}`}
-            className="text-body text-primary underline-offset-4 hover:underline"
-          >
-            查看本轮审核结果
-          </Link>
         </>
       ) : null}
 

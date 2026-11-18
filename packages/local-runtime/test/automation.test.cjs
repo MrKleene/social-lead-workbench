@@ -59,6 +59,10 @@ test('quota-exhausted decisions surface as pending replies and can be requeued o
  assert.equal(pending.total,2);assert.equal(pending.remaining,0);
  assert.equal(pending.items[0].channel,'DM');assert.equal(pending.items[0].reason,'ACCOUNT_POOL_QUOTA_EXHAUSTED');
  assert.equal(pending.items[0].content,'合成联系内容');assert.ok(pending.items[0].postTitle);
+ assert.equal(f.automation.pending({query:'学习方法'}).total,1);assert.equal(f.automation.pending({query:'不存在的词'}).total,0);
+ assert.equal(f.automation.pending({channel:'COMMENT'}).total,0);assert.equal(f.automation.pending({channel:'DM'}).total,2);
+ assert.equal(f.automation.pending({reason:'QUOTA'}).total,2);assert.equal(f.automation.pending({reason:'POOL'}).total,0);
+ assert.equal(f.automation.pending({days:1}).total,2);assert.throws(()=>f.automation.pending({reason:'NOPE'}),/INVALID_PENDING_FILTER/);
  assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND'").get().n,0);
  f.store.db.prepare('UPDATE account_days SET occupied=0 WHERE account_id=? AND day=?').run('account',day);
  assert.equal(f.automation.pending().remaining,20);

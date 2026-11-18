@@ -75,9 +75,7 @@ export function LocalOverview() {
         }
       />
 
-      {query.error ? (
-        <ErrorNotice error={query.error} />
-      ) : null}
+      {query.error ? <ErrorNotice error={query.error} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map(({ name, value, detail, url, icon: Icon }) => (
@@ -209,11 +207,7 @@ function formatDay(value: string) {
   return value.slice(5).replace("-", "/");
 }
 
-function ReplyTrend({
-  days,
-}: {
-  days: { day: string; count: number }[];
-}) {
+function ReplyTrend({ days }: { days: { day: string; count: number }[] }) {
   const max = Math.max(1, ...days.map((day) => day.count));
   const total = days.reduce((sum, day) => sum + day.count, 0);
 

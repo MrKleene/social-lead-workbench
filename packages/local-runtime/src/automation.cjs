@@ -121,12 +121,24 @@ class LocalAutomation{
   * 只读聚合，不带任何发送权限；处理动作另走 retry / dismiss。
   * 规则已被关闭（revoke）的不列：关掉自动回复就等于这批不发了。
   */
- pending({page=1}={}){
+ pending({page=1,query='',channel='',reason='',days=0}={}){
   if(!Number.isInteger(page)||page<1||page>100000)throw new LocalError('INVALID_PAGE');
-  const from=`FROM automation_decisions d LEFT JOIN jobs j ON j.id=d.job_id JOIN review_results v ON v.id=d.review_id JOIN run_comments c ON c.id=v.comment_id JOIN run_posts p ON p.id=c.post_id JOIN contact_rules r ON r.id=d.rule_id WHERE ${UNRESOLVED} AND r.enabled=1`;
-  const items=this.db.prepare(`SELECT d.id,d.run_id,d.review_id,d.rule_id,d.channel,d.reason,d.created_at,j.state job_state,j.payload job_payload,r.name rule_name,r.plans,r.accounts,json_extract(p.snapshot,'$.title') post_title,c.body comment_body,c.user_id recipient_id ${from} ORDER BY d.id DESC LIMIT 30 OFFSET ?`).all((page-1)*30)
-   .map(row=>({id:row.id,runId:row.run_id,reviewId:row.review_id,ruleId:row.rule_id,channel:row.channel,reason:row.reason,ruleName:row.rule_name,jobState:row.job_state??null,postTitle:row.post_title??'',comment:row.comment_body,recipientId:row.recipient_id,content:row.job_payload?JSON.parse(row.job_payload).content??'':this.contact.pick(JSON.parse(row.plans)?{plans:row.plans}:{plans:'[]'},row.channel,row.recipient_id)?.content??'',createdAt:row.created_at,pool:JSON.parse(row.accounts).map(a=>a.id)}));
-  return {items:items.map(({pool,...item})=>item),total:this.db.prepare(`SELECT count(*) n ${from}`).get().n,page,remaining:this.remaining([...new Set(items.flatMap(item=>item.pool))])};
+  if(typeof query!=='string'||query.length>200)throw new LocalError('INVALID_PENDING_FILTER');
+  query=query.trim();
+  if(channel&&!['COMMENT','DM'].includes(channel))throw new LocalError('INVALID_PENDING_FILTER');
+  if(reason&&!['QUOTA','POOL','STOPPED'].includes(reason))throw new LocalError('INVALID_PENDING_FILTER');
+  if(!Number.isInteger(days)||days<0||days>365)throw new LocalError('INVALID_PENDING_FILTER');
+  const where=[UNRESOLVED,'r.enabled=1'],args=[];
+  if(query){where.push(`(instr(lower(coalesce(json_extract(p.snapshot,'$.title'),'')),lower(?))>0 OR instr(lower(c.body),lower(?))>0 OR instr(lower(coalesce(json_extract(j.payload,'$.content'),'')),lower(?))>0)`);args.push(query,query,query);}
+  if(channel){where.push('d.channel=?');args.push(channel);}
+  if(reason==='QUOTA'){where.push('d.state=? AND d.reason=?');args.push('SKIPPED',QUOTA_EXHAUSTED);}
+  else if(reason==='POOL'){where.push('d.state=? AND d.reason=?');args.push('SKIPPED',POOL_STOPPED);}
+  else if(reason==='STOPPED')where.push(DEAD_JOB);
+  if(days){where.push('d.created_at>=?');args.push(this.store.clock()-days*86400000);}
+  const from=`FROM automation_decisions d LEFT JOIN jobs j ON j.id=d.job_id JOIN review_results v ON v.id=d.review_id JOIN run_comments c ON c.id=v.comment_id JOIN run_posts p ON p.id=c.post_id JOIN contact_rules r ON r.id=d.rule_id WHERE ${where.join(' AND ')}`;
+  const items=this.db.prepare(`SELECT d.id,d.run_id,d.review_id,d.rule_id,d.channel,d.reason,d.created_at,j.state job_state,j.payload job_payload,r.name rule_name,r.plans,r.accounts,json_extract(p.snapshot,'$.title') post_title,c.body comment_body,c.user_id recipient_id ${from} ORDER BY d.id DESC LIMIT 30 OFFSET ?`).all(...args,(page-1)*30)
+   .map(row=>({id:row.id,runId:row.run_id,reviewId:row.review_id,ruleId:row.rule_id,channel:row.channel,reason:row.reason,ruleName:row.rule_name,jobState:row.job_state??null,postTitle:row.post_title??'',comment:row.comment_body,recipientId:row.recipient_id,content:row.job_payload?JSON.parse(row.job_payload).content??'':this.contact.pick(JSON.parse(row.plans)?{plans:row.plans}:{plans:'[]'},row.channel,row.recipient_id)?.content??'',createdAt:row.created_at}));
+  return {items,total:this.db.prepare(`SELECT count(*) n ${from}`).get(...args).n,page,remaining:this.remaining()};
  }
  /** 今日还能发多少条：给定账号池（缺省为全部在用账号）的剩余额度合计，供界面判断「现在能不能重排」。 */
  remaining(ids=[]){

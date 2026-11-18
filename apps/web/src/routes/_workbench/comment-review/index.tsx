@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { LocalHistory } from '@/features/local-workbench/local-history'
+import { LocalCommentReview } from '@/features/local-workbench/local-comment-review'
 
 export const Route = createFileRoute('/_workbench/comment-review/')({
-  component: () => <LocalHistory key='reviews' tab='reviews' />,
+  component: LocalCommentReview,
 })

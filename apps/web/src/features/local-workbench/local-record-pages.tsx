@@ -23,7 +23,6 @@ import {
   ReplyHistoryDetail,
   ReplyHistoryTable,
 } from "@/features/auto-contact/reply-history-content";
-import { LocalEvidence } from "./local-evidence";
 import { LocalRecoveryCheck } from "./local-recovery-hold";
 import { LocalUnknownModels } from "./local-model-unknown";
 import { useLocalAction, useLocalRecords } from "./use-local-records";
@@ -328,89 +327,6 @@ export function LocalJobs({ runId }: { runId?: string }) {
   );
 }
 
-export function LocalPending() {
-  return (
-    <>
-      <PageHeader title="待处理回复" />
-      <LocalQuotaPending />
-      <LocalEvidence />
-      <LocalJobs />
-    </>
-  );
-}
-
-/**
- * 额度不足、或在发出前就夭折而没发出去的回复。
- *
- * 它们不占发送队列、也不带授权：重新排队会按当前账号池重新分配账号并签发新的单次授权；
- * 忽略只标记已处理，记录与原因都保留。列表为空时不渲染，避免在待处理页挂一个常驻空块。
- */
-function LocalQuotaPending() {
-  const [page, setPage] = useState(1);
-  const data = useLocalRecords("pendingContacts", { page });
-  const retry = useLocalAction("retryPendingContact");
-  const dismiss = useLocalAction("dismissPendingContact");
-  const items = data.data?.items ?? [];
-  const total = data.data?.total ?? 0;
-  const remaining = data.data?.remaining ?? 0;
-  const failure = data.error ?? retry.error ?? dismiss.error;
-
-  if (!total && !failure) return null;
-
-  return (
-    <SectionCard
-      title="未发送的回复"
-      description={`今日剩余额度 ${remaining} 条`}
-    >
-      {failure ? <ErrorNotice error={failure} /> : null}
-
-      <RecordList label="未发送的回复">
-        {items.map((item) => (
-          <RecordItem
-            key={item.id}
-            title={item.postTitle || "未命名笔记"}
-            meta={[
-              item.channel === "DM" ? "私信" : "评论回复",
-              new Date(item.createdAt).toLocaleString(),
-            ].join(" · ")}
-            action={
-              <>
-                <Button
-                  variant="outline"
-                  disabled={remaining < 1}
-                  pending={retry.isPending}
-                  onClick={() => retry.mutate({ id: item.id })}
-                >
-                  重新加入队列
-                </Button>
-                <Button
-                  variant="ghost"
-                  pending={dismiss.isPending}
-                  onClick={() => dismiss.mutate({ id: item.id })}
-                >
-                  忽略
-                </Button>
-              </>
-            }
-          >
-            <p className="break-words">{item.comment}</p>
-            {item.content ? (
-              <p className="break-words">将发送：{item.content}</p>
-            ) : null}
-          </RecordItem>
-        ))}
-      </RecordList>
-
-      <Pagination
-        page={page}
-        total={total}
-        onPageChange={setPage}
-        label="未发送回复分页"
-      />
-    </SectionCard>
-  );
-}
-
 export function LocalNotices() {
   const [page, setPage] = useState(1);
   const data = useLocalRecords("notices", { page });
@@ -465,6 +381,8 @@ export function LocalNotices() {
           label="异常历史分页"
         />
       </SectionCard>
+
+      <LocalJobs />
     </>
   );
 }
