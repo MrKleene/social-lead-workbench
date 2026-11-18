@@ -6,6 +6,28 @@ export const REDACTION_VERSION='contact-redaction-v1';
 const marker='[已脱敏]';
 /** 证据比对时空白按等价处理：原文可能含非常规 Unicode 空白（如 U+2006），模型会写成普通空格。 */
 const evidenceSpace=(text:string)=>text.replace(/\s+/gu,' ').trim();
+const escapeRegExp=(text:string)=>text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+/** 在原文中定位引用的精确片段：先逐字匹配，再按空白等价匹配，最后容忍模型用省略号缩写长引用。 */
+function anchorQuote(text:string,raw:string):string|null{
+ const quote=evidenceSpace(raw);
+ if(!quote)return null;
+ if(text.includes(quote))return quote;
+ const exact=(candidate:string)=>{
+  if(!candidate)return null;
+  if(text.includes(candidate))return candidate;
+  const found=new RegExp(candidate.split(/\s+/u).map(escapeRegExp).join('\\s+'),'u').exec(text);
+  return found?found[0]:null;
+ };
+ const whole=exact(quote);
+ if(whole)return whole;
+ // 模型常把长引用写成「前半段...」；只接受它在原文里确实逐字复制过的片段，绝不补写或拼接。
+ const parts=quote.split(/\.{2,}|…+/u).map(part=>part.trim()).filter(part=>part.length>=2).sort((a,b)=>b.length-a.length);
+ for(const part of parts){
+  const anchored=exact(part);
+  if(anchored)return anchored;
+ }
+ return null;
+}
 export function redactText(text:string,identifiers:string[]=[]){
  let result=text.normalize('NFKC').replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g,'');
  for(const id of identifiers.filter(x=>x.length>=3).sort((a,b)=>b.length-a.length))result=result.split(id).join(marker);
@@ -50,17 +72,18 @@ export function validateQwenEvidence(raw:unknown,payload:SemanticOutbound,inputs
  return inputs.map((input,i)=>{
   const s=payload.items[i],position=items.findIndex(x=>x.id===s.id),row=items[position];
   if(!row)throw new QwenError('OUTPUT_ID_MISSING');
-  const fail=(code:Parameters<typeof modelOutputFailureCode>[0])=>{throw new QwenError(modelOutputFailureCode(code,position+1));};
+  const fail=(code:Parameters<typeof modelOutputFailureCode>[0]):never=>{throw new QwenError(modelOutputFailureCode(code,position+1));};
   const texts={COMMENT:s.comment,POST_TITLE:s.title,POST_BODY:s.body,PARENT_COMMENT:s.parent||''};
   if(!row.evidence.some(e=>e.source==='COMMENT'))fail('OUTPUT_COMMENT_EVIDENCE_MISSING');
-  for(const evidence of row.evidence){
-   if(evidence.quote.includes(marker)&&!(payload.inputPolicyVersion===semanticInputPolicy&&evidence.source==='COMMENT'))fail('OUTPUT_CONTEXT_REDACTION_MARKER');
-   const text=texts[evidence.source],quote=evidenceSpace(evidence.quote);
-   if(!quote||(!text.includes(evidence.quote)&&!evidenceSpace(text).includes(quote)))fail('OUTPUT_EVIDENCE_NOT_EXACT');
-  }
+  const evidence=row.evidence.map(e=>{
+   if(e.quote.includes(marker)&&!(payload.inputPolicyVersion===semanticInputPolicy&&e.source==='COMMENT'))fail('OUTPUT_CONTEXT_REDACTION_MARKER');
+   const quote=anchorQuote(texts[e.source]||'',e.quote);
+   if(!quote)fail('OUTPUT_EVIDENCE_NOT_EXACT');
+   return {...e,quote:quote as string};
+  });
   // Reasons are bounded plain text, not a second redaction input. Never execute model text.
   const context=!contextOptional&&(s.missingParent||s.truncated||!s.title&&!s.body)?'INSUFFICIENT':row.context;
-  return {...row,id:input.id,context,decision:context==='INSUFFICIENT'?'UNCERTAIN':row.decision};
+  return {...row,evidence,id:input.id,context,decision:context==='INSUFFICIENT'?'UNCERTAIN':row.decision};
  });
 }
 

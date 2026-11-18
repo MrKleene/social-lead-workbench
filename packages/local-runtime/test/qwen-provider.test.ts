@@ -140,12 +140,28 @@ describe('whole post transport capacity and time bounds (synthetic only)',()=>{
   const value=await requestQwen(qwenSettings(env),p,transport,'comment-first');expect(validateQwenEvidence(value.result,p,source,true)).toHaveLength(n);expect(transport).toHaveBeenCalledTimes(1);
   value.result.items[n-1].evidence[0].quote='forged';expect(()=>validateQwenEvidence(value.result,p,source,true)).toThrow('OUTPUT_EVIDENCE_NOT_EXACT_ITEM_'+n);
  });
+ it('clamps an over-long exact quote to the bounded length instead of failing the whole batch',async()=>{
+  const {wholePostRequestPolicy}=await import('@crm/contracts');
+  const comment='护理专业如何选题'.repeat(30),source=[{...input,snapshot:{...input.snapshot,comment}}],p={...prepareOutbound(source,true),requestPolicy:wholePostRequestPolicy};
+  const long={items:[{...result.items[0],id:'item1',evidence:[{source:'COMMENT',quote:comment}]}]};
+  const value=await requestQwen(qwenSettings(env),p,async()=>response({choices:[{finish_reason:'stop',message:{content:JSON.stringify(long)}}],usage:{prompt_tokens:10,completion_tokens:10}}));
+  expect([...value.result.items[0].evidence[0].quote].length).toBe(120);
+  const parsed=validateQwenEvidence(value.result,p,source,true);expect(comment.includes(parsed[0].evidence[0].quote)).toBe(true);
+ });
  it('comment evidence tolerates the model normalizing unusual Unicode whitespace but still rejects forged text',()=>{
   const source=[{...input,snapshot:{...input.snapshot,comment:'d\u2006d'}}],p=prepareOutbound(source,true);
   const output={items:[{...result.items[0],id:'item1',evidence:[{source:'COMMENT',quote:'d d'}]}]};
-  expect(validateQwenEvidence(output,p,source,true)[0].evidence[0].quote).toBe('d d');
+  expect(validateQwenEvidence(output,p,source,true)[0].evidence[0].quote).toBe('d\u2006d');
   output.items[0].evidence[0].quote='d e';expect(()=>validateQwenEvidence(output,p,source,true)).toThrow('OUTPUT_EVIDENCE_NOT_EXACT_ITEM_1');
   output.items[0].evidence[0].quote='   ';expect(()=>validateQwenEvidence(output,p,source,true)).toThrow('OUTPUT_EVIDENCE_NOT_EXACT_ITEM_1');
+ });
+ it('anchors an ellipsis-abbreviated quote back to a span the model actually copied',()=>{
+  const comment='老师想求教您，我是今年刚毕业，准备报青年项目。我博士论文方向创新性一般，在犹豫是按照博论方向拓展延伸还是另外开拓一个方向。';
+  const source=[{...input,snapshot:{...input.snapshot,comment}}],p=prepareOutbound(source,true);
+  const anchored=validateQwenEvidence({items:[{...result.items[0],id:'item1',evidence:[{source:'COMMENT',quote:'老师想求教您，我是今年刚毕业...我博士论文方向创新性一般'}]}]},p,source,true);
+  const quote=anchored[0].evidence[0].quote;expect(comment.includes(quote)).toBe(true);expect(quote).not.toContain('...');expect(quote.length).toBeGreaterThan(4);
+  const forged={items:[{...result.items[0],id:'item1',evidence:[{source:'COMMENT',quote:'查无此句...也无此句'}]}]};
+  expect(()=>validateQwenEvidence(forged,p,source,true)).toThrow('OUTPUT_EVIDENCE_NOT_EXACT_ITEM_1');
  });
  it('input/output envelope overflow blocks whole request; never silently truncates or splits',async()=>{
   const {wholePostRequestPolicy}=await import('@crm/contracts'),transport=vi.fn(async()=>response());
