@@ -13,6 +13,7 @@ npm test
 关键边界：
 
 - 所有决定授权、去重、配额或任务所有权的写入在同步 SQLite `BEGIN IMMEDIATE` 事务中完成；事务内禁止 await/外部请求。
+- 队列严格串行：存在运行中的任务/核对/诊断，或现在就能被领取的排队任务时，`queue.busy()` 为真，新一轮采集直接拒绝（`QUEUE_BUSY`）而不排队；模型额度耗尽时排不动的 REVIEW 不算前序任务。`status().queueBusy` 供界面禁用「开始自动化采集」。
 - QUEUED → RUNNING 使用 owner/fence/expiry；过期工作必须先对账，不能抢占后盲目重放。Mac 原生监督器退出证明和清理已接入；Windows Job Object 代码仍待真机验收。
 - SEND 必须经 SendSafety 预留和派发；授权绑定精确内容、账号及版本、目标；发送 intent 与授权消费同一事务提交，然后才能执行外部操作。
 - RESERVED/DISPATCHED/UNKNOWN 阻止同对象跨渠道重复触达；CONFIRMED 阻止同渠道跨账号重复触达。UNKNOWN 保留额度并暂停，不当作失败退款。只有可信执行器证明零次提交且已停止才能释放占用。
