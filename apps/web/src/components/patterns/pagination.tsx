@@ -16,6 +16,7 @@ export function Pagination({
   pageSize = 30,
   onPageChange,
   label = "分页",
+  countLabel = "条",
   className,
 }: {
   page: number;
@@ -23,6 +24,7 @@ export function Pagination({
   pageSize?: number;
   onPageChange: (page: number) => void;
   label?: string;
+  countLabel?: string;
   className?: string;
 }) {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
@@ -34,7 +36,7 @@ export function Pagination({
       className={cn("mt-4 flex flex-wrap items-center gap-3", className)}
     >
       <span className="text-caption text-muted-foreground tabular-nums">
-        共 {total} 条 · 第 {page} / {pageCount} 页
+        共 {total} {countLabel} · 第 {page} / {pageCount} 页
       </span>
       <Button
         variant="outline"

@@ -6,7 +6,7 @@ export function useLocalPosts(runId:string){
  const [historyId,setHistoryId]=useState<string|null>(null),[historyPage,setHistoryPage]=useState(1);
  const history=useQuery({queryKey:['local','post-history',historyId,historyPage],queryFn:()=>localApi('postHistory',{postId:historyId,page:historyPage}),enabled:!!historyId});
  const posts=useQuery({queryKey:['local','saved-posts',runId],queryFn:()=>localApi('savedPosts',{runId})});
- const progress=useQuery({queryKey:['local','run-progress',runId],queryFn:()=>localApi('runProgress',{runId}),enabled:!!runId});
+ const progress=useQuery({queryKey:['local','runProgress',{runId}],queryFn:()=>localApi('runProgress',{runId}),enabled:!!runId,refetchInterval:2000});
  const accounts=useQuery({queryKey:['local','platform-accounts'],queryFn:()=>localApi('accountOverview')});
  const configs=useQuery({queryKey:['local','configurations'],queryFn:()=>localApi('configurations')});
  const workflow=useQuery({queryKey:['local','workflow'],queryFn:()=>localApi('workflowOverview')});

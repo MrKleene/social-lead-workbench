@@ -19,6 +19,7 @@ import { Route as WorkbenchConfigurationIndexRouteImport } from './routes/_workb
 import { Route as WorkbenchDataIndexRouteImport } from './routes/_workbench/data/index'
 import { Route as WorkbenchInboxIndexRouteImport } from './routes/_workbench/inbox/index'
 import { Route as WorkbenchPlatformsIndexRouteImport } from './routes/_workbench/platforms/index'
+import { Route as WorkbenchPostsIndexRouteImport } from './routes/_workbench/posts/index'
 import { Route as WorkbenchReplyHistoryIndexRouteImport } from './routes/_workbench/reply-history/index'
 import { Route as WorkbenchWorkIndexRouteImport } from './routes/_workbench/work/index'
 import { Route as WorkbenchWorkAccountsRouteImport } from './routes/_workbench/work/accounts'
@@ -78,6 +79,11 @@ const WorkbenchPlatformsIndexRoute = WorkbenchPlatformsIndexRouteImport.update({
   path: '/platforms/',
   getParentRoute: () => WorkbenchRouteRoute,
 } as any)
+const WorkbenchPostsIndexRoute = WorkbenchPostsIndexRouteImport.update({
+  id: '/posts/',
+  path: '/posts/',
+  getParentRoute: () => WorkbenchRouteRoute,
+} as any)
 const WorkbenchReplyHistoryIndexRoute =
   WorkbenchReplyHistoryIndexRouteImport.update({
     id: '/reply-history/',
@@ -118,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/data/': typeof WorkbenchDataIndexRoute
   '/inbox/': typeof WorkbenchInboxIndexRoute
   '/platforms/': typeof WorkbenchPlatformsIndexRoute
+  '/posts/': typeof WorkbenchPostsIndexRoute
   '/reply-history/': typeof WorkbenchReplyHistoryIndexRoute
   '/work/': typeof WorkbenchWorkIndexRoute
 }
@@ -134,6 +141,7 @@ export interface FileRoutesByTo {
   '/data': typeof WorkbenchDataIndexRoute
   '/inbox': typeof WorkbenchInboxIndexRoute
   '/platforms': typeof WorkbenchPlatformsIndexRoute
+  '/posts': typeof WorkbenchPostsIndexRoute
   '/reply-history': typeof WorkbenchReplyHistoryIndexRoute
   '/work': typeof WorkbenchWorkIndexRoute
 }
@@ -152,6 +160,7 @@ export interface FileRoutesById {
   '/_workbench/data/': typeof WorkbenchDataIndexRoute
   '/_workbench/inbox/': typeof WorkbenchInboxIndexRoute
   '/_workbench/platforms/': typeof WorkbenchPlatformsIndexRoute
+  '/_workbench/posts/': typeof WorkbenchPostsIndexRoute
   '/_workbench/reply-history/': typeof WorkbenchReplyHistoryIndexRoute
   '/_workbench/work/': typeof WorkbenchWorkIndexRoute
 }
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/data/'
     | '/inbox/'
     | '/platforms/'
+    | '/posts/'
     | '/reply-history/'
     | '/work/'
   fileRoutesByTo: FileRoutesByTo
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/data'
     | '/inbox'
     | '/platforms'
+    | '/posts'
     | '/reply-history'
     | '/work'
   id:
@@ -203,6 +214,7 @@ export interface FileRouteTypes {
     | '/_workbench/data/'
     | '/_workbench/inbox/'
     | '/_workbench/platforms/'
+    | '/_workbench/posts/'
     | '/_workbench/reply-history/'
     | '/_workbench/work/'
   fileRoutesById: FileRoutesById
@@ -283,6 +295,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkbenchPlatformsIndexRouteImport
       parentRoute: typeof WorkbenchRouteRoute
     }
+    '/_workbench/posts/': {
+      id: '/_workbench/posts/'
+      path: '/posts'
+      fullPath: '/posts/'
+      preLoaderRoute: typeof WorkbenchPostsIndexRouteImport
+      parentRoute: typeof WorkbenchRouteRoute
+    }
     '/_workbench/reply-history/': {
       id: '/_workbench/reply-history/'
       path: '/reply-history'
@@ -334,6 +353,7 @@ interface WorkbenchRouteRouteChildren {
   WorkbenchDataIndexRoute: typeof WorkbenchDataIndexRoute
   WorkbenchInboxIndexRoute: typeof WorkbenchInboxIndexRoute
   WorkbenchPlatformsIndexRoute: typeof WorkbenchPlatformsIndexRoute
+  WorkbenchPostsIndexRoute: typeof WorkbenchPostsIndexRoute
   WorkbenchReplyHistoryIndexRoute: typeof WorkbenchReplyHistoryIndexRoute
   WorkbenchWorkIndexRoute: typeof WorkbenchWorkIndexRoute
 }
@@ -351,6 +371,7 @@ const WorkbenchRouteRouteChildren: WorkbenchRouteRouteChildren = {
   WorkbenchDataIndexRoute: WorkbenchDataIndexRoute,
   WorkbenchInboxIndexRoute: WorkbenchInboxIndexRoute,
   WorkbenchPlatformsIndexRoute: WorkbenchPlatformsIndexRoute,
+  WorkbenchPostsIndexRoute: WorkbenchPostsIndexRoute,
   WorkbenchReplyHistoryIndexRoute: WorkbenchReplyHistoryIndexRoute,
   WorkbenchWorkIndexRoute: WorkbenchWorkIndexRoute,
 }

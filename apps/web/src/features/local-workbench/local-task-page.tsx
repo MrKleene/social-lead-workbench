@@ -14,12 +14,12 @@ import {
   MissingConfigDialog,
   type MissingItem,
 } from "./missing-config-dialog";
+import { LocalCollectProgress } from "./local-collect-progress";
 import { LocalPosts } from "./local-posts";
 import { LocalReviewDialog } from "./local-review-dialog";
 import { LocalRunReview } from "./local-run-review";
 import { StartCollectionDialog } from "./start-collection-dialog";
 import { localApi, type LocalMethods } from "./local-api";
-import { safeRunCoverage } from "@crm/contracts";
 import { reasonLabels } from "../collection/types";
 import { useLocalRecords } from "./use-local-records";
 
@@ -335,15 +335,6 @@ function RunWorkspace({
   // 采到了笔记但评论树被读取预算截断：仍是有效轮次，不能一直显示「等待采集完成」。
   const collectPartial = runStatus === "PARTIAL" && (data?.posts ?? 0) > 0;
   // 有界搜索会保留 PARTIAL，但每篇帖子的评论读取可能都已完整；两种状态要分开表达。
-  const coverage = data ? safeRunCoverage(data.run.coverage) : undefined;
-  const postsComplete =
-    !!coverage &&
-    !!data &&
-    coverage.posts.length === data.posts &&
-    coverage.posts.every((post) => post.complete);
-  const postsPending = coverage
-    ? Math.max(0, (data?.posts ?? 0) - coverage.posts.filter((post) => post.complete).length)
-    : 0;
   const collectSettled =
     (runStatus === "COMPLETE" && !data?.run.reason) || collectPartial;
   const reviewActive =
@@ -353,8 +344,6 @@ function RunWorkspace({
   const reviewQueuePaused = (data?.reviewPauses ?? []).some(
     (pause) => pause.kind === "QUEUE",
   );
-  const reviewedCount = data?.reviewProgress?.reviewed ?? 0;
-  const reviewTotal = data?.reviewProgress?.total ?? 0;
 
   // 依赖只用原始值：轮询每次都可能返回等价但不同引用的对象，用对象做依赖会重复推进判定。
   useEffect(() => {
@@ -416,9 +405,19 @@ function RunWorkspace({
               : runStatus === "PARTIAL"
                 ? "partial"
                 : "paused",
-      status: data
-        ? `${data.posts} 篇笔记 · ${data.comments} 条评论`
-        : "正在读取",
+      status: !data
+        ? "正在读取"
+        : collectActive
+          ? "采集中"
+          : runStatus === "FAILED"
+            ? "失败"
+            : runStatus === "COMPLETE"
+              ? data.run.reason
+                ? "部分完成"
+                : "已完成"
+              : runStatus === "PARTIAL"
+                ? "部分完成"
+                : "已结束",
     },
     {
       id: "review",
@@ -436,15 +435,17 @@ function RunWorkspace({
                 : "idle",
       status: !data
         ? "正在读取"
-        : reviewReady
-          ? "整轮审核已完成"
+        : reviews.UNKNOWN
+          ? "结果未知"
           : reviewPaused
-            ? `${reviewQueuePaused ? "审核队列已暂停" : "该帖审核已暂停"} · 已审 ${reviewedCount}/${reviewTotal} 条`
+            ? "已暂停"
             : (reviews.DISPATCHED ?? 0) > 0
-              ? `整轮审核进行中 · 已审 ${reviewedCount}/${reviewTotal} 条`
-              : collectSettled
-                ? "等待本轮审核"
-                : "等待采集完成",
+              ? "审核中"
+              : reviewReady
+                ? "已完成"
+                : collectSettled
+                  ? "待审核"
+                  : "等待采集完成",
     },
     {
       id: "contact",
@@ -465,16 +466,16 @@ function RunWorkspace({
       status: !data
         ? "正在读取"
         : sendUnknown
-          ? "结果未知 · 勿重发"
+          ? "结果未知"
           : sendQueued
-            ? "任务执行中"
+            ? "进行中"
             : sendFailed
-              ? "回复存在失败"
+              ? "有失败"
               : sendConfirmed
-                ? "已确认发送"
+                ? "已完成"
                 : sendStopped
-                  ? "已结束 · 有未发送"
-                  : "查看本轮回复记录",
+                  ? "已结束"
+                  : "未开始",
     },
   ];
 
@@ -502,13 +503,15 @@ function RunWorkspace({
           selected={stage}
           onSelect={onStage}
           caption={
-            collectPartial
-              ? postsComplete
-                ? `已采集 · ${data?.posts ?? 0} 篇`
-                : `已采集 · ${data?.posts ?? 0} 篇 · 待补读 ${postsPending} 篇`
-              : data?.run.reason
-                ? "本轮已停止"
-                : "进行中"
+            !data
+              ? "正在读取"
+              : collectActive
+                ? "进行中"
+                : collectPartial
+                  ? "有笔记待补读"
+                  : data.run.reason
+                    ? "本轮已停止"
+                    : "已完成"
           }
           attention={!!data?.run.reason && !collectPartial}
           details={
@@ -519,8 +522,12 @@ function RunWorkspace({
         />
       </SectionCard>
 
+      {stage === "collect" && data ? (
+        <LocalCollectProgress data={data} history={viewingHistory} />
+      ) : null}
+
       {stage === "collect" ? (
-        <LocalPosts runId={runId} onClose={() => onStage("review")} />
+        <LocalPosts runId={runId} />
       ) : null}
 
       {stage === "review" ? (

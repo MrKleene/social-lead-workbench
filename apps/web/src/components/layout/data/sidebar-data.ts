@@ -1,6 +1,7 @@
 import {
   Archive,
   Database,
+  FileText,
   Inbox,
   Layers,
   ListChecks,
@@ -40,12 +41,15 @@ export const sidebarData: SidebarData = {
       items: [
         { title: '仪表盘', url: '/', icon: SquareStack },
         { title: '自动化任务', url: '/automation', icon: PlayCircle },
-        { title: '采集历史', url: '/work/archive', icon: Archive },
       ],
     },
     {
       title: '数据与审核',
-      items: [{ title: '评论审核', url: '/comment-review', icon: ScanLine }],
+      items: [
+        { title: '帖子列表', url: '/posts', icon: FileText },
+        { title: '采集历史', url: '/work/archive', icon: Archive },
+        { title: '评论审核', url: '/comment-review', icon: ScanLine },
+      ],
     },
     {
       title: '回复管理',
