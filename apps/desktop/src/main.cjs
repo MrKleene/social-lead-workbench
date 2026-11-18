@@ -75,7 +75,7 @@ async function main(){
   const target=path.resolve(web,'.'+rel);if(target!==web&&!target.startsWith(web+path.sep))return new Response('',{status:403});
   const file=fs.existsSync(target)&&fs.statSync(target).isFile()?target:path.join(web,'desktop.html');
   const contentType={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png'}[path.extname(file)]||'application/octet-stream';
-  return new Response(fs.readFileSync(file),{headers:{'content-type':contentType,'content-security-policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'",'x-content-type-options':'nosniff','cache-control':'no-store'}});
+  return new Response(fs.readFileSync(file),{headers:{'content-type':contentType,'content-security-policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.xhscdn.com; font-src 'self'; connect-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'",'x-content-type-options':'nosniff','cache-control':'no-store'}});
  });
  const area=screen.getPrimaryDisplay().workAreaSize;
  const statePath=path.join(data,'window-state.json');

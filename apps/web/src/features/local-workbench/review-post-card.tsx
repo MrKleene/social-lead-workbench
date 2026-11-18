@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ImageOff, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,8 @@ export function ReviewPostCard({
   reviewing?: boolean;
   onOpen: () => void;
 }) {
+  const [failed, setFailed] = useState(false);
+  const coverUrl = failed ? null : post.coverUrl;
   return (
     <button
       type="button"
@@ -26,11 +29,13 @@ export function ReviewPostCard({
       )}
     >
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-muted">
-        {post.coverUrl ? (
+        {coverUrl ? (
           <img
-            src={post.coverUrl}
+            src={coverUrl}
             alt=""
             loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setFailed(true)}
             className="size-full object-cover transition-transform duration-200 group-hover:scale-105"
           />
         ) : (
