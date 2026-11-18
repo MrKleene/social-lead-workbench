@@ -2,6 +2,7 @@
 const {randomUUID}=require('node:crypto');
 const {LocalError,canonical,hash}=require('./database.cjs');
 const {LocalQueue}=require('./queue.cjs');
+const {PostIdentity}=require('./post-identity.cjs');
 const policy=require('@crm/local-runtime/policy');
 const account=(db,id,revision)=>{
   const row=db.prepare("SELECT * FROM accounts WHERE id=? AND state='VERIFIED'").get(id);
@@ -48,29 +49,31 @@ class LocalCollection {
   checkpoint(lease,runId,entries){
     if(!Array.isArray(entries)||entries.length>10)throw new LocalError('CAPTURE_BOUND');
     return this.store.transaction(()=>{
-      const run=this.current(lease,runId),plan=JSON.parse(run.read_plan);let addedPosts=0,addedComments=0,conflicts=0;
+      const run=this.current(lease,runId),plan=JSON.parse(run.read_plan),identity=new PostIdentity(this.db,()=>this.store.clock());let addedPosts=0,addedComments=0,conflicts=0;
       const conflict=(platformId,kind,observed)=>{this.db.prepare('INSERT INTO capture_conflicts(run_id,platform_id,kind,observed,created_at) VALUES(?,?,?,?,?)').run(runId,platformId,kind,canonical(observed),this.store.clock());this.db.prepare('UPDATE collection_runs SET identity_conflict=1 WHERE id=?').run(runId);conflicts++;};
       for(const entry of entries){
         const parsed=policy.postSchema.parse(entry.post),{sourceReference,...post}=parsed;
         // Source access references must be sealed by the adapter, never persisted as plaintext here.
         if(plan.kind==='SAVED_POST'&&plan.postId!==post.id)throw new LocalError('POST_OUTSIDE_READ_PLAN');
         if(!Array.isArray(entry.comments)||entry.comments.length>policy.commentCollectionLimits.commentsPerPost)throw new LocalError('CAPTURE_BOUND');
-        const comments=entry.comments.map(c=>policy.commentSchema.parse(c)),contentHash=hash({id:post.id,title:post.title,body:post.body||''});
+        const comments=entry.comments.map(c=>policy.commentSchema.parse(c)),contentHash=hash({id:post.id,title:post.title,body:post.body||''}),now=this.store.clock(),postKey=identity.post(post.id,now);
         let saved=this.db.prepare('SELECT * FROM run_posts WHERE run_id=? AND platform_id=?').get(runId,post.id);
         if(saved&&saved.content_hash!==contentHash){conflict(post.id,'POST_TEXT_CHANGED',post);continue;}
         const reference=entry.sourceReferenceRef??null;if(reference!==null&&(typeof reference!=='string'||!/^[-a-zA-Z0-9_]{1,100}$/.test(reference)))throw new LocalError('INVALID_SOURCE_REFERENCE');
         if(!saved){
           const count=this.db.prepare('SELECT count(*) n FROM run_posts WHERE run_id=?').get(runId).n;
           if(count>=plan.batchLimit)throw new LocalError('POST_OUTSIDE_READ_PLAN');
-          const id=randomUUID();this.db.prepare('INSERT INTO run_posts(id,run_id,platform_id,snapshot,content_hash,ordinal,source_reference_ref) VALUES(?,?,?,?,?,?,?)').run(id,runId,post.id,canonical(post),contentHash,count+1,reference);saved=this.db.prepare('SELECT * FROM run_posts WHERE id=?').get(id);addedPosts++;
-        }else this.db.prepare('UPDATE run_posts SET snapshot=?,source_reference_ref=coalesce(?,source_reference_ref) WHERE id=?').run(canonical({...JSON.parse(saved.snapshot),...post}),reference,saved.id);
+          const id=randomUUID();this.db.prepare('INSERT INTO run_posts(id,run_id,platform_id,post_id,snapshot,content_hash,ordinal,source_reference_ref) VALUES(?,?,?,?,?,?,?,?)').run(id,runId,post.id,postKey,canonical(post),contentHash,count+1,reference);saved=this.db.prepare('SELECT * FROM run_posts WHERE id=?').get(id);addedPosts++;
+        }else this.db.prepare('UPDATE run_posts SET post_id=coalesce(post_id,?),snapshot=?,source_reference_ref=coalesce(?,source_reference_ref) WHERE id=?').run(postKey,canonical({...JSON.parse(saved.snapshot),...post}),reference,saved.id);
+        identity.touchPostRun(postKey,saved.id);
         for(const c of comments){
           const old=this.db.prepare('SELECT * FROM run_comments WHERE run_id=? AND platform_id=?').get(runId,c.id);
           if(old){if(old.post_id!==saved.id||old.user_id!==c.userId||old.body!==c.text||(old.parent_id||null)!==(c.parentId||null))conflict(c.id,'COMMENT_IDENTITY_OR_TEXT_CHANGED',c);continue;}
           const ordinal=this.db.prepare('SELECT count(*) n FROM run_comments WHERE post_id=?').get(saved.id).n+1;if(ordinal>policy.commentCollectionLimits.commentsPerPost)throw new LocalError('CAPTURE_BOUND');
-          const snapshot={...policy.semanticSnapshot(post,c,undefined,false,false),authorNickname:c.nickname,...(c.publishedAt?{publishedAt:c.publishedAt}:{}),...(c.imageDiagnostics?{imageDiagnostics:c.imageDiagnostics}:{}),...(c.replyTarget?{replyTarget:c.replyTarget}:{}),...(c.replyTargetConflict?{replyTargetConflict:true}:{})};
-          this.db.prepare('INSERT INTO run_comments(id,run_id,post_id,platform_id,user_id,parent_id,body,snapshot,source_hash,ordinal) VALUES(?,?,?,?,?,?,?,?,?,?)')
-            .run(randomUUID(),runId,saved.id,c.id,c.userId,c.parentId||null,c.text,canonical(snapshot),hash(snapshot),ordinal);addedComments++;
+          const snapshot={...policy.semanticSnapshot(post,c,undefined,false,false),authorNickname:c.nickname,...(c.authorAvatarUrl?{authorAvatarUrl:c.authorAvatarUrl}:{}),...(c.publishedAt?{publishedAt:c.publishedAt}:{}),...(c.imageDiagnostics?{imageDiagnostics:c.imageDiagnostics}:{}),...(c.replyTarget?{replyTarget:c.replyTarget}:{}),...(c.replyTargetConflict?{replyTargetConflict:true}:{})};
+          const commentKey=identity.comment(postKey,c.id,c.parentId||null,now),commentId=randomUUID();
+          this.db.prepare('INSERT INTO run_comments(id,run_id,post_id,platform_id,comment_id,user_id,parent_id,body,snapshot,source_hash,ordinal) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+            .run(commentId,runId,saved.id,c.id,commentKey,c.userId,c.parentId||null,c.text,canonical(snapshot),hash(snapshot),ordinal);identity.touchCommentRun(commentKey,commentId);addedComments++;
         }
         if(entry.chunk){
           const receipt=policy.commentChunkSchema.pick({checkpoint:true,hash:true,replaying:true,remainingAnchors:true}).parse(entry.chunk),chunkComments=(entry.chunkComments??[]).map(c=>policy.commentSchema.parse(c)),prior=this.db.prepare('SELECT * FROM run_checkpoints WHERE post_id=?').get(saved.id),previous=prior?JSON.parse(prior.checkpoint):{version:1,sequence:0,marks:[]};
@@ -86,6 +89,17 @@ class LocalCollection {
       this.store.audit('AUTOMATION','CAPTURE_CHECKPOINT',runId,{addedPosts,addedComments,conflicts});return {addedPosts,addedComments,conflicts};
     });
   }
+  /** 记录帖子级采集事件。事件不参与采集成功判定：写失败由执行器吞掉。 */
+  event(runId,kind,{platformId=null,title=null,comments=0,reason=null}={}){
+    if(!['POST_STARTED','POST_SAVED','POST_PARTIAL','POST_FAILED'].includes(kind))throw new LocalError('INVALID_COLLECTION_EVENT');
+    if(platformId!==null&&(typeof platformId!=='string'||!platformId))throw new LocalError('INVALID_COLLECTION_EVENT');
+    if(title!==null&&typeof title!=='string'||reason!==null&&typeof reason!=='string'||!Number.isInteger(comments)||comments<0)throw new LocalError('INVALID_COLLECTION_EVENT');
+    return this.store.transaction(()=>{
+      if(!this.db.prepare('SELECT 1 FROM collection_runs WHERE id=?').get(runId))throw new LocalError('RUN_NOT_FOUND');
+      const sequence=this.db.prepare('SELECT coalesce(max(sequence),0)+1 n FROM collection_run_events WHERE run_id=?').get(runId).n;
+      this.db.prepare('INSERT INTO collection_run_events(id,run_id,sequence,kind,platform_id,title,comments,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?)').run(randomUUID(),runId,sequence,kind,platformId,title,comments,reason,this.store.clock());
+    });
+  }
   finish(lease,runId,{status,reason=null,coverage}){return this.store.transaction(()=>{
     const run=this.current(lease,runId),evidence=policy.safeRunCoverage(coverage);
     if(!['COMPLETE','PARTIAL','FAILED','CANCELLED'].includes(status)||!evidence)throw new LocalError('INVALID_RUN_COVERAGE');
@@ -99,6 +113,7 @@ class LocalCollection {
       if(e.complete&&(!bounded.success||bounded.data.state!=='COMPLETE'))throw new LocalError('COMPLETE_COVERAGE_REQUIRED');
       if(e.complete){const totals=bounded.data.chunkSummary||bounded.data.retained.loaded;if(!totals||(totals.unique??totals.uniqueKnown)!==rows.length||totals.roots!==e.roots||totals.replies!==e.replies||e.boundedRead&&hash(e.boundedRead)!==hash(bounded.data))throw new LocalError('RUN_MEMBERSHIP_MISMATCH');}
       this.db.prepare('UPDATE run_posts SET coverage=? WHERE id=?').run(e.complete?'COMPLETE':'PARTIAL',post.id);
+      if(e.complete&&post.post_id)new PostIdentity(this.db,()=>this.store.clock()).completePostRun(post.post_id,post.id);
       for(const row of rows){
         const prior=JSON.parse(row.snapshot),parent=rows.find(r=>r.platform_id===row.parent_id);
         const next={...prior,parent:parent?.body??null,coverage:e.complete?'COMPLETE':'PARTIAL'};

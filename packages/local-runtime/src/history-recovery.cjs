@@ -1,5 +1,5 @@
 'use strict';
-const {randomUUID}=require('node:crypto'),{LocalError,hash}=require('./database.cjs'),policy=require('@crm/local-runtime/policy');
+const {randomUUID}=require('node:crypto'),{LocalError,hash}=require('./database.cjs'),policy=require('@crm/local-runtime/policy'),{PostIdentity}=require('./post-identity.cjs');
 class HistoryRecovery{
  constructor(store){this.store=store;this.db=store.db;}
  plan(postId){
@@ -10,9 +10,9 @@ class HistoryRecovery{
  }
  seed(lease,runId,proof){return this.store.transaction(()=>{
   const {LocalCollection}=require('./collection.cjs'),collection=new LocalCollection(this.store),run=collection.current(lease,runId),plan=JSON.parse(run.read_plan);if(plan.kind!=='SAVED_POST'||hash(plan.resume)!==hash(proof)||hash(this.plan(proof.sourcePostId))!==hash(proof)||this.db.prepare('SELECT 1 FROM run_posts WHERE run_id=?').get(runId))throw new LocalError('HISTORY_CHECKPOINT_CHANGED');
-  const source=this.db.prepare('SELECT * FROM run_posts WHERE id=?').get(proof.sourcePostId),saved=this.db.prepare('SELECT * FROM run_checkpoints WHERE post_id=?').get(source.id),postId=randomUUID(),rows=this.db.prepare('SELECT * FROM run_comments WHERE post_id=? ORDER BY ordinal').all(source.id);
-  this.db.prepare("INSERT INTO run_posts(id,run_id,platform_id,snapshot,content_hash,ordinal,source_reference_ref,coverage) VALUES(?,?,?,?,?,1,?,'UNKNOWN')").run(postId,runId,source.platform_id,source.snapshot,source.content_hash,source.source_reference_ref);
-  for(const c of rows)this.db.prepare('INSERT INTO run_comments(id,run_id,post_id,platform_id,user_id,parent_id,body,snapshot,source_hash,ordinal) VALUES(?,?,?,?,?,?,?,?,?,?)').run(randomUUID(),runId,postId,c.platform_id,c.user_id,c.parent_id,c.body,c.snapshot,c.source_hash,c.ordinal);
+  const source=this.db.prepare('SELECT * FROM run_posts WHERE id=?').get(proof.sourcePostId),saved=this.db.prepare('SELECT * FROM run_checkpoints WHERE post_id=?').get(source.id),postId=randomUUID(),rows=this.db.prepare('SELECT * FROM run_comments WHERE post_id=? ORDER BY ordinal').all(source.id),identity=new PostIdentity(this.db,()=>this.store.clock()),postKey=source.post_id||identity.post(source.platform_id);
+  this.db.prepare("INSERT INTO run_posts(id,run_id,platform_id,post_id,snapshot,content_hash,ordinal,source_reference_ref,coverage) VALUES(?,?,?,?,?,?,1,?,'UNKNOWN')").run(postId,runId,source.platform_id,postKey,source.snapshot,source.content_hash,source.source_reference_ref);identity.touchPostRun(postKey,postId);
+  for(const c of rows){const commentId=randomUUID(),commentKey=c.comment_id||identity.comment(postKey,c.platform_id,c.parent_id);this.db.prepare('INSERT INTO run_comments(id,run_id,post_id,platform_id,comment_id,user_id,parent_id,body,snapshot,source_hash,ordinal) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(commentId,runId,postId,c.platform_id,commentKey,c.user_id,c.parent_id,c.body,c.snapshot,c.source_hash,c.ordinal);identity.touchCommentRun(commentKey,commentId);}
   this.db.prepare('INSERT INTO run_checkpoints VALUES(?,?,?,?,?,?)').run(postId,saved.checkpoint,saved.hash,saved.remaining_anchors,saved.sequence,this.store.clock());
   this.store.audit('LOCAL_USER','HISTORICAL_CHECKPOINT_COPIED_FOR_REVALIDATION',runId,proof);
   return {checkpoint:JSON.parse(saved.checkpoint),comments:rows.map(c=>({id:c.platform_id,userId:c.user_id,nickname:JSON.parse(c.snapshot).authorNickname||'',text:c.body,...(c.parent_id?{parentId:c.parent_id}:{}),hasReplies:false}))};

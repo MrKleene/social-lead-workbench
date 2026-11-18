@@ -29,6 +29,8 @@ function packageFiles(root){
   exports[key]=target;
   add('packages/local-runtime/'+target.slice(2),moduleRoot+'/'+target.slice(2));
  }
+ // Internal runtime helpers required by collection.cjs via relative require, but not public exports.
+ for(const name of ['keyword-plan.cjs','post-identity.cjs'])add('packages/local-runtime/dist/'+name,moduleRoot+'/dist/'+name);
  add('packages/local-runtime/dist/schema.sql',moduleRoot+'/dist/schema.sql');
  for(const name of fs.readdirSync(path.join(root,'packages/local-runtime/dist/migrations')))add('packages/local-runtime/dist/migrations/'+name,moduleRoot+'/dist/migrations/'+name);
  for(const name of fs.readdirSync(path.join(root,'packages/local-runtime/dist')).filter(name=>name.endsWith('-build.json')||name.endsWith('-NOTICES.txt')||name.endsWith('-LICENSES.txt')))add('packages/local-runtime/dist/'+name,moduleRoot+'/dist/'+name);

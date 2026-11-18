@@ -5,6 +5,8 @@ const {LocalInbox}=require('./inbox.cjs');
 const {LocalWorkflow}=require('./workflow.cjs');
 const {definitions:builtinDefinitions}=require('./builtin-configurations.cjs');
 const KINDS=new Set(['KEYWORDS','MATCHING','COMMENT_TEMPLATE','DM_TEMPLATE']);
+function mediaUrl(value){if(typeof value!=='string'||value.length>2048)return null;try{const url=new URL(value);return url.protocol==='https:'?url.href:null;}catch{return null;}}
+function textField(value,max){return typeof value==='string'&&value.length<=max?value:null;}
 // MATCHING 配置与 review_policies 是 1:1 的：任何内容变更都必须让旧授权失效。
 function syncReviewPolicy(store,id,name,target){
  store.db.prepare('INSERT INTO review_policies(id,name,target) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,target=excluded.target,revision=revision+1,version=version+1,enabled=0,model_version=NULL').run(id,name,target);
@@ -148,8 +150,42 @@ class LocalService {
  verifyEvidence(input){return this.evidence.verify(input);}
  cancelEvidence(){return this.evidence.cancel();}
  comparePostVersions(input){return new(require('./post-versions.cjs').PostVersions)(this.store).compare(input);}
- postHistory({postId,page=1}){this.page(page);const p=this.store.db.prepare('SELECT p.*,r.finished_at,r.status run_status FROM run_posts p JOIN collection_runs r ON r.id=p.run_id WHERE p.id=?').get(postId);if(!p)throw new LocalError('POST_NOT_FOUND');const snapshot=JSON.parse(p.snapshot),policy=require('@crm/local-runtime/policy');return {post:{id:p.id,runId:p.run_id,platformId:p.platform_id,title:JSON.parse(p.snapshot).title||'',body:JSON.parse(p.snapshot).body||'',coverage:p.coverage,observedAt:p.finished_at,imageDiagnostics:policy.safeImageDiagnostics(snapshot.imageDiagnostics)??null,boundedRead:policy.safeBoundedReadReport(snapshot.boundedRead)??null,boundedReadWindows:Array.isArray(snapshot.boundedReadWindows)?snapshot.boundedReadWindows.slice(0,8).map(policy.safeBoundedReadReport).filter(Boolean):[]},comments:{items:this.store.db.prepare("SELECT c.id,c.body,c.parent_id,json_extract(c.snapshot,'$.authorNickname') nickname,json_extract(c.snapshot,'$.publishedAt') published_at,CASE WHEN json_type(c.snapshot,'$.imageDiagnostics')='object' THEN json_extract(c.snapshot,'$.imageDiagnostics') ELSE NULL END image_diagnostics FROM run_comments c WHERE c.post_id=? ORDER BY ordinal LIMIT 30 OFFSET ?").all(postId,(page-1)*30).map(c=>({...c,image_diagnostics:policy.safeImageDiagnostics(c.image_diagnostics?JSON.parse(c.image_diagnostics):null)??null})),total:this.store.db.prepare('SELECT count(*) n FROM run_comments WHERE post_id=?').get(postId).n,page},versions:this.store.db.prepare('SELECT p.id,p.run_id,p.coverage,r.created_at,r.reason FROM run_posts p JOIN collection_runs r ON r.id=p.run_id WHERE p.platform_id=? ORDER BY r.created_at DESC,p.rowid DESC LIMIT 100').all(p.platform_id)};}
+ postHistory({postId,page=1}){
+  this.page(page);
+  const p=this.store.db.prepare('SELECT p.*,r.finished_at,r.status run_status FROM run_posts p JOIN collection_runs r ON r.id=p.run_id WHERE p.id=?').get(postId);
+  if(!p)throw new LocalError('POST_NOT_FOUND');
+  const snapshot=JSON.parse(p.snapshot),policy=require('@crm/local-runtime/policy');
+  const comment=c=>({id:c.id,platform_id:c.platform_id,body:c.body,parent_id:c.parent_id,nickname:c.nickname,author_avatar_url:mediaUrl(c.author_avatar_url),published_at:c.published_at,image_diagnostics:policy.safeImageDiagnostics(c.image_diagnostics?JSON.parse(c.image_diagnostics):null)??null});
+  const select="SELECT c.id,c.platform_id,c.parent_id,c.body,c.ordinal,json_extract(c.snapshot,'$.authorNickname') nickname,json_extract(c.snapshot,'$.authorAvatarUrl') author_avatar_url,json_extract(c.snapshot,'$.publishedAt') published_at,CASE WHEN json_type(c.snapshot,'$.imageDiagnostics')='object' THEN json_extract(c.snapshot,'$.imageDiagnostics') ELSE NULL END image_diagnostics FROM run_comments c WHERE c.post_id=?";
+  const roots=this.store.db.prepare(select+' AND c.parent_id IS NULL ORDER BY c.ordinal LIMIT 20 OFFSET ?').all(postId,(page-1)*20).map(comment);
+  const total=this.store.db.prepare('SELECT count(*) n FROM run_comments WHERE post_id=?').get(postId).n;
+  const rootsTotal=this.store.db.prepare('SELECT count(*) n FROM run_comments WHERE post_id=? AND parent_id IS NULL').get(postId).n;
+  const nodes=new Map(roots.map(x=>[x.platform_id,x])),byRoot=new Map(roots.map(x=>[x.platform_id,[]]));
+  let frontier=roots;
+  while(frontier.length){
+   const ids=frontier.map(x=>x.platform_id);
+   const rows=this.store.db.prepare(select+' AND c.parent_id IN ('+ids.map(()=>'?').join(',')+') ORDER BY c.ordinal').all(postId,...ids).map(comment);
+   if(!rows.length)break;
+   for(const row of rows){
+    const parent=nodes.get(row.parent_id);
+    if(!parent)continue;
+    const rootId=parent.root_id||parent.platform_id;
+    row.root_id=rootId;
+    row.reply_to_nickname=parent.platform_id===rootId?null:parent.nickname;
+    nodes.set(row.platform_id,row);
+    const list=byRoot.get(rootId);
+    if(list)list.push(row);
+   }
+   frontier=rows;
+  }
+  const items=roots.map(root=>{
+   const list=(byRoot.get(root.platform_id)||[]).sort((a,b)=>a.ordinal-b.ordinal);
+   return {...root,reply_to_nickname:null,replies:list,reply_count:list.length};
+  });
+  return {post:{id:p.id,runId:p.run_id,platformId:p.platform_id,title:snapshot.title||'',body:snapshot.body||'',coverUrl:mediaUrl(snapshot.coverUrl),authorNickname:textField(snapshot.authorNickname,80),authorAvatarUrl:mediaUrl(snapshot.authorAvatarUrl),publishedAt:textField(snapshot.publishedAt,80),coverage:p.coverage,observedAt:p.finished_at,imageDiagnostics:policy.safeImageDiagnostics(snapshot.imageDiagnostics)??null,boundedRead:policy.safeBoundedReadReport(snapshot.boundedRead)??null,boundedReadWindows:Array.isArray(snapshot.boundedReadWindows)?snapshot.boundedReadWindows.slice(0,8).map(policy.safeBoundedReadReport).filter(Boolean):[]},comments:{items,total,roots:rootsTotal,page,pageSize:20},versions:this.store.db.prepare('SELECT p.id,p.run_id,p.coverage,r.created_at,r.reason FROM run_posts p JOIN collection_runs r ON r.id=p.run_id WHERE p.platform_id=? ORDER BY r.created_at DESC,p.rowid DESC LIMIT 100').all(p.platform_id)};
+ }
  savedPosts(input){return this.workflow.savedPosts(input);}
+ collectedPosts(input){return this.workflow.collectedPosts(input);}
  previewSavedPost(input){return this.workflow.previewSavedPost(input);}
  authorizeSavedPost(input){return this.workflow.authorizeSavedPost(input);}
  recoveryPreview(){return new (require('./recovery.cjs').LocalRecovery)(this.store).preview();}

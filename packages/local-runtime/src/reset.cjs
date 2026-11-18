@@ -42,8 +42,10 @@ class LocalReset{
   const counts=this.store.transaction(()=>{
    const out={},drop=table=>{out[table]=this.db.prepare('DELETE FROM '+table).run().changes;};
    if(selected.has('reviews')){drop('automation_decisions');drop('model_submissions');drop('review_results');drop('review_batches');}
+   if(selected.has('comments')||selected.has('posts'))drop('collection_run_events');
    if(selected.has('comments'))drop('run_comments');
-   if(selected.has('posts')){drop('run_checkpoints');drop('automatic_review_tasks');drop('run_posts');}
+   if(selected.has('comments')||selected.has('posts'))out.comments=this.db.prepare('DELETE FROM comments WHERE NOT EXISTS(SELECT 1 FROM run_comments c WHERE c.comment_id=comments.id)').run().changes;
+   if(selected.has('posts')){drop('run_checkpoints');drop('automatic_review_tasks');drop('run_posts');out.posts=this.db.prepare('DELETE FROM posts WHERE NOT EXISTS(SELECT 1 FROM run_posts p WHERE p.post_id=posts.id)').run().changes;}
    if(selected.has('runs')){drop('capture_conflicts');drop('collection_runs');}
    out.jobs=this.db.prepare(ORPHAN_JOBS).run().changes;
    out.authorizations=this.db.prepare(ORPHAN_GRANTS).run().changes;
