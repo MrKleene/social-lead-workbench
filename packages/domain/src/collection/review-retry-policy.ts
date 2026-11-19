@@ -2,6 +2,8 @@ export type ReviewErrorStage='CONFIG'|'NETWORK'|'PROVIDER'|'OUTPUT'|'AUTH'|'CAPA
 export type ReviewFailure={code:string;stage:ReviewErrorStage;retryable:boolean;unknown:boolean;httpStatus:number|null};
 /** 分批审核的固定上限；重试只针对能够确定“没有产生结果”的失败。 */
 export const reviewRetryPolicy=Object.freeze({chunkSize:50,maxAttempts:3,rateLimitWaitMs:60000,failureWaitMs:30000});
+/** 超过该字符数的评论不送审，单独记为跳过；目标表达通常远低于该阈值。 */
+export const reviewCommentPolicy=Object.freeze({maxChars:200});
 const outputCodes=new Set(['INVALID_OUTPUT','INVALID_RESPONSE','OUTPUT_JSON_INVALID']);
 export function classifyReviewError(code:string,httpStatus:number|null=null):ReviewFailure{
  const output=outputCodes.has(code)||code.startsWith('OUTPUT_');

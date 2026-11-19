@@ -22,6 +22,7 @@ export const stateLabels: Record<ReviewComment["state"], string> = {
   UNKNOWN: "结果未知",
   FAILED: "失败",
   PENDING: "待审核",
+  SKIPPED: "已跳过",
 };
 
 export function stateVariant(state: ReviewComment["state"]) {

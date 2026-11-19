@@ -57,13 +57,14 @@ export function ReviewPostCard({
       <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
         <div className="flex items-center gap-2 text-caption text-muted-foreground">
           <MessageSquare className="size-4" aria-hidden="true" />
-          <span className="tabular-nums">{post.total} 条评论</span>
+          <span className="tabular-nums">{post.total + post.skipped} 条评论</span>
         </div>
         <h3 className="line-clamp-2 text-body font-medium break-words">
           {post.title}
         </h3>
         <p className="text-caption text-muted-foreground tabular-nums">
           {post.reviewed}/{post.total} 已评分 · 最高 {post.highest ?? "—"}
+          {post.skipped ? ` · 跳过 ${post.skipped} 条` : ""}
         </p>
         {reviewing ? (
           <div

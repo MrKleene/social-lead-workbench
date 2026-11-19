@@ -101,6 +101,11 @@ export function LocalRunReview({ runId }: { runId: string }) {
               </dd>
             </div>
           </dl>
+          {reviewProgress.skipped ? (
+            <p className="text-caption text-muted-foreground tabular-nums">
+              跳过 {reviewProgress.skipped} 条（评论超长）
+            </p>
+          ) : null}
           <div
             role="progressbar"
             aria-label="评论审核进度"

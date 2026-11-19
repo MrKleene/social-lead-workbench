@@ -6,8 +6,9 @@ class RunReview{
  constructor(store){this.store=store;this.db=store.db;this.review=new LocalReview(store);}
  /** 只把尚无结果、也不在途的段切成请求；失败段在人工重试时作为新尝试重新进入。 */
  preview({runId}){
- const run=this.db.prepare('SELECT snapshot FROM collection_runs WHERE id=?').get(runId);if(!run)throw new LocalError('RUN_NOT_FOUND');const frozen=JSON.parse(run.snapshot).strictStages,batches=[];let skipped=0;
- for(const post of this.db.prepare('SELECT id FROM run_posts WHERE run_id=? ORDER BY ordinal').all(runId))for(const p of frozen.policies){
+ const run=this.db.prepare('SELECT snapshot FROM collection_runs WHERE id=?').get(runId);if(!run)throw new LocalError('RUN_NOT_FOUND');const frozen=JSON.parse(run.snapshot).strictStages,batches=[],posts=this.db.prepare('SELECT id FROM run_posts WHERE run_id=? ORDER BY ordinal').all(runId);let skipped=0,skippedComments=0;
+ for(const post of posts)skippedComments+=this.review.skippedComments(runId,post.id).length;
+ for(const post of posts)for(const p of frozen.policies){
   const reviewed=this.review.reviewedKeys(p.id,p.revision),states=this.review.segmentStates(runId,post.id,p.id,p.revision),{segments}=this.review.commentSegments(runId,post.id);
   for(const segment of segments){
    const state=states.get(segment.segmentNo)||{},running=state.batchState&&['RESERVED','DISPATCHED','UNKNOWN'].includes(state.batchState)||(state.jobStates||[]).some(s=>inFlight.has(s))||state.batchState==='COMPLETED';
@@ -17,7 +18,7 @@ class RunReview{
    if(plan.empty){skipped++;continue;}batches.push({scope:plan.scope,comments:plan.inputs.length,estimatedMicros:plan.estimate.estimatedMicros});
   }
  }
- if(batches.length>100)throw new LocalError('RUN_REVIEW_BATCH_LIMIT');const scope={runId,batches,automaticRules:(frozen.contactRules||[]).length};if(Buffer.byteLength(canonical(scope))>60000)throw new LocalError('RUN_REVIEW_BATCH_LIMIT');return {scope,previewHash:hash(scope),requests:batches.length,comments:batches.reduce((n,b)=>n+b.comments,0),estimatedMicros:batches.some(b=>b.estimatedMicros===null)?null:batches.reduce((n,b)=>n+b.estimatedMicros,0),skipped,pauses:this.review.pauses(runId),minutes:15};
+ if(batches.length>100)throw new LocalError('RUN_REVIEW_BATCH_LIMIT');const scope={runId,batches,automaticRules:(frozen.contactRules||[]).length};if(Buffer.byteLength(canonical(scope))>60000)throw new LocalError('RUN_REVIEW_BATCH_LIMIT');return {scope,previewHash:hash(scope),requests:batches.length,comments:batches.reduce((n,b)=>n+b.comments,0),estimatedMicros:batches.some(b=>b.estimatedMicros===null)?null:batches.reduce((n,b)=>n+b.estimatedMicros,0),skipped,skippedComments,pauses:this.review.pauses(runId),minutes:15};
  }
  authorize({scope,previewHash,requestKey,consent}){return this.store.transaction(()=>{
  if(consent!=='review-exact-new-run-batches-v1'||!scope||hash(scope)!==previewHash||typeof requestKey!=='string'||!/^[-a-zA-Z0-9_]{1,100}$/.test(requestKey))throw new LocalError('MODEL_CONSENT_REQUIRED');

@@ -5,14 +5,17 @@ const {LocalQueue}=require('./queue.cjs');
 const {LocalCollection}=require('./collection.cjs');
 const policy=require('@crm/local-runtime/policy');
 const dayAt=timestamp=>new Date(timestamp+8*3600000).toISOString().slice(0,10);
-const {reviewRetryPolicy,classifyReviewError}=policy;
-const segmentSize=reviewRetryPolicy.chunkSize;
+const {reviewRetryPolicy,reviewCommentPolicy,classifyReviewError}=policy;
+const segmentSize=reviewRetryPolicy.chunkSize,maxCommentChars=reviewCommentPolicy.maxChars;
+const commentText=c=>String(c.snapshot&&c.snapshot.comment||'').trim(),commentTooLong=text=>[...text].length>maxCommentChars;
 const barrierSql='SELECT r.comment_id,r.source_hash,r.snapshot FROM review_results r JOIN review_batches b ON b.id=r.batch_id JOIN jobs j ON j.id=b.job_id '
  +"WHERE b.run_id=? AND b.post_id=? AND b.policy_id=? AND b.policy_revision=? AND b.model_version=? AND b.review_mode='FROZEN_RUN' AND b.state='COMPLETED' AND j.state='SUCCEEDED' AND j.cancel_requested=0";
 class LocalReview {
   constructor(store){this.store=store;this.db=store.db;this.queue=new LocalQueue(store);this.collection=new LocalCollection(store);}
-  /** 可送审评论：正文为空（只有图片/表情或被删除）的评论无法让模型引用逐字证据，永久留在模型请求之外。 */
-  reviewableComments(runId,postId){return this.collection.comments(runId,postId).filter(c=>String(c.snapshot&&c.snapshot.comment||'').trim()!=='');}
+  /** 可送审评论：正文为空（只有图片/表情或被删除）或超过长度上限的评论不送审，永久留在模型请求之外。 */
+  reviewableComments(runId,postId){return this.collection.comments(runId,postId).filter(c=>{const text=commentText(c);return text!==''&&!commentTooLong(text);});}
+  /** 因正文超长而不送审的评论；与 reviewableComments 互斥。 */
+  skippedComments(runId,postId){return this.collection.comments(runId,postId).filter(c=>{const text=commentText(c);return text!==''&&commentTooLong(text);});}
   plan(runId,postId,policyId,reviewMode,reviewedKeys,options={}){
     if(reviewMode!==undefined&&reviewMode!=='INDEPENDENT')throw new LocalError('INVALID_REVIEW_MODE');
     const independent=reviewMode==='INDEPENDENT';
@@ -200,7 +203,8 @@ class LocalReview {
     for(const p of frozen)for(const post of posts){
       const comments=this.reviewableComments(runId,post.id);
       if(!comments.length)continue;
-      const results=this.db.prepare(barrierSql).all(runId,post.id,p.id,p.revision,p.modelVersion);
+      const skipped=new Set(this.skippedComments(runId,post.id).map(c=>c.id));
+      const results=this.db.prepare(barrierSql).all(runId,post.id,p.id,p.revision,p.modelVersion).filter(r=>!skipped.has(r.comment_id));
       if(results.length!==comments.length)return {ready:false,reason:'等待整轮全部评论审核完成'};
       const byComment=new Map();for(const r of results){const list=byComment.get(r.comment_id)||[];list.push(r);byComment.set(r.comment_id,list);}
       for(const comment of comments){const list=byComment.get(comment.id)||[],expected=hash(comment.snapshot);if(list.length!==1||list[0].source_hash!==expected||hash(JSON.parse(list[0].snapshot))!==expected)return {ready:false,reason:'审核结果与本轮原文不一致'};}

@@ -1,5 +1,5 @@
 'use strict';
-const {LocalError}=require('./database.cjs'),{dayAt}=require('./send-safety.cjs');
+const {LocalError}=require('./database.cjs'),{dayAt}=require('./send-safety.cjs'),{reviewCommentPolicy}=require('@crm/local-runtime/policy');
 function page(value=1){if(!Number.isInteger(value)||value<1||value>100000)throw new LocalError('INVALID_PAGE');return value;}
 function filterText(values){if(values.some(x=>typeof x!=='string'||x.length>200))throw new LocalError('INVALID_REPORT_FILTER');}
 function range(from='',to=''){
@@ -50,7 +50,7 @@ class LocalReporting{
  }
  unreviewed({page:current=1,runId='',policyId='',query='',state=''}={}){
   page(current);filterText([runId,policyId,query]);if(!['','FAILED','UNKNOWN','PROCESSING','UNANALYSED'].includes(state))throw new LocalError('INVALID_REPORT_FILTER');
-  const source=`FROM run_comments c JOIN run_posts p ON p.id=c.post_id LEFT JOIN review_batches b ON b.id=(SELECT x.id FROM review_batches x WHERE x.post_id=c.post_id AND (?='' OR x.policy_id=?) ORDER BY x.created_at DESC,x.rowid DESC LIMIT 1)`,where="NOT EXISTS(SELECT 1 FROM review_results r JOIN review_batches rb ON rb.id=r.batch_id WHERE r.comment_id=c.id AND (?='' OR rb.policy_id=?)) AND (?='' OR c.run_id=?) AND (?='' OR instr(c.body,?)>0) AND (?='' OR ?='FAILED' AND b.state IN('FAILED','CANCELLED') OR ?='UNKNOWN' AND b.state='UNKNOWN' OR ?='PROCESSING' AND b.state IN('RESERVED','DISPATCHED') OR ?='UNANALYSED' AND b.id IS NULL)",args=[policyId,policyId,policyId,policyId,runId,runId,query,query,state,state,state,state,state];
+  const source=`FROM run_comments c JOIN run_posts p ON p.id=c.post_id LEFT JOIN review_batches b ON b.id=(SELECT x.id FROM review_batches x WHERE x.post_id=c.post_id AND (?='' OR x.policy_id=?) ORDER BY x.created_at DESC,x.rowid DESC LIMIT 1)`,where="NOT EXISTS(SELECT 1 FROM review_results r JOIN review_batches rb ON rb.id=r.batch_id WHERE r.comment_id=c.id AND (?='' OR rb.policy_id=?)) AND (?='' OR c.run_id=?) AND length(trim(c.body))<="+reviewCommentPolicy.maxChars+" AND (?='' OR instr(c.body,?)>0) AND (?='' OR ?='FAILED' AND b.state IN('FAILED','CANCELLED') OR ?='UNKNOWN' AND b.state='UNKNOWN' OR ?='PROCESSING' AND b.state IN('RESERVED','DISPATCHED') OR ?='UNANALYSED' AND b.id IS NULL)",args=[policyId,policyId,policyId,policyId,runId,runId,query,query,state,state,state,state,state];
   return {items:this.db.prepare(`SELECT c.id,c.run_id,c.post_id,c.body,p.coverage,json_extract(p.snapshot,'$.title') post_title,b.state batch_state,b.error_code ${source} WHERE ${where} ORDER BY c.rowid DESC LIMIT 30 OFFSET ?`).all(...args,(current-1)*30),total:this.db.prepare(`SELECT count(*) n ${source} WHERE ${where}`).get(...args).n,page:current};
  }
 

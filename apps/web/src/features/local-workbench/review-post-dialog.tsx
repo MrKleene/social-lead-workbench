@@ -135,8 +135,9 @@ export function ReviewPostDialog({
               <div className="min-w-0">
                 <DialogTitle className="break-words">{post.title}</DialogTitle>
                 <DialogDescription className="tabular-nums">
-                  {post.total} 条评论 · {post.reviewed}/{post.total} 已评分 · 最高{" "}
+                  {post.total + post.skipped} 条评论 · {post.reviewed}/{post.total} 已评分 · 最高{" "}
                   {post.highest ?? "—"}
+                  {post.skipped ? ` · 跳过 ${post.skipped} 条（评论超长）` : ""}
                 </DialogDescription>
               </div>
               <Badge variant={postVariant(post.status)}>{postLabel(post.status)}</Badge>
@@ -171,6 +172,7 @@ export function ReviewPostDialog({
                 <SelectItem value="PENDING">待审核</SelectItem>
                 <SelectItem value="UNKNOWN">结果未知</SelectItem>
                 <SelectItem value="FAILED">失败</SelectItem>
+                <SelectItem value="SKIPPED">已跳过</SelectItem>
               </SelectContent>
             </Select>
             <Select
