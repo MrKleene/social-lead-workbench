@@ -1,6 +1,5 @@
 import {useQuery} from '@tanstack/react-query';
 import {useSearchParams} from '@/lib/router-compat';
-import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {Dialog,DialogContent,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {DatePicker} from '@/components/ui/date-picker';
@@ -10,9 +9,8 @@ import {EmptyState} from '@/components/patterns/empty-state';
 import {FilterBar,FilterField} from '@/components/patterns/filter-bar';
 import {PageHeader} from '@/components/patterns/page-header';
 import {Pagination} from '@/components/patterns/pagination';
-import {RecordItem,RecordList} from '@/components/patterns/record-list';
-import {SectionCard} from '@/components/patterns/section-card';
 import {ErrorNotice} from '@/components/feedback';
+import {CollectedPostCard} from './collected-post-card';
 import {localApi} from './local-api';
 import {LocalPostHistory} from './local-post-history';
 import {LocalPostRead} from './local-post-read';
@@ -30,7 +28,7 @@ export function LocalPostsPage(){
  const selected=posts.data?.items.find(item=>item.id===get('post')),action=get('action');
  return <>
   <PageHeader title="帖子列表" description={posts.data?`${posts.data.total} 篇笔记`:'已采集的笔记'}/>
-  <SectionCard>
+  <div className="flex flex-col gap-3">
    <FilterBar>
     <FilterField label="搜索帖子标题"><Input type="search" maxLength={200} value={query} onChange={event=>change('query',event.target.value)}/></FilterField>
     <FilterField label="完整度">
@@ -59,20 +57,11 @@ export function LocalPostsPage(){
    {posts.error?<ErrorNotice error={posts.error}/>:null}
    {posts.isPending?<p className="text-body text-muted-foreground">正在读取…</p>:null}
    {!posts.isPending&&!posts.data?.total?<EmptyState title="还没有采集的帖子。"/>:null}
-   {posts.data?.items.length?<RecordList>
-    {posts.data.items.map(post=><RecordItem key={post.id} title={post.title||'无标题笔记'} meta={<span className="flex flex-wrap items-center gap-2">
-      <Badge variant={post.coverage==='COMPLETE'?'success':'warning'}>{post.coverage==='COMPLETE'?'完整':'待补读'}</Badge>
-      <span>{post.comments} 条评论 · 采集 {post.collections} 次 · {new Date(post.latestAt).toLocaleString()} · {post.accountName}</span>
-     </span>} action={<>
-      <Button variant="outline" onClick={()=>open(post.id,'view')}>查看原文与评论</Button>
-      <Button variant="outline" onClick={()=>open(post.id,'read')}>重新读取</Button>
-      {post.coverage!=='COMPLETE'?<Button variant="outline" disabled={!post.resumeReady} onClick={()=>open(post.id,'resume')}>补读</Button>:null}
-      {post.reviewReady?<Button variant="outline" onClick={()=>open(post.id,'review')}>审核这篇的评论</Button>:null}
-     </>}/>
-    )}
-   </RecordList>:null}
-   {posts.data&&posts.data.total?<Pagination page={page} total={posts.data.total} onPageChange={value=>setParams(previous=>{const next=new URLSearchParams(previous);next.set('page',String(value));return next;})} label="帖子列表分页"/>:null}
-  </SectionCard>
+   {posts.data?.items.length?<div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
+    {posts.data.items.map(post=><CollectedPostCard key={post.id} post={post} onOpen={()=>open(post.id,'view')}/>)}
+   </div>:null}
+   {posts.data&&posts.data.total?<Pagination page={page} total={posts.data.total} onPageChange={value=>setParams(previous=>{const next=new URLSearchParams(previous);next.set('page',String(value));return next;})} label="帖子列表分页" countLabel="篇笔记"/>:null}
+  </div>
   {selected&&action==='view'?<LocalPostHistory key={selected.viewPostId} postId={selected.viewPostId} onClose={close} footer={<>
    <Button variant="ghost" onClick={close}>关闭</Button>
    <Button variant="outline" onClick={()=>open(selected.id,'read')}>重新读取</Button>

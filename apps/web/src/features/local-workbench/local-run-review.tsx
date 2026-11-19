@@ -7,7 +7,7 @@ import { SectionCard } from "@/components/patterns/section-card";
 import { useLocalRecords } from "./use-local-records";
 import type { ReviewPostSummary } from "./local-api";
 import { ReviewPostDialog } from "./review-post-dialog";
-import { ReviewPostGrid } from "./review-post-card";
+import { ReviewPostGrid, ReviewPostList } from "./review-post-card";
 import { statusVariant } from "./review-model";
 import { reviewFailureLabel } from "../comment-review/run-review-model";
 
@@ -43,18 +43,18 @@ export function LocalRunReview({ runId }: { runId: string }) {
               ? "UNKNOWN"
               : "PENDING"
       : null;
-  const statusLabel =
-    status === "COMPLETED"
-      ? "已评分"
-      : status === "PROCESSING"
-        ? "审核中"
-        : status === "FAILED"
-          ? "失败"
-          : status === "UNKNOWN"
-            ? "结果未知"
-            : status === "PENDING"
-              ? "待审核"
-              : "待开始";
+  const completed = status === "COMPLETED";
+  const statusLabel = completed
+    ? "已完成"
+    : status === "PROCESSING"
+      ? "审核中"
+      : status === "FAILED"
+        ? "失败"
+        : status === "UNKNOWN"
+          ? "结果未知"
+          : status === "PENDING"
+            ? "待审核"
+            : "待开始";
 
   return (
     <SectionCard
@@ -64,65 +64,82 @@ export function LocalRunReview({ runId }: { runId: string }) {
           <Button variant="ghost" size="sm" asChild>
             <Link to={`/comment-review?view=posts&run=${runId}`}>查看评论审核</Link>
           </Button>
-          <Badge variant={status ? statusVariant(status) : "secondary"}>
+          <Badge
+            variant={completed ? "success" : status ? statusVariant(status) : "secondary"}
+          >
             {statusLabel}
           </Badge>
         </div>
       }
     >
       {reviewProgress ? (
-        <div className="flex flex-col gap-4">
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div>
-              <dt className="text-caption text-muted-foreground">已评分</dt>
-              <dd className="mt-1 text-title tabular-nums">
-                {reviewProgress.reviewed}
-                <span className="text-body font-normal text-muted-foreground">
-                  {" "}/ {reviewProgress.total}
-                </span>
-              </dd>
-            </div>
-            <div>
-              <dt className="text-caption text-muted-foreground">审核中</dt>
-              <dd className="mt-1 text-title tabular-nums">
-                {reviewProgress.processing}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-caption text-muted-foreground">待审核</dt>
-              <dd className="mt-1 text-title tabular-nums">
-                {reviewProgress.pending}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-caption text-muted-foreground">失败</dt>
-              <dd className="mt-1 text-title tabular-nums">
-                {reviewProgress.failed}
-              </dd>
-            </div>
-          </dl>
-          {reviewProgress.skipped ? (
-            <p className="text-caption text-muted-foreground tabular-nums">
-              跳过 {reviewProgress.skipped} 条（评论超长）
+        completed ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-body tabular-nums">
+              已评分 <span className="font-medium">{reviewProgress.reviewed}</span>
+              {" · "}跳过 <span className="font-medium">{reviewProgress.skipped}</span>
+              {" · "}失败 <span className="font-medium">{reviewProgress.failed}</span>
             </p>
-          ) : null}
-          <div
-            role="progressbar"
-            aria-label="评论审核进度"
-            aria-valuemin={0}
-            aria-valuemax={reviewProgress.total}
-            aria-valuenow={reviewProgress.reviewed}
-            className="h-2 overflow-hidden rounded-full bg-muted"
-          >
-            <div
-              className="h-full rounded-full bg-foreground transition-[width]"
-              style={{ width: percent + "%" }}
-            />
+            {reviewProgress.skipped ? (
+              <p className="text-caption text-muted-foreground">
+                跳过原因：评论超长
+              </p>
+            ) : null}
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div>
+                <dt className="text-caption text-muted-foreground">已评分</dt>
+                <dd className="mt-1 text-title tabular-nums">
+                  {reviewProgress.reviewed}
+                  <span className="text-body font-normal text-muted-foreground">
+                    {" "}/ {reviewProgress.total}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-caption text-muted-foreground">审核中</dt>
+                <dd className="mt-1 text-title tabular-nums">
+                  {reviewProgress.processing}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-caption text-muted-foreground">待审核</dt>
+                <dd className="mt-1 text-title tabular-nums">
+                  {reviewProgress.pending}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-caption text-muted-foreground">失败</dt>
+                <dd className="mt-1 text-title tabular-nums">
+                  {reviewProgress.failed}
+                </dd>
+              </div>
+            </dl>
+            {reviewProgress.skipped ? (
+              <p className="text-caption text-muted-foreground tabular-nums">
+                跳过 {reviewProgress.skipped} 条（评论超长）
+              </p>
+            ) : null}
+            <div
+              role="progressbar"
+              aria-label="评论审核进度"
+              aria-valuemin={0}
+              aria-valuemax={reviewProgress.total}
+              aria-valuenow={reviewProgress.reviewed}
+              className="h-2 overflow-hidden rounded-full bg-muted"
+            >
+              <div
+                className="h-full rounded-full bg-foreground transition-[width]"
+                style={{ width: percent + "%" }}
+              />
+            </div>
+          </div>
+        )
       ) : null}
 
-      {activity ? (
+      {!completed && activity ? (
         <div className="flex flex-col gap-1">
           <p
             role="status"
@@ -140,19 +157,19 @@ export function LocalRunReview({ runId }: { runId: string }) {
         </div>
       ) : null}
 
-      {reviewProgress?.unknown ? (
+      {!completed && reviewProgress?.unknown ? (
         <p role="status" className="text-body text-warning break-words">
           结果未知 {reviewProgress.unknown} 条。
         </p>
       ) : null}
 
-      {pauses.length ? (
+      {!completed && pauses.length ? (
         <p role="status" className="text-body text-warning break-words">
           {queuePaused ? "审核队列已暂停。" : "该帖审核已暂停。"}
         </p>
       ) : null}
 
-      {showFailures ? (
+      {!completed && showFailures ? (
         <ul className="space-y-2 text-body text-muted-foreground">
           {failures.slice(0, 3).map((item) => (
             <li key={item.batchId} className="break-words">
@@ -163,12 +180,20 @@ export function LocalRunReview({ runId }: { runId: string }) {
       ) : null}
 
       {posts.length ? (
-        <ReviewPostGrid
-          posts={posts}
-          activePostId={activity?.postId ?? selectedId}
-          reviewingPostId={activity?.postId ?? null}
-          onOpen={(post) => setSelectedId(post.postId)}
-        />
+        completed ? (
+          <ReviewPostList
+            posts={posts}
+            activePostId={selectedId}
+            onOpen={(post) => setSelectedId(post.postId)}
+          />
+        ) : (
+          <ReviewPostGrid
+            posts={posts}
+            activePostId={activity?.postId ?? selectedId}
+            reviewingPostId={activity?.postId ?? null}
+            onOpen={(post) => setSelectedId(post.postId)}
+          />
+        )
       ) : (
         <p className="text-body text-muted-foreground">还没有可审核的评论。</p>
       )}
