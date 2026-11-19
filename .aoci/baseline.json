@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-11T10:57:30Z",
-  "updated_at": "2026-11-19T15:07:59Z",
+  "updated_at": "2026-11-19T15:22:15Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -17507,9 +17507,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "750ea9893d92984b1f1e1dcb508a0822aec8cd3ee97707456fd1e24c47f5b0f2",
-      "size": 246156,
-      "normalized_sha256": "750ea9893d92984b1f1e1dcb508a0822aec8cd3ee97707456fd1e24c47f5b0f2"
+      "sha256": "3ba25132f9edee7947d28ad245c8dd1ec920a527c8802714dfea167b5c9e4493",
+      "size": 246459,
+      "normalized_sha256": "3ba25132f9edee7947d28ad245c8dd1ec920a527c8802714dfea167b5c9e4493"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -17567,9 +17567,9 @@
     },
     "apps/desktop/src/ipc-policy.cjs": {
       "role": "index",
-      "sha256": "83026439dd740f7300173bbc60f2ae0647d5401349b13bcedf6efba4a768a86b",
-      "size": 2605,
-      "normalized_sha256": "83026439dd740f7300173bbc60f2ae0647d5401349b13bcedf6efba4a768a86b"
+      "sha256": "7dbe30a302f764294efd4b9e2f3a7959a25684e43d817de68defd5d0013aee6f",
+      "size": 2594,
+      "normalized_sha256": "7dbe30a302f764294efd4b9e2f3a7959a25684e43d817de68defd5d0013aee6f"
     },
     "apps/desktop/src/local-crypto.cjs": {
       "role": "index",
@@ -17609,9 +17609,9 @@
     },
     "apps/desktop/src/preload.cjs": {
       "role": "index",
-      "sha256": "7e2964f720cdb2a86afdbeae90d44541ec323c78448113a992283a76b3d5b094",
-      "size": 2097,
-      "normalized_sha256": "7e2964f720cdb2a86afdbeae90d44541ec323c78448113a992283a76b3d5b094"
+      "sha256": "875e46d938ef8a20b84ecb2bd7989e1e8a36888ee48809b6f13efa6b87f793e5",
+      "size": 2086,
+      "normalized_sha256": "875e46d938ef8a20b84ecb2bd7989e1e8a36888ee48809b6f13efa6b87f793e5"
     },
     "apps/desktop/src/send-wire.cjs": {
       "role": "index",
@@ -17639,9 +17639,9 @@
     },
     "apps/desktop/test/ipc-service.test.cjs": {
       "role": "index",
-      "sha256": "eb1abb2532438392eec6325b08af51872ff76f663b273d8cb286e1198e036e27",
-      "size": 1093,
-      "normalized_sha256": "eb1abb2532438392eec6325b08af51872ff76f663b273d8cb286e1198e036e27"
+      "sha256": "409fc208099c9eb48a749be94d6679c8e38a6533cca08aaf74330fe67ff1df62",
+      "size": 2059,
+      "normalized_sha256": "409fc208099c9eb48a749be94d6679c8e38a6533cca08aaf74330fe67ff1df62"
     },
     "apps/desktop/test/owned-journal.test.cjs": {
       "role": "index",
@@ -21307,9 +21307,9 @@
     },
     "packages/local-runtime/src/service.cjs": {
       "role": "index",
-      "sha256": "0ba6f7784149cda4c42a5d8e46a9a57bda6a1a17557bb42bbd1513a7e0a05415",
-      "size": 22069,
-      "normalized_sha256": "0ba6f7784149cda4c42a5d8e46a9a57bda6a1a17557bb42bbd1513a7e0a05415"
+      "sha256": "f5e00afdd9a36225bc5eb91718cb3db5a36342de1a61dac6080cddf4bc89778c",
+      "size": 22137,
+      "normalized_sha256": "f5e00afdd9a36225bc5eb91718cb3db5a36342de1a61dac6080cddf4bc89778c"
     },
     "packages/local-runtime/src/workflow.cjs": {
       "role": "index",

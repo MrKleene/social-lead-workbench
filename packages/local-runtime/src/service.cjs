@@ -134,7 +134,7 @@ class LocalService {
   this.vault.put('MODEL_KEY','qwen',key);this.store.audit('LOCAL_USER','MODEL_KEY_SAVED','qwen');return {configured:true};}
  jobs(){return this.store.db.prepare('SELECT id,kind,state,created_at,updated_at FROM jobs ORDER BY created_at DESC,id LIMIT 100').all();}
  accounts(){return this.store.db.prepare('SELECT id,platform,name,state,daily_limit FROM accounts ORDER BY name,id').all();}
- accountsInbox(){return new LocalInbox(this.store).accounts();}
+ inboxAccounts(){return new LocalInbox(this.store).accounts();}
  inboxPage(input){return new LocalInbox(this.store).list(input);}
  conversations(input){return new LocalInbox(this.store).threads(input);}
  conversation(input){return new LocalInbox(this.store).thread(input);}
@@ -213,6 +213,7 @@ class LocalService {
  authorizeChat(input){return this.workflow.authorizeChat(input);}
  previewCommentReply(input){return this.workflow.previewCommentReply(input);}
  authorizeCommentReply(input){return this.workflow.authorizeCommentReply(input);}
+ previewContact(input){return this.workflow.previewContact(input);}
  authorizeContact(input){return this.workflow.authorizeContact(input);}
  previewReply(input){return this.workflow.previewReply(input);}
  authorizeReply(input){return this.workflow.authorizeReply(input);}
