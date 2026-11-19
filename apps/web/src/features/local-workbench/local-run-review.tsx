@@ -25,6 +25,11 @@ export function LocalRunReview({ runId }: { runId: string }) {
     ? Math.round((reviewProgress.reviewed / reviewProgress.total) * 100)
     : 0;
   const selected = posts.find((post) => post.postId === selectedId);
+  const showFailures =
+    failures.length > 0 &&
+    (pauses.length > 0 ||
+      (reviewProgress?.failed ?? 0) > 0 ||
+      (reviewProgress?.unknown ?? 0) > 0);
 
   const status =
     reviewProgress && reviewProgress.total > 0
@@ -142,7 +147,7 @@ export function LocalRunReview({ runId }: { runId: string }) {
         </p>
       ) : null}
 
-      {failures.length ? (
+      {showFailures ? (
         <ul className="space-y-2 text-body text-muted-foreground">
           {failures.slice(0, 3).map((item) => (
             <li key={item.batchId} className="break-words">
