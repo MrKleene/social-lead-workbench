@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckboxField } from "@/components/patterns/checkbox-field";
 import { FormField } from "@/components/patterns/form-field";
 import { ErrorNotice } from "@/components/feedback";
 import { localApi, type ReviewPreview } from "./local-api";
@@ -37,7 +36,6 @@ export function LocalReviewDialog({
   const [plan, setPlan] = useState<(ReviewPreview & { requestKey: string }) | null>(
     null,
   );
-  const [consent, setConsent] = useState(false);
 
   const workflow = useQuery({
     queryKey: ["local", "workflow"],
@@ -60,7 +58,6 @@ export function LocalReviewDialog({
       }),
     onSuccess: (value) => {
       setPlan({ ...value, requestKey: crypto.randomUUID() });
-      setConsent(false);
     },
   });
 
@@ -164,20 +161,16 @@ export function LocalReviewDialog({
               ? `本轮已冻结 ${plan.automaticRules} 条自动联系规则。全部笔记与目标审核完成后，规则可自动发送。`
               : "本轮未选择自动联系规则。"}
           </p>
-          <CheckboxField checked={consent} onCheckedChange={setConsent}>
-            同意发送本批评论原文至北京千问（付费）。
-          </CheckboxField>
           <div className="flex flex-wrap gap-3">
             <Button
               disabled={
-                !consent ||
                 plan.empty ||
                 workflow.data?.capabilities.review === false
               }
               pending={authorize.isPending}
               onClick={() => authorize.mutate()}
             >
-              授权并审核本批
+              审核本批
             </Button>
           </div>
         </div>
