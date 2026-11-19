@@ -36,20 +36,21 @@ class LocalPreferences{
    dmTemplateIds:this.templateIds(saved.dmTemplateIds??(saved.dmTemplateId?[saved.dmTemplateId]:[]),'DM'),
    // 回复账号池：数组顺序即配额耗尽后的取用顺序；账号被删除后自动摘掉，不静默换号。
    replyAccountIds:Array.isArray(saved.replyAccountIds)?saved.replyAccountIds.filter(id=>validId(id)&&this.account(id)):[],
-   threshold:Number.isInteger(saved.threshold)&&saved.threshold>=0&&saved.threshold<=100?saved.threshold:80};
+   threshold:Number.isInteger(saved.threshold)&&saved.threshold>=0&&saved.threshold<=100?saved.threshold:80,
+   refreshTime:typeof saved.refreshTime==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(saved.refreshTime)?saved.refreshTime:'00:00'};
  }
- saveSteps({version,autoReview,policyId,autoReply,commentTemplateIds,dmTemplateIds,replyAccountIds,threshold}){
+ saveSteps({version,autoReview,policyId,autoReply,commentTemplateIds,dmTemplateIds,replyAccountIds,threshold,refreshTime='00:00'}){
   const accounts=replyAccountIds??[],comments=commentTemplateIds??[],dms=dmTemplateIds??[];
   const ids=list=>Array.isArray(list)&&list.length<=20&&list.every(id=>validId(id))&&new Set(list).size===list.length;
-  if(!Number.isInteger(version)||version<0||typeof autoReview!=='boolean'||typeof autoReply!=='boolean'||policyId!==null&&!validId(policyId)||!ids(comments)||!ids(dms)||!Array.isArray(accounts)||accounts.length>100||accounts.some(x=>!validId(x))||new Set(accounts).size!==accounts.length||!Number.isInteger(threshold)||threshold<0||threshold>100)throw new LocalError('INVALID_AUTOMATION_STEPS');
+  if(!Number.isInteger(version)||version<0||typeof autoReview!=='boolean'||typeof autoReply!=='boolean'||policyId!==null&&!validId(policyId)||!ids(comments)||!ids(dms)||!Array.isArray(accounts)||accounts.length>100||accounts.some(x=>!validId(x))||new Set(accounts).size!==accounts.length||!Number.isInteger(threshold)||threshold<0||threshold>100||typeof refreshTime!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(refreshTime))throw new LocalError('INVALID_AUTOMATION_STEPS');
   return this.store.transaction(()=>{
    if(this.steps().version!==version)throw new LocalError('PREFERENCE_CHANGED');
    if(policyId&&!this.policy(policyId))throw new LocalError('REVIEW_POLICY_CHANGED');
    for(const id of comments)if(!this.template(id,'COMMENT'))throw new LocalError('CONTACT_TEMPLATE_CHANGED');
    for(const id of dms)if(!this.template(id,'DM'))throw new LocalError('CONTACT_TEMPLATE_CHANGED');
    for(const id of accounts)if(!this.account(id))throw new LocalError('PREFERRED_ACCOUNT_UNAVAILABLE');
-   this.put('automation-steps',{autoReview,policyId,autoReply,commentTemplateIds:comments,dmTemplateIds:dms,replyAccountIds:accounts,threshold},version+1);
-   this.store.audit('LOCAL_USER','AUTOMATION_STEPS_SAVED',policyId??'none',{version:version+1,autoReview,policyId,autoReply,commentTemplateIds:comments,dmTemplateIds:dms,replyAccountIds:accounts,threshold});
+   this.put('automation-steps',{autoReview,policyId,autoReply,commentTemplateIds:comments,dmTemplateIds:dms,replyAccountIds:accounts,threshold,refreshTime},version+1);
+   this.store.audit('LOCAL_USER','AUTOMATION_STEPS_SAVED',policyId??'none',{version:version+1,autoReview,policyId,autoReply,commentTemplateIds:comments,dmTemplateIds:dms,replyAccountIds:accounts,threshold,refreshTime});
    return this.steps();
   });
  }

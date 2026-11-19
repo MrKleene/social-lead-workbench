@@ -10,7 +10,7 @@ export {postSchema,commentSchema,configInput} from '@crm/domain/collection/contr
 export {wholePostCapacity} from '@crm/domain/collection/whole-post-capacity';
 export {estimateWholePostCost} from '@crm/domain/collection/model-cost-estimate';
 export {modelCallWaitMs} from '@crm/domain/collection/model-call-pacing';
-export {reviewRetryPolicy,classifyReviewError} from '@crm/domain/collection/review-retry-policy';
+export {reviewRetryPolicy,reviewCommentPolicy,classifyReviewError} from '@crm/domain/collection/review-retry-policy';
 export {collectionBarrier,stagePlanSchema} from '@crm/domain/collection/collection-barrier';
 export {autoContactRuleInput} from '@crm/contracts';
 export {prepareXhsReply,verifyXhsReplyResult,XHS_REPLY_PROTOCOL} from '@crm/domain/auto-contact/xhs-reply-protocol';

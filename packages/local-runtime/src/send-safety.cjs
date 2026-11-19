@@ -3,6 +3,10 @@ const {randomUUID}=require('node:crypto');
 const {LocalError,canonical,hash}=require('./database.cjs');
 const {LocalQueue}=require('./queue.cjs');
 function dayAt(timestamp){const f=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'});return f.format(new Date(timestamp));}
+/** 账号额度刷新时间（HH:MM，Asia/Shanghai），默认 00:00。 */
+function refreshOffset(db){try{const row=db.prepare("SELECT value FROM settings WHERE key='automation-steps'").get(),value=row?JSON.parse(row.value).refreshTime:null,match=/^([01]\d|2[0-3]):([0-5]\d)$/.exec(value||'');return match?(Number(match[1])*60+Number(match[2]))*60000:0;}catch{return 0;}}
+function quotaDay(timestamp,offset=0){return dayAt(timestamp-offset);}
+function currentQuotaDay(store){return quotaDay(store.clock(),refreshOffset(store.db));}
 const PURPOSES=['FIRST_CONTACT','INBOX_REPLY','CHAT_FOLLOW_UP','INBOX_COMMENT_REPLY'];
 function purposeOf(s){return s.purpose||(s.intent==='INBOX_REPLY'?'INBOX_REPLY':'FIRST_CONTACT');}
 /** 只有首次联系（自动或待处理人工）占账号日额度；收件箱里的继续聊天和评论回复不占。 */
@@ -16,7 +20,7 @@ function validateScope(s){
  if(s.channel==='DM'&&s.target.recipientId!==s.recipientId)throw new LocalError('EXACT_TARGET_REQUIRED');
  if(Object.keys(s).some(k=>!['platform','channel','accountId','accountRevision','recipientId','content','target','intent','purpose','basis','batchId'].includes(k)))throw new LocalError('INVALID_SEND_SCOPE');
  if(s.batchId!==undefined&&(typeof s.batchId!=='string'||!s.batchId||s.batchId.length>200))throw new LocalError('INVALID_SEND_SCOPE');
- if(s.basis&&(s.intent==='INBOX_REPLY'||!['AUTOMATIC','MANUAL_REVIEW','INBOX_CHAT','INBOX_COMMENT'].includes(s.basis.type)))throw new LocalError('INVALID_SEND_SCOPE');
+ if(s.basis&&(s.intent==='INBOX_REPLY'||!['AUTOMATIC','MANUAL_REVIEW','AUTOMATIC_QUEUE','MANUAL_QUEUE','INBOX_CHAT','INBOX_COMMENT'].includes(s.basis.type)))throw new LocalError('INVALID_SEND_SCOPE');
  if(s.purpose!==undefined&&!PURPOSES.includes(s.purpose))throw new LocalError('INVALID_SEND_SCOPE');
  const purpose=purposeOf(s);
  if(s.intent!==undefined&&!['FIRST_CONTACT','INBOX_REPLY'].includes(s.intent))throw new LocalError('INVALID_SEND_SCOPE');
@@ -39,8 +43,8 @@ class SendSafety {
   if(purpose==='INBOX_COMMENT_REPLY')require('./inbox.cjs').assertCommentReplyScope(this.store,s,job.request_key);
   if(purpose==='CHAT_FOLLOW_UP')require('./inbox.cjs').assertChatScope(this.store,s,job.request_key);
   this.assertRecipient(s,purpose);
-  if(this.db.prepare("SELECT 1 FROM send_attempts WHERE platform=? AND account_id=? AND recipient_id=? AND state IN('RESERVED','DISPATCHED')").get(s.platform,s.accountId,s.recipientId))throw new LocalError('SEND_IN_FLIGHT');
-  const day=dayAt(now),quota=countsQuota(s),account=this.account(s);
+  if(this.db.prepare("SELECT 1 FROM send_attempts WHERE platform=? AND channel=? AND account_id=? AND recipient_id=? AND state IN('RESERVED','DISPATCHED')").get(s.platform,s.channel,s.accountId,s.recipientId))throw new LocalError('SEND_IN_FLIGHT');
+  const day=currentQuotaDay(this.store),quota=countsQuota(s),account=this.account(s);
   if(quota){
    const usage=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(s.accountId,day),ruleLimit=this.scopeLimit(s,grant);
    if((usage?.occupied||0)>=Math.min(usage?.daily_limit_override??account.daily_limit,ruleLimit))throw new LocalError('DAILY_LIMIT');
@@ -57,11 +61,11 @@ class SendSafety {
   if(rows.some(r=>r.blocked))throw new LocalError('DO_NOT_CONTACT');
   if(purpose==='FIRST_CONTACT'){
    if(rows.some(r=>r.first_contact_blocked))throw new LocalError('DO_NOT_CONTACT');
-   if(this.db.prepare("SELECT 1 FROM send_attempts WHERE id<>? AND platform=? AND recipient_id=? AND state IN('RESERVED','DISPATCHED','CONFIRMED','UNKNOWN')").get(excludeAttemptId??'',s.platform,s.recipientId))throw new LocalError('ALREADY_CONTACTED_OR_UNKNOWN');
+   if(this.db.prepare("SELECT 1 FROM send_attempts WHERE id<>? AND platform=? AND channel=? AND recipient_id=? AND state IN('RESERVED','DISPATCHED','CONFIRMED','UNKNOWN')").get(excludeAttemptId??'',s.platform,s.channel,s.recipientId))throw new LocalError('ALREADY_CONTACTED_OR_UNKNOWN');
   }
   if(purpose==='CHAT_FOLLOW_UP'&&!this.db.prepare("SELECT 1 FROM send_attempts WHERE platform=? AND account_id=? AND recipient_id=? AND state='CONFIRMED'").get(s.platform,s.accountId,s.recipientId))throw new LocalError('NOT_CONTACTED');
  }
- scopeLimit(s,grant){if(s.basis?.type==='AUTOMATIC')return new (require('./contact.cjs').LocalContact)(this.store).assertScope(s,grant).dailyLimit;if(s.basis?.type==='MANUAL_REVIEW'){if(grant.issuer!=='LOCAL_USER')throw new LocalError('MANUAL_AUTHORIZATION_REQUIRED');new (require('./manual-contact.cjs').ManualContact)(this.store).assertScope(s);}return Infinity;}
+ scopeLimit(s,grant){if(s.basis?.type==='AUTOMATIC_QUEUE'||s.basis?.type==='MANUAL_QUEUE'){return new (require('./send-queue.cjs').LocalSendQueue)(this.store).assertScope(s,grant);}if(s.basis?.type==='AUTOMATIC')return new (require('./contact.cjs').LocalContact)(this.store).assertScope(s,grant).dailyLimit;if(s.basis?.type==='MANUAL_REVIEW'){if(grant.issuer!=='LOCAL_USER')throw new LocalError('MANUAL_AUTHORIZATION_REQUIRED');new (require('./manual-contact.cjs').ManualContact)(this.store).assertScope(s);}return Infinity;}
  account(s){return require('./account-safety.cjs').assertSendAccount(this.store,s.accountId,s.accountRevision,s.channel);}
  notPaused(){if(this.db.prepare("SELECT 1 FROM safety_state WHERE id='sending' AND reason IS NOT NULL").get())throw new LocalError('SENDING_PAUSED');}
  dispatch(lease,attemptId){return this.store.transaction(()=>{
@@ -74,7 +78,7 @@ class SendSafety {
   if(purpose==='INBOX_COMMENT_REPLY')require('./inbox.cjs').assertCommentReplyScope(this.store,s,job.request_key);
   if(purpose==='CHAT_FOLLOW_UP')require('./inbox.cjs').assertChatScope(this.store,s,job.request_key);
   this.assertRecipient(s,purpose,a.id);
-  if(dayAt(this.store.clock())!==a.quota_day)throw new LocalError('QUOTA_DAY_CHANGED');
+  if(currentQuotaDay(this.store)!==a.quota_day)throw new LocalError('QUOTA_DAY_CHANGED');
   if(countsQuota(s)){
    const usage=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(a.account_id,a.quota_day),ruleLimit=this.scopeLimit(s,grant);
    if(!usage||usage.occupied<1||usage.occupied>Math.min(usage.daily_limit_override??this.account(s).daily_limit,ruleLimit))throw new LocalError('DAILY_LIMIT_CHANGED');
@@ -145,4 +149,4 @@ class SendSafety {
   for(const a of rows){const sent=a.state==='DISPATCHED',state=sent?'UNKNOWN':'CANCELLED';this.db.prepare('UPDATE send_attempts SET state=?,updated_at=? WHERE id=?').run(state,this.store.clock(),a.id);if(sent)this.pause('SUBMISSION_UNKNOWN',a.id);else if(a.quota_charged===1){this.db.prepare('UPDATE account_days SET occupied=occupied-1 WHERE account_id=? AND day=? AND occupied>0').run(a.account_id,a.quota_day);this.db.prepare('UPDATE send_attempts SET quota_charged=0 WHERE id=?').run(a.id);}this.store.audit('RECOVERY','SEND_INTERRUPTED',a.id,{state});}return rows.length;
  });}
 }
-module.exports={SendSafety,validateScope,dayAt,purposeOf,countsQuota};
+module.exports={SendSafety,validateScope,dayAt,quotaDay,currentQuotaDay,refreshOffset,purposeOf,countsQuota};

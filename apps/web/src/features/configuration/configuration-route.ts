@@ -1,4 +1,4 @@
-export const configurationTabs=[{id:'keywords',label:'采集关键词配置'},{id:'matching',label:'评论匹配规则配置'},{id:'templates',label:'评论回复模板配置'},{id:'dm-templates',label:'私信模板配置'},{id:'model',label:'模型配置'}] as const;
+export const configurationTabs=[{id:'keywords',label:'采集关键词配置'},{id:'matching',label:'评论匹配规则配置'},{id:'templates',label:'评论回复模板配置'},{id:'dm-templates',label:'私信模板配置'},{id:'reply',label:'自动回复配置'},{id:'model',label:'模型配置'}] as const;
 export type ConfigurationTab=typeof configurationTabs[number]['id'];
 export function configurationTab(search:string):ConfigurationTab{const value=new URLSearchParams(search).get('tab');return configurationTabs.find(t=>t.id===value)?.id||'keywords';}
 export function configurationPath(tab:ConfigurationTab,search=''){const source=new URLSearchParams(search),next=new URLSearchParams({tab});for(const key of ['config','policy'])if(source.get(key))next.set(key,source.get(key)!);return '/configuration?'+next;}

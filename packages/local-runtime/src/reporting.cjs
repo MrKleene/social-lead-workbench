@@ -1,5 +1,5 @@
 'use strict';
-const {LocalError}=require('./database.cjs'),{dayAt}=require('./send-safety.cjs'),{reviewCommentPolicy}=require('@crm/local-runtime/policy');
+const {LocalError}=require('./database.cjs'),{dayAt,currentQuotaDay}=require('./send-safety.cjs'),{reviewCommentPolicy}=require('@crm/local-runtime/policy');
 function page(value=1){if(!Number.isInteger(value)||value<1||value>100000)throw new LocalError('INVALID_PAGE');return value;}
 function filterText(values){if(values.some(x=>typeof x!=='string'||x.length>200))throw new LocalError('INVALID_REPORT_FILTER');}
 function range(from='',to=''){
@@ -29,7 +29,7 @@ class LocalReporting{
  constructor(store){this.store=store;this.db=store.db;}
  account({accountId}){
   filterText([accountId]);const a=this.db.prepare("SELECT * FROM accounts WHERE id=? AND state<>'ARCHIVED'").get(accountId);if(!a)throw new LocalError('ACCOUNT_NOT_FOUND');
-  const day=dayAt(this.store.clock()),usage=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(a.id,day),occupied=usage?.occupied??0,limit=usage?.daily_limit_override??a.daily_limit;
+  const day=currentQuotaDay(this.store),usage=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(a.id,day),occupied=usage?.occupied??0,limit=usage?.daily_limit_override??a.daily_limit;
   const holds=this.db.prepare('SELECT channel,reason,created_at,detail FROM account_holds WHERE account_id=?').all(a.id).map(h=>({...h,detail:h.detail?JSON.parse(h.detail):null})),pauses=this.db.prepare('SELECT id,reason FROM safety_state WHERE reason IS NOT NULL').all(),busy=this.db.prepare("SELECT id,kind,state FROM jobs WHERE state IN('QUEUED','RUNNING') AND json_extract(payload,'$.accountId')=? ORDER BY created_at LIMIT 30").all(a.id);
   const base=[];if(a.state!=='VERIFIED'||!a.session_ref)base.push('ACCOUNT_REQUIRES_LOGIN');if(!/^[a-f0-9]{24}$/.test(a.platform_user_id??''))base.push('ACCOUNT_IDENTITY_UNVERIFIED');if(busy.length)base.push('ACCOUNT_HAS_ACTIVE_TASKS');
   const channels=['COMMENT','DM'].map(channel=>{const reasons=[...base];if(require('./account-safety.cjs').historicalSendHold(a.platform_user_id)||holds.some(h=>!h.channel||h.channel===channel)||a.state==='RESTRICTED')reasons.push('ACCOUNT_HAS_RETAINED_RESTRICTION');if(occupied>=limit)reasons.push('DAILY_QUOTA_EXHAUSTED');if(pauses.some(p=>['sending','platform'].includes(p.id)))reasons.push('SENDING_PAUSED');const unknown=this.db.prepare("SELECT count(*) n FROM send_attempts WHERE account_id=? AND channel=? AND state='UNKNOWN'").get(a.id,channel).n;if(unknown)reasons.push('UNKNOWN_SEND_REQUIRES_EVIDENCE');return {channel,reasons,unknown,targetPreflightRequired:channel==='COMMENT',verdict:verdictOf(reasons)};});

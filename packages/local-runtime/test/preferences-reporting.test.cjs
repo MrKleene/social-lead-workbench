@@ -16,7 +16,7 @@ test('per-configuration defaults persist with CAS, do not grant execution, and n
 test('step toggles persist with CAS and drop selections that no longer exist',t=>{
  const f=fixture(t),p=new LocalPreferences(f.store);
  f.store.db.exec("INSERT INTO configurations(id,kind,name,body,updated_at) VALUES('ct','COMMENT_TEMPLATE','评论模板','{\"text\":\"合成评论回复\"}',0),('dt','DM_TEMPLATE','私信模板','{\"text\":\"合成私信\"}',0)");
- assert.deepEqual(p.steps(),{version:0,autoReview:false,policyId:null,autoReply:false,commentTemplateIds:[],dmTemplateIds:[],replyAccountIds:[],threshold:80});
+ assert.deepEqual(p.steps(),{version:0,autoReview:false,policyId:null,autoReply:false,commentTemplateIds:[],dmTemplateIds:[],replyAccountIds:[],threshold:80,refreshTime:'00:00'});
  const saved=p.saveSteps({version:0,autoReview:true,policyId:'policy',autoReply:true,commentTemplateIds:['ct'],dmTemplateIds:['dt'],replyAccountIds:['account'],threshold:85});
  assert.equal(saved.version,1);assert.deepEqual(saved.commentTemplateIds,['ct']);assert.deepEqual(saved.dmTemplateIds,['dt']);assert.equal(saved.threshold,85);
  assert.deepEqual(saved.replyAccountIds,['account']);

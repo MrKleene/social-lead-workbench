@@ -10,7 +10,7 @@
 3. [MODULES.md](MODULES.md) — 逐模块职责、输入输出、关键约束、代码入口
 4. [IMPLEMENTATION-STATUS.md](IMPLEMENTATION-STATUS.md) — 当前实现范围与验证限制
 5. [ACCEPTANCE.md](ACCEPTANCE.md) — 本轮验收范围
-6. 按需：[three-step-automation.md](three-step-automation.md)（三步自动化与统一设置）、
+6. 按需：[three-step-automation.md](three-step-automation.md)（三步自动化、发送队列与统一设置）、
    [inbox-reception.md](inbox-reception.md)（接收消息）、
    [direct-messages.md](direct-messages.md)（私信发送与执行边界）、
    [DESKTOP-LOCAL.md](DESKTOP-LOCAL.md)（单人本地桌面版）
@@ -24,7 +24,7 @@
 | `MODULES.md` | 每个模块做什么、不能做什么、代码在哪 | 模块行为变化时 |
 | `IMPLEMENTATION-STATUS.md` | 现在实现了多少、哪些只是合成验证 | 每次实现/验收后 |
 | `ACCEPTANCE.md` | 本轮验收包含哪些、不包含哪些 | 每轮交付 |
-| `three-step-automation.md` | 采集/匹配/回复三阶段与统一设置的行为 | 自动化流程变化时 |
+| `three-step-automation.md` | 采集/匹配/回复三阶段、发送队列与统一设置的行为 | 自动化流程变化时 |
 | `inbox-reception.md` | 接收窗口、工具集、历史上限 | 接收能力变化时 |
 | `direct-messages.md` | 私信为什么只有预览、放开的前置条件 | 私信能力变化时 |
 | `DESKTOP-LOCAL.md` | 桌面版范围、数据与凭据边界、构建状态 | 桌面版变化时 |

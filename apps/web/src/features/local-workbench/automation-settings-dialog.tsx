@@ -28,6 +28,7 @@ import type { JourneyStage } from "@/features/work/journey-model";
 import { localApi, type LocalConfiguration } from "./local-api";
 import { LocalCollectionPanel } from "./local-collection";
 import { useLocalRecords } from "./use-local-records";
+import { ReplySettings } from "./reply-settings";
 
 /**
  * 「采集设置」弹窗：三步各自的开关与选择。
@@ -148,7 +149,7 @@ export function AutomationSettingsDialog({
             ) : tab === "review" ? (
               <MatchingTab />
             ) : (
-              <ReplyTab />
+              <ReplySettings showSwitch />
             )}
           </div>
         </div>
@@ -318,153 +319,6 @@ function MatchingTab() {
   );
 }
 
-/* ---------------- 自动回复 ---------------- */
-
-function ReplyTab() {
-  const configs = useLocalRecords("configurations");
-  const steps = useLocalRecords("automationSteps");
-  const accounts = useLocalRecords("accountDetails");
-  const save = useSaveSteps();
-  const [text, setText] = useState("");
-
-  const current = steps.data;
-  const comment = configs.data?.filter((item) => item.kind === "COMMENT_TEMPLATE") ?? [];
-  const dm = configs.data?.filter((item) => item.kind === "DM_TEMPLATE") ?? [];
-  const selected = current?.replyAccountIds ?? [];
-  const blocked = (accounts.data ?? []).some(
-    (item) => selected.includes(item.id) && item.holds.length > 0,
-  );
-  const error = configs.error ?? steps.error ?? accounts.error ?? save.error;
-
-  const persist = (patch: Partial<NonNullable<typeof current>>) => {
-    if (!current) return;
-    save.mutate({ ...current, ...patch });
-  };
-
-  const commitThreshold = () => {
-    const next = Number(text);
-    setText("");
-    if (!Number.isInteger(next) || next < 0 || next > 100) return;
-    if (next !== current?.threshold) persist({ threshold: next });
-  };
-
-  const toggleAccount = (id: string, checked: boolean) => {
-    persist({
-      replyAccountIds: checked
-        ? [...selected, id]
-        : selected.filter((value) => value !== id),
-    });
-  };
-
-  return (
-    <div className="flex flex-col gap-4">
-      {error ? <ErrorNotice error={error} /> : null}
-
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-body font-medium">自动回复</span>
-        <Switch
-          checked={!!current?.autoReply}
-          onCheckedChange={(enabled) => persist({ autoReply: enabled })}
-          aria-label="自动回复"
-        >
-          <SwitchThumb />
-        </Switch>
-      </div>
-
-      <FormField label="满足分数自动发送">
-        <Input
-          type="number"
-          min={0}
-          max={100}
-          value={text || String(current?.threshold ?? 80)}
-          onChange={(event) => setText(event.target.value)}
-          onBlur={commitThreshold}
-        />
-      </FormField>
-
-      {/* 账号池：顺序即配额耗尽后的取用顺序；日额度是账号属性，只在这里展示。 */}
-      <div className="flex min-w-0 flex-col gap-2">
-        <span className="text-body">回复账号</span>
-        {accounts.data?.length ? (
-          <div className="flex flex-col divide-y rounded-md border">
-            {accounts.data.map((item) => {
-              const usable = item.state === "VERIFIED" && !!item.hasSession;
-              const restricted = item.holds.length > 0;
-              const chosen = selected.includes(item.id);
-              return (
-                <label
-                  key={item.id}
-                  className="flex cursor-pointer items-start gap-2 px-4 py-2"
-                >
-                  <Checkbox
-                    checked={chosen}
-                    disabled={save.isPending || (!chosen && (!usable || restricted))}
-                    onCheckedChange={(checked) =>
-                      toggleAccount(item.id, checked === true)
-                    }
-                    className="mt-0.5"
-                  />
-                  <span className="flex min-w-0 flex-col gap-1">
-                    <span className="text-body break-words">
-                      {item.nickname ?? item.name}
-                    </span>
-                    <span
-                      className={cn(
-                        "text-caption break-words",
-                        usable && !restricted
-                          ? "text-muted-foreground"
-                          : "text-attention",
-                      )}
-                    >
-                      每日 {item.daily_limit} 条
-                      {restricted ? " · 受限" : ""}
-                      {usable ? "" : " · 需重新登录"}
-                    </span>
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-body text-muted-foreground">
-            {accounts.isPending ? "正在读取…" : "还没有账号"}
-          </p>
-        )}
-      </div>
-
-      <FormField label="评论回复模板">
-        <TemplatePicker
-          name="评论回复模板"
-          items={comment}
-          selected={current?.commentTemplateIds ?? []}
-          disabled={save.isPending}
-          onChange={(ids) => persist({ commentTemplateIds: ids })}
-        />
-      </FormField>
-
-      <FormField label="私信模板">
-        <TemplatePicker
-          name="私信模板"
-          items={dm}
-          selected={current?.dmTemplateIds ?? []}
-          disabled={save.isPending}
-          onChange={(ids) => persist({ dmTemplateIds: ids })}
-        />
-      </FormField>
-
-      {current?.autoReply &&
-      !current.commentTemplateIds.length &&
-      !current.dmTemplateIds.length ? (
-        <Hint>请选择至少一个自动回复模式</Hint>
-      ) : null}
-      {current?.autoReply && !selected.length ? (
-        <Hint>未选择回复账号</Hint>
-      ) : null}
-      {blocked ? <Hint>已选账号存在未解除的回复限制</Hint> : null}
-    </div>
-  );
-}
-
 /* ---------------- 共用 ---------------- */
 
 /**
@@ -480,51 +334,6 @@ function useSaveSteps() {
       void client.invalidateQueries({ queryKey: ["local"] });
     },
   });
-}
-
-/** 多选模板：勾选顺序不影响发送，后端每次从池里随机选一条且不与上一条重复。 */
-function TemplatePicker({
-  name,
-  items,
-  selected,
-  disabled,
-  onChange,
-}: {
-  name: string;
-  items: LocalConfiguration[];
-  selected: string[];
-  disabled: boolean;
-  onChange: (ids: string[]) => void;
-}) {
-  const toggle = (id: string, checked: boolean) =>
-    onChange(
-      checked ? [...selected, id] : selected.filter((value) => value !== id),
-    );
-
-  if (!items.length)
-    return (
-      <p className="text-body text-muted-foreground">还没有可用的{name}</p>
-    );
-
-  return (
-    <div className="flex flex-col divide-y rounded-md border">
-      {items.map((item) => (
-        <label
-          key={item.id}
-          className="flex cursor-pointer items-start gap-2 px-4 py-2"
-        >
-          <Checkbox
-            checked={selected.includes(item.id)}
-            disabled={disabled}
-            onCheckedChange={(checked) => toggle(item.id, checked === true)}
-            className="mt-0.5"
-            aria-label={item.name}
-          />
-          <span className="text-body break-words">{item.name}</span>
-        </label>
-      ))}
-    </div>
-  );
 }
 
 function Hint({ children }: { children: ReactNode }) {

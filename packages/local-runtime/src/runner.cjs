@@ -4,10 +4,11 @@ const {LocalQueue}=require('./queue.cjs');
 const {SendSafety}=require('./send-safety.cjs');
 const {LocalReview}=require('./review.cjs');
 const {LocalCollection}=require('./collection.cjs');
+const {LocalSendQueue}=require('./send-queue.cjs');
 // Executors are explicitly injected. Opening the desktop never registers a
 // platform adapter or grants permission to resume historical external actions.
 class LocalRunner {
- constructor(store,executors={}){this.store=store;this.queue=new LocalQueue(store);this.sends=new SendSafety(store);this.reviews=new LocalReview(store);this.collection=new LocalCollection(store);this.executors=executors;this.owner=randomUUID();this.pending=null;this.stopping=false;}
+ constructor(store,executors={}){this.store=store;this.queue=new LocalQueue(store);this.sends=new SendSafety(store);this.reviews=new LocalReview(store);this.collection=new LocalCollection(store);this.sendQueue=new LocalSendQueue(store);this.executors=executors;this.owner=randomUUID();this.pending=null;this.stopping=false;}
  tick(){if(this.pending||this.stopping)return this.pending??Promise.resolve(false);this.pending=this.runOne().finally(()=>{this.pending=null;});return this.pending;}
  recoverStartup(){
   new(require('./automatic-review.cjs').AutomaticReview)(this.store).renewPending();
@@ -15,9 +16,10 @@ class LocalRunner {
   // desktop session's one-shot external actions merely because the app opened.
   // Explicit standing automatic-review consent alone retains validated, never-started work.
   this.store.transaction(()=>{this.store.db.exec("UPDATE evidence_checks SET state='INTERRUPTED' WHERE state='RUNNING'; UPDATE post_diagnostics SET state='INTERRUPTED' WHERE state='RUNNING'; UPDATE authorizations SET state='REVOKED' WHERE state='ACTIVE' AND id NOT IN(SELECT j.authorization_id FROM jobs j WHERE j.state='QUEUED' AND j.dispatch_started=0 AND j.cancel_requested=0 AND (j.id IN(SELECT job_id FROM automatic_review_tasks WHERE job_id IS NOT NULL) OR j.id IN(SELECT job_id FROM automatic_review_segments))); UPDATE jobs SET state='INTERRUPTED',cancel_requested=1 WHERE state='QUEUED' AND id NOT IN(SELECT job_id FROM automatic_review_tasks WHERE job_id IS NOT NULL UNION SELECT job_id FROM automatic_review_segments); UPDATE jobs SET lease_until=0 WHERE state='RUNNING'; DELETE FROM account_leases WHERE owner LIKE 'login:%'");this.store.audit('RECOVERY','DESKTOP_SESSION_RECOVERED','installation');});
-  this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();
+  this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();this.sendQueue.recover();
  }
  async runOne(){
+  if(this.executors.SEND)try{this.sendQueue.schedule();}catch{this.store.transaction(()=>this.store.audit('RECOVERY','SEND_QUEUE_SCHEDULE_INTERRUPTED','queue'));}
   this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();if(this.executors.REVIEW)new(require('./automatic-review.cjs').AutomaticReview)(this.store).reconcile();const lease=this.queue.claim(this.owner);if(!lease)return false;
   const executor=this.executors[lease.kind];if(!executor){this.queue.finish(lease,'FAILED',{code:'EXECUTOR_UNAVAILABLE'});return false;}
   const abort=new AbortController();this.abort=abort;let dispatched=false,attemptId,batchId,commentCommand;
@@ -36,9 +38,9 @@ class LocalRunner {
     command=lease.payload.channel==='DM'?this.sends.commandForDm(attemptId):(commentCommand=this.sends.commandForComment(attemptId,reference));
    }else if(lease.kind==='REVIEW'){batchId=this.reviews.reserve(lease);command=this.reviews.dispatch(lease,batchId);}else this.queue.beginDispatch(lease);
    dispatched=true;const result=await executor.execute(command,abort.signal,{lease});
-   if(lease.kind==='SEND'){if(lease.payload.channel==='DM')this.sends.resultDm(lease,attemptId,result);else this.sends.resultComment(lease,attemptId,commentCommand,result);this.afterSendAccount(lease);}else if(lease.kind==='REVIEW'){this.reviews.complete(lease,batchId,result);try{new (require('./automation.cjs').LocalAutomation)(this.store,{enabled:()=>!!this.executors.SEND}).afterReview(lease.payload.runId);}catch{this.store.transaction(()=>this.store.audit('RECOVERY','AUTOMATION_COORDINATION_INTERRUPTED',lease.payload.runId));}}else if(lease.kind==='INBOX'&&result?.reason==='YIELDED_FOR_SEND'&&!this.stopping&&!this.queue.current(lease).cancel_requested)this.queue.yieldInbox(lease);else this.queue.finish(lease,abort.signal.aborted||this.queue.current(lease).cancel_requested?'CANCELLED':'SUCCEEDED',result);
+   if(lease.kind==='SEND'){if(lease.payload.channel==='DM')this.sends.resultDm(lease,attemptId,result);else this.sends.resultComment(lease,attemptId,commentCommand,result);this.sendQueue.settle(lease.id);this.afterSendAccount(lease);}else if(lease.kind==='REVIEW'){this.reviews.complete(lease,batchId,result);try{new (require('./automation.cjs').LocalAutomation)(this.store,{enabled:()=>!!this.executors.SEND}).afterReview(lease.payload.runId);}catch{this.store.transaction(()=>this.store.audit('RECOVERY','AUTOMATION_COORDINATION_INTERRUPTED',lease.payload.runId));}}else if(lease.kind==='INBOX'&&result?.reason==='YIELDED_FOR_SEND'&&!this.stopping&&!this.queue.current(lease).cancel_requested)this.queue.yieldInbox(lease);else this.queue.finish(lease,abort.signal.aborted||this.queue.current(lease).cancel_requested?'CANCELLED':'SUCCEEDED',result);
   }catch(error){
-   try{if(attemptId)this.sends.result(lease,attemptId,dispatched?{kind:'UNKNOWN'}:{kind:'NOT_SUBMITTED',submissions:0,stopped:true});else if(batchId)this.reviews.fail(lease,batchId,error?.code?{code:error.code,httpStatus:error.httpStatus??null,stage:error.stage,retryable:error.retryable,unknown:error.unknown}:{code:'TRANSPORT_UNKNOWN'});else this.queue.finish(lease,dispatched&&['SEND','REVIEW'].includes(lease.kind)?'UNKNOWN':!['SEND','REVIEW'].includes(lease.kind)&&(abort.signal.aborted||this.queue.current(lease).cancel_requested)?'CANCELLED':'FAILED',{code:error?.code||'EXECUTION_INTERRUPTED'});}catch{/* Expired leases are handled by recovery; never overwrite a newer owner. */}
+   try{if(attemptId)this.sends.result(lease,attemptId,dispatched?{kind:'UNKNOWN'}:{kind:'NOT_SUBMITTED',submissions:0,stopped:true}),this.sendQueue.settle(lease.id);else if(batchId)this.reviews.fail(lease,batchId,error?.code?{code:error.code,httpStatus:error.httpStatus??null,stage:error.stage,retryable:error.retryable,unknown:error.unknown}:{code:'TRANSPORT_UNKNOWN'});else this.queue.finish(lease,dispatched&&['SEND','REVIEW'].includes(lease.kind)?'UNKNOWN':!['SEND','REVIEW'].includes(lease.kind)&&(abort.signal.aborted||this.queue.current(lease).cancel_requested)?'CANCELLED':'FAILED',{code:error?.code||'EXECUTION_INTERRUPTED'});}catch{/* Expired leases are handled by recovery; never overwrite a newer owner. */}
   }finally{clearInterval(heartbeat);this.abort=null;await executor.close?.();}
   return true;
  }

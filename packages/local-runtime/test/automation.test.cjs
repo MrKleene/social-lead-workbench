@@ -1,89 +1,162 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {fixture,collect,evaluate,entry}=require('./flow-fixture.cjs');
 const {LocalAutomation}=require('../dist/automation.cjs');
-function setup(t){const f=fixture(t),automation=new LocalAutomation(f.store,{enabled:()=>true});const input={platform:'XHS',version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成联系内容',accounts:[{id:'account',version:1,dailyLimit:1}]};automation.save({id:'rule',name:'合成规则',input});const p=automation.preview({id:'rule',version:1}),ref=automation.authorize({...p,consent:'automatic-contact-frozen-run-v1'});return {...f,automation,ref};}
-test('automatic orchestration waits for whole round, queues once and disabling cancels pending sends',t=>{const f=setup(t),run=collect(f,[entry('post-a'),entry('post-b')],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);assert.deepEqual(f.automation.afterReview(run.runId),{waiting:true});f.advance(120001);evaluate(f,run.runId,f.collection.posts(run.runId)[1].id);assert.deepEqual(f.automation.afterReview(run.runId),{queued:1,skipped:1});assert.deepEqual(f.automation.afterReview(run.runId),{queued:0,skipped:0});assert.equal(f.automation.decisions().total,2);assert.equal(f.automation.revoke({id:'rule'}).cancelled,1);assert.equal(f.store.db.prepare("SELECT state FROM jobs WHERE kind='SEND'").get().state,'CANCELLED');});
-test('rules cannot retroactively attach to a collected round or pass a global hold',t=>{const f=setup(t),old=collect(f);evaluate(f,old.runId,f.collection.posts(old.runId)[0].id);assert.deepEqual(f.automation.afterReview(old.runId),{queued:0,skipped:0});f.advance(120001);const run=collect(f,[entry('post-new')],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);f.store.db.prepare("INSERT INTO safety_state VALUES('sending',1,NULL,'RESTORE_REQUIRES_REVIEW',0)").run();assert.deepEqual(f.automation.afterReview(run.runId),{queued:0,skipped:1});assert.equal(f.automation.decisions().items[0].reason,'SENDING_PAUSED');});
-test('rule authorization requires registered sender, exact preview and selected current policy',t=>{const f=setup(t);assert.throws(()=>f.automation.authorize({id:'rule',version:1,previewHash:'wrong',consent:'automatic-contact-frozen-run-v1'}),/AUTOMATION_CONSENT_REQUIRED/);assert.throws(()=>f.automation.frozen(['rule'],[]),/AUTOMATION_POLICY_NOT_SELECTED/);assert.throws(()=>new LocalAutomation(f.store).authorize({...f.automation.preview({id:'rule',version:1}),consent:'automatic-contact-frozen-run-v1'}),/SEND_EXECUTOR_UNAVAILABLE/);f.automation.revoke({id:'rule'});assert.throws(()=>f.automation.frozen(['rule'],[{id:'policy',revision:1}]),/AUTOMATION_POLICY_NOT_SELECTED/);});
-test('inbox yields only same scope within original expiry; sending wins next lease',t=>{const f=fixture(t),scope={accountId:'account'},grant=f.queue.authorize('INBOX',scope,10000),id=f.queue.enqueue('INBOX',scope,grant,'receiver');const lease=f.queue.claim('receiver');f.queue.beginDispatch(lease);const expiry=f.store.db.prepare('SELECT expires_at FROM authorizations WHERE id=?').get(grant).expires_at;const sg=f.queue.authorize('SEND',{synthetic:true});const send=f.queue.enqueue('SEND',{synthetic:true},sg,'send');f.queue.yieldInbox(lease);assert.equal(f.queue.claim('sender').id,send);assert.equal(f.store.db.prepare('SELECT expires_at FROM authorizations WHERE id=?').get(grant).expires_at,expiry);assert.equal(f.store.db.prepare('SELECT state FROM jobs WHERE id=?').get(id).state,'QUEUED');});
-test('expired or cancelled inbox cannot renew its consumed grant',t=>{for(const cancelled of [false,true]){const f=fixture(t),scope={},g=f.queue.authorize('INBOX',scope,1000),id=f.queue.enqueue('INBOX',scope,g,'inbox'),lease=f.queue.claim('owner');f.queue.beginDispatch(lease);if(cancelled)f.store.db.prepare('UPDATE jobs SET cancel_requested=1 WHERE id=?').run(id);else f.advance(1001);assert.throws(()=>f.queue.yieldInbox(lease),/INBOX_CONTINUATION_ENDED/);assert.equal(f.store.db.prepare('SELECT state FROM authorizations WHERE id=?').get(g).state,'CONSUMED');}});
-test('registered review runner derives sends only after persisting complete synthetic review',async t=>{const f=setup(t),run=collect(f,[entry()],{contactRules:[f.ref]}),post=f.collection.posts(run.runId)[0],plan=f.review.plan(run.runId,post.id,'policy');f.queue.enqueue('REVIEW',plan.scope,f.queue.authorize('REVIEW',plan.scope),'review-runner');const {LocalRunner}=require('../dist/runner.cjs'),{output}=require('./flow-fixture.cjs');let externalSends=0;const runner=new LocalRunner(f.store,{REVIEW:{prepare:async()=>{},execute:async c=>output(c)},SEND:{prepare:async()=>{externalSends++;}}});await runner.tick();await runner.stop();assert.equal(externalSends,0);assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND' AND state='QUEUED'").get().n,1);assert.equal(f.automation.decisions().items[0].state,'QUEUED');});
-test('collection with automatic rules requires its own explicit combined consent',t=>{const f=setup(t),{LocalWorkflow}=require('../dist/workflow.cjs'),w=new LocalWorkflow(f.store,null,{capabilities:()=>({collect:true,send:true})}),p=w.previewCollection({configId:'config',accountId:'account',policyIds:['policy'],ruleIds:['rule']});assert.equal(p.automaticRules,1);assert.throws(()=>w.authorizeCollection({...p,requestKey:'collect-auto',consent:'bounded-platform-read-once-v1'}),/COLLECTION_CONSENT_REQUIRED/);assert.ok(w.authorizeCollection({...p,requestKey:'collect-auto',consent:'bounded-read-with-frozen-contact-v1'}).id);});
-test('comment rule configuration does not replace fresh capability required at send reservation',t=>{const f=fixture(t),a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'comment-rule',name:'合成评论',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'COMMENT',content:'合成评论内容',accounts:[{id:'account',version:1,dailyLimit:1}]}});const ref=a.authorize({...a.preview({id:'comment-rule',version:1}),consent:'automatic-contact-frozen-run-v1'}),run=collect(f,[entry('c'.repeat(24))],{contactRules:[ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);assert.equal(a.afterReview(run.runId).queued,1);assert.throws(()=>new (require('../dist/send-safety.cjs').SendSafety)(f.store).reserve(f.queue.claim('send')),/COMMENT_CAPABILITY_REQUIRED/);});
-test('account pool allocates once by remaining shared quota including queued jobs without fallback after risk',t=>{const f=fixture(t);f.store.db.prepare("INSERT INTO accounts(id,platform,platform_user_id,name,session_ref,state,daily_limit) VALUES('second','XHS',?,'第二合成账号','synthetic','VERIFIED',10)").run('d'.repeat(24));const a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'pool',name:'合成账号池',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成池内容',accounts:[{id:'account',version:1,dailyLimit:1},{id:'second',version:1,dailyLimit:1}]}});const ref=a.authorize({...a.preview({id:'pool',version:1}),consent:'automatic-contact-frozen-run-v1'}),e=entry('c'.repeat(24),['想请教学习方法','想请教选题指导']);e.comments[1].userId='e'.repeat(24);const run=collect(f,[e],{contactRules:[ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);assert.equal(a.afterReview(run.runId).queued,2);assert.deepEqual(f.store.db.prepare("SELECT json_extract(payload,'$.accountId') account FROM jobs WHERE kind='SEND' ORDER BY created_at,rowid").all().map(x=>x.account),['account','second']);assert.equal(a.afterReview(run.runId).queued,0);});
-test('account-level risk stops only that account and the rest continues on the next account',t=>{
- const f=fixture(t);f.store.db.prepare("INSERT INTO accounts(id,platform,platform_user_id,name,session_ref,state,daily_limit) VALUES('second','XHS',?,'第二合成账号','synthetic','VERIFIED',10)").run('d'.repeat(24));
- const a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'risk-pool',name:'风险核验',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成池内容',accounts:[{id:'account',version:1,dailyLimit:1},{id:'second',version:1,dailyLimit:1}]}});
- const ref=a.authorize({...a.preview({id:'risk-pool',version:1}),consent:'automatic-contact-frozen-run-v1'}),run=collect(f,[entry()],{contactRules:[ref]});
- evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
- f.store.db.exec("INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES('hold','account',NULL,'RETAINED_RISK','hash',0)");
- assert.equal(a.afterReview(run.runId).queued,1);
- const job=f.store.db.prepare("SELECT json_extract(payload,'$.accountId') account,available_at FROM jobs WHERE kind='SEND'").get();
- assert.equal(job.account,'second');
-});
-test('a restricted account hands its queued sends to the next account with a 3-5 minute gap',t=>{
- const f=fixture(t);f.store.db.prepare("INSERT INTO accounts(id,platform,platform_user_id,name,session_ref,state,daily_limit) VALUES('second','XHS',?,'第二合成账号','synthetic','VERIFIED',10)").run('d'.repeat(24));
- const a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'switch',name:'换号续发',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成池内容',accounts:[{id:'account',version:1,dailyLimit:10},{id:'second',version:1,dailyLimit:10}]}});
- const ref=a.authorize({...a.preview({id:'switch',version:1}),consent:'automatic-contact-frozen-run-v1'}),e=entry('c'.repeat(24),['想请教学习方法','想请教选题指导']);e.comments[1].userId='e'.repeat(24);
- const run=collect(f,[e],{contactRules:[ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
- assert.equal(a.afterReview(run.runId).queued,2);
- const first=f.store.db.prepare("SELECT id FROM jobs WHERE kind='SEND' AND json_extract(payload,'$.accountId')='account' ORDER BY created_at,rowid LIMIT 1").get();
- // 第二个账号先占住位置，让换号后的排期落在它后面。
- f.store.db.exec("INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES('hold','account',NULL,'RATE_LIMITED','hash',"+f.store.clock()+")");
- assert.equal(a.reallocate({jobId:first.id,accountId:'account',runId:run.runId}).moved,2);
- const moved=f.store.db.prepare("SELECT available_at FROM jobs WHERE kind='SEND' AND state='QUEUED' AND json_extract(payload,'$.accountId')='second' ORDER BY available_at").all();
- assert.equal(moved.length,2);
- // 换号后的第一条间隔 3-5 分钟，同账号随后的条目间隔 30-60 秒。
- assert.ok(moved[0].available_at-f.store.clock()>=180000&&moved[0].available_at-f.store.clock()<=300000);
- assert.ok(moved[1].available_at-moved[0].available_at>=30000&&moved[1].available_at-moved[0].available_at<=60000);
- assert.match(a.decisions().items.filter(d=>d.reason==='ACCOUNT_SWITCHED').map(d=>d.reason).join(),/ACCOUNT_SWITCHED/);
-});
-test('a second restricted account stops the whole pool and keeps the rest as pending replies',t=>{
- const f=fixture(t);f.store.db.prepare("INSERT INTO accounts(id,platform,platform_user_id,name,session_ref,state,daily_limit) VALUES('second','XHS',?,'第二合成账号','synthetic','VERIFIED',10)").run('d'.repeat(24));
- const a=new LocalAutomation(f.store,{enabled:()=>true});a.save({id:'pool-stop',name:'整池停止',input:{version:0,policyId:'policy',policyRevision:1,threshold:80,channel:'DM',content:'合成池内容',accounts:[{id:'account',version:1,dailyLimit:1},{id:'second',version:1,dailyLimit:1}]}});
- const ref=a.authorize({...a.preview({id:'pool-stop',version:1}),consent:'automatic-contact-frozen-run-v1'}),run=collect(f,[entry()],{contactRules:[ref]});
- evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
- f.store.db.exec("INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES('h1','account',NULL,'RESTRICTED','hash',0),('h2','second',NULL,'RESTRICTED','hash2',0)");
- assert.deepEqual(a.afterReview(run.runId),{queued:0,skipped:1});
- assert.equal(a.decisions().items[0].reason,'ACCOUNT_POOL_RESTRICTED');
- assert.equal(a.pending().total,1);assert.equal(a.pending().items[0].reason,'ACCOUNT_POOL_RESTRICTED');
+const {LocalSendQueue}=require('../dist/send-queue.cjs');
+
+function steps(f,value){f.store.db.prepare("INSERT INTO settings(key,value) VALUES('automation-steps',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(value));}
+function rule(automation,{id='rule',channel='DM',content='合成联系内容',accounts=[{id:'account',version:1,dailyLimit:1}],threshold=80}={}){automation.save({id,name:'合成规则',input:{version:0,policyId:'policy',policyRevision:1,threshold,channel,content,accounts}});const p=automation.preview({id,version:1});return automation.authorize({...p,consent:'automatic-contact-frozen-run-v1'});}
+function setup(t,{autoReply=false,channel='DM',autoReplyAccounts=[]}={}){const f=fixture(t);steps(f,{autoReply,replyAccountIds:autoReplyAccounts});const automation=new LocalAutomation(f.store,{enabled:()=>true});return {...f,automation,ref:rule(automation,{channel})};}
+function queuedReview(f,runId,postId){evaluate(f,runId,postId);return f.store.db.prepare('SELECT id FROM review_results ORDER BY id DESC LIMIT 1').get().id;}
+function queueRow(f){return new LocalSendQueue(f.store);}
+
+test('rules cannot retroactively attach to a collected round or pass a global hold',t=>{
+ const f=fixture(t),automation=new LocalAutomation(f.store,{enabled:()=>true});const old=collect(f);evaluate(f,old.runId,f.collection.posts(old.runId)[0].id);
+ assert.deepEqual(automation.afterReview(old.runId),{queued:0,skipped:0});
+ f.advance(120001);const ref=rule(automation),run=collect(f,[entry('post-new')],{contactRules:[ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ assert.deepEqual(automation.afterReview(run.runId),{queued:1,skipped:0});
 });
 
-test('quota-exhausted decisions surface as pending replies and can be requeued or dismissed',t=>{
- const f=setup(t),{dayAt}=require('../dist/send-safety.cjs'),day=dayAt(f.store.clock());
- f.store.db.prepare('INSERT INTO account_days(account_id,day,occupied) VALUES(?,?,20) ON CONFLICT(account_id,day) DO UPDATE SET occupied=20').run('account',day);
- const e=entry('c'.repeat(24),['想请教学习方法','想请教选题指导']);e.comments[1].userId='e'.repeat(24);
- const run=collect(f,[e],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
- assert.deepEqual(f.automation.afterReview(run.runId),{queued:0,skipped:2});
- const pending=f.automation.pending();
- assert.equal(pending.total,2);assert.equal(pending.remaining,0);
- assert.equal(pending.items[0].channel,'DM');assert.equal(pending.items[0].reason,'ACCOUNT_POOL_QUOTA_EXHAUSTED');
- assert.equal(pending.items[0].content,'合成联系内容');assert.ok(pending.items[0].postTitle);
- assert.equal(f.automation.pending({query:'学习方法'}).total,1);assert.equal(f.automation.pending({query:'不存在的词'}).total,0);
- assert.equal(f.automation.pending({channel:'COMMENT'}).total,0);assert.equal(f.automation.pending({channel:'DM'}).total,2);
- assert.equal(f.automation.pending({reason:'QUOTA'}).total,2);assert.equal(f.automation.pending({reason:'POOL'}).total,0);
- assert.equal(f.automation.pending({days:1}).total,2);assert.throws(()=>f.automation.pending({reason:'NOPE'}),/INVALID_PENDING_FILTER/);
+test('review completion enqueues a frozen plan even while automatic replies are off',t=>{
+ const f=setup(t,{autoReply:false}),run=collect(f,[entry()],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ assert.deepEqual(f.automation.afterReview(run.runId),{queued:1,skipped:0});
+ assert.deepEqual(f.automation.afterReview(run.runId),{queued:0,skipped:1});
+ const row=f.store.db.prepare('SELECT * FROM send_queue').get(),plan=JSON.parse(row.plan);
+ assert.equal(row.state,'WAITING_SWITCH');assert.equal(row.origin,'AUTO');assert.equal(row.channel,'DM');
+ assert.equal(plan.ruleId,'rule');assert.equal(plan.threshold,80);assert.equal(plan.templates[0].content,'合成联系内容');
  assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND'").get().n,0);
- f.store.db.prepare('UPDATE account_days SET occupied=0 WHERE account_id=? AND day=?').run('account',day);
- assert.equal(f.automation.pending().remaining,20);
- const requeued=f.automation.retry({id:pending.items[0].id});
- assert.equal(requeued.queued,true);
- assert.equal(f.store.db.prepare('SELECT state FROM automation_decisions WHERE id=?').get(pending.items[0].id).state,'QUEUED');
- assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND' AND state='QUEUED'").get().n,1);
- assert.equal(f.automation.pending().total,1);
- assert.deepEqual(f.automation.dismiss({id:pending.items[1].id}),{dismissed:true});
- assert.equal(f.automation.pending().total,0);
- assert.throws(()=>f.automation.dismiss({id:pending.items[1].id}),/PENDING_CONTACT_CHANGED/);
 });
 
-test('pending replies stay visible when their queued job dies before sending',t=>{
- const f=setup(t),run=collect(f,[entry()],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
- assert.deepEqual(f.automation.afterReview(run.runId),{queued:1,skipped:0});assert.equal(f.automation.pending().total,0);
- f.store.db.prepare("UPDATE jobs SET state='CANCELLED' WHERE kind='SEND'").run();
- const pending=f.automation.pending();assert.equal(pending.total,1);assert.equal(pending.items[0].jobState,'CANCELLED');
- assert.equal(f.automation.retry({id:pending.items[0].id}).queued,true);
- assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND'").get().n,2);
- assert.equal(f.automation.pending().total,0);
+test('switching automatic replies on schedules one frozen queue item with queue authorization',t=>{
+ const f=setup(t,{autoReply:true}),run=collect(f,[entry()],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ f.automation.afterReview(run.runId);const queue=queueRow(f),started=queue.schedule();assert.equal(started.started,true);assert.equal(typeof started.id,'string');
+ const row=f.store.db.prepare('SELECT * FROM send_queue').get(),job=f.store.db.prepare("SELECT * FROM jobs WHERE kind='SEND'").get();
+ assert.equal(row.state,'SENDING');assert.equal(job.state,'QUEUED');
+ const payload=JSON.parse(job.payload),grant=f.store.db.prepare('SELECT * FROM authorizations WHERE id=?').get(job.authorization_id);
+ assert.equal(payload.basis.type,'AUTOMATIC_QUEUE');assert.equal(payload.basis.queueId,row.id);assert.equal(grant.issuer,'AUTOMATION');
+ assert.equal(queue.assertScope(payload,grant),1);
 });
 
-test('rule reporting filters derivations and current job outcome without treating cancellation as sending',t=>{const f=setup(t),run=collect(f,[entry('post-a'),entry('post-b')],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);f.advance(120001);evaluate(f,run.runId,f.collection.posts(run.runId)[1].id);f.automation.afterReview(run.runId);const r=new(require('../dist/reporting.cjs').LocalReporting)(f.store);assert.equal(r.automation({runId:run.runId,ruleId:'rule',state:'QUEUED',channel:'DM'}).total,1);assert.equal(r.automation({state:'SKIPPED'}).total,1);assert.equal(r.automation({channel:'COMMENT'}).total,0);f.automation.revoke({id:'rule'});assert.equal(r.automation({state:'QUEUED'}).items[0].job_state,'CANCELLED');assert.equal(r.automation().summary.reduce((n,s)=>n+s.count,0),2);assert.ok(!JSON.stringify(r.automation()).includes('合成联系内容'));});
+test('switching automatic replies off returns unsent items to the switch queue',t=>{
+ const f=setup(t,{autoReply:true}),run=collect(f,[entry()],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ f.automation.afterReview(run.runId);const queue=queueRow(f);
+ f.store.db.prepare("UPDATE send_queue SET state='READY'").run();steps(f,{autoReply:false});
+ assert.deepEqual(queue.schedule(),{started:false});
+ const row=f.store.db.prepare('SELECT state,reason FROM send_queue').get();assert.equal(row.state,'WAITING_SWITCH');assert.equal(row.reason,'AUTO_REPLY_OFF');
+});
+
+test('direct messages and comments are independent queue contacts for the same recipient',t=>{
+ const f=fixture(t);steps(f,{autoReply:false});const automation=new LocalAutomation(f.store,{enabled:()=>true});
+ const dm=rule(automation,{id:'dm',channel:'DM'}),comment=rule(automation,{id:'comment',channel:'COMMENT'});
+ const run=collect(f,[entry()],{contactRules:[dm,comment]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ assert.deepEqual(automation.afterReview(run.runId),{queued:2,skipped:0});
+ const rows=f.store.db.prepare('SELECT channel,plan FROM send_queue ORDER BY channel').all();
+ assert.deepEqual(rows.map(row=>row.channel),['COMMENT','DM']);
+ assert.ok(rows.every(row=>JSON.parse(row.plan).templates[0].channel===row.channel));
+});
+
+test('manual approval queues without the model score threshold',t=>{
+ const f=setup(t,{autoReply:false}),run=collect(f,[entry()],{contactRules:[f.ref]}),reviewId=queuedReview(f,run.runId,f.collection.posts(run.runId)[0].id);
+ f.store.db.prepare("UPDATE review_results SET review_status='APPROVED',manual_decision='MATCH',score=0,decision='SKIP' WHERE id=?").run(reviewId);
+ const queue=queueRow(f);assert.deepEqual(queue.enqueueReview(reviewId),{queued:1});
+ const row=f.store.db.prepare('SELECT * FROM send_queue').get();assert.equal(row.origin,'MANUAL_REVIEW');assert.equal(row.state,'WAITING_SWITCH');
+});
+
+test('expired comments require an explicit override before they can be queued again',t=>{
+ const f=setup(t,{autoReply:false}),run=collect(f,[entry()],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);f.automation.afterReview(run.runId);
+ const queue=queueRow(f),now=f.store.clock();f.store.db.prepare('UPDATE send_queue SET comment_published_at=?,expires_at=?').run(now-8*86400000,now-1);
+ queue.schedule();const expired=f.store.db.prepare('SELECT * FROM send_queue').get();assert.equal(expired.state,'EXPIRED');assert.equal(expired.reason,'COMMENT_TOO_OLD');
+ assert.throws(()=>queue.requeue(expired.id),/COMMENT_TOO_OLD/);
+ assert.deepEqual(queue.requeue(expired.id,{override:true}),{id:expired.id});
+ const requeued=f.store.db.prepare('SELECT * FROM send_queue').get();assert.equal(requeued.state,'WAITING_SWITCH');assert.equal(requeued.reason,'MANUAL_RECOVERED');
+});
+
+test('failed items retry and settled items dismiss, while sending items cannot be cancelled',t=>{
+ const f=setup(t,{autoReply:false}),run=collect(f,[entry()],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);f.automation.afterReview(run.runId);
+ const queue=queueRow(f),id=f.store.db.prepare('SELECT id FROM send_queue').get().id;
+ f.store.db.prepare("UPDATE send_queue SET state='SENDING'").run();assert.throws(()=>queue.cancel(id),/SEND_QUEUE_SENDING/);
+ f.store.db.prepare("UPDATE send_queue SET state='FAILED',reason='NOT_SUBMITTED'").run();
+ assert.deepEqual(queue.retry(id),{id});assert.equal(f.store.db.prepare('SELECT state FROM send_queue').get().state,'WAITING_SWITCH');
+ f.store.db.prepare("UPDATE send_queue SET state='FAILED',reason='NOT_SUBMITTED'").run();
+ assert.deepEqual(queue.dismiss(id),{id});assert.equal(f.store.db.prepare('SELECT state,reason FROM send_queue').get().state,'CANCELLED');
+ assert.throws(()=>queue.dismiss(id),/SEND_QUEUE_NOT_DISMISSABLE/);
+});
+
+test('manual send now requires one channel and freezes the chosen account and template',t=>{
+ const f=fixture(t);steps(f,{autoReply:false});const automation=new LocalAutomation(f.store,{enabled:()=>true});const dm=rule(automation,{id:'dm',channel:'DM'}),comment=rule(automation,{id:'comment',channel:'COMMENT'});
+ f.store.db.exec("INSERT INTO configurations(id,kind,name,body,updated_at) VALUES('dt','DM_TEMPLATE','私信模板','{\"text\":\"手动私信内容\"}',0),('ct','COMMENT_TEMPLATE','评论模板','{\"text\":\"手动评论内容\"}',0)");
+ const run=collect(f,[entry()],{contactRules:[dm,comment]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);automation.afterReview(run.runId);
+ const queue=queueRow(f),ids=f.store.db.prepare("SELECT id FROM send_queue WHERE state='WAITING_SWITCH'").all().map(row=>row.id);
+ assert.throws(()=>queue.sendNow({ids,accountId:'account',templateId:'dt'}),/SEND_QUEUE_CHANNEL_MIXED/);
+ const dmId=f.store.db.prepare("SELECT id FROM send_queue WHERE channel='DM'").get().id;
+ assert.deepEqual(queue.sendNow({ids:[dmId],accountId:'account',templateId:'dt'}),{count:1});
+ assert.equal(queue.schedule().started,true);
+ const row=f.store.db.prepare('SELECT * FROM send_queue WHERE id=?').get(dmId),job=f.store.db.prepare('SELECT * FROM jobs WHERE kind=\'SEND\'').get(),payload=JSON.parse(job.payload);
+ assert.equal(row.manual_now,1);assert.equal(row.state,'SENDING');assert.equal(payload.content,'手动私信内容');assert.equal(payload.basis.type,'MANUAL_QUEUE');
+ assert.equal(f.store.db.prepare('SELECT issuer FROM authorizations WHERE id=?').get(job.authorization_id).issuer,'LOCAL_USER');
+});
+
+test('quota exhaustion leaves the item waiting with a remaining-quota summary',t=>{
+ const f=setup(t,{autoReply:true,autoReplyAccounts:['account']}),run=collect(f,[entry()],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);f.automation.afterReview(run.runId);
+ const queue=queueRow(f),day=require('../dist/send-safety.cjs').currentQuotaDay(f.store);
+ f.store.db.prepare('INSERT INTO account_days(account_id,day,occupied) VALUES(?,?,1) ON CONFLICT(account_id,day) DO UPDATE SET occupied=1').run('account',day);
+ assert.deepEqual(queue.schedule(),{started:false});
+ const waiting=f.store.db.prepare('SELECT state,reason FROM send_queue').get();assert.equal(waiting.state,'WAITING_QUOTA');assert.equal(waiting.reason,'ACCOUNT_POOL_QUOTA_EXHAUSTED');
+ assert.equal(queue.summary().quota,1);assert.equal(queue.summary().remaining,19);
+ f.store.db.prepare('DELETE FROM account_days WHERE account_id=? AND day=?').run('account',day);
+ assert.equal(queue.schedule().started,true);
+});
+
+test('revoking an automatic rule cancels its unsent queue items',t=>{
+ const f=setup(t,{autoReply:false}),run=collect(f,[entry()],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);f.automation.afterReview(run.runId);
+ assert.deepEqual(f.automation.revoke({id:'rule'}),{disabled:true,cancelled:0,queuedCancelled:1});
+ const row=f.store.db.prepare('SELECT state,reason FROM send_queue').get();assert.equal(row.state,'CANCELLED');assert.equal(row.reason,'RULE_REVOKED');
+});
+
+test('a queued comment still needs a fresh comment capability at send reservation',t=>{
+ const f=fixture(t);steps(f,{autoReply:true});const automation=new LocalAutomation(f.store,{enabled:()=>true}),ref=rule(automation,{id:'comment',channel:'COMMENT'});
+ const run=collect(f,[entry('c'.repeat(24))],{contactRules:[ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);automation.afterReview(run.runId);
+ const queue=queueRow(f);assert.equal(queue.schedule().started,true);
+ const lease=f.queue.claim('send');assert.throws(()=>new (require('../dist/send-safety.cjs').SendSafety)(f.store).reserve(lease),/COMMENT_CAPABILITY_REQUIRED/);
+});
+
+test('rule authorization requires registered sender, exact preview and selected current policy',t=>{
+ const f=setup(t);assert.throws(()=>f.automation.authorize({id:'rule',version:1,previewHash:'wrong',consent:'automatic-contact-frozen-run-v1'}),/AUTOMATION_CONSENT_REQUIRED/);
+ assert.throws(()=>f.automation.frozen(['rule'],[]),/AUTOMATION_POLICY_NOT_SELECTED/);
+ assert.throws(()=>new LocalAutomation(f.store).authorize({...f.automation.preview({id:'rule',version:1}),consent:'automatic-contact-frozen-run-v1'}),/SEND_EXECUTOR_UNAVAILABLE/);
+ f.automation.revoke({id:'rule'});assert.throws(()=>f.automation.frozen(['rule'],[{id:'policy',revision:1}]),/AUTOMATION_POLICY_NOT_SELECTED/);
+});
+
+test('collection with automatic rules requires its own explicit combined consent',t=>{
+ const f=setup(t),{LocalWorkflow}=require('../dist/workflow.cjs'),w=new LocalWorkflow(f.store,null,{capabilities:()=>({collect:true,send:true})});
+ const p=w.previewCollection({configId:'config',accountId:'account',policyIds:['policy'],ruleIds:['rule']});assert.equal(p.automaticRules,1);
+ assert.throws(()=>w.authorizeCollection({...p,requestKey:'collect-auto',consent:'bounded-platform-read-once-v1'}),/COLLECTION_CONSENT_REQUIRED/);
+ assert.ok(w.authorizeCollection({...p,requestKey:'collect-auto',consent:'bounded-read-with-frozen-contact-v1'}).id);
+});
+test('a settled send job records the queue item as sent',t=>{
+ const f=setup(t,{autoReply:true}),run=collect(f,[entry()],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);f.automation.afterReview(run.runId);
+ const queue=queueRow(f);assert.equal(queue.schedule().started,true);
+ const job=f.store.db.prepare("SELECT id FROM jobs WHERE kind='SEND'").get(),rowId=f.store.db.prepare('SELECT id FROM send_queue').get().id;
+ f.store.db.prepare("UPDATE jobs SET state='SUCCEEDED',result='{\"ok\":true}' WHERE id=?").run(job.id);
+ assert.deepEqual(queue.settle(job.id),{id:rowId,state:'SENT',reason:null});
+ const row=f.store.db.prepare('SELECT state,settled_at FROM send_queue').get();assert.equal(row.state,'SENT');assert.ok(row.settled_at);
+});
+
+test('expired queue rows are purged 30 days after settling',t=>{
+ const f=setup(t,{autoReply:false}),run=collect(f,[entry()],{contactRules:[f.ref]});evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);f.automation.afterReview(run.runId);
+ const queue=queueRow(f),row=f.store.db.prepare('SELECT id FROM send_queue').get(),now=f.store.clock();
+ f.store.db.prepare("UPDATE send_queue SET state='EXPIRED',reason='QUEUE_TOO_OLD',settled_at=? WHERE id=?").run(now-29*86400000,row.id);
+ queue.schedule();assert.equal(f.store.db.prepare('SELECT count(*) n FROM send_queue').get().n,1);
+ f.store.db.prepare("UPDATE send_queue SET settled_at=? WHERE id=?").run(now-31*86400000,row.id);
+ queue.schedule();assert.equal(f.store.db.prepare('SELECT count(*) n FROM send_queue').get().n,0);
+});
+
+test('service review decisions enqueue approved contacts and cancel rejected ones',t=>{
+ const {LocalService}=require('../dist/service.cjs');
+ const f=setup(t,{autoReply:false}),run=collect(f,[entry()],{contactRules:[f.ref]}),reviewId=queuedReview(f,run.runId,f.collection.posts(run.runId)[0].id);
+ const service=new LocalService(f.store),raw=f.store.db.prepare('SELECT version FROM review_results WHERE id=?').get(reviewId);
+ const done=service.decideReview({id:reviewId,version:raw.version,status:'APPROVED'});
+ assert.deepEqual(done.queue,{queued:1});
+ const row=f.store.db.prepare('SELECT * FROM send_queue').get();assert.equal(row.origin,'MANUAL_REVIEW');assert.equal(row.state,'WAITING_SWITCH');
+ service.decideReview({id:reviewId,version:raw.version+1,status:'REJECTED'});
+ const cancelled=f.store.db.prepare('SELECT state,reason FROM send_queue WHERE id=?').get(row.id);assert.equal(cancelled.state,'CANCELLED');assert.equal(cancelled.reason,'REVIEW_REJECTED');
+});

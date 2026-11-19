@@ -1,7 +1,7 @@
 'use strict';
 const {randomUUID}=require('node:crypto'),{LocalError,hash}=require('./database.cjs');
 const {LocalContact,definition}=require('./contact.cjs'),{LocalReview}=require('./review.cjs');
-const {dayAt}=require('./send-safety.cjs');
+const {currentQuotaDay}=require('./send-safety.cjs');
 const {restricted,restrictedToday}=require('./account-safety.cjs');
 /** 额度不足的跳过原因。只有它（或任务夭折）的条目会留在「待处理回复」里等人处理。 */
 const QUOTA_EXHAUSTED='ACCOUNT_POOL_QUOTA_EXHAUSTED';
@@ -19,7 +19,7 @@ class LocalAutomation{
  save({id=randomUUID(),name,input}){return this.contact.save(id,name,{...input,platform:'XHS'});}
  preview({id,version}){const r=this.db.prepare('SELECT * FROM contact_rules WHERE id=?').get(id);if(!r||r.version!==version)throw new LocalError('CONTACT_RULE_CHANGED');return {...definition(r),name:r.name,previewHash:hash(definition(r))};}
  authorize({id,version,previewHash,consent}){if(!this.enabled())throw new LocalError('SEND_EXECUTOR_UNAVAILABLE');if(consent!=='automatic-contact-frozen-run-v1'||this.preview({id,version}).previewHash!==previewHash)throw new LocalError('AUTOMATION_CONSENT_REQUIRED');return this.contact.authorize(id,version);}
- revoke({id}){return this.store.transaction(()=>{this.contact.revokeInTransaction(id);const rows=this.db.prepare("SELECT id,authorization_id FROM jobs WHERE kind='SEND' AND state IN('QUEUED','RUNNING') AND json_extract(payload,'$.basis.ruleId')=?").all(id);for(const row of rows){this.db.prepare("UPDATE jobs SET cancel_requested=1,state=CASE WHEN state='QUEUED' THEN 'CANCELLED' ELSE state END WHERE id=?").run(row.id);this.db.prepare("UPDATE authorizations SET state='REVOKED' WHERE id=? AND state='ACTIVE'").run(row.authorization_id);}return {disabled:true,cancelled:rows.length};});}
+ revoke({id}){return this.store.transaction(()=>{this.contact.revokeInTransaction(id);const queued=this.db.prepare("UPDATE send_queue SET state='CANCELLED',reason='RULE_REVOKED',updated_at=?,settled_at=? WHERE state IN('WAITING_SWITCH','READY','WAITING_QUOTA') AND json_extract(plan,'$.ruleId')=?").run(this.store.clock(),this.store.clock(),id).changes;const rows=this.db.prepare("SELECT id,authorization_id FROM jobs WHERE kind='SEND' AND state IN('QUEUED','RUNNING') AND json_extract(payload,'$.basis.ruleId')=?").all(id);for(const row of rows){this.db.prepare("UPDATE jobs SET cancel_requested=1,state=CASE WHEN state='QUEUED' THEN 'CANCELLED' ELSE state END WHERE id=?").run(row.id);this.db.prepare("UPDATE authorizations SET state='REVOKED' WHERE id=? AND state='ACTIVE'").run(row.authorization_id);}return {disabled:true,cancelled:rows.length,queuedCancelled:queued};});}
  frozen(ruleIds,policies){
   if(!Array.isArray(ruleIds)||ruleIds.length>100||new Set(ruleIds).size!==ruleIds.length)throw new LocalError('INVALID_AUTOMATION_SELECTION');
   return ruleIds.map(id=>{const r=this.db.prepare('SELECT * FROM contact_rules WHERE id=?').get(id);if(!r?.enabled||!policies.some(p=>p.id===r.policy_id&&p.revision===r.policy_revision))throw new LocalError('AUTOMATION_POLICY_NOT_SELECTED');const ref={id:r.id,version:r.version,hash:r.authorization_hash};this.contact.frozen(ref);return ref;});
@@ -38,7 +38,7 @@ class LocalAutomation{
    let candidate;
    try{candidate=this.contact.plan(reviewId,ref.id,channel,a.id,{templateId}).scope;}
    catch(error){if(error instanceof LocalError&&SWITCHABLE.has(error.code)){restrictedSeen=true;continue;}throw error;}
-   const day=dayAt(this.store.clock()),account=this.db.prepare('SELECT daily_limit FROM accounts WHERE id=?').get(a.id),usage=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(a.id,day);
+   const day=currentQuotaDay(this.store),account=this.db.prepare('SELECT daily_limit FROM accounts WHERE id=?').get(a.id),usage=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(a.id,day);
    const pending=this.db.prepare("SELECT count(*) n FROM jobs j JOIN authorizations g ON g.id=j.authorization_id WHERE j.kind='SEND' AND j.state IN('QUEUED','RUNNING') AND j.cancel_requested=0 AND g.state='ACTIVE' AND g.expires_at>? AND json_extract(j.payload,'$.accountId')=? AND NOT EXISTS(SELECT 1 FROM send_attempts s WHERE s.request_key=j.request_key)").get(this.store.clock(),a.id).n;
    if((usage?.occupied??0)+pending>=Math.min(usage?.daily_limit_override??account.daily_limit,a.dailyLimit))continue;
    return {account:a,scope:candidate};
@@ -54,34 +54,10 @@ class LocalAutomation{
   return {at,prev:{accountId,at}};
  }
  afterReview(runId){
-  if(!this.enabled()||!new LocalReview(this.store).barrier(runId).ready)return {waiting:true};
-  const run=this.db.prepare('SELECT snapshot FROM collection_runs WHERE id=?').get(runId),refs=JSON.parse(run.snapshot).strictStages.contactRules||[];
-  let queued=0,skipped=0,prev=this.lastScheduled();
-  for(const ref of refs){const rule=this.db.prepare('SELECT * FROM contact_rules WHERE id=?').get(ref.id);if(!rule)continue;
-   const rows=this.db.prepare('SELECT r.id FROM review_results r JOIN review_batches b ON b.id=r.batch_id WHERE b.run_id=? AND b.policy_id=? ORDER BY r.created_at,r.id').all(runId,rule.policy_id);
-   // 每个渠道只排一次：同一渠道可以有多条模板，发送时从池里选一条。
-   const channels=[...new Set(JSON.parse(rule.plans).map(p=>p.channel))];
-   for(const row of rows)for(const channel of channels)this.store.transaction(()=>{
-    if(this.db.prepare('SELECT 1 FROM automation_decisions WHERE run_id=? AND review_id=? AND rule_id=? AND channel=?').get(runId,row.id,ref.id,channel))return;
-    let jobId=null,reason='RULE_JOB_CREATED';
-    try{
-     if(this.db.prepare("SELECT 1 FROM safety_state WHERE id IN('sending','platform') AND reason IS NOT NULL").get())throw new LocalError('SENDING_PAUSED');
-     this.contact.frozen(ref);
-     // 账号级失败（限制/掉登录/缺评论能力）换下一个账号；额度不足也换下一个账号。
-     const {account:selected,scope}=this.allocate(ref,rule,row.id,channel);
-     if(this.db.prepare("SELECT 1 FROM jobs WHERE kind='SEND' AND state IN('QUEUED','RUNNING','UNKNOWN') AND json_extract(payload,'$.recipientId')=? AND (json_extract(payload,'$.channel')=? OR state='UNKNOWN')").get(scope.recipientId,channel)||this.db.prepare("SELECT 1 FROM send_attempts WHERE platform='XHS' AND recipient_id=? AND (state IN('RESERVED','DISPATCHED','UNKNOWN') OR channel=? AND state='CONFIRMED')").get(scope.recipientId,channel))throw new LocalError('RECIPIENT_ALREADY_PLANNED_OR_CONTACTED');
-     const next=this.slot(prev,selected.id,runId+':'+row.id+':'+channel);prev=next.prev;
-     jobId=this.contact.enqueueInTransaction(row.id,ref.id,channel,selected.id,null,{availableAt:next.at,templateId:scope.basis.templateId});queued++;
-    }catch(error){if(!(error instanceof LocalError))throw error;reason=error.code;skipped++;}
-    this.db.prepare('INSERT INTO automation_decisions(run_id,review_id,rule_id,channel,job_id,state,reason,created_at) VALUES(?,?,?,?,?,?,?,?)').run(runId,row.id,ref.id,channel,jobId,jobId?'QUEUED':'SKIPPED',reason,this.store.clock());
-   });
-  }
-  return {queued,skipped};
+  // 旧版在这里直接为每条评论创建 SEND 任务；现在统一进入发送队列，由队列按开关、额度和节奏调度。
+  if(!this.enabled())return {waiting:true};
+  return new (require('./send-queue.cjs').LocalSendQueue)(this.store).enqueueAfterReview(runId);
  }
- /**
-  * 账号被平台限制后调用：把这一轮里还排在这个账号上的条目挪到下一个可用账号。
-  * 同一天已经有第二个账号被限制时不再换号，整池停止，剩余条目进「待处理回复」。
-  */
  reallocate({jobId,accountId,runId}){
   const id=this.db.prepare('SELECT run_id FROM automation_decisions WHERE job_id=?').get(jobId)?.run_id??runId;
   if(!id)return {ignored:true};
@@ -142,7 +118,7 @@ class LocalAutomation{
  }
  /** 今日还能发多少条：给定账号池（缺省为全部在用账号）的剩余额度合计，供界面判断「现在能不能重排」。 */
  remaining(ids=[]){
-  const day=dayAt(this.store.clock()),filter=ids.length?`AND a.id IN (${ids.map(()=>'?').join(',')})`:'';
+  const day=currentQuotaDay(this.store),filter=ids.length?`AND a.id IN (${ids.map(()=>'?').join(',')})`:'';
   return this.db.prepare(`SELECT a.daily_limit,COALESCE(d.occupied,0) occupied,d.daily_limit_override FROM accounts a LEFT JOIN account_days d ON d.account_id=a.id AND d.day=? WHERE a.state<>'ARCHIVED' ${filter}`).all(day,...ids).reduce((n,r)=>n+Math.max(0,Math.min(r.daily_limit_override??r.daily_limit,r.daily_limit)-r.occupied),0);
  }
  /**

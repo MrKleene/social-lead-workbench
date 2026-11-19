@@ -87,10 +87,10 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 ## 3. 自动回复
 
-**职责**：审核到明确终态后，派生发送任务并执行，记录回执。
+**职责**：审核到明确终态后，按当时配置冻结发送计划并入队；开启自动发送后按队列调度执行，记录回执。
 
-- 输入：审核目标版本、门槛、原文内容、渠道（评论 / 私信）、发送账号池、每账号共享日额度
-- 输出：`AutoContactJob` → `SendAttempt` / `ContactLedger`
+- 输入：审核目标版本、门槛、原文内容、渠道（评论 / 私信）、发送账号池、每账号共享日额度、额度刷新时间
+- 输出：`send_queue` → `AutoContactJob` → `SendAttempt` / `ContactLedger`
 
 **关键约束**
 
@@ -100,31 +100,34 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 旧线索的勿联系与已联系证据在离线导入时转成 `contact_ledger` 阻断，只读转换，不写回线索记录
 - 未知结果保留占用与去重，不盲目重发；未知不当失败
 - 平台限流、验证、封禁后即停，不自动换号绕验证
+- 开关关闭时审核仍入队等待；人工通过绕过阈值但保留真实评分；评论与私信同一收件人各自独立首联
+- 队列条目在入队时冻结模板池、账号池、规则版本与阈值；过期后可由人工覆盖重新排队
 - 保存规则保持关闭；发送需独立授权
 
 **代码**：`packages/domain/src/auto-contact`（`contact-policy.ts`、`contact-sender.ts`、`reply-stage-journal.ts`、
 `live-journal-progress.ts`、`xhs-reply-protocol.ts`、`xhs-reply-transport.ts`、`xhs-restriction-transport.ts`）；
-`packages/local-runtime/src/contact.cjs`、`send-safety.cjs`、`send-executor.cjs`
+`packages/local-runtime/src/contact.cjs`、`send-safety.cjs`、`send-executor.cjs`、`send-queue.cjs`
 
 **状态**：评论回复已接入 + 合成验证；真实发送需逐次授权
 
 **注意**：私信渠道可对评论作者首联发送（模板、额度、跨渠道去重）；收到入站私信后不自动回复，见模块 6
 
-**延伸**：[comment-reply-target.md](../design/comment-reply-target.md)、[dm-templates-and-day-limit.md](../design/dm-templates-and-day-limit.md)
+**延伸**：[send-queue.md](../design/send-queue.md)、[comment-reply-target.md](../design/comment-reply-target.md)、[dm-templates-and-day-limit.md](../design/dm-templates-and-day-limit.md)
 
 ---
 
 ## 4. 待处理
 
-**职责**：把自动流程没跑完的可操作任务集中起来，允许单条人工处理。
+**职责**：集中展示自动回复队列中待发送、等待额度、发送失败、结果未知与已过期的条目，并允许单条或同渠道批量人工处理。
 
 **关键约束**
 
-- 每条显示渠道、对象、原因
-- 单条选择兼容账号与渠道模板，预览后确认
+- 每条显示渠道、对象、原因；待发送与等待额度可取消，发送中不可取消
+- 失败可重试或忽略；过期可重新排队，评论发布超过 7 天需显式覆盖
+- 批量「立即发送」一次只接受同一渠道，并选择账号与模板；自动发送期间不可用
 - 成功与未知结果禁止直接重发
 
-**代码**：`apps/web/src/features/local-workbench/local-record-pages.tsx`（`LocalPending`）；
+**代码**：`apps/web/src/features/local-workbench/local-pending.tsx`；
 页面 `/auto-contact/pending`
 
 **状态**：已接入
@@ -182,7 +185,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 ## 7. 配置管理
 
-**职责**：集中管理关键词组、匹配方案、评论模板、私信模板、模型设置。
+**职责**：集中管理关键词组、匹配方案、评论模板、私信模板、模型设置与自动回复配置。
 
 **关键约束**
 
@@ -194,8 +197,9 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 切换页签保留草稿，关闭需确认丢弃；保存失败保留该组草稿并报错
 - 启动校验只要求已开启阶段的必要条件；读取失败不能误判为"开关关闭"
 - 采集操作区只保留"开始采集"和"采集设置"，不重复配置
+- 自动回复配置维护自动发送阈值、额度刷新时间（默认 00:00）、回复账号池、评论模板池与私信模板池；采集设置弹窗不再单独保存回复账号与模板
 
-**代码**：`apps/web/src/features/local-workbench/local-configurations.tsx`；页面 `/configuration`；
+**代码**：`apps/web/src/features/local-workbench/local-configurations.tsx`、`reply-settings.tsx`；页面 `/configuration`、`/configuration?tab=reply`；
 后端 `ModelSettings`、`CommentReviewPolicy`、`ReplyTemplate`
 
 **状态**：已接入
@@ -258,7 +262,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 | `/automation` | `LocalTaskPage` | 1 / 2 / 3 三步自动化 |
 | `/comment-review` | `LocalHistory` | 2 评论匹配（历史与审核） |
 | `/auto-contact` | `LocalAutomation` | 3 自动回复 |
-| `/auto-contact/pending` | `LocalPending` | 4 待处理 |
+| `/auto-contact/pending` | `LocalPending` | 4 待处理发送 |
 | `/configuration` | `LocalConfigurations` | 7 配置管理 |
 | `/inbox` | `LocalInboxPage` | 5 接收消息 / 6 平台会话 |
 | `/platforms` | `LocalCapabilities` | 8 账号与设备 |

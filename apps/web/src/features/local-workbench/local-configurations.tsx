@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Cpu, Filter, MessageSquare, Send, Tag } from "lucide-react";
+import { Cpu, Filter, MessageSquare, MessagesSquare, Send, Tag } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { SectionCard } from "@/components/patterns/section-card";
 import { DetailItem, DetailList } from "@/components/patterns/detail-sheet";
@@ -33,6 +33,7 @@ import { useConfirmDiscard, useDraftGuard } from "@/features/work/draft-guard";
 import { ErrorNotice } from "@/components/feedback";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LocalModelSettings } from "./local-model-settings";
+import { ReplySettings } from "./reply-settings";
 import type { ConfigurationKind, LocalConfiguration } from "./local-api";
 import { useLocalWorkbench } from "./use-local-workbench";
 
@@ -41,6 +42,7 @@ const tabIcons: Record<ConfigurationTab, typeof Tag> = {
   matching: Filter,
   templates: MessageSquare,
   "dm-templates": Send,
+  reply: MessagesSquare,
   model: Cpu,
 };
 
@@ -180,7 +182,7 @@ export function LocalConfigurations() {
       <PageHeader
         title="配置管理"
         actions={
-          tab === "model" ? undefined : (
+          tab === "model" || tab === "reply" ? undefined : (
             <Button
               onClick={async () => {
                 if (await leave()) {
@@ -213,6 +215,10 @@ export function LocalConfigurations() {
             <LocalModelSettings
               keyConfigured={!!workbench.status.data?.modelKeyConfigured}
             />
+          ) : tab === "reply" ? (
+            <SectionCard title="自动回复配置">
+              <ReplySettings />
+            </SectionCard>
           ) : (
             <>
               {workbench.error ? (

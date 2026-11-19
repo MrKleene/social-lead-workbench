@@ -40,7 +40,7 @@ export const sidebarData: SidebarData = {
       title: '工作区',
       items: [
         { title: '仪表盘', url: '/', icon: SquareStack },
-        { title: '自动化任务', url: '/automation', icon: PlayCircle },
+        { title: '获客数据采集', url: '/automation', icon: PlayCircle },
       ],
     },
     {
@@ -54,7 +54,7 @@ export const sidebarData: SidebarData = {
     {
       title: '回复管理',
       items: [
-        { title: '待处理回复', url: '/auto-contact/pending', icon: ListChecks },
+        { title: '待处理发送', url: '/auto-contact/pending', icon: ListChecks },
         { title: '回复记录', url: '/reply-history', icon: Archive },
         { title: '消息通知', url: '/inbox', icon: Inbox },
       ],
