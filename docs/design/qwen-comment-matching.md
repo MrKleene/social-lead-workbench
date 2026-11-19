@@ -28,13 +28,16 @@
 
 | 页面受控型号 | 北京非思考输入 / 输出，元/百万token |
 | --- | --- |
-| qwen3.8-flash（未配置时的默认选项） | 0.8 / 2.7 |
+| qwen4-max（未配置时的默认选项） | 输入≤1M：10 / 30 |
+| kimi-k3.1-pro | 输入≤1,048,576：13 / 68 |
+| deepseek-v4.1-flash（分时价，按忙时计） | 输入≤1M：忙时 2 / 8；闲时 1 / 4 |
+| qwen3.8-flash（兼容已保存配置） | 0.8 / 2.7 |
 | qwen3.7-flash-2026-07-15（兼容已保存配置） | 输入≤32K：0.2 / 0.8；32K–256K：0.6 / 2.4；256K–1M：1.2 / 4.8 |
 | qwen3.7-plus-2026-05-26（兼容已保存配置） | 输入≤256K：2 / 8；256K–1M：6 / 24 |
 | qwen3.8-max（2026-10-26核实；最大输入991K） | 12 / 36 |
-| qwen3.8-max-0902 | 输入≤1M：12 / 36 |
+| qwen3.8-max-0902（兼容已保存配置） | 输入≤1M：12 / 36 |
 
-2026-10-26 复核：[模型市场](https://www.qianwenai.com/models)、[Max 型号、北京端点及标准价格](https://www.qianwenai.com/models/qwen3.8-max)、[结构化输出](https://platform.qianwenai.com/docs/developer-guides/text-generation/structured-output)、[思考模式](https://platform.qianwenai.com/docs/developer-guides/text-generation/thinking)。默认列表仅展示 Flash、Max 和 Max0902 三个文本输出候选；旧3.7型号仍在后端受控目录，已有选择会追加显示并保留原价格版本，不自动替换或改写数据库。新Max采用独立价格版本 `beijing-2026-10-26`，旧确认不能授权它。未知型号/价目仍阻断，不猜费用。未做真实连通性或质量验收。
+2026-11-20 复核新增三款：[qwen4-max](https://help.aliyun.com/zh/model-studio/qwen4-max)、[kimi-k3.1-pro](https://help.aliyun.com/zh/model-studio/kimi-k3-1-pro)、[deepseek-v4.1-flash](https://help.aliyun.com/zh/model-studio/deepseek-v4-1-flash)。默认列表只展示这三款；deepseek 为分时价，这里按较高的忙时价计入估算，避免低估预算。3.8 系列（含 Max0902）从默认列表下移为兼容型号：后端受控目录仍保留，已有选择会追加显示并保留原价格版本，不自动替换或改写数据库。新型号使用独立价格版本 `beijing-2026-11-20`，旧确认不能授权它们。未知型号/价目仍阻断，不猜费用。三款已用真实 Key 验证基础对话与严格 JSON Schema 调用可用，但未做语义质量验收。
 
 这些型号默认开启思考；本项目所有请求 `enable_thinking=false`、严格 JSON Schema。手动小批（≤5条）最多 2500 输出 token；整轮审核按每批容量估算 `max_tokens`（每条评论预留 JSON/枚举开销、理由与证据引用上限，再按模型 131072 输出上限校验），容量不足在预览阶段拒绝该批，不截断评论。业务输出保持符合/不符合/待确认、排序分、理由（简体中文）、上下文程度及引用。服务端复核结构与脱敏原文（非空白字符逐字一致，空白按等价处理；正文为空或超过 200 字符的评论不送审，后者单独显示为「跳过（评论超长）」）。模型用省略号缩写或引用超长时，先把理由与引用裁到 120 字上限（引用可远超 Schema 的 500 字上限），再把引用锚定回该评论中确实逐字复制的连续片段；找不到逐字片段或引用其他评论的文字仍判格式异常，按可重试失败处理。缺上下文强制待确认。分数不是校准概率。保留2500输出token上限以限制请求；若因此截断，按无效结果失败，不补猜或自动重试。
 

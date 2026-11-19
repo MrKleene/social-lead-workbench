@@ -5,7 +5,7 @@ import { prepareOutbound, outboundBatches, validateQwenEvidence, redactText, pre
 import type { SemanticInput } from '@crm/domain/collection/semantic-evaluator';
 import { qwenEnvironment } from '../dist/adapters/collection/qwen-env.cjs';
 import { qwenModel, qwenModelChoices } from '@crm/domain/collection/qwen-models';
-const env={QWEN_MATCH_PRICE_ACK:QWEN_MODEL+':beijing-2026-10-21',QWEN_MATCH_ENABLED:'1',QWEN_MATCH_CONSENT:'beijing-original-comments-v2',QWEN_MATCH_DAILY_LIMIT:'3',QWEN_WORKSPACE_ID:'fictional-space',QWEN_API_KEY:'fictional-key-not-real'};
+const env={QWEN_MATCH_PRICE_ACK:qwenModel(QWEN_MODEL)!.priceAck,QWEN_MATCH_ENABLED:'1',QWEN_MATCH_CONSENT:'beijing-original-comments-v2',QWEN_MATCH_DAILY_LIMIT:'3',QWEN_WORKSPACE_ID:'fictional-space',QWEN_API_KEY:'fictional-key-not-real'};
 const input:SemanticInput={id:'fictional-row',rules:{version:1,target:'寻找正在毕业论文选题中寻求指导的学生',reviewThreshold:70},snapshot:{postId:'fictional-post',commentId:'fictional-comment',userId:'fictional-user',title:'虚构论文选题讨论',body:'留下专业后讨论选题',comment:'护理专业如何选题',parent:null,parentId:null,coverage:'PARTIAL',isDemo:true}};
 const payload=prepareOutbound([input]);
 const result={items:[{id:'item1',score:88,decision:'MATCH',reason:'评论明确询问护理选题',context:'SUFFICIENT',evidence:[{source:'COMMENT',quote:'护理专业如何选题'}]}]};
@@ -22,16 +22,20 @@ describe('Qwen only mocked HTTP, fictional local samples',()=>{
   expect(qwenSettings({...env,QWEN_API_KEY:''}).status.state).toBe('UNCONFIGURED');
   expect(JSON.stringify(qwenSettings(env).status)).not.toContain(env.QWEN_API_KEY);
  });
- it.each(['qwen3.7-flash-2026-07-15','qwen3.7-plus-2026-05-26','qwen3.8-max-0902','qwen3.8-flash','qwen3.8-max'])('controlled model %s retains business schema, non-thinking and model-specific price consent',async model=>{
+ it.each(['qwen4-max','kimi-k3.1-pro','deepseek-v4.1-flash','qwen3.7-flash-2026-07-15','qwen3.7-plus-2026-05-26','qwen3.8-max-0902','qwen3.8-flash','qwen3.8-max'])('controlled model %s retains business schema, non-thinking and model-specific price consent',async model=>{
   const settings=qwenSettings({...env,QWEN_MATCH_MODEL:model,QWEN_MATCH_PRICE_ACK:qwenModel(model)!.priceAck});expect(settings.status.state).toBe('READY');expect(settings.status.model).toBe(model);
   const transport=vi.fn(async(_url:string,init:RequestInit)=>{const body=JSON.parse(init.body as string);expect(body.model).toBe(model);expect(body.enable_thinking).toBe(false);expect(body.response_format).toMatchObject({type:'json_schema',json_schema:{strict:true}});return response();});
   await requestQwen(settings,payload,transport);expect(transport).toHaveBeenCalledTimes(1);
   expect(qwenEnvironment({...env,QWEN_MATCH_MODEL:model,QWEN_MATCH_PRICE_ACK:qwenModel(model)!.priceAck}).QWEN_MATCH_MODEL).toBe(model);
  });
  it('current model choices preserve a saved legacy ID and bind each model to its verified price version',()=>{
-  expect(qwenModelChoices().map(m=>m.id)).toEqual(['qwen3.8-flash','qwen3.8-max','qwen3.8-max-0902']);
+  expect(qwenModelChoices().map(m=>m.id)).toEqual(['qwen4-max','kimi-k3.1-pro','deepseek-v4.1-flash']);
   expect(qwenModelChoices('qwen3.7-plus-2026-05-26').map(m=>m.id)).toContain('qwen3.7-plus-2026-05-26');
+  expect(qwenModelChoices('qwen3.8-flash').map(m=>m.id)).toContain('qwen3.8-flash');
   expect(qwenModelChoices('unknown-model')).toEqual(qwenModelChoices());
+  expect(qwenModel('qwen4-max')).toMatchObject({priceVersion:'beijing-2026-11-20',priceDescription:'输入≤1000000 token：输入/输出 10/30 元/百万token'});
+  expect(qwenModel('kimi-k3.1-pro')).toMatchObject({priceVersion:'beijing-2026-11-20',priceDescription:'输入≤1048576 token：输入/输出 13/68 元/百万token'});
+  expect(qwenModel('deepseek-v4.1-flash')!.priceDescription).toContain('忙时');
   expect(qwenSettings({...env,QWEN_MATCH_MODEL:'qwen3.8-max',QWEN_MATCH_PRICE_ACK:'qwen3.8-max:beijing-2026-10-21'}).status.state).toBe('BUDGET_REQUIRED');
   expect(qwenModel('qwen3.8-max')).toMatchObject({priceVersion:'beijing-2026-10-26',priceDescription:'输入≤991000 token：输入/输出 12/36 元/百万token'});
  });
