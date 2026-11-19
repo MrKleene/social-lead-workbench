@@ -108,7 +108,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 **状态**：评论回复已接入 + 合成验证；真实发送需逐次授权
 
-**注意**：私信渠道在本机只有协议定义与本地预览，**没有接通发送**，见模块 6
+**注意**：私信渠道可对评论作者首联发送（模板、额度、跨渠道去重）；收到入站私信后不自动回复，见模块 6
 
 **延伸**：[comment-reply-target.md](../design/comment-reply-target.md)、[dm-templates-and-day-limit.md](../design/dm-templates-and-day-limit.md)
 
@@ -133,18 +133,17 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 ## 5. 接收消息
 
-**职责**：在限时窗口内接收平台推送的评论通知与私信，落库去重，提供系统内未读。
+**职责**：按需一次性读取平台可见的评论通知与单聊会话，落库去重，提供系统内未读与账号级会话入口。
 
 - 输入：本机用户显式选账号 + 读确认
 - 输出：`InboxReceiver`、`InboxMessage`、`InboxRead`
 
 **关键约束**
 
-- 窗口 15 分钟，受管浏览器每 5 分钟租约轮换；部署、页面加载、API 重启都不自动启动接收
-- 只用项目受管 MCP 浏览器，独立哈希固定的接收专用二进制；恰好四个工具：`start` / `drain` / `snapshot` / `stop`
-- 账号隔离、稳定身份、增量去重
-- 区分平台主动事件与补偿读取；不宣称零轮询或全量历史
-- 历史上限：100 条评论通知、10 个可见单聊会话 × 50 条入站消息
+- 手动“获取消息”触发一次性快照；部署、页面加载、API 重启都不自动启动，也不维持常驻窗口
+- 只用项目受管 MCP 浏览器；收件进程只暴露接收工具
+- 账号隔离、稳定身份、增量去重；平台会话单例，与采集、发送、登录互斥
+- 覆盖仅限平台可见数据：最多 100 条评论通知、10 个可见单聊会话 × 50 条入站消息；不宣称全量历史
 - 读取会改变平台未读状态；系统未读是独立的一套
 - 只做增量迁移，不动原业务记录与 UNKNOWN 证据
 
@@ -159,24 +158,25 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 
 ## 6. 平台会话与私信
 
-**职责**：展示已有账号、会话、消息，并提供私信内容的**本地预览**。
+**职责**：账号级收件箱；展示入站与已联系会话，逐条授权发送私信；评论回复在评论收件箱内完成。
 
 **关键约束**
 
-- 服务端**没有 DM 发送路由**；预览返回 `PREVIEW_ONLY`、`sent:false`、`canSend:false`、
-  `authorizationCreated:false`、`conversation:null`
-- 收件人取自已存审核/评论的稳定作者，不接受客户端传 ID 或昵称
-- 版本不匹配、绑定缺失直接失败；关键词/职业缺失如实报告，不从后一条评论推断
-- 本地策略包里有 DM 协议定义与校验（`dm-protocol.cjs`），但没有接入发送执行
-- 放开真实发送的前置：可验证的 API/工具契约、真实会话绑定、收件人校验、额度原子预留、
-  单次派发与 UNKNOWN、DM 专属队列与回执映射
+- `/inbox` 账号列表进入账号两栏（私信 / 评论）；未读数来自本地库，不依赖平台未读
+- 私信列表合并入站与已确认出站；新建私信只列本账号联系过的人，不接受任意收件人
+- 跨账号、跨渠道已联系与勿联系拦截在服务端执行；同一时刻同一收件人只允许一条发送在途
+- 未回复的入站私信走精确回复；已回复后继续聊天走 MANUAL_DM；不设会话条数上限
+- 评论回复要求审核记录匹配且有原帖引用，复用评论发送链；缺引用直接拒绝
+- 每条发送单独预览与授权；连续输入在本地排队，平台确认后才显示已发送
+- 关闭应用前确认取消未发送消息；异常退出恢复为未发送，不自动续发
+- 不承诺平台全量历史；打开会话与获取消息都可能改变平台未读
 
-**代码**：`packages/domain/src/direct-messages`（`dm-send-protocol.ts`、`dm-transport.ts`、`dm-readback.ts`）；
-`packages/local-runtime/src/dm-protocol.cjs`；入口：配置管理 → 私信模板 → 私信预览
+**代码**：`packages/local-runtime/src/inbox.cjs`、`inbox-executor.cjs`、`send-safety.cjs`、`send-executor.cjs`；
+页面 `/inbox`、`/inbox?account=`
 
-**状态**：仅预览
+**状态**：合成验证；真实发送待验收
 
-**延伸**：[direct-messages.md](direct-messages.md)
+**延伸**：[direct-messages.md](direct-messages.md)、[conversation-replies.md](../design/conversation-replies.md)
 
 ---
 
@@ -260,7 +260,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 | `/auto-contact` | `LocalAutomation` | 3 自动回复 |
 | `/auto-contact/pending` | `LocalPending` | 4 待处理 |
 | `/configuration` | `LocalConfigurations` | 7 配置管理 |
-| `/inbox` | `LocalInboxPage` | 5 接收消息 |
+| `/inbox` | `LocalInboxPage` | 5 接收消息 / 6 平台会话 |
 | `/platforms` | `LocalCapabilities` | 8 账号与设备 |
 | `/reply-history` | `LocalReplyHistory` | 3 回复记录 |
 | `/data` | `LocalDataPage` | 数据与导出 |

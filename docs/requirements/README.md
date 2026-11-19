@@ -12,7 +12,7 @@
 5. [ACCEPTANCE.md](ACCEPTANCE.md) — 本轮验收范围
 6. 按需：[three-step-automation.md](three-step-automation.md)（三步自动化与统一设置）、
    [inbox-reception.md](inbox-reception.md)（接收消息）、
-   [direct-messages.md](direct-messages.md)（私信，仅预览）、
+   [direct-messages.md](direct-messages.md)（私信发送与执行边界）、
    [DESKTOP-LOCAL.md](DESKTOP-LOCAL.md)（单人本地桌面版）
 
 ## 文件清单
