@@ -142,10 +142,12 @@ describe('whole post transport capacity and time bounds (synthetic only)',()=>{
  });
  it('clamps an over-long exact quote to the bounded length instead of failing the whole batch',async()=>{
   const {wholePostRequestPolicy}=await import('@crm/contracts');
-  const comment='护理专业如何选题'.repeat(30),source=[{...input,snapshot:{...input.snapshot,comment}}],p={...prepareOutbound(source,true),requestPolicy:wholePostRequestPolicy};
-  const long={items:[{...result.items[0],id:'item1',evidence:[{source:'COMMENT',quote:comment}]}]};
+  // 640 字，超过 qwenResultSchema 的 500 字引用上限：裁剪必须发生在 Schema 校验之前。
+  const comment='护理专业如何选题'.repeat(80),source=[{...input,snapshot:{...input.snapshot,comment}}],p={...prepareOutbound(source,true),requestPolicy:wholePostRequestPolicy};
+  const long={items:[{...result.items[0],id:'item1',reason:'说'.repeat(200),evidence:[{source:'COMMENT',quote:comment}]}]};
   const value=await requestQwen(qwenSettings(env),p,async()=>response({choices:[{finish_reason:'stop',message:{content:JSON.stringify(long)}}],usage:{prompt_tokens:10,completion_tokens:10}}));
   expect([...value.result.items[0].evidence[0].quote].length).toBe(120);
+  expect([...value.result.items[0].reason].length).toBe(120);
   const parsed=validateQwenEvidence(value.result,p,source,true);expect(comment.includes(parsed[0].evidence[0].quote)).toBe(true);
  });
  it('comment evidence tolerates the model normalizing unusual Unicode whitespace but still rejects forged text',()=>{
