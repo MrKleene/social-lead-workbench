@@ -296,7 +296,11 @@ function MatchingTab() {
         </Select>
       </FormField>
 
-      {!modelReady ? <Hint>模型未选择，不允许开启自动审核</Hint> : null}
+      {!modelReady ? (
+        <Hint>
+          {data?.model ? "模型请求未启用" : "未配置模型 Key"}
+        </Hint>
+      ) : null}
       {modelReady && current?.autoReview && !current.policyId ? (
         <Hint>未选择评论匹配规则</Hint>
       ) : null}

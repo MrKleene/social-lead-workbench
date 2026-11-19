@@ -3,17 +3,36 @@ const {LocalError,hash}=require('./database.cjs');
 const {LocalQueue}=require('./queue.cjs');
 const {LocalReview}=require('./review.cjs');
 const policy=require('@crm/local-runtime/policy');
+const MODEL_CONSENT='beijing-original-comments-v2';
 class LocalWorkflow {
  constructor(store,vault,{capabilities=()=>({review:false,collect:false,inbox:false,send:false})}={}){this.store=store;this.db=store.db;this.vault=vault;this.capabilities=capabilities;this.queue=new LocalQueue(store);}
  overview(){const automatic=new Set(new(require('./automatic-review.cjs').AutomaticReview)(this.store).enabled().map(a=>a.policyId));const model=this.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get();return {capabilities:this.capabilities(),model:model??null,choices:policy.qwenModelChoices(model?.model),policies:this.db.prepare('SELECT * FROM review_policies p WHERE NOT EXISTS(SELECT 1 FROM configurations c WHERE c.id=p.id AND c.archived=1) ORDER BY name,id').all().map(p=>({...p,autoEnabled:automatic.has(p.id)})),modelPaused:!!this.db.prepare("SELECT 1 FROM safety_state WHERE id='model' AND reason IS NOT NULL").get()};}
- saveModel({version,model,dailyLimit,priceAck,consent}){return this.store.transaction(()=>{
+ /** 模型审核授权不是用户动作：型号与价格版本由受控目录给出，用户只需要提供 Key。
+  *  这一方法把已有 Key 与当前目录对齐（补建、修复被旧版本吊销的行、同步价格版本），
+  *  只动 model_profile，不关用户已经开着的策略。 */
+ ensureModelAuthorization(){
+  const old=this.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get(),model=old&&policy.qwenModel(old.model)?old.model:policy.qwenModelChoices(null)[0].id,spec=policy.qwenModel(model);
+  let hasKey=false;try{hasKey=!!this.vault?.has('MODEL_KEY','qwen')&&!!this.vault.protector?.available();}catch{hasKey=false;}
+  if(!hasKey||!spec)return {authorized:false};
+  const priceAck=model+':'+spec.priceVersion;
+  if(old&&old.authorized===1&&old.consent===MODEL_CONSENT&&old.price_ack===priceAck&&old.model===model)return {authorized:true,changed:false};
+  this.store.transaction(()=>{
+   if(!old)this.db.prepare("INSERT INTO model_profile VALUES('qwen',?,1,1,NULL,?,?)").run(model,priceAck,MODEL_CONSENT);
+   else this.db.prepare("UPDATE model_profile SET model=?,authorized=1,consent=?,price_ack=? WHERE id='qwen'").run(model,MODEL_CONSENT,priceAck);
+   this.store.audit('RECOVERY','MODEL_AUTHORIZATION_DEFAULTED','qwen',{model,priceAck});
+  });
+  return {authorized:true,changed:true};
+ }
+ saveModel({version,model,dailyLimit=null}){return this.store.transaction(()=>{
   const old=this.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get(),spec=policy.qwenModel(model);
   if(!Number.isInteger(version)||version!==(old?.version??0))throw new LocalError('MODEL_CONFIGURATION_CHANGED');
-  if(!spec||!(dailyLimit===null||(Number.isInteger(dailyLimit)&&dailyLimit>=1&&dailyLimit<=100))||priceAck!==spec.priceAck||consent!=='beijing-original-comments-v2')throw new LocalError('MODEL_CONSENT_REQUIRED');
+  if(!spec)throw new LocalError('MODEL_NOT_SUPPORTED');
+  if(!(dailyLimit===null||(Number.isInteger(dailyLimit)&&dailyLimit>=1&&dailyLimit<=100)))throw new LocalError('INVALID_MODEL_DAILY_LIMIT');
   if(!this.vault?.has('MODEL_KEY','qwen')||!this.vault.protector.available())throw new LocalError('MODEL_KEY_UNAVAILABLE');
-  this.db.prepare("INSERT INTO model_profile VALUES('qwen',?,?,1,?,?,?) ON CONFLICT(id) DO UPDATE SET model=excluded.model,version=excluded.version,authorized=1,daily_limit=excluded.daily_limit,price_ack=excluded.price_ack,consent=excluded.consent").run(model,version+1,dailyLimit,priceAck,consent);
+  const priceAck=model+':'+spec.priceVersion;
+  this.db.prepare("INSERT INTO model_profile VALUES('qwen',?,?,1,?,?,?) ON CONFLICT(id) DO UPDATE SET model=excluded.model,version=excluded.version,authorized=1,daily_limit=excluded.daily_limit,price_ack=excluded.price_ack,consent=excluded.consent").run(model,version+1,dailyLimit,priceAck,MODEL_CONSENT);
   this.db.exec('UPDATE review_policies SET enabled=0,version=version+1; UPDATE contact_rules SET enabled=0,version=version+1,authorization_hash=NULL');
-  this.store.audit('LOCAL_USER','MODEL_CONFIGURATION_AUTHORIZED','qwen',{model,version:version+1,dailyLimit,priceAck,consent});return {version:version+1};
+  this.store.audit('LOCAL_USER','MODEL_CONFIGURATION_SAVED','qwen',{model,version:version+1,dailyLimit,priceAck,consent:MODEL_CONSENT});return {version:version+1};
  });}
  setPolicy({id,version,enabled,consent,modelVersion}){return this.store.transaction(()=>{
   const p=this.db.prepare('SELECT * FROM review_policies WHERE id=?').get(id),m=this.db.prepare("SELECT * FROM model_profile WHERE id='qwen'").get();

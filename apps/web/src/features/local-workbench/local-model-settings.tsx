@@ -19,7 +19,8 @@ import { useLocalWorkbench } from "./use-local-workbench";
 
 /**
  * 模型配置：只有两件事——选模型、存 API Key。
- * 一次保存先写密钥再写授权，避免「密钥没存但授权成功了」这种半状态。
+ * 审核授权随 Key 自动建立（型号与价格版本取自受控目录），不再要求用户二次确认。
+ * 一次保存先写密钥再写型号，避免「密钥没存但型号保存了」这种半状态。
  */
 export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }) {
   const client = useQueryClient();
@@ -52,9 +53,6 @@ export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }
       await save.mutateAsync({
         version: data?.model?.version ?? 0,
         model: selected.id,
-        dailyLimit: null,
-        priceAck: selected.id + ":" + selected.priceVersion,
-        consent: "beijing-original-comments-v2",
       });
       setKey("");
     } catch {
@@ -74,7 +72,7 @@ export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }
         </Alert>
       ) : null}
 
-      <form className="flex max-w-xl flex-col gap-3" onSubmit={submit}>
+      <form className="flex max-w-xl flex-col gap-4" onSubmit={submit}>
         <FormField label="模型选择">
           <Select value={selected?.id ?? ""} onValueChange={setModel}>
             <SelectTrigger aria-label="模型选择">
@@ -100,7 +98,7 @@ export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }
           />
         </FormField>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-4">
           <Button
             type="submit"
             pending={save.isPending || workbench.key.isPending}

@@ -24,7 +24,10 @@ function validateConfiguration(input){
  return {kind:input.kind,name:input.name.trim(),body:input.body};
 }
 class LocalService {
- constructor(store,vault,options={}){this.store=store;this.vault=vault;this.workflow=new LocalWorkflow(store,vault,options);this.accountService=options.accounts;this.evidence=options.evidence;this.diagnostic=options.diagnostic;this.automation=new (require('./automation.cjs').LocalAutomation)(store,{enabled:()=>!!this.workflow.capabilities().send});}
+ constructor(store,vault,options={}){this.store=store;this.vault=vault;this.workflow=new LocalWorkflow(store,vault,options);
+  // 有 Key 就有授权：启动时对齐一次，旧版本留下的 authorized=0 也不会把界面卡在灰色开关上。
+  try{this.workflow.ensureModelAuthorization();}catch{}
+  this.accountService=options.accounts;this.evidence=options.evidence;this.diagnostic=options.diagnostic;this.automation=new (require('./automation.cjs').LocalAutomation)(store,{enabled:()=>!!this.workflow.capabilities().send});}
  checkPostDiagnostic(input){if(!this.diagnostic)throw new LocalError('PLATFORM_COMPONENT_UNAVAILABLE');return this.diagnostic.check(input);}
  cancelPostDiagnostic(){return this.diagnostic?.cancel()??{requested:true};}
  previewRunReview(input){return new(require('./run-review.cjs').RunReview)(this.store).preview(input);}
@@ -128,10 +131,8 @@ class LocalService {
  unknownModelSubmissions(){return this.review().unknown();}
  discardModelSubmission(input){return this.review().discard(input);}
  saveModelKey({key}){if(typeof key!=='string'||! /^[\x21-\x7e]{16,512}$/.test(key))throw new LocalError('INVALID_MODEL_KEY');if(!this.vault)throw new LocalError('OS_CREDENTIAL_PROTECTION_UNAVAILABLE');
-  // Revoke before replacing the secret: an interrupted write must not leave old
-  // grants authorizing a different provider account/workspace.
-  this.store.transaction(()=>{this.store.db.exec('UPDATE model_profile SET authorized=0,version=version+1; UPDATE review_policies SET enabled=0,version=version+1; UPDATE contact_rules SET enabled=0,version=version+1,authorization_hash=NULL');this.store.audit('LOCAL_USER','MODEL_AUTHORIZATION_REVOKED_FOR_KEY_CHANGE','qwen');});
-  this.vault.put('MODEL_KEY','qwen',key);this.store.audit('LOCAL_USER','MODEL_KEY_SAVED','qwen');return {configured:true};}
+  // 写失败就什么都不变：旧 Key 与既有授权保持原样，不需要先吊销。
+  this.vault.put('MODEL_KEY','qwen',key);this.store.audit('LOCAL_USER','MODEL_KEY_SAVED','qwen');this.workflow.ensureModelAuthorization();return {configured:true};}
  jobs(){return this.store.db.prepare('SELECT id,kind,state,created_at,updated_at FROM jobs ORDER BY created_at DESC,id LIMIT 100').all();}
  accounts(){return this.store.db.prepare('SELECT id,platform,name,state,daily_limit FROM accounts ORDER BY name,id').all();}
  inboxAccounts(){return new LocalInbox(this.store).accounts();}
