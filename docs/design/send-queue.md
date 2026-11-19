@@ -13,7 +13,7 @@
 
 ## 冻结计划
 
-入队时把当时配置写进 `plan` JSON：规则 id 与版本、`policy_id`、阈值、渠道、来源、评论与帖子平台 id、收件人、渠道模板池、账号池和资格哈希。之后修改配置不会改动已入队行；派发时重新校验资格，失败转 `FAILED` / `ELIGIBILITY_CHANGED`，模板被删除则 `FAILED` / `TEMPLATE_CHANGED`。
+回复规则在开始采集时随本轮范围冻结；自动发送开关只决定入队后的状态，不影响是否冻结。入队时把当时配置写进 `plan` JSON：规则 id 与版本、`policy_id`、阈值、渠道、来源、评论与帖子平台 id、收件人、渠道模板池、账号池和资格哈希。之后修改配置不会改动已入队行；派发时重新校验资格，失败转 `FAILED` / `ELIGIBILITY_CHANGED`，模板被删除则 `FAILED` / `TEMPLATE_CHANGED`。
 
 ## 状态
 

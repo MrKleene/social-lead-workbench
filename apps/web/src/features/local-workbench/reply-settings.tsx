@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FormField } from "@/components/patterns/form-field";
 import { Input } from "@/components/ui/input";
-import { Switch, SwitchThumb } from "@/components/ui/switch";
 import {
   SELECT_EMPTY,
   Select,
@@ -27,7 +26,7 @@ const refreshTimes = Array.from({ length: 48 }, (_, index) => {
  * 自动回复配置：账号池、模板池、阈值和额度刷新时间。
  * 开关在「待处理发送」页头，这里不重复放。
  */
-export function ReplySettings({ showSwitch = false }: { showSwitch?: boolean }) {
+export function ReplySettings() {
   const configs = useLocalRecords("configurations");
   const steps = useLocalRecords("automationSteps");
   const accounts = useLocalRecords("accountDetails");
@@ -67,19 +66,6 @@ export function ReplySettings({ showSwitch = false }: { showSwitch?: boolean }) 
   return (
     <div className="flex flex-col gap-4">
       {error ? <ErrorNotice error={error} /> : null}
-
-      {showSwitch ? (
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-body font-medium">自动发送</span>
-          <Switch
-            checked={!!current?.autoReply}
-            onCheckedChange={(enabled) => persist({ autoReply: enabled })}
-            aria-label="自动发送"
-          >
-            <SwitchThumb />
-          </Switch>
-        </div>
-      ) : null}
 
       <FormField label="满足分数自动发送">
         <Input

@@ -10,7 +10,7 @@
 3. [MODULES.md](MODULES.md) — 逐模块职责、输入输出、关键约束、代码入口
 4. [IMPLEMENTATION-STATUS.md](IMPLEMENTATION-STATUS.md) — 当前实现范围与验证限制
 5. [ACCEPTANCE.md](ACCEPTANCE.md) — 本轮验收范围
-6. 按需：[three-step-automation.md](three-step-automation.md)（三步自动化、发送队列与统一设置）、
+6. 按需：[three-step-automation.md](three-step-automation.md)（采集、评论匹配、自动回复与发送队列）、
    [inbox-reception.md](inbox-reception.md)（接收消息）、
    [direct-messages.md](direct-messages.md)（私信发送与执行边界）、
    [DESKTOP-LOCAL.md](DESKTOP-LOCAL.md)（单人本地桌面版）

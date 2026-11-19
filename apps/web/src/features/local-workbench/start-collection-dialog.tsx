@@ -32,7 +32,7 @@ export function StartCollectionDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   credentialsAvailable: boolean;
-  /** `id` 是本轮 COLLECT 任务 id；`replySkipped` 是「本轮没带上的后续步骤」的原因，没有就传 null。 */
+  /** `id` 是本轮 COLLECT 任务 id；`replySkipped` 是「自动回复规则未加入本轮」的原因，没有就传 null。 */
   onStarted: (started: { id: string; replySkipped: string | null }) => void;
 }) {
   const client = useQueryClient();
@@ -93,11 +93,8 @@ export function StartCollectionDialog({
       replyAccounts: { id: string; version: number; dailyLimit: number }[];
       plans: { channel: "DM" | "COMMENT"; content: string; templateId: string; templateVersion: number }[];
     }) => {
-      // 采集与回复解耦：回复账号受限时只放弃本轮的自动回复，采集照常开始。
-      // 未选匹配规则属于配置缺失，仍然阻断——那不是「回复暂时发不出去」。
-      if (input.plans.length && !input.policyId) {
-        throw new Error("未选择评论匹配规则");
-      }
+      // 采集与自动回复解耦：回复配置缺失或账号受限时只跳过本轮冻结的回复规则，采集照常开始。
+      // 自动发送开关在「待处理发送」页头，不参与是否开始采集的判断。
       let ruleIds: string[] = [];
       let replySkipped: string | null = null;
       if (input.plans.length) {
@@ -208,7 +205,7 @@ export function StartCollectionDialog({
                 value={`${preferences.data.batchLimit} 篇`}
               />
               <ScopeRow
-                label="后续步骤"
+                label="本轮范围"
                 value={[
                   policy ? `评论匹配（${policy.name}）` : "仅采集",
                   plans.length
@@ -254,15 +251,15 @@ export function StartCollectionDialog({
   );
 }
 
-/** 本轮要用的回复模板：每个勾选的模板各一条，发送时从同一渠道的池子里随机取。 */
+/** 本轮要用的回复模板：每个勾选的模板各一条，发送时从同一渠道的池子里随机取。
+ *  自动发送开关只决定入队后的状态，不影响是否冻结本轮计划。 */
 function replyPlans(
   configs: LocalConfiguration[] | undefined,
   steps: AutomationSteps | undefined,
 ) {
-  if (!steps?.autoReply) return [];
   const pairs = [
-    ["COMMENT_TEMPLATE", steps.commentTemplateIds, "COMMENT"],
-    ["DM_TEMPLATE", steps.dmTemplateIds, "DM"],
+    ["COMMENT_TEMPLATE", steps?.commentTemplateIds ?? [], "COMMENT"],
+    ["DM_TEMPLATE", steps?.dmTemplateIds ?? [], "DM"],
   ] as const;
   return pairs.flatMap(([kind, ids, channel]) =>
     ids.flatMap((id) => {

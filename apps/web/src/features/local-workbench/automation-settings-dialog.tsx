@@ -24,31 +24,30 @@ import { Switch, SwitchThumb } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ErrorNotice } from "@/components/feedback";
 import { cn } from "@/lib/utils";
-import type { JourneyStage } from "@/features/work/journey-model";
 import { localApi, type LocalConfiguration } from "./local-api";
 import { LocalCollectionPanel } from "./local-collection";
 import { useLocalRecords } from "./use-local-records";
-import { ReplySettings } from "./reply-settings";
 
 /**
- * 「采集设置」弹窗：三步各自的开关与选择。
+ * 「采集设置」弹窗：采集与评论匹配两步的开关与选择。
  *
  * 布局照 shadcn-admin 的设置页：左边一列步骤（带状态），右边一张内容卡。
- * 三步是先后关系而不是并列分类，竖排比横向页签更能表达顺序，也能顺带显示每步配好没有。
+ * 两步是先后关系而不是并列分类，竖排比横向页签更能表达顺序，也能顺带显示每步配好没有。
+ *
+ * 自动回复不在采集设置里配置：账号池、模板池、阈值和额度刷新时间统一在
+ * 「配置管理 → 自动回复配置」，运行开关在「待处理发送」页头。
  *
  * 每组「必须配好才能开始」的东西：
  * - 采集：关键词组
  * - 评论匹配：开自动审核就必须选一个评论匹配规则
- * - 自动回复：开自动回复就必须选至少一个回复账号 + 该账号要用的模板
  */
-export type AutomationSettingsTab = JourneyStage;
+export type AutomationSettingsTab = "collect" | "review";
 
-const order: AutomationSettingsTab[] = ["collect", "review", "contact"];
+const order: AutomationSettingsTab[] = ["collect", "review"];
 
 const labels: Record<AutomationSettingsTab, string> = {
   collect: "采集",
   review: "评论匹配",
-  contact: "自动回复",
 };
 
 /** 每个步骤对应的全局配置页与入口文案——放页脚左侧，和主按钮分开。
@@ -59,11 +58,6 @@ const manage: Record<AutomationSettingsTab, { to: string; label: string }[]> = {
     { to: "/work/accounts", label: "管理账号" },
   ],
   review: [{ to: "/configuration?tab=matching", label: "管理评论匹配规则" }],
-  contact: [
-    { to: "/configuration?tab=templates", label: "管理回复模板" },
-    // 日额度是账号属性，只能在账号中心改；这里只读展示。
-    { to: "/work/accounts", label: "管理账号" },
-  ],
 };
 
 export function AutomationSettingsDialog({
@@ -91,13 +85,6 @@ export function AutomationSettingsDialog({
     review: !steps.data?.autoReview
       ? "已关闭"
       : steps.data.policyId
-        ? "已配置"
-        : "未配置",
-    contact: !steps.data?.autoReply
-      ? "已关闭"
-      : (steps.data.replyAccountIds.length > 0 &&
-          (steps.data.commentTemplateIds.length > 0 ||
-            steps.data.dmTemplateIds.length > 0))
         ? "已配置"
         : "未配置",
   };
@@ -146,10 +133,8 @@ export function AutomationSettingsDialog({
           <div className="max-h-[60vh] min-h-80 min-w-0 flex-1 overflow-y-auto rounded-lg border bg-card p-6">
             {tab === "collect" ? (
               <CollectTab credentialsAvailable={credentialsAvailable} />
-            ) : tab === "review" ? (
-              <MatchingTab />
             ) : (
-              <ReplySettings showSwitch />
+              <MatchingTab />
             )}
           </div>
         </div>

@@ -53,7 +53,12 @@ export function JourneyStepper({
   return (
     <div className="flex min-w-0 flex-col">
       <nav aria-label="任务步骤">
-        <ol className="mb-1.5 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-8">
+        <ol
+          className={cn(
+            "mb-1.5 grid grid-cols-1 gap-4 sm:gap-8",
+            steps.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3",
+          )}
+        >
           {steps.map((step, index) => {
             const Icon =
               step.state === "complete"

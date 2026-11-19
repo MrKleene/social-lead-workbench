@@ -197,7 +197,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 切换页签保留草稿，关闭需确认丢弃；保存失败保留该组草稿并报错
 - 启动校验只要求已开启阶段的必要条件；读取失败不能误判为"开关关闭"
 - 采集操作区只保留"开始采集"和"采集设置"，不重复配置
-- 自动回复配置维护自动发送阈值、额度刷新时间（默认 00:00）、回复账号池、评论模板池与私信模板池；采集设置弹窗不再单独保存回复账号与模板
+- 自动回复配置维护自动发送阈值、额度刷新时间（默认 00:00）、回复账号池、评论模板池与私信模板池；采集设置弹窗只保留采集、评论匹配两步，不再单独保存回复账号与模板
 
 **代码**：`apps/web/src/features/local-workbench/local-configurations.tsx`、`reply-settings.tsx`；页面 `/configuration`、`/configuration?tab=reply`；
 后端 `ModelSettings`、`CommentReviewPolicy`、`ReplyTemplate`
@@ -259,7 +259,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 | --- | --- | --- |
 | `/` | `LocalOverview` 仪表盘；未初始化时显示首次使用引导 | 9 任务进度显示（首屏聚合） |
 | `/welcome` | 使用引导，可从侧栏底部菜单重新打开 | 本地初始化不授予平台或模型执行权限 |
-| `/automation` | `LocalTaskPage` | 1 / 2 / 3 三步自动化 |
+| `/automation` | `LocalTaskPage` | 1 采集 + 2 评论匹配；自动回复在待处理发送 |
 | `/comment-review` | `LocalHistory` | 2 评论匹配（历史与审核） |
 | `/auto-contact` | `LocalAutomation` | 3 自动回复 |
 | `/auto-contact/pending` | `LocalPending` | 4 待处理发送 |
