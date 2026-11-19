@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -30,10 +31,10 @@ import {
 import { EmptyState } from "@/components/patterns/empty-state";
 import { FormField } from "@/components/patterns/form-field";
 import { PageHeader } from "@/components/patterns/page-header";
+import { RecordList } from "@/components/patterns/record-list";
 import { SectionCard } from "@/components/patterns/section-card";
 import { useDraftGuard } from "@/features/work/draft-guard";
 import { ErrorNotice } from "@/components/feedback";
-import { cn } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LocalLoginPanel } from "./local-platform";
 import { useLocalAction, useLocalRecords } from "./use-local-records";
@@ -79,55 +80,62 @@ const nextStepLabel: Record<string, string> = {
 
 const channelLabel: Record<string, string> = { COMMENT: "评论回复", DM: "私信" };
 
-/** 卡片只放基础信息；完整字段与操作在详情抽屉里。
- *
- *  `Card asChild` 把卡片样式落到真正的 `<button>` 上——整张卡可点，且键盘 Tab / Enter /
- *  焦点环都是原生行为，不用给 div 补 role 与 keydown。
- */
-function AccountCard({
+/** 一行只放管理时需要扫读的字段；完整字段与操作在详情抽屉里。 */
+function AccountRow({
   account,
   onOpen,
 }: {
   account: AccountDetails;
   onOpen: () => void;
 }) {
-  const restricted = account.state === "RESTRICTED";
+  const restricted =
+    account.state === "RESTRICTED" || account.holds.length > 0;
   const title = account.nickname ?? account.name;
+  const quota =
+    restricted || account.todayLimit === 0
+      ? "今日不可发送"
+      : `今日额度 ${account.occupied}/${account.todayLimit}`;
   return (
-    <Card asChild className="transition-colors hover:bg-accent">
+    <li>
       <button
         type="button"
         onClick={onOpen}
-        className="text-start outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="group flex w-full items-center gap-3 py-4 text-start outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
-        <CardContent className="flex items-center gap-3">
-          <Avatar className="size-10">
-            {account.avatar_url ? (
-              <AvatarImage src={account.avatar_url} alt="" />
-            ) : null}
-            <AvatarFallback className="text-caption">
-              {title.slice(0, 1)}
-            </AvatarFallback>
-          </Avatar>
-          <span className="flex min-w-0 flex-col gap-1">
-            <span className="text-section font-semibold break-words">
-              {title}
-            </span>
-            <span
-              className={cn(
-                "text-caption break-words",
-                restricted ? "text-attention" : "text-muted-foreground",
-              )}
+        <Avatar className="size-10 shrink-0">
+          {account.avatar_url ? (
+            <AvatarImage src={account.avatar_url} alt="" />
+          ) : null}
+          <AvatarFallback className="text-caption">
+            {title.slice(0, 1)}
+          </AvatarFallback>
+        </Avatar>
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="text-body font-medium break-words">{title}</span>
+          <span className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
+            <Badge
+              variant={
+                restricted
+                  ? "destructive"
+                  : account.hasSession
+                    ? "success"
+                    : "outline"
+              }
             >
-              {restricted ? "账号受限 · " : ""}
-              {account.hasSession ? "本机已登录" : "待重新登录"}
-              {" · 今日 "}
-              {account.occupied}/{account.todayLimit}
-            </span>
+              {restricted ? "受限" : account.hasSession ? "已登录" : "待重新登录"}
+            </Badge>
+            {account.nickname ? (
+              <span className="break-words">本地名称 {account.name}</span>
+            ) : null}
+            <span className="break-words">{quota}</span>
           </span>
-        </CardContent>
+        </span>
+        <ChevronRight
+          className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+          aria-hidden="true"
+        />
       </button>
-    </Card>
+    </li>
   );
 }
 
@@ -212,11 +220,25 @@ function AccountEditor({
   );
 }
 
+function AccountSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-3 border-t pt-5">
+      <h3 className="text-body font-medium">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
 /**
- * 账号中心：页头一个「添加账号」，账号以卡片网格排列，点卡片开详情抽屉。
+ * 账号中心：页头汇总账号数据，列表一行一个账号，点行开详情抽屉。
  *
- * 卡片只放基础信息（名称、会话状态、今日额度）；完整字段与编辑/断开/删除都在抽屉里，
- * 十几个账号时主列表也不会变成一屏长列表。
+ * 列表只放管理时需要扫读的字段（身份、登录状态、风险、今日额度）；完整字段与操作都在抽屉里。
  */
 export function LocalAccountPage() {
   const client = useQueryClient();
@@ -238,19 +260,37 @@ export function LocalAccountPage() {
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   const accounts = data.data ?? [];
+  const signedIn = accounts.filter((item) => item.hasSession).length;
+  const restrictedAccounts = accounts.filter(
+    (item) => item.state === "RESTRICTED" || item.holds.length > 0,
+  ).length;
+  const usedToday = accounts.reduce((total, item) => total + item.occupied, 0);
+  const limitToday = accounts.reduce(
+    (total, item) => total + item.todayLimit,
+    0,
+  );
+  const description = data.data
+    ? accounts.length
+      ? `${accounts.length} 个账号 · 已登录 ${signedIn} · 今日已用 ${usedToday}/${limitToday}${restrictedAccounts ? ` · ${restrictedAccounts} 个受限` : ""}`
+      : "还没有账号"
+    : undefined;
   // 暂停解除后提示一并收起，避免旧结论挂在页面上。
   useEffect(() => {
     if (!status.data?.platformPause) setPauseNote(null);
   }, [status.data?.platformPause]);
   // 从列表里现取：账号被删或数据刷新后抽屉自动失效，不会停在旧快照上。
   const selected = accounts.find((item) => item.id === detailId) ?? null;
+  const selectedRestricted = selected
+    ? selected.state === "RESTRICTED" || selected.holds.length > 0
+    : false;
   // 抽屉里要讲清「为什么不能发 + 下一步」，这份判定由运行时按三档给出。
   const diagnostics = useLocalRecords(
     "accountDiagnostics",
     { accountId: selected?.id ?? "" },
     { enabled: !!selected, refetchInterval: 15000 },
   );
-  const failure = data.error ?? disconnect.error ?? remove.error;
+  const failure = data.error;
+  const accountFailure = disconnect.error ?? remove.error;
   const credentialsAvailable = !!status.data?.credentialsAvailable;
   const checkable = accounts.some((item) => item.hasSession);
 
@@ -316,6 +356,7 @@ export function LocalAccountPage() {
     <>
       <PageHeader
         title="账号中心"
+        description={description}
         actions={
           <>
             <Button
@@ -335,7 +376,7 @@ export function LocalAccountPage() {
                 ? sweep
                   ? `停止检查 ${sweep.done}/${sweep.total}`
                   : "停止检查"
-                : "全部检查"}
+                : "检查全部账号"}
             </Button>
             <Button disabled={sweepAll.isPending} onClick={() => setLoginFor("")}>
               添加账号
@@ -409,19 +450,21 @@ export function LocalAccountPage() {
       {failure ? <ErrorNotice error={failure} /> : null}
 
       {accounts.length ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {accounts.map((account) => (
-            <AccountCard
-              key={account.id}
-              account={account}
-              onOpen={() => {
-                setEditing(false);
-                setCheckNote(null);
-                setDetailId(account.id);
-              }}
-            />
-          ))}
-        </div>
+        <SectionCard>
+          <RecordList label="账号列表">
+            {accounts.map((account) => (
+              <AccountRow
+                key={account.id}
+                account={account}
+                onOpen={() => {
+                  setEditing(false);
+                  setCheckNote(null);
+                  setDetailId(account.id);
+                }}
+              />
+            ))}
+          </RecordList>
+        </SectionCard>
       ) : (
         <SectionCard>
           <EmptyState
@@ -461,77 +504,153 @@ export function LocalAccountPage() {
         onOpenChange={(open) => {
           if (!open) closeDetail();
         }}
-        title={selected ? (selected.nickname ?? selected.name) : ""}
+        title="账号详情"
       >
         {selected ? (
           <>
-            <DetailList>
-              {selected.nickname ? (
-                <DetailItem label="平台昵称">{selected.nickname}</DetailItem>
-              ) : null}
-              {selected.nickname ? (
-                <DetailItem label="本地名称">{selected.name}</DetailItem>
-              ) : null}
-              <DetailItem label="平台账号 ID">
-                {selected.platform_user_id ?? "尚未取得可靠身份"}
-              </DetailItem>
-              <DetailItem label="本机登录">
-                {selected.hasSession
-                  ? "已登录；执行前再次核验"
-                  : "未登录"}
-              </DetailItem>
-              <DetailItem label="今日额度（北京时间）">
-                {selected.occupied} / {selected.todayLimit} · {selected.day}
-              </DetailItem>
-              <DetailItem label="默认每日上限">
-                {selected.daily_limit}
-              </DetailItem>
-              <DetailItem label="能不能发">
-                {diagnostics.data ? (
-                  diagnostics.data.channels.map((channel) => (
-                    <p key={channel.channel} className="break-words">
-                      {channelLabel[channel.channel] ?? channel.channel} ·{" "}
-                      {channel.verdict ? (
-                        <>
-                          {verdictLabel[channel.verdict.level]}
-                          {" · "}
-                          {holdLabels[channel.verdict.reason] ??
-                            reasonLabel[channel.verdict.reason] ??
-                            channel.verdict.reason}
-                          {" · "}
-                          {nextStepLabel[channel.verdict.nextStep] ??
-                            channel.verdict.nextStep}
-                        </>
-                      ) : (
-                        "可以发送"
-                      )}
-                    </p>
-                  ))
-                ) : (
-                  <p>{diagnostics.isPending ? "正在读取…" : "未读取"}</p>
-                )}
-                {diagnostics.data?.poolStopped ? (
-                  <p>
-                    今天已有 {diagnostics.data.poolRestrictedToday}{" "}
-                    个账号被限制，本轮剩余回复转入待处理。
+            <div className="flex items-center gap-3">
+              <Avatar className="size-12 shrink-0">
+                {selected.avatar_url ? (
+                  <AvatarImage src={selected.avatar_url} alt="" />
+                ) : null}
+                <AvatarFallback className="text-body font-medium">
+                  {(selected.nickname ?? selected.name).slice(0, 1)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="text-section font-semibold break-words">
+                  {selected.nickname ?? selected.name}
+                </p>
+                {selected.nickname ? (
+                  <p className="text-caption text-muted-foreground break-words">
+                    本地名称 {selected.name}
                   </p>
                 ) : null}
-              </DetailItem>
-              <DetailItem label="风险记录">
-                {selected.holds.length ? (
-                  selected.holds.map((hold) => (
-                    <p key={hold.reason + String(hold.channel)}>
-                      {hold.channel ?? "全部渠道"} ·{" "}
-                      {holdLabels[hold.reason] ?? hold.reason}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge
+                variant={
+                  selectedRestricted
+                    ? "destructive"
+                    : selected.hasSession
+                      ? "success"
+                      : "outline"
+                }
+              >
+                {selectedRestricted
+                  ? "受限"
+                  : selected.hasSession
+                    ? "已登录"
+                    : "待重新登录"}
+              </Badge>
+              {selected.holds.length ? (
+                <Badge variant="warning">
+                  {selected.holds.length} 条风险记录
+                </Badge>
+              ) : null}
+              <Badge variant="outline">
+                {selected.todayLimit === 0
+                  ? "今日不可发送"
+                  : `今日额度 ${selected.occupied}/${selected.todayLimit}`}
+              </Badge>
+            </div>
+
+            {accountFailure ? <ErrorNotice error={accountFailure} /> : null}
+
+            <AccountSection title="身份">
+              <DetailList>
+                {selected.nickname ? (
+                  <DetailItem label="平台昵称">{selected.nickname}</DetailItem>
+                ) : null}
+                <DetailItem label="本地名称">{selected.name}</DetailItem>
+                <DetailItem label="平台账号 ID">
+                  {selected.platform_user_id ?? "尚未取得可靠身份"}
+                </DetailItem>
+              </DetailList>
+            </AccountSection>
+
+            <AccountSection title="额度">
+              <DetailList>
+                <DetailItem label="今日额度（北京时间）">
+                  {selected.todayLimit === 0
+                    ? "今日不可发送"
+                    : `${selected.occupied} / ${selected.todayLimit}`}{" "}
+                  · {selected.day}
+                </DetailItem>
+                <DetailItem label="默认每日上限">
+                  {selected.daily_limit}
+                </DetailItem>
+                {selected.todayOverride !== null ? (
+                  <DetailItem label="仅今日上限">
+                    {selected.todayOverride}
+                  </DetailItem>
+                ) : null}
+              </DetailList>
+            </AccountSection>
+
+            <AccountSection title="发送资格">
+              <DetailList>
+                <DetailItem label="本机登录">
+                  {selected.hasSession ? "已登录" : "未登录"}
+                </DetailItem>
+                <DetailItem label="能不能发">
+                  {diagnostics.data ? (
+                    diagnostics.data.channels.map((channel) => (
+                      <p key={channel.channel} className="break-words">
+                        {channelLabel[channel.channel] ?? channel.channel} ·{" "}
+                        {channel.verdict ? (
+                          <>
+                            {verdictLabel[channel.verdict.level]}
+                            {" · "}
+                            {holdLabels[channel.verdict.reason] ??
+                              reasonLabel[channel.verdict.reason] ??
+                              channel.verdict.reason}
+                            {" · "}
+                            {nextStepLabel[channel.verdict.nextStep] ??
+                              channel.verdict.nextStep}
+                          </>
+                        ) : (
+                          "可以发送"
+                        )}
+                      </p>
+                    ))
+                  ) : (
+                    <p>{diagnostics.isPending ? "正在读取…" : "未读取"}</p>
+                  )}
+                  {diagnostics.data?.poolStopped ? (
+                    <p>
+                      今日已限制 {diagnostics.data.poolRestrictedToday}{" "}
+                      个账号 · 剩余回复已转入待处理
                     </p>
-                  ))
-                ) : selected.state === "RESTRICTED" ? (
-                  "账号受限，登录不能解除限制"
-                ) : (
-                  "暂无独立风险记录；不代表平台允许发送。"
-                )}
-              </DetailItem>
-            </DetailList>
+                  ) : null}
+                </DetailItem>
+                {diagnostics.data ? (
+                  <DetailItem label="最近检查">
+                    {new Date(diagnostics.data.checkedAt).toLocaleString()}
+                  </DetailItem>
+                ) : null}
+              </DetailList>
+            </AccountSection>
+
+            <AccountSection title="风险记录">
+              {selected.holds.length ? (
+                selected.holds.map((hold) => (
+                  <p
+                    key={hold.reason + String(hold.channel)}
+                    className="text-body leading-relaxed break-words"
+                  >
+                    {hold.channel ?? "全部渠道"} ·{" "}
+                    {holdLabels[hold.reason] ?? hold.reason}
+                  </p>
+                ))
+              ) : (
+                <p className="text-body leading-relaxed text-muted-foreground">
+                  {selected.state === "RESTRICTED" ? "账号受限" : "无风险记录"}
+                </p>
+              )}
+            </AccountSection>
 
             {editing ? (
               <AccountEditor
@@ -539,113 +658,124 @@ export function LocalAccountPage() {
                 account={selected}
                 onClose={() => setEditing(false)}
               />
-            ) : null}
-
-            {checkNote ? (
-              <p role="status" className="text-body text-muted-foreground break-words">
-                {checkNote}
-              </p>
-            ) : null}
-            {check.error ? <ErrorNotice error={check.error} /> : null}
-
-            <div className="flex flex-wrap gap-3 border-t pt-4">
-              <Button
-                variant="outline"
-                disabled={sweepAll.isPending}
-                onClick={() => setLoginFor(selected.id)}
-              >
-                重新登录
-              </Button>
-              <Button
-                variant="outline"
-                pending={check.isPending}
-                disabled={!selected.hasSession || sweepAll.isPending}
-                onClick={() =>
-                  check.mutate(
-                    { id: selected.id },
-                    {
-                      onSuccess: (result) =>
-                        setCheckNote(
-                          result.restricted
-                            ? `已记录回复限制 · ${holdLabels[result.reason ?? ""] ?? result.reason}`
-                            : result.released
-                              ? `未发现回复限制提示 · 已解除 ${result.released} 条风险记录`
-                              : "未发现回复限制提示",
-                        ),
-                    },
-                  )
-                }
-              >
-                重新检查回复权限
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setEditing((value) => !value)}
-              >
-                {editing ? "取消编辑" : "编辑账号设置"}
-              </Button>
-
-              <AlertDialog
-                open={confirmDisconnect}
-                onOpenChange={setConfirmDisconnect}
-              >
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" disabled={!selected.hasSession}>
-                    退出本机登录
+            ) : (
+              <>
+                {checkNote ? (
+                  <p
+                    role="status"
+                    className="text-body text-muted-foreground break-words"
+                  >
+                    {checkNote}
+                  </p>
+                ) : null}
+                {check.error ? <ErrorNotice error={check.error} /> : null}
+                <div className="flex flex-wrap gap-3 border-t pt-5">
+                  <Button
+                    variant="outline"
+                    disabled={sweepAll.isPending}
+                    onClick={() => setLoginFor(selected.id)}
+                  >
+                    重新登录
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>退出本机登录</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      退出后需要重新扫码才能继续使用该账号，引用该账号的自动回复规则会被停用。
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>取消</AlertDialogCancel>
-                    <AlertDialogAction
-                      variant="destructive"
-                      onClick={() =>
-                        disconnect.mutate(
-                          { id: selected.id, revision: selected.revision },
-                          { onSuccess: () => setConfirmDisconnect(false) },
-                        )
-                      }
-                    >
-                      退出登录
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                  <Button
+                    variant="outline"
+                    pending={check.isPending}
+                    disabled={!selected.hasSession || sweepAll.isPending}
+                    onClick={() =>
+                      check.mutate(
+                        { id: selected.id },
+                        {
+                          onSuccess: (result) =>
+                            setCheckNote(
+                              result.restricted
+                                ? `已记录回复限制 · ${holdLabels[result.reason ?? ""] ?? result.reason}`
+                                : result.released
+                                  ? `未发现回复限制提示 · 已解除 ${result.released} 条风险记录`
+                                  : "未发现回复限制提示",
+                            ),
+                        },
+                      )
+                    }
+                  >
+                    重新检查回复权限
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setEditing(true)}
+                  >
+                    编辑账号设置
+                  </Button>
+                </div>
+              </>
+            )}
 
-              <AlertDialog open={confirmRemove} onOpenChange={setConfirmRemove}>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive">删除账号</Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>删除账号</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      删除后该账号从列表移除，发送与收件记录保留。
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>保留账号</AlertDialogCancel>
-                    <AlertDialogAction
-                      variant="destructive"
-                      onClick={() =>
-                        remove.mutate(
-                          { id: selected.id, revision: selected.revision },
-                          { onSuccess: closeDetail },
-                        )
-                      }
-                    >
-                      确认删除
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
+            <AccountSection title="危险操作">
+              <div className="flex flex-wrap gap-3">
+                <AlertDialog
+                  open={confirmDisconnect}
+                  onOpenChange={setConfirmDisconnect}
+                >
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" disabled={!selected.hasSession}>
+                      退出本机登录
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>退出本机登录</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        退出后需要重新扫码才能继续使用该账号，引用该账号的自动回复规则会被停用。
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>取消</AlertDialogCancel>
+                      <AlertDialogAction
+                        variant="destructive"
+                        onClick={() =>
+                          disconnect.mutate(
+                            { id: selected.id, revision: selected.revision },
+                            { onSuccess: () => setConfirmDisconnect(false) },
+                          )
+                        }
+                      >
+                        退出登录
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog
+                  open={confirmRemove}
+                  onOpenChange={setConfirmRemove}
+                >
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">删除账号</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>删除账号</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        删除后该账号从列表移除，发送与收件记录保留。
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>保留账号</AlertDialogCancel>
+                      <AlertDialogAction
+                        variant="destructive"
+                        onClick={() =>
+                          remove.mutate(
+                            { id: selected.id, revision: selected.revision },
+                            { onSuccess: closeDetail },
+                          )
+                        }
+                      >
+                        确认删除
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </AccountSection>
           </>
         ) : null}
       </DetailSheet>
