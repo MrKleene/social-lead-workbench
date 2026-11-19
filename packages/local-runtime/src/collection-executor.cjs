@@ -13,8 +13,8 @@ class LocalCollectionExecutor {
   const job=this.queue.current(lease);if(signal.aborted||job.kind!=='COLLECT'||job.dispatch_started||job.cancel_requested||hash(scope)!==job.payload_hash)throw new LocalError('COLLECTION_AUTHORIZATION_REQUIRED');
   if(this.store.db.prepare("SELECT 1 FROM safety_state WHERE id='platform' AND reason IS NOT NULL").get())throw new LocalError('PLATFORM_PROCESS_RECONCILIATION_REQUIRED');
   if(!this.runtime.available('COLLECT'))throw new LocalError('PLATFORM_COMPONENT_UNAVAILABLE');
-  const a=this.store.db.prepare("SELECT * FROM accounts WHERE id=? AND revision=? AND state='VERIFIED'").get(scope.accountId,scope.accountRevision);
-  if(!a?.session_ref||!this.vault.has('PLATFORM_SESSION',a.session_ref))throw new LocalError('PLATFORM_SESSION_UNAVAILABLE');
+  const a=require('./account-safety.cjs').assertCollectAccount(this.store,scope.accountId,scope.accountRevision);
+  if(!this.vault.has('PLATFORM_SESSION',a.session_ref))throw new LocalError('PLATFORM_SESSION_UNAVAILABLE');
  }
  async execute(scope,signal,{lease}){
   const runId=this.collection.start(lease),references=new Map();let session,adapter;

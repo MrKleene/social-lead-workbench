@@ -23,7 +23,7 @@ const {DesktopPlatformRuntime}=require('./platform-runtime.cjs');
 const {LocalModelExecutor}=require('@crm/local-runtime/model-executor');
 const os=require('node:os');
 protocol.registerSchemesAsPrivileged([{scheme:'workbench',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
-const root=path.resolve(__dirname,'../../..');let window,store,service,runner,accounts,ticker,smokeDirectory,closing=false,operations=Promise.resolve();
+const root=path.resolve(__dirname,'../../..');let window,store,service,runner,accounts,ticker,smokeDirectory,closing=false,pendingSends=0,forceClose=false,operations=Promise.resolve();
 // Separate app identity/data from the existing production workbench.
 app.setName('SocialLeadDesktop');
 function privateDirectory(p){
@@ -31,6 +31,12 @@ function privateDirectory(p){
   windowsNative(app,{operation:'directory',path:p,create:true});
  }else{if(!fs.existsSync(p))fs.mkdirSync(p,{mode:0o700});const s=fs.lstatSync(p);if(!s.isDirectory()||s.isSymbolicLink()||s.uid!==process.getuid()||(s.mode&0o077))throw Error('PRIVATE_DATA_DIRECTORY_REQUIRED');}
  return fs.realpathSync(p);
+}
+function confirmPendingSends(){
+ if(forceClose||closing||pendingSends<1)return true;
+ const choice=dialog.showMessageBoxSync(window,{type:'warning',buttons:['取消发送并关闭','继续发送'],defaultId:1,cancelId:1,noLink:true,title:'还有消息未发送',message:`关闭应用将取消 ${pendingSends} 条未发送消息。`});
+ if(choice!==0)return false;
+ forceClose=true;pendingSends=0;return true;
 }
 async function main(){
  if(!['darwin','win32'].includes(process.platform))throw Error('UNSUPPORTED_DESKTOP_PLATFORM');
@@ -82,7 +88,7 @@ async function main(){
  let saved=null;try{const s=JSON.parse(fs.readFileSync(statePath,'utf8'));if(Number.isInteger(s.width)&&Number.isInteger(s.height))saved=s;}catch{}
  const width=Math.max(960,Math.min(saved?saved.width:1440,area.width-40)),height=Math.max(600,Math.min(saved?saved.height:900,area.height-40));
  window=new BrowserWindow({width,height,minWidth:320,minHeight:520,center:true,show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:!app.isPackaged}});
- window.on('close',()=>{if(window.isMinimized()||window.isMaximized()||window.isFullScreen())return;const b=window.getBounds();try{fs.writeFileSync(statePath,JSON.stringify({width:b.width,height:b.height}),{mode:0o600});}catch{}});
+ window.on('close',event=>{if(!(window.isMinimized()||window.isMaximized()||window.isFullScreen())){const b=window.getBounds();try{fs.writeFileSync(statePath,JSON.stringify({width:b.width,height:b.height}),{mode:0o600});}catch{}}if(!confirmPendingSends())event.preventDefault();});
  window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,value)=>{const u=new URL(value);const allowed=devOrigin?u.origin===devOrigin:(u.protocol==='workbench:'&&u.hostname==='app'&&!u.port&&!u.username&&!u.password);if(!allowed)event.preventDefault();});
  window.webContents.session.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
  window.webContents.session.setPermissionCheckHandler(()=>false);
@@ -90,6 +96,7 @@ async function main(){
  window.webContents.session.on('will-download',event=>event.preventDefault());
  ipcMain.handle('workbench:call',async(event,method,input)=>{
   try{validateCall(event,window,method,input,devOrigin);if(closing)throw Error('APP_CLOSING');
+   if(method==='reportPendingSends'){pendingSends=Math.max(0,Math.min(999,Number(input?.count)||0));return {ok:true,data:{count:pendingSends}};}
    if(method==='cancelPostDiagnostic')return {ok:true,data:service.cancelPostDiagnostic()};
    if(method==='cancelEvidence')return {ok:true,data:service.cancelEvidence()};
    if(method==='cancelLogin')return {ok:true,data:await service.cancelLogin(input)};
@@ -109,5 +116,5 @@ async function main(){
 }
 app.on('window-all-closed',()=>app.quit());
 app.on('quit',()=>{if(smokeDirectory)fs.rmSync(smokeDirectory,{recursive:true,force:true});});
-app.on('before-quit',event=>{if(closing||!store)return;event.preventDefault();closing=true;clearInterval(ticker);service?.cancelEvidence();service?.cancelPostDiagnostic();void Promise.allSettled([operations,accounts?.close()]).then(async()=>{await runner?.stop();store.close();store=null;if(smokeDirectory)fs.rmSync(smokeDirectory,{recursive:true,force:true});app.quit();});});
+app.on('before-quit',event=>{if(!confirmPendingSends()){event.preventDefault();return;}if(closing||!store)return;event.preventDefault();closing=true;clearInterval(ticker);service?.cancelEvidence();service?.cancelPostDiagnostic();void Promise.allSettled([operations,accounts?.close()]).then(async()=>{await runner?.stop();store.close();store=null;if(smokeDirectory)fs.rmSync(smokeDirectory,{recursive:true,force:true});app.quit();});});
 main().catch(error=>{console.error('DESKTOP_START_FAILED',error?.stack||error);if(smokeDirectory){console.error('DESKTOP_SELF_TEST_FAILED');app.quit();return;}if(process.argv.includes('--test-fixture')){app.quit();return;}dialog.showErrorBox('工作台启动失败','本地数据目录、数据库或系统凭据保护不可用。没有连接或修改原工作台数据。');app.quit();});

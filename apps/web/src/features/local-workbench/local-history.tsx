@@ -178,7 +178,7 @@ export function LocalHistory({
               <RecordItem
                 key={thread.account_id + ":" + thread.sender_id}
                 title={thread.sender_name || "未命名用户"}
-                meta={`${thread.account_name}${thread.unread ? ` · ${thread.unread} 条未读` : ""}`}
+                meta={`${thread.direction === "OUT" ? "已发送" : "收到"} · ${new Date(thread.received_at).toLocaleString()}${thread.unread ? ` · ${thread.unread} 条未读` : ""}`}
                 action={
                   <Button
                     variant="outline"

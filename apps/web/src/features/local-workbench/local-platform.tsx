@@ -232,106 +232,62 @@ export function LocalLoginPanel({
 }
 
 export function LocalReceivePanel({
+  accountId,
   credentialsAvailable,
+  onFetched,
 }: {
+  accountId: string;
   credentialsAvailable: boolean;
+  onFetched?: () => void;
 }) {
   const platform = useLocalPlatform();
-  const [receiverId, setReceiverId] = useState("");
-  const [inboxConsent, setInboxConsent] = useState(false);
+  const [consent, setConsent] = useState(false);
   const ready = platform.accounts.data?.runtime.ready && credentialsAvailable;
 
   return (
     <div className="flex flex-col gap-3">
-      {platform.error ? (
-        <ErrorNotice error={platform.error} />
-      ) : null}
+      {platform.error ? <ErrorNotice error={platform.error} /> : null}
       {platform.notice ? (
         <p role="status" className="text-body text-muted-foreground">
           {platform.notice}
         </p>
       ) : null}
 
-      <h3 className="text-section font-semibold">限时接收消息</h3>
-
-      <FormField label="收件账号">
-        <Select
-          value={receiverId}
-          onValueChange={(value) => {
-          setReceiverId(value);
-          platform.setInboxPlan(null);
-          setInboxConsent(false);
-          }}
-        >
-          <SelectTrigger aria-label="收件账号">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={SELECT_EMPTY}>选择已登录账号</SelectItem>
-            {platform.accounts.data?.accounts
-            .filter((item) => item.state === "VERIFIED" && item.hasSession)
-            .map((item) => (
-            <SelectItem key={item.id} value={item.id}>
-            {item.name}
-            </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </FormField>
-
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           variant="outline"
-          disabled={!ready || !receiverId}
+          disabled={!ready || !accountId}
           pending={platform.previewInbox.isPending}
-          onClick={() => platform.previewInbox.mutate(receiverId)}
+          onClick={() => platform.previewInbox.mutate(accountId)}
         >
-          预览收件授权
+          获取消息
         </Button>
       </div>
 
       {platform.inboxPlan ? (
         <div className="flex flex-col gap-3 border-t pt-4">
           <p className="text-body leading-relaxed text-muted-foreground break-words">
-            {platform.inboxPlan.accountName} · 最长 {platform.inboxPlan.minutes}{" "}
-            分钟。历史记录可能不完整，平台消息可能被标记为已读。
+            {platform.inboxPlan.accountName}
           </p>
-          <CheckboxField
-            checked={inboxConsent}
-            onCheckedChange={setInboxConsent}
-          >
+          <CheckboxField checked={consent} onCheckedChange={setConsent}>
             允许读取消息（含已读状态）。
           </CheckboxField>
           <div className="flex flex-wrap gap-3">
             <Button
-              disabled={!inboxConsent}
+              disabled={!consent}
               pending={platform.receive.isPending}
-              onClick={() => platform.receive.mutate()}
+              onClick={() =>
+                platform.receive.mutate(undefined, {
+                  onSuccess: () => {
+                    setConsent(false);
+                    onFetched?.();
+                  },
+                })
+              }
             >
-              授权并开始收件
+              开始获取
             </Button>
           </div>
-        </div>
-      ) : null}
-
-      {platform.receivers.data?.length ? (
-        <div className="flex flex-col gap-2 border-t pt-4">
-          <h3 className="text-body font-semibold">收件运行状态</h3>
-          <ul className="flex flex-col gap-2">
-            {platform.receivers.data.map((receiver) => (
-              <li
-                key={receiver.account_id}
-                className="text-caption leading-relaxed text-muted-foreground break-words"
-              >
-                {receiver.name} ·{" "}
-                {receiver.job_state === "QUEUED" &&
-                receiver.reason === "YIELDED_FOR_SEND"
-                  ? "等待发送结束后继续"
-                  : receiver.state}{" "}
-                · 截止 {new Date(receiver.expires_at).toLocaleTimeString()}
-              </li>
-            ))}
-          </ul>
         </div>
       ) : null}
     </div>

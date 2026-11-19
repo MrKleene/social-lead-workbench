@@ -7,7 +7,7 @@ const REPLY_BLOCKING={BANNED:'RESTRICTED',MUTED:'REPLY_DISABLED',COMMENT_RESTRIC
 // supply identity proof, Cookie, session reference or a VERIFIED account state.
 class LocalAccounts{
  constructor(store,vault,runtime,inspection){this.store=store;this.db=store.db;this.vault=vault;this.runtime=runtime;this.inspection=inspection;this.attempt=null;}
- overview(){return {runtime:this.runtime.status(),accounts:this.db.prepare('SELECT id,name,nickname,avatar_url,state,daily_limit,revision,platform_user_id,session_ref IS NOT NULL hasSession FROM accounts WHERE state<>\'ARCHIVED\' AND NOT(state=\'UNVERIFIED\' AND platform_user_id IS NULL) ORDER BY name,id').all(),login:this.attempt?{id:this.attempt.id,accountId:this.attempt.accountId,expiresAt:this.attempt.expiresAt}:null};}
+ overview(){return {runtime:this.runtime.status(),accounts:this.db.prepare('SELECT id,name,nickname,avatar_url,state,daily_limit,revision,platform_user_id,collect_state,contact_state,eligibility_checked_at,session_ref IS NOT NULL hasSession FROM accounts WHERE state<>\'ARCHIVED\' AND NOT(state=\'UNVERIFIED\' AND platform_user_id IS NULL) ORDER BY name,id').all(),login:this.attempt?{id:this.attempt.id,accountId:this.attempt.accountId,expiresAt:this.attempt.expiresAt}:null};}
  async begin({accountId,revision,name,dailyLimit=10,consent}){
   if(consent!=='login-this-account-on-this-device-v1')throw new LocalError('PLATFORM_LOGIN_CONSENT_REQUIRED');if(this.attempt||this.store.active()||this.db.prepare("SELECT 1 FROM safety_state WHERE id='platform' AND reason IS NOT NULL").get())throw new LocalError('PLATFORM_BUSY_OR_PAUSED');
   if(!this.runtime.available('LOGIN')||!this.vault.protector.available())throw new LocalError('PLATFORM_LOGIN_UNAVAILABLE');if(typeof name!=='string'||!name.trim()||name.length>80||!Number.isInteger(dailyLimit)||dailyLimit<0||dailyLimit>1000)throw new LocalError('INVALID_ACCOUNT');
@@ -15,8 +15,8 @@ class LocalAccounts{
   this.store.transaction(()=>{
    const old=this.db.prepare('SELECT * FROM accounts WHERE id=?').get(aid);if(accountId&&(!old||old.state==='ARCHIVED'||old.revision!==revision))throw new LocalError('ACCOUNT_IDENTITY_CHANGED');
    expectedSender=old?.platform_user_id;accountRevision=(old?.revision??0)+1;
-   if(old){this.db.prepare("UPDATE accounts SET name=?,daily_limit=?,revision=?,state=CASE WHEN state='RESTRICTED' THEN state ELSE 'UNVERIFIED' END,session_ref=NULL WHERE id=?").run(name.trim(),dailyLimit,accountRevision,aid);this.db.prepare('DELETE FROM account_capabilities WHERE account_id=?').run(aid);}
-   else{this.db.prepare("INSERT INTO accounts(id,platform,name,state,daily_limit) VALUES(?,'XHS',?,'UNVERIFIED',?)").run(aid,name.trim(),dailyLimit);created=true;}
+   if(old){this.db.prepare("UPDATE accounts SET name=?,daily_limit=?,revision=?,state=CASE WHEN state='RESTRICTED' THEN state ELSE 'UNVERIFIED' END,session_ref=NULL,collect_state='CHECKING',contact_state='CHECKING',eligibility_checked_at=NULL WHERE id=?").run(name.trim(),dailyLimit,accountRevision,aid);this.db.prepare('DELETE FROM account_capabilities WHERE account_id=?').run(aid);}
+   else{this.db.prepare("INSERT INTO accounts(id,platform,name,state,daily_limit,collect_state,contact_state) VALUES(?,'XHS',?,'UNVERIFIED',?,'CHECKING','CHECKING')").run(aid,name.trim(),dailyLimit);created=true;}
    this.db.prepare('INSERT INTO account_leases VALUES(?,?,1,?)').run(aid,'login:'+id,now+300000);this.store.audit('LOCAL_USER','ACCOUNT_LOGIN_AUTHORIZED',aid,{attempt:id,revision:accountRevision});
   });
   // created：这一行是本次扫码新建的。扫码没成功就回滚掉——「添加账号」只有扫码核验通过才算数。
@@ -34,44 +34,62 @@ class LocalAccounts{
   const duplicate=this.db.prepare('SELECT id FROM accounts WHERE platform_user_id=? AND id<>?').get(observed.userId,a.accountId);if(duplicate){await this.finish(a,false);throw new LocalError('PLATFORM_ACCOUNT_ALREADY_EXISTS');}
   const ref=randomUUID();let sealed=false,stopped=false;
   try{stopped=await a.session.saveAfterStop(payload=>{this.current(id);this.vault.put('PLATFORM_SESSION',ref,JSON.stringify({version:1,accountId:a.accountId,senderId:observed.userId,payload}));sealed=true;});if(!sealed||!stopped)throw new LocalError('PLATFORM_STOP_UNCONFIRMED');this.current(id);
-   this.store.transaction(()=>{this.db.prepare("UPDATE accounts SET platform_user_id=?,session_ref=?,nickname=?,avatar_url=?,state=CASE WHEN state='RESTRICTED' THEN state ELSE 'VERIFIED' END WHERE id=? AND revision=?").run(observed.userId,ref,observed.nickname??null,observed.avatar??null,a.accountId,a.accountRevision);if(historicalSendHold(observed.userId))this.db.prepare('INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES(?,?,NULL,?,?,?)').run(randomUUID(),a.accountId,'LEGACY_REPLY_RESTRICTION',require('./database.cjs').hash({sender:observed.userId}),this.store.clock());this.store.audit('LOCAL_USER','PLATFORM_IDENTITY_VERIFIED',a.accountId,{revision:a.accountRevision,credentialsSealed:true});});
+   this.store.transaction(()=>{this.db.prepare("UPDATE accounts SET platform_user_id=?,session_ref=?,nickname=?,avatar_url=?,state=CASE WHEN state='RESTRICTED' THEN state ELSE 'VERIFIED' END,collect_state='CHECKING',contact_state='CHECKING',eligibility_checked_at=NULL WHERE id=? AND revision=?").run(observed.userId,ref,observed.nickname??null,observed.avatar??null,a.accountId,a.accountRevision);if(historicalSendHold(observed.userId))this.db.prepare('INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES(?,?,NULL,?,?,?)').run(randomUUID(),a.accountId,'LEGACY_REPLY_RESTRICTION',require('./database.cjs').hash({sender:observed.userId}),this.store.clock());this.store.audit('LOCAL_USER','PLATFORM_IDENTITY_VERIFIED',a.accountId,{revision:a.accountRevision,credentialsSealed:true});});
    a.verified=true;await this.finish(a,true);
    // 登录成功不等于能回复：后台再查一次主页限制，看到封禁/禁言就记一条风险记录。
    // 不 await——扫码后不该为这次探测多等十几秒；账号列表轮询会把它刷出来。
-   void this.inspectReplyEligibility(a.accountId,observed.userId).catch(()=>{});
+   void this.inspectReplyEligibility(a.accountId,observed.userId).catch(()=>this.markCheckFailed(a.accountId,'ACCOUNT_CHECK_FAILED'));
    return {state:'VERIFIED',accountId:a.accountId};
   }catch(error){if(sealed)this.vault.remove('PLATFORM_SESSION',ref);await this.finish(a,stopped);throw new LocalError(error?.code||'LOGIN_SAVE_FAILED');}
  }
  /**
-  * 手动重查一次回复权限（账号中心「重新检查」）。只读打开账号主页，唯一副作用是
-  * 命中限制时补一条风险记录；不改账号状态、不发送。
+  * 手动重查一次回复权限（账号中心「重新检查」）。只读打开账号主页；检查期间两个能力都是
+  * CHECKING（采集和发送都被挡住），检查完要么恢复 ALLOWED，要么落到 BLOCKED。
   */
  async checkReplyEligibility({id}){
   if(typeof id!=='string'||!id||id.length>200)throw new LocalError('ACCOUNT_IDENTITY_CHANGED');
   const row=this.db.prepare("SELECT id,platform_user_id,session_ref FROM accounts WHERE id=? AND state<>'ARCHIVED'").get(id);
   if(!row||!row.session_ref||!/^[a-f0-9]{24}$/.test(row.platform_user_id??''))throw new LocalError('ACCOUNT_REQUIRES_LOGIN');
   if(!this.inspection||!this.runtime.available('ACCOUNT_CHECK'))throw new LocalError('ACCOUNT_CHECK_UNAVAILABLE');
-  const result=await this.inspectReplyEligibility(id,row.platform_user_id);
+  // 检测会打开唯一平台会话：有任何排队/运行中的任务就先不查，避免把平台锁抢走或改到一半的状态。
+  if(this.db.prepare("SELECT 1 FROM jobs WHERE state IN('QUEUED','RUNNING') AND (json_extract(payload,'$.accountId')=? OR json_extract(payload,'$.id')=?)").get(id,id))throw new LocalError('ACCOUNT_BUSY');
+  this.markChecking(id);
+  let result;
+  try{result=await this.inspectReplyEligibility(id,row.platform_user_id);}
+  catch(error){this.markCheckFailed(id,error?.code||'ACCOUNT_CHECK_FAILED');throw new LocalError(error?.code||'ACCOUNT_CHECK_FAILED');}
   if(!result)throw new LocalError('ACCOUNT_CHECK_UNAVAILABLE');
-  return {checked:true,restricted:!!result.reason,reason:result.reason??null,code:result.code,released:result.released??0};
+  const state=this.db.prepare('SELECT collect_state,contact_state FROM accounts WHERE id=?').get(id);
+  return {checked:true,restricted:!!result.reason,reason:result.reason??null,code:result.code,released:result.released??0,collectState:state?.collect_state??'BLOCKED',contactState:state?.contact_state??'BLOCKED'};
+ }
+ markChecking(accountId){
+  this.store.transaction(()=>this.db.prepare("UPDATE accounts SET collect_state='CHECKING',contact_state='CHECKING',eligibility_checked_at=NULL WHERE id=?").run(accountId));
+ }
+ /** 检测本身失败（网络、页面打不开）：不写 hold，但两个能力都挡住，直到用户重试成功。 */
+ markCheckFailed(accountId,code){
+  this.store.transaction(()=>{
+   this.db.prepare("UPDATE accounts SET collect_state='BLOCKED',contact_state='BLOCKED',eligibility_checked_at=? WHERE id=?").run(this.store.clock(),accountId);
+   this.store.audit('LOCAL_USER','ACCOUNT_ELIGIBILITY_CHECK_FAILED',accountId,{code});
+  });
  }
  /**
-  * 登录后的一次只读「主页限制检查」。只在明确看到限制提示时落库，看不到什么都不写——
-  * 原生结果对「没看到」的结论本身就是 NOT_A_SEND_PERMISSION_CHECK。
+  * 登录/重查时的一次只读「主页限制检查」。只在明确看到限制提示时落 hold；看不到就恢复。
+  * 检查失败只把能力置 BLOCKED，不伪造限制记录。
   */
  async inspectReplyEligibility(accountId,senderId){
-  if(!this.inspection||!this.runtime.available('ACCOUNT_CHECK'))return null;
-  const row=this.db.prepare('SELECT session_ref FROM accounts WHERE id=?').get(accountId);if(!row?.session_ref)return null;
+  if(!this.inspection||!this.runtime.available('ACCOUNT_CHECK')){this.markCheckFailed(accountId,'ACCOUNT_CHECK_UNAVAILABLE');return {code:'ACCOUNT_CHECK_UNAVAILABLE',reason:null,failed:true};}
+  const row=this.db.prepare('SELECT session_ref FROM accounts WHERE id=?').get(accountId);if(!row?.session_ref){this.markCheckFailed(accountId,'ACCOUNT_REQUIRES_LOGIN');return {code:'ACCOUNT_REQUIRES_LOGIN',reason:null,failed:true};}
+  this.markChecking(accountId);
   const abort=new AbortController();let session;
   try{
    session=await this.runtime.openSaved({accountId,senderId,sessionRef:row.session_ref,purpose:'ACCOUNT_CHECK'},abort.signal);
    const result=await this.inspection(session,{accountId,senderId});
    const code=[result.code,...result.warnings].find(c=>REPLY_BLOCKING[c]);
    if(!code){const released=this.store.transaction(()=>require('./account-safety.cjs').releaseAccountRiskInTransaction(this.store,accountId,null,'ELIGIBILITY_RECHECK_PASSED'));return {code:result.code,reason:null,released};}
-   const reason=REPLY_BLOCKING[code];
+   const reason=REPLY_BLOCKING[code],now=this.store.clock();
    this.store.transaction(()=>{
-    if(this.db.prepare('SELECT 1 FROM account_holds WHERE account_id=? AND reason=?').get(accountId,reason))return;
-    this.db.prepare('INSERT INTO account_holds(id,account_id,channel,reason,source_hash,created_at) VALUES(?,?,NULL,?,?,?)').run(randomUUID(),accountId,reason,require('./database.cjs').hash({accountId,senderId,code}),this.store.clock());
+    require('./account-safety.cjs').retainAccountRiskInTransaction(this.store,accountId,null,reason,{code,source:'ACCOUNT_ELIGIBILITY_CHECK'});
+    // 回复受限不等于不能采集；封号才同时停采集。
+    this.db.prepare("UPDATE accounts SET collect_state=?,contact_state='BLOCKED',eligibility_checked_at=? WHERE id=?").run(reason==='RESTRICTED'?'BLOCKED':'ALLOWED',now,accountId);
     this.store.audit('LOCAL_USER','REPLY_ELIGIBILITY_RESTRICTED',accountId,{code,reason});
    });
    return {code,reason};

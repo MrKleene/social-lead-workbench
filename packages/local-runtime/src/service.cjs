@@ -134,12 +134,13 @@ class LocalService {
   this.vault.put('MODEL_KEY','qwen',key);this.store.audit('LOCAL_USER','MODEL_KEY_SAVED','qwen');return {configured:true};}
  jobs(){return this.store.db.prepare('SELECT id,kind,state,created_at,updated_at FROM jobs ORDER BY created_at DESC,id LIMIT 100').all();}
  accounts(){return this.store.db.prepare('SELECT id,platform,name,state,daily_limit FROM accounts ORDER BY name,id').all();}
- messages(){return new LocalInbox(this.store).list().items;}
+ accountsInbox(){return new LocalInbox(this.store).accounts();}
  inboxPage(input){return new LocalInbox(this.store).list(input);}
  conversations(input){return new LocalInbox(this.store).threads(input);}
  conversation(input){return new LocalInbox(this.store).thread(input);}
  unread(){return new LocalInbox(this.store).unread();}
  markRead({id}){return new LocalInbox(this.store).markRead(id);}
+ markThreadRead({accountId,senderId}){return new LocalInbox(this.store).markThreadRead(accountId,senderId);}
  runs(input){return this.reporting().runs(input);}
  reviews(input){return this.workspace().reviews(input);}
  reviewPosts(input){return this.workspace().reviewPosts(input);}
@@ -208,7 +209,10 @@ class LocalService {
  beginLogin(input){return this.accountService.begin(input);}
  pollLogin(input){return this.accountService.poll(input);}
  cancelLogin(input){return this.accountService.cancel(input);}
- previewContact(input){return this.workflow.previewContact(input);}
+ previewChat(input){return this.workflow.previewChat(input);}
+ authorizeChat(input){return this.workflow.authorizeChat(input);}
+ previewCommentReply(input){return this.workflow.previewCommentReply(input);}
+ authorizeCommentReply(input){return this.workflow.authorizeCommentReply(input);}
  authorizeContact(input){return this.workflow.authorizeContact(input);}
  previewReply(input){return this.workflow.previewReply(input);}
  authorizeReply(input){return this.workflow.authorizeReply(input);}

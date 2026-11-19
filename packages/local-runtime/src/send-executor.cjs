@@ -1,7 +1,7 @@
 'use strict';
 const {createHash}=require('node:crypto');
 const {LocalError,hash}=require('./database.cjs'),{LocalQueue}=require('./queue.cjs'),{SendSafety,validateScope}=require('./send-safety.cjs');
-const {assertSendAccount,historicalSendHold,retainAccountRisk}=require('./account-safety.cjs');
+const {assertSendAccount,retainAccountRisk}=require('./account-safety.cjs');
 const digest=s=>createHash('sha256').update(s).digest('hex');
 class LocalSendExecutor{
  constructor(store,vault,runtime,wire){this.store=store;this.vault=vault;this.runtime=runtime;this.wire=wire;this.queue=new LocalQueue(store);this.safety=new SendSafety(store);this.reference=null;}
@@ -10,7 +10,7 @@ class LocalSendExecutor{
   if(signal.aborted||job.kind!=='SEND'||job.dispatch_started||job.cancel_requested||hash(scope)!==job.payload_hash)throw new LocalError('SEND_AUTHORIZATION_REQUIRED');
   this.safety.notPaused();if(this.store.db.prepare("SELECT 1 FROM safety_state WHERE id='platform' AND reason IS NOT NULL").get())throw new LocalError('PLATFORM_PROCESS_RECONCILIATION_REQUIRED');
   const a=this.store.db.prepare("SELECT * FROM accounts WHERE id=? AND revision=? AND state='VERIFIED'").get(scope.accountId,scope.accountRevision);
-  if(!a?.session_ref||!this.vault.has('PLATFORM_SESSION',a.session_ref)||!this.runtime.available(scope.channel)||historicalSendHold(a.platform_user_id)||this.store.db.prepare('SELECT 1 FROM account_holds WHERE account_id=? AND (channel IS NULL OR channel=?)').get(a.id,scope.channel))throw new LocalError('SEND_ACCOUNT_UNAVAILABLE');
+  if(!a?.session_ref||!this.vault.has('PLATFORM_SESSION',a.session_ref)||!this.runtime.available(scope.channel))throw new LocalError('SEND_ACCOUNT_UNAVAILABLE');
   if(scope.channel==='COMMENT'){
    const row=this.store.db.prepare('SELECT source_reference_ref FROM run_posts WHERE platform_id=? AND source_reference_ref IS NOT NULL ORDER BY rowid DESC LIMIT 1').get(scope.target.postId);
    if(!row)throw new LocalError('COMMENT_REFERENCE_UNAVAILABLE');this.reference=JSON.parse(this.vault.get('POST_REFERENCE',row.source_reference_ref));

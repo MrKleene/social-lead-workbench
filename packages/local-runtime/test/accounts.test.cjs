@@ -39,6 +39,6 @@ test('login-time profile inspection records a reply hold only for explicit bans'
  store.db.exec("INSERT INTO accounts(id,platform,name,state,daily_limit) VALUES('nologin','XHS','未登录','UNVERIFIED',10)");
  await assert.rejects(()=>accounts.checkReplyEligibility({id:'nologin'}),/ACCOUNT_REQUIRES_LOGIN/);
  answer={kind:'RESTRICTION_VISIBLE',code:'VISIBLE_NOTICE',identity:'MATCH',warnings:['MUTED']};
- assert.deepEqual(await accounts.checkReplyEligibility({id:'acc'}),{checked:true,restricted:true,reason:'REPLY_DISABLED',code:'MUTED',released:0});
+ assert.deepEqual(await accounts.checkReplyEligibility({id:'acc'}),{checked:true,restricted:true,reason:'REPLY_DISABLED',code:'MUTED',released:0,collectState:'ALLOWED',contactState:'BLOCKED'});
  assert.equal(store.db.prepare("SELECT count(*) n FROM account_holds WHERE reason='REPLY_DISABLED'").get().n,1);
 });
