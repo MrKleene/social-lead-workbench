@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-11T10:57:30Z",
-  "updated_at": "2026-11-22T22:44:40Z",
+  "updated_at": "2026-11-22T23:04:59Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -17507,9 +17507,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "238f93519d4f463fb35225d09e676a32d8234d9b8732382e34b1dc90243dee67",
-      "size": 252882,
-      "normalized_sha256": "238f93519d4f463fb35225d09e676a32d8234d9b8732382e34b1dc90243dee67"
+      "sha256": "403e817576b425fd3c58d4f0f9e2db294121c18d4a67ffd4c4ef91df8fe3b656",
+      "size": 252767,
+      "normalized_sha256": "403e817576b425fd3c58d4f0f9e2db294121c18d4a67ffd4c4ef91df8fe3b656"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -19139,10 +19139,10 @@
     },
     "integrations/inbox-mcp/exactreply/dm_conversation.go": {
       "role": "index",
-      "sha256": "35e205099b5e9f3f2480655c9227c3538f9aceb2a0a0ba44cd20df52b9afa022",
-      "size": 4886,
-      "normalized_sha256": "35e205099b5e9f3f2480655c9227c3538f9aceb2a0a0ba44cd20df52b9afa022",
-      "format_sha256": "a996a00fb90fc11770859c96dbe08c71f38c5b967175e7841a7674c2ffd0ca71",
+      "sha256": "b3bc67334261ff8cf02c8264c4c8c385680c4923902e6481408f364e3ec20b18",
+      "size": 4952,
+      "normalized_sha256": "b3bc67334261ff8cf02c8264c4c8c385680c4923902e6481408f364e3ec20b18",
+      "format_sha256": "b3bc67334261ff8cf02c8264c4c8c385680c4923902e6481408f364e3ec20b18",
       "format_kind": "gofmt"
     },
     "integrations/inbox-mcp/exactreply/dm_conversation_test.go": {
@@ -19809,10 +19809,10 @@
     },
     "integrations/inbox-mcp/xiaohongshu/dm_conversation_driver.go": {
       "role": "index",
-      "sha256": "78912c9f19e9e0e59c5c53816f7d2107885aaebd5af73a8e5876be9fdbb4e29b",
-      "size": 9326,
-      "normalized_sha256": "78912c9f19e9e0e59c5c53816f7d2107885aaebd5af73a8e5876be9fdbb4e29b",
-      "format_sha256": "82cfddc5a61e4360e963abd52e1a1133458c243c4c56ab6a2de05f0a5051c35b",
+      "sha256": "f7fa1f14c4ade9db7608a6d613569956f3c4fa8696f0b8373376834eaefcaafa",
+      "size": 9423,
+      "normalized_sha256": "f7fa1f14c4ade9db7608a6d613569956f3c4fa8696f0b8373376834eaefcaafa",
+      "format_sha256": "f7fa1f14c4ade9db7608a6d613569956f3c4fa8696f0b8373376834eaefcaafa",
       "format_kind": "gofmt"
     },
     "integrations/inbox-mcp/xiaohongshu/dm_entry_driver.go": {
@@ -20627,9 +20627,9 @@
     },
     "packages/domain/src/direct-messages/dm-send-protocol.ts": {
       "role": "index",
-      "sha256": "d53f0b889c524721a106a240d878229cff9fbed15d74cdccd6c5a1912da09f3c",
-      "size": 2534,
-      "normalized_sha256": "d53f0b889c524721a106a240d878229cff9fbed15d74cdccd6c5a1912da09f3c"
+      "sha256": "aeeb152be29b33680b181fea3e66057c7aabf9faeeb7dea2825c8548c0231031",
+      "size": 2580,
+      "normalized_sha256": "aeeb152be29b33680b181fea3e66057c7aabf9faeeb7dea2825c8548c0231031"
     },
     "packages/domain/src/inbox/protocol.ts": {
       "role": "index",
@@ -20849,9 +20849,9 @@
     },
     "packages/local-runtime/src/adapters/direct-messages/dm-readback.ts": {
       "role": "index",
-      "sha256": "7c197dbe9d0c775ac13186e3e2f08e025e06d55313852265ef8990c3b65ae3d5",
-      "size": 4679,
-      "normalized_sha256": "7c197dbe9d0c775ac13186e3e2f08e025e06d55313852265ef8990c3b65ae3d5"
+      "sha256": "d5e794fbd0756b7aa69310c5e9f5c6d3696a89c00fb0e03ef416570a6a986b30",
+      "size": 5069,
+      "normalized_sha256": "d5e794fbd0756b7aa69310c5e9f5c6d3696a89c00fb0e03ef416570a6a986b30"
     },
     "packages/local-runtime/src/adapters/direct-messages/dm-transport.ts": {
       "role": "index",
@@ -20939,9 +20939,9 @@
     },
     "packages/local-runtime/src/evidence.cjs": {
       "role": "index",
-      "sha256": "f1233ec35daa3b18c4a179369d2525472b86f454dab92976e43f2599c473743a",
-      "size": 14077,
-      "normalized_sha256": "f1233ec35daa3b18c4a179369d2525472b86f454dab92976e43f2599c473743a"
+      "sha256": "f4bf0a57115a550882a5a11d8c831c90ba6a4a1a14e8204d9a4a4611c0445b00",
+      "size": 14436,
+      "normalized_sha256": "f4bf0a57115a550882a5a11d8c831c90ba6a4a1a14e8204d9a4a4611c0445b00"
     },
     "packages/local-runtime/src/history-recovery.cjs": {
       "role": "index",
@@ -21197,15 +21197,15 @@
     },
     "packages/local-runtime/test/dm-send-protocol.test.ts": {
       "role": "observe",
-      "sha256": "7d97dff9944796efd30bae3e09f08635b7eb01eea22fc11a7e56ffff79e9a8dc",
-      "size": 3897,
-      "normalized_sha256": "7d97dff9944796efd30bae3e09f08635b7eb01eea22fc11a7e56ffff79e9a8dc"
+      "sha256": "b631d2f2b9ef5aedcb7efaa963aa4dc3766f5ab8c1a2265bdd397537c353dc34",
+      "size": 3981,
+      "normalized_sha256": "b631d2f2b9ef5aedcb7efaa963aa4dc3766f5ab8c1a2265bdd397537c353dc34"
     },
     "packages/local-runtime/test/evidence.test.cjs": {
       "role": "index",
-      "sha256": "4b870300e451e14d871b770566ccc31277c9b3f56f9b339bdf11f92c9502c7f9",
-      "size": 8698,
-      "normalized_sha256": "4b870300e451e14d871b770566ccc31277c9b3f56f9b339bdf11f92c9502c7f9"
+      "sha256": "d192d0e0cc7704ce4b76afac7c42e330e52222799e5cc477b5cea1a5f178ec28",
+      "size": 10371,
+      "normalized_sha256": "d192d0e0cc7704ce4b76afac7c42e330e52222799e5cc477b5cea1a5f178ec28"
     },
     "packages/local-runtime/test/flow-fixture.cjs": {
       "role": "index",
