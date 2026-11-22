@@ -301,12 +301,12 @@ export function LocalPending() {
                       <TableHead className="w-[120px]">状态 / 原因</TableHead>
                       <TableHead>入队时间</TableHead>
                       <TableHead>有效期</TableHead>
-                      <TableHead className="text-right">操作</TableHead>
+                      <TableHead className="sticky right-0 z-10 border-l bg-muted text-right">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {items.map((item) => (
-                      <TableRow key={item.id}>
+                      <TableRow key={item.id} className="group">
                         <TableCell className="align-top">
                           <Checkbox
                             checked={selected.some((row) => row.id === item.id)}
@@ -369,7 +369,7 @@ export function LocalPending() {
                         <TableCell className="align-top text-caption text-muted-foreground">
                           {at(item.expiresAt)}
                         </TableCell>
-                        <TableCell className="align-top">
+                        <TableCell className="sticky right-0 z-10 border-l bg-card align-top transition-colors group-hover:bg-muted/50">
                           <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
                             {tab === "failed" ? (
                               <Button
