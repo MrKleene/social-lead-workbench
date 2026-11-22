@@ -35,14 +35,14 @@ class LocalEvidence{
   this.db.prepare("UPDATE safety_state SET reason=NULL,event_id=NULL,version=version+1,created_at=? WHERE id='sending'").run(now);
   return true;
  }
- closeUnconfirmed(attemptId,now){
+ closeUnconfirmed(attemptId,now,reason='UNKNOWN_UNCONFIRMED'){
   const job=this.db.prepare('SELECT id FROM jobs WHERE request_key=(SELECT request_key FROM send_attempts WHERE id=?)').get(attemptId);
   if(job){
-   this.db.prepare("UPDATE send_queue SET state='CANCELLED',reason='UNKNOWN_UNCONFIRMED',updated_at=?,settled_at=? WHERE state='UNKNOWN' AND job_id=?").run(now,now,job.id);
-   this.db.prepare("UPDATE jobs SET state='FAILED',result=?,updated_at=? WHERE id=? AND state='UNKNOWN'").run(canonical({attemptId,state:'UNKNOWN_UNCONFIRMED'}),now,job.id);
+   this.db.prepare("UPDATE send_queue SET state='CANCELLED',reason=?,updated_at=?,settled_at=? WHERE state='UNKNOWN' AND job_id=?").run(reason,now,now,job.id);
+   this.db.prepare("UPDATE jobs SET state='FAILED',result=?,updated_at=? WHERE id=? AND state='UNKNOWN'").run(canonical({attemptId,state:reason}),now,job.id);
   }
-  this.updateAuto(attemptId,'UNVERIFIED','UNKNOWN_UNCONFIRMED',now);
-  this.store.audit('RECOVERY','UNKNOWN_AUTO_CLOSED',attemptId,{});
+  this.updateAuto(attemptId,'UNVERIFIED',reason,now);
+  this.store.audit('RECOVERY','UNKNOWN_AUTO_CLOSED',attemptId,{reason});
   this.clearPauseIfSettled(attemptId,now);
  }
  recoverAuto(){
@@ -73,7 +73,7 @@ class LocalEvidence{
    return true;
   }catch(error){
    const attempts=(task.attempts??0)+1,reason=error instanceof LocalError?error.code:(error?.code||'EVIDENCE_AUTO_FAILED');
-   if(attempts>=3)this.updateAuto(task.attempt_id,'STOPPED',reason,this.store.clock());
+   if(attempts>=3)this.closeUnconfirmed(task.attempt_id,this.store.clock(),'READBACK_UNAVAILABLE');
    else this.db.prepare("UPDATE evidence_auto_tasks SET state='WAITING',next_at=?,last_reason=?,updated_at=? WHERE attempt_id=?").run(this.store.clock()+Math.min(60000,5000*attempts),reason,this.store.clock(),task.attempt_id);
    return true;
   }
