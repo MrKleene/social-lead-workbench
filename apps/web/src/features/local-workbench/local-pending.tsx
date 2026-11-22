@@ -176,9 +176,11 @@ export function LocalPending() {
     });
   };
 
-  const openSend = () => {
+  const openSend = (rows: SendQueueItem[] = selected) => {
+    const kind = rows[0]?.channel === "DM" ? "DM_TEMPLATE" : "COMMENT_TEMPLATE";
+    const pool = configs.data?.filter((item) => item.kind === kind) ?? [];
     setAccountId(usableAccounts[0]?.id ?? "");
-    setTemplateId(templates[0]?.id ?? "");
+    setTemplateId(pool[0]?.id ?? "");
     setSending(true);
   };
 
@@ -276,7 +278,7 @@ export function LocalPending() {
                 </Select>
               </FilterField>
               {selected.length ? (
-                <Button disabled={!sameChannel} onClick={openSend}>
+                <Button disabled={!sameChannel} onClick={() => openSend()}>
                   立即发送 {selected.length} 条
                 </Button>
               ) : null}
@@ -293,10 +295,10 @@ export function LocalPending() {
                       <TableHead className="w-10">
                         <span className="sr-only">选择</span>
                       </TableHead>
-                      <TableHead>帖子与评论</TableHead>
+                      <TableHead className="min-w-[250px]">帖子与评论</TableHead>
                       <TableHead>发送账号</TableHead>
                       <TableHead>渠道</TableHead>
-                      <TableHead>状态 / 原因</TableHead>
+                      <TableHead className="w-[120px]">状态 / 原因</TableHead>
                       <TableHead>入队时间</TableHead>
                       <TableHead>有效期</TableHead>
                       <TableHead className="text-right">操作</TableHead>
@@ -321,7 +323,7 @@ export function LocalPending() {
                             onCheckedChange={(checked) => toggle(item, checked === true)}
                           />
                         </TableCell>
-                        <TableCell className="max-w-[320px] whitespace-normal align-top">
+                        <TableCell className="min-w-[250px] max-w-[320px] whitespace-normal align-top">
                           <p className="font-medium break-words">
                             {item.postTitle || "无标题笔记"}
                           </p>
@@ -341,7 +343,7 @@ export function LocalPending() {
                         <TableCell className="align-top">
                           <Badge variant="outline">{item.channel === "DM" ? "私信" : "评论"}</Badge>
                         </TableCell>
-                        <TableCell className="max-w-[220px] whitespace-normal align-top">
+                        <TableCell className="w-[120px] whitespace-nowrap align-top">
                           <Badge
                             variant={
                               item.state === "FAILED"
@@ -356,7 +358,7 @@ export function LocalPending() {
                             {queueStates[item.state] ?? "待发送"}
                           </Badge>
                           {item.reason ? (
-                            <p className="mt-1 text-caption leading-relaxed text-muted-foreground break-words">
+                            <p className="mt-1 text-caption leading-relaxed text-muted-foreground">
                               {pendingReasonLabels[item.reason] ?? "等待处理"}
                             </p>
                           ) : null}
@@ -392,14 +394,27 @@ export function LocalPending() {
                               </Button>
                             ) : null}
                             {tab === "pending" || tab === "quota" ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={item.state === "SENDING" || cancel.isPending}
-                                onClick={() => setCancelTarget(item)}
-                              >
-                                移出待发送
-                              </Button>
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={item.state === "SENDING"}
+                                  onClick={() => {
+                                    setSelected([item]);
+                                    openSend([item]);
+                                  }}
+                                >
+                                  发送
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={item.state === "SENDING" || cancel.isPending}
+                                  onClick={() => setCancelTarget(item)}
+                                >
+                                  移出待发送
+                                </Button>
+                              </>
                             ) : null}
                             {tab === "failed" || tab === "unknown" ? (
                               <Button
