@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, CircleAlert } from "lucide-react";
+import { ChevronDown, CircleAlert, Clock, Loader2 } from "lucide-react";
 import type { SendQueueItem, SendQueueTab } from "./local-api";
 import { Link, useSearchParams } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
@@ -62,14 +62,10 @@ import { useLocalAction, useLocalRecords } from "./use-local-records";
 const tabs: {
   id: SendQueueTab;
   label: string;
-  key: "pending" | "quota" | "sending" | "failed" | "unknown" | "expired";
+  key: "queue" | "attention";
 }[] = [
-  { id: "pending", label: "待发送", key: "pending" },
-  { id: "quota", label: "等待额度", key: "quota" },
-  { id: "sending", label: "发送中", key: "sending" },
-  { id: "failed", label: "发送失败", key: "failed" },
-  { id: "unknown", label: "结果未知", key: "unknown" },
-  { id: "expired", label: "已过期", key: "expired" },
+  { id: "queue", label: "发送队列", key: "queue" },
+  { id: "attention", label: "需要处理", key: "attention" },
 ];
 
 const queueStates: Record<string, string> = {
@@ -91,7 +87,11 @@ function isOldComment(item: SendQueueItem): boolean {
 
 export function LocalPending() {
   const [params, setParams] = useSearchParams();
-  const tab = (tabs.find((item) => item.id === params.get("tab"))?.id ?? "pending") as SendQueueTab;
+  const rawTab = params.get("tab");
+  const tab: SendQueueTab =
+    rawTab === "attention" || ["failed", "unknown", "expired"].includes(rawTab ?? "")
+      ? "attention"
+      : "queue";
   const page = Math.max(1, Number(params.get("page")) || 1);
   const query = params.get("query") || "";
   const channel = params.get("channel") || "";
@@ -112,7 +112,7 @@ export function LocalPending() {
   }, [tab, page, query, channel]);
 
   const steps = useLocalRecords("automationSteps");
-  const fast = { refetchInterval: tab === "pending" || tab === "sending" || tab === "unknown" ? 1000 : 5000 };
+  const fast = { refetchInterval: tab === "queue" ? 1000 : 5000 };
   const summary = useLocalRecords("sendQueueSummary", undefined, fast);
   const records = useLocalRecords("sendQueueList", { tab, page, query, channel }, fast);
   const accounts = useLocalRecords("accountDetails");
@@ -128,6 +128,7 @@ export function LocalPending() {
   const total = records.data?.total ?? 0;
   const failure = records.error ?? retry.error ?? cancel.error ?? requeueAction.error ?? dismiss.error ?? sendNow.error;
   const summaryData = summary.data;
+  const progress = summaryData?.progress ?? null;
   const autoReply = !!steps.data?.autoReply;
   const hasAccountPool = (steps.data?.replyAccountIds.length ?? 0) > 0;
   const hasChannel = !!steps.data && (steps.data.autoComment || steps.data.autoDm);
@@ -144,6 +145,21 @@ export function LocalPending() {
   const selectedChannel = channels[0] ?? null;
   const selectedChannelLabel = selectedChannel === "DM" ? "私信" : "评论";
   const sameChannel = channels.length <= 1;
+  const stateLabel = (item: SendQueueItem) => {
+    if (item.state === "SENDING") return "发送中";
+    if (item.state === "READY" && progress && item.batchId === progress.batchId)
+      return "排队中";
+    return queueStates[item.state] ?? "待发送";
+  };
+  const progressLabel =
+    progress?.state === "SENDING"
+      ? "正在发送"
+      : progress?.state === "WAITING_QUOTA"
+        ? "等待额度"
+        : "等待发送";
+  const progressPosition = progress
+    ? Math.min(progress.done + progress.failed + 1, progress.total)
+    : 0;
 
   const templateKind =
     selectedChannel === "DM" ? "DM_TEMPLATE" : "COMMENT_TEMPLATE";
@@ -274,6 +290,59 @@ export function LocalPending() {
         </Alert>
       ) : null}
 
+      {progress ? (
+        <SectionCard>
+          <div className="flex flex-wrap items-center gap-3">
+            {progress.state === "SENDING" ? (
+              <Loader2
+                className="size-4 shrink-0 animate-spin text-muted-foreground"
+                aria-hidden="true"
+              />
+            ) : (
+              <Clock
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-body font-medium">
+                {progressLabel} {progressPosition}/{progress.total}
+              </p>
+              <p className="mt-1 text-caption text-muted-foreground">
+                {progress.channel === "DM" ? "私信" : "评论"}
+                {progress.accountName ? " · " + progress.accountName : ""}
+                {progress.recipientNickname
+                  ? " · 收件人 " + progress.recipientNickname
+                  : ""}
+              </p>
+            </div>
+            <p className="text-caption text-muted-foreground">
+              已完成 {progress.done} 条
+              {progress.failed ? " · 失败 " + progress.failed + " 条" : ""}
+            </p>
+          </div>
+          <div
+            className="h-2 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-label="发送进度"
+            aria-valuemin={0}
+            aria-valuemax={progress.total}
+            aria-valuenow={progress.done + progress.failed}
+          >
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{
+                width: String(((progress.done + progress.failed) / progress.total) * 100) + "%",
+              }}
+            />
+          </div>
+          <p className="text-caption leading-relaxed text-muted-foreground break-words">
+            {progress.postTitle || "无标题笔记"}
+            {progress.comment ? " · " + progress.comment : ""}
+          </p>
+        </SectionCard>
+      ) : null}
+
       <Tabs value={tab} onValueChange={changeTab}>
         <TabsList className="w-full sm:w-fit" aria-label="发送状态">
           {tabs.map((item) => (
@@ -350,11 +419,11 @@ export function LocalPending() {
                           <Checkbox
                             checked={selected.some((row) => row.id === item.id)}
                             disabled={
+                              tab !== "queue" ||
                               !(
                                 item.state === "WAITING_SWITCH" ||
                                 item.state === "READY" ||
-                                item.state === "WAITING_QUOTA" ||
-                                item.state === "FAILED"
+                                item.state === "WAITING_QUOTA"
                               ) ||
                               (!!selectedChannel && selectedChannel !== item.channel)
                             }
@@ -387,14 +456,19 @@ export function LocalPending() {
                             variant={
                               item.state === "FAILED"
                                 ? "destructive"
-                                : item.state === "UNKNOWN" || item.state === "EXPIRED"
+                                : item.state === "UNKNOWN" ||
+                                    item.state === "EXPIRED" ||
+                                    item.state === "WAITING_QUOTA"
                                   ? "warning"
                                   : item.state === "SENDING"
                                     ? "success"
                                     : "outline"
                             }
                           >
-                            {queueStates[item.state] ?? "待发送"}
+                            {item.state === "SENDING" ? (
+                              <Loader2 className="animate-spin" aria-hidden="true" />
+                            ) : null}
+                            {stateLabel(item)}
                           </Badge>
                           {item.reason ? (
                             <p className="mt-1 text-caption leading-relaxed text-muted-foreground">
@@ -410,34 +484,65 @@ export function LocalPending() {
                         </TableCell>
                         <TableCell className="sticky right-0 z-10 w-[200px] bg-card align-top transition-colors group-hover:bg-muted/50">
                           <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
-                            {tab === "failed" ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={retry.isPending}
-                                onClick={() => retry.mutate({ id: item.id })}
-                              >
-                                重试
-                              </Button>
-                            ) : null}
-                            {tab === "expired" ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setOverride(false);
-                                  setRequeue(item);
-                                }}
-                              >
-                                重新排队
-                              </Button>
-                            ) : null}
-                            {tab === "pending" || tab === "quota" ? (
+                            {tab === "attention" ? (
+                              <>
+                                {item.state === "FAILED" ? (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={retry.isPending}
+                                      onClick={() => retry.mutate({ id: item.id })}
+                                    >
+                                      重试
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={dismiss.isPending}
+                                      onClick={() => setDismissTarget(item)}
+                                    >
+                                      移除记录
+                                    </Button>
+                                  </>
+                                ) : null}
+                                {item.state === "EXPIRED" ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setOverride(false);
+                                      setRequeue(item);
+                                    }}
+                                  >
+                                    重新排队
+                                  </Button>
+                                ) : null}
+                                {item.state === "UNKNOWN" ? (
+                                  <>
+                                    <Button asChild size="sm" variant="outline">
+                                      <Link to="/work/notices">核对结果</Link>
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={dismiss.isPending}
+                                      onClick={() => setDismissTarget(item)}
+                                    >
+                                      移出队列
+                                    </Button>
+                                  </>
+                                ) : null}
+                              </>
+                            ) : item.state === "SENDING" ? (
+                              <span className="text-caption text-muted-foreground">
+                                发送中
+                              </span>
+                            ) : (
                               <>
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  disabled={item.state === "SENDING"}
                                   onClick={() => {
                                     setSelected([item]);
                                     openSend([item]);
@@ -448,38 +553,13 @@ export function LocalPending() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  disabled={item.state === "SENDING" || cancel.isPending}
+                                  disabled={cancel.isPending}
                                   onClick={() => setCancelTarget(item)}
                                 >
                                   移出待发送
                                 </Button>
                               </>
-                            ) : null}
-                            {tab === "failed" ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={dismiss.isPending}
-                                onClick={() => setDismissTarget(item)}
-                              >
-                                移除记录
-                              </Button>
-                            ) : null}
-                            {tab === "unknown" ? (
-                              <>
-                                <Button asChild size="sm" variant="outline">
-                                  <Link to="/work/notices">核对结果</Link>
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={dismiss.isPending}
-                                  onClick={() => setDismissTarget(item)}
-                                >
-                                  移出队列
-                                </Button>
-                              </>
-                            ) : null}
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -489,9 +569,15 @@ export function LocalPending() {
               </div>
             ) : (
               <EmptyState
-                title={records.isPending ? "正在读取…" : `没有${tabs.find((item) => item.id === tab)?.label ?? "记录"}`}
+                title={
+                  records.isPending
+                    ? "正在读取…"
+                    : tab === "queue"
+                      ? "没有待发送"
+                      : "没有需要处理的发送"
+                }
                 action={
-                  tab === "pending" && !records.isPending ? (
+                  tab === "queue" && !records.isPending ? (
                     <Button asChild variant="link" size="sm">
                       <Link to="/comment-review">去评论审核</Link>
                     </Button>

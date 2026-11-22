@@ -319,9 +319,10 @@ class LocalSendQueue{
   const unique=[...new Set(requested)],pool=unique.map(id=>this.template(id,channel));
   const order=shuffle(pool),last=this.db.prepare('SELECT template_id FROM send_attempts WHERE account_id=? AND channel=? ORDER BY created_at DESC,rowid DESC LIMIT 1').get(accountId,channel)?.template_id??null;
   if(order.length>1&&order[0].id===last){const index=order.findIndex(item=>item.id!==last);if(index>0)[order[0],order[index]]=[order[index],order[0]];}
-  const now=this.store.clock();
+  const now=this.store.clock(),batchId=randomUUID();
   for(const [index,row] of rows.entries()){
    const template=order[index%order.length],plan=JSON.parse(row.plan);
+   plan.manualBatchId=batchId;
    plan.accounts=[{id:account.id,version:account.revision,dailyLimit:account.daily_limit}];
    plan.templates=[{channel:template.channel,templateId:template.id,templateVersion:template.revision,content:template.content}];
    this.db.prepare("UPDATE send_queue SET state='READY',priority=1,manual_now=1,plan=?,reason=NULL,account_id=NULL,template_id=NULL,job_id=NULL,scope_hash=NULL,updated_at=?,settled_at=NULL WHERE id=?").run(canonical(plan),now,row.id);
@@ -332,7 +333,7 @@ class LocalSendQueue{
 
  /* ---------- 查询 ---------- */
  list({tab='pending',page=1,pageSize=20,query='',channel=''}={}){
-  const tabs={pending:['WAITING_SWITCH','READY','SENDING'],quota:['WAITING_QUOTA'],sending:['SENDING'],failed:['FAILED'],unknown:['UNKNOWN'],expired:['EXPIRED']};
+  const tabs={queue:ACTIVE,attention:['FAILED','UNKNOWN','EXPIRED'],pending:['WAITING_SWITCH','READY','SENDING'],quota:['WAITING_QUOTA'],sending:['SENDING'],failed:['FAILED'],unknown:['UNKNOWN'],expired:['EXPIRED']};
   if(!tabs[tab])throw new LocalError('INVALID_SEND_QUEUE_TAB');
   if(channel&&channel!=='COMMENT'&&channel!=='DM')throw new LocalError('INVALID_PENDING_FILTER');
   const states=tabs[tab],size=Math.min(100,Math.max(1,Number(pageSize)||20)),current=Math.max(1,Number(page)||1);
@@ -342,7 +343,7 @@ class LocalSendQueue{
   if(typeof query==='string'&&query.trim()){filter+=" AND (c.body LIKE ? OR p.snapshot LIKE ? OR q.recipient_id LIKE ? OR json_extract(c.snapshot,'$.authorNickname') LIKE ?)";const like='%'+query.trim()+'%';args.push(like,like,like,like);}
   const total=this.db.prepare('SELECT count(*) n FROM send_queue q JOIN run_comments c ON c.id=q.comment_id JOIN run_posts p ON p.id=c.post_id WHERE '+filter).get(...args).n;
   const rows=this.db.prepare("SELECT q.*,c.body,c.ordinal,json_extract(c.snapshot,'$.authorNickname') recipient_nickname,p.snapshot post_snapshot,r.score,r.decision,a.name account_name,(SELECT count(*) FROM send_queue x WHERE x.run_id=q.run_id AND x.channel=q.channel AND x.recipient_id=q.recipient_id AND x.state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING','SENT')) same_recipient FROM send_queue q JOIN run_comments c ON c.id=q.comment_id JOIN run_posts p ON p.id=c.post_id JOIN review_results r ON r.id=q.review_id LEFT JOIN accounts a ON a.id=q.account_id WHERE "+filter+' ORDER BY q.priority DESC,q.enqueued_at ASC,q.id ASC LIMIT ? OFFSET ?').all(...args,size,(current-1)*size);
-  return {items:rows.map(row=>{const snapshot=JSON.parse(row.post_snapshot||'{}'),plan=JSON.parse(row.plan||'{}');return {id:row.id,runId:row.run_id,reviewId:row.review_id,commentId:row.comment_id,channel:row.channel,origin:row.origin,state:row.state,reason:row.reason,priority:row.priority,accountId:row.account_id,accountName:row.account_name,templateId:row.template_id,comment:row.body,commentOrdinal:row.ordinal,postTitle:snapshot.title??snapshot.displayTitle??null,score:row.score,decision:row.decision,recipientId:row.recipient_id,recipientNickname:row.recipient_nickname??null,ruleId:plan.ruleId??null,enqueuedAt:row.enqueued_at,expiresAt:row.expires_at,commentPublishedAt:row.comment_published_at,updatedAt:row.updated_at};}),total,page:current,pageSize:size};
+  return {items:rows.map(row=>{const snapshot=JSON.parse(row.post_snapshot||'{}'),plan=JSON.parse(row.plan||'{}');return {id:row.id,runId:row.run_id,reviewId:row.review_id,commentId:row.comment_id,channel:row.channel,origin:row.origin,state:row.state,reason:row.reason,priority:row.priority,accountId:row.account_id,accountName:row.account_name,templateId:row.template_id,batchId:plan.manualBatchId??null,comment:row.body,commentOrdinal:row.ordinal,postTitle:snapshot.title??snapshot.displayTitle??null,score:row.score,decision:row.decision,recipientId:row.recipient_id,recipientNickname:row.recipient_nickname??null,ruleId:plan.ruleId??null,enqueuedAt:row.enqueued_at,expiresAt:row.expires_at,commentPublishedAt:row.comment_published_at,updatedAt:row.updated_at};}),total,page:current,pageSize:size};
  }
 
  summary(){
@@ -358,7 +359,16 @@ class LocalSendQueue{
   }
   const pause=this.db.prepare("SELECT reason FROM safety_state WHERE id IN('sending','platform') AND reason IS NOT NULL ORDER BY created_at DESC LIMIT 1").get();
   const checking=this.db.prepare("SELECT count(*) n FROM evidence_auto_tasks WHERE state IN('WAITING','RUNNING')").get().n;
-  return {pending:(counts.WAITING_SWITCH??0)+(counts.READY??0)+(counts.SENDING??0),quota:counts.WAITING_QUOTA??0,failed:counts.FAILED??0,unknown:counts.UNKNOWN??0,expired:counts.EXPIRED??0,sending:counts.SENDING??0,autoReply:!!steps.autoReply,autoComment:steps.autoComment!==false,autoDm:steps.autoDm!==false,refreshTime:steps.refreshTime??'00:00',remaining,paused:!!pause,pauseReason:pause?.reason??null,checking};
+  const current=this.db.prepare("SELECT q.state,q.channel,q.recipient_id,q.plan,q.updated_at,c.body,json_extract(c.snapshot,'$.authorNickname') recipient_nickname,p.snapshot post_snapshot,a.name account_name,json_extract(q.plan,'$.manualBatchId') batch_id FROM send_queue q JOIN run_comments c ON c.id=q.comment_id JOIN run_posts p ON p.id=c.post_id LEFT JOIN accounts a ON a.id=q.account_id WHERE q.state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING') AND json_extract(q.plan,'$.manualBatchId') IS NOT NULL ORDER BY (q.state='SENDING') DESC,q.enqueued_at,q.id LIMIT 1").get();
+  let progress=null;
+  if(current){
+   const batch=this.db.prepare("SELECT count(*) total,coalesce(sum(state='SENT'),0) done,coalesce(sum(state IN('FAILED','UNKNOWN','EXPIRED')),0) failed FROM send_queue WHERE json_extract(plan,'$.manualBatchId')=?").get(current.batch_id);
+   const snapshot=JSON.parse(current.post_snapshot||'{}');
+   progress={batchId:current.batch_id,state:current.state,total:batch.total,done:batch.done,failed:batch.failed,channel:current.channel,comment:current.body,postTitle:snapshot.title??snapshot.displayTitle??null,recipientNickname:current.recipient_nickname??null,accountName:current.account_name??null};
+  }
+  const pending=(counts.WAITING_SWITCH??0)+(counts.READY??0)+(counts.SENDING??0);
+  const quota=counts.WAITING_QUOTA??0;
+  return {queue:pending+quota,attention:(counts.FAILED??0)+(counts.UNKNOWN??0)+(counts.EXPIRED??0),pending,quota,failed:counts.FAILED??0,unknown:counts.UNKNOWN??0,expired:counts.EXPIRED??0,sending:counts.SENDING??0,autoReply:!!steps.autoReply,autoComment:steps.autoComment!==false,autoDm:steps.autoDm!==false,refreshTime:steps.refreshTime??'00:00',remaining,paused:!!pause,pauseReason:pause?.reason??null,checking,progress};
  }
 
  template(id,channel){const row=this.db.prepare('SELECT * FROM configurations WHERE id=?').get(id);if(!row||row.archived||row.kind!==channel+'_TEMPLATE')throw new LocalError('CONTACT_TEMPLATE_CHANGED');const body=JSON.parse(row.body),content=body.text??body.content;if(typeof content!=='string'||!content.trim())throw new LocalError('CONTACT_TEMPLATE_CHANGED');return {id:row.id,revision:row.revision,channel,content};}

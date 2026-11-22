@@ -48,6 +48,20 @@ test('pending list follows dispatch order and summary exposes a send pause',t=>{
  const summary=f.sendQueue.summary();assert.equal(summary.paused,true);assert.equal(summary.pauseReason,'SUBMISSION_UNKNOWN');
 });
 
+test("queue tab merges quota and sending while attention keeps failed unknown expired",t=>{
+  const f=reviewed(t,{autoReply:false,channels:["DM"]});f.automation.afterReview(f.run.runId);
+  const source=f.store.db.prepare("SELECT * FROM send_queue").get(),now=Date.now();
+  f.store.db.prepare("DELETE FROM send_queue").run();
+  const insert=f.store.db.prepare("INSERT INTO send_queue(id,run_id,review_id,comment_id,channel,recipient_id,origin,state,priority,manual_now,plan,enqueued_at,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,'MANUAL_REVIEW',?,0,0,?,?,?,?,?)");
+  const rows=[["waiting","WAITING_SWITCH","r1","{}"],["ready","READY","r2",JSON.stringify({manualBatchId:"batch-1"})],["quota","WAITING_QUOTA","r3","{}"],["sending","SENDING","r4",JSON.stringify({manualBatchId:"batch-1"})],["failed","FAILED","r5","{}"],["unknown","UNKNOWN","r6","{}"],["expired","EXPIRED","r7","{}"]];
+  for(const [id,state,recipient,plan] of rows)insert.run(id,source.run_id,source.review_id,source.comment_id,"DM",recipient,state,plan,now,now+86400000,now,now);
+  const queue=f.sendQueue.list({tab:"queue"}),attention=f.sendQueue.list({tab:"attention"}),summary=f.sendQueue.summary();
+  assert.equal(queue.total,4);assert.equal(attention.total,3);assert.equal(summary.queue,4);assert.equal(summary.attention,3);assert.equal(summary.quota,1);assert.equal(summary.sending,1);
+  assert.deepEqual(summary.progress,{batchId:"batch-1",state:"SENDING",total:2,done:0,failed:0,channel:"DM",comment:"想请教学习方法和选题指导",postTitle:"合成学习讨论",recipientNickname:"合成用户",accountName:null});
+  f.store.db.prepare("UPDATE send_queue SET state='SENT' WHERE id='sending'").run();
+  const after=f.sendQueue.summary().progress;assert.equal(after.state,"READY");assert.equal(after.done,1);assert.equal(after.total,2);
+});
+
 test('review completion queues one waiting row per configured channel without the old contact rule snapshot',t=>{
  const f=reviewed(t,{autoReply:false,channels:['DM','COMMENT']});
  assert.deepEqual(f.automation.afterReview(f.run.runId),{queued:2,skipped:0});
