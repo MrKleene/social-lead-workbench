@@ -17,39 +17,74 @@ function settings(db){const row=db.prepare("SELECT value FROM settings WHERE key
 function publishedAt(snapshot){const value=snapshot&&snapshot.publishedAt;const at=typeof value==='string'?Date.parse(value):NaN;return Number.isFinite(at)?at:null;}
 function limitOf(account,dailyLimit){const override=account.daily_limit_override;return Math.min(...[override,dailyLimit,account.daily_limit].filter(value=>Number.isFinite(value)&&value>0));}
 function sample(list,seed){if(!list.length)return null;return list[Math.abs(seed)%list.length];}
+function parseChannels(value){try{const list=Array.isArray(value)?value:JSON.parse(value);return [...new Set((Array.isArray(list)?list:[]).filter(channel=>channel==='COMMENT'||channel==='DM'))];}catch{return [];}}
+function channelOn(steps,channel){if(steps.autoReply!==true)return false;return channel==='COMMENT'?steps.autoComment!==false:steps.autoDm!==false;}
+function offReason(steps){return steps.autoReply===true?'AUTO_CHANNEL_OFF':'AUTO_REPLY_OFF';}
+
 class LocalSendQueue{
  constructor(store){this.store=store;this.db=store.db;this.review=new LocalReview(store);}
+
+ /* ---------- 入队规则 ---------- */
+ rules(){
+  return this.db.prepare('SELECT q.*,p.name policy_name FROM queue_rules q LEFT JOIN review_policies p ON p.id=q.policy_id ORDER BY q.system_default DESC,q.created_at,q.id').all().map(row=>({id:row.id,policyId:row.policy_id,policyName:row.policy_name??null,threshold:row.threshold,channels:parseChannels(row.channels),enabled:row.enabled===1,systemDefault:row.system_default===1,version:row.version,updatedAt:row.updated_at}));
+ }
+ ruleForPolicy(policyId){return this.db.prepare('SELECT * FROM queue_rules WHERE policy_id=?').get(policyId)??null;}
+ rule(id){return this.db.prepare('SELECT * FROM queue_rules WHERE id=?').get(id)??null;}
+ saveRule({id,policyId,threshold,channels,enabled=true,version=0}={}){
+  const existing=id?this.rule(id):(policyId?this.ruleForPolicy(policyId):null);
+  if(!existing&&!policyId)throw new LocalError('QUEUE_RULE_POLICY_REQUIRED');
+  const targetPolicy=existing?existing.policy_id:policyId;
+  if(typeof targetPolicy!=='string'||!this.db.prepare('SELECT 1 FROM review_policies WHERE id=? AND NOT EXISTS(SELECT 1 FROM configurations c WHERE c.id=review_policies.id AND c.archived=1)').get(targetPolicy))throw new LocalError('REVIEW_POLICY_CHANGED');
+  if(!Number.isInteger(threshold)||threshold<0||threshold>100)throw new LocalError('INVALID_QUEUE_RULE');
+  if(!Array.isArray(channels)||!channels.length||new Set(channels).size!==channels.length||channels.some(channel=>channel!=='COMMENT'&&channel!=='DM'))throw new LocalError('INVALID_QUEUE_RULE');
+  if(typeof enabled!=='boolean')throw new LocalError('INVALID_QUEUE_RULE');
+  return this.store.transaction(()=>{
+   const now=this.store.clock();
+   if(existing){
+    if(!Number.isInteger(version)||version!==existing.version)throw new LocalError('QUEUE_RULE_CHANGED');
+    this.db.prepare('UPDATE queue_rules SET threshold=?,channels=?,enabled=?,version=version+1,updated_at=? WHERE id=?').run(threshold,canonical(channels),enabled?1:0,now,existing.id);
+    this.store.audit('LOCAL_USER','QUEUE_RULE_SAVED',existing.id,{threshold,channels,enabled,version:existing.version+1});
+    return this.rules().find(rule=>rule.id===existing.id);
+   }
+   if(version!==0&&version!==null&&version!==undefined)throw new LocalError('QUEUE_RULE_CHANGED');
+   if(this.ruleForPolicy(targetPolicy))throw new LocalError('QUEUE_RULE_CHANGED');
+   const ruleId=randomUUID();
+   this.db.prepare('INSERT INTO queue_rules(id,policy_id,threshold,channels,enabled,system_default,version,created_at,updated_at) VALUES(?,?,?,?,?,0,1,?,?)').run(ruleId,targetPolicy,threshold,canonical(channels),enabled?1:0,now,now);
+   this.store.audit('LOCAL_USER','QUEUE_RULE_SAVED',ruleId,{policyId:targetPolicy,threshold,channels,enabled,version:1});
+   return this.rules().find(rule=>rule.id===ruleId);
+  });
+ }
+ deleteRule({id,version}={}){
+  const row=id?this.rule(id):null;
+  if(!row)throw new LocalError('QUEUE_RULE_NOT_FOUND');
+  if(row.system_default===1)throw new LocalError('QUEUE_RULE_SYSTEM_DEFAULT');
+  if(!Number.isInteger(version)||version!==row.version)throw new LocalError('QUEUE_RULE_CHANGED');
+  return this.store.transaction(()=>{this.db.prepare('DELETE FROM queue_rules WHERE id=?').run(id);this.store.audit('LOCAL_USER','QUEUE_RULE_DELETED',id,{policyId:row.policy_id});return {id};});
+ }
 
  /* ---------- 入队 ---------- */
  enqueueAfterReview(runId){return this.store.transaction(()=>{
   const run=this.db.prepare('SELECT * FROM collection_runs WHERE id=?').get(runId);
   if(!run)throw new LocalError('RUN_NOT_FOUND');
   if(!this.review.barrier(runId).ready)return {waiting:true,queued:0,skipped:0};
-  const snapshot=JSON.parse(run.snapshot);
-  const refs=snapshot.strictStages?.contactRules??[];
-  if(!refs.length)return {queued:0,skipped:0};
-  const steps=settings(this.db),on=!!steps.autoReply,now=this.store.clock();
+  const steps=settings(this.db),now=this.store.clock();
+  const reviews=this.db.prepare("SELECT r.*,b.run_id,b.policy_id,b.policy_revision,b.model,c.user_id,c.ordinal,c.platform_id,c.body,c.source_hash current_source_hash,c.snapshot comment_snapshot,c.post_id,p.platform_id post_platform_id FROM review_results r JOIN review_batches b ON b.id=r.batch_id JOIN run_comments c ON c.id=r.comment_id JOIN run_posts p ON p.id=c.post_id WHERE b.run_id=? AND b.state='COMPLETED' ORDER BY c.ordinal,r.id").all(runId);
   let queued=0,skipped=0;
-  for(const ref of refs){
-   let rule;try{rule=this.frozenRule(ref);}catch{skipped++;continue;}
-   const channels=[...new Set(JSON.parse(rule.plans).map(plan=>plan.channel))];
-   if(!channels.length)continue;
-   const reviews=this.db.prepare("SELECT r.*,b.run_id,b.policy_id,b.policy_revision,b.model,c.user_id,c.ordinal,c.platform_id,c.body,c.source_hash current_source_hash,c.snapshot comment_snapshot,c.post_id,p.platform_id post_platform_id FROM review_results r JOIN review_batches b ON b.id=r.batch_id JOIN run_comments c ON c.id=r.comment_id JOIN run_posts p ON p.id=c.post_id WHERE b.run_id=? AND b.policy_id=? AND b.state='COMPLETED' ORDER BY c.ordinal,r.id").all(runId,rule.policy_id);
-   const claimed=new Set();
-   for(const channel of channels){
-    for(const row of reviews){
-     const key=row.user_id+'\u0000'+channel;
-     if(claimed.has(key))continue;
-     if(!this.eligible(row,channel,rule,'AUTO')){continue;}
-     const dup=this.existing(row.user_id,channel);
-     if(dup){claimed.add(key);skipped++;continue;}
-     const plan=this.freezePlan(rule,row,channel,'AUTO');
-     const published=publishedAt(JSON.parse(row.comment_snapshot||'{}'));
-     const expires=Math.min(now+MAX_AGE_MS,published!==null?published+MAX_AGE_MS:now+MAX_AGE_MS);
-     const state=published!==null&&published+MAX_AGE_MS<=now?'EXPIRED':on?'READY':'WAITING_SWITCH';
-     this.insert({runId:row.run_id,reviewId:row.id,commentId:row.comment_id,channel,recipientId:row.user_id,origin:'AUTO',state,priority:0,manualNow:0,plan,published,expires,now,reason:state==='EXPIRED'?'COMMENT_TOO_OLD':null});
-     claimed.add(key);queued++;
-    }
+  const claimed=new Set();
+  for(const row of reviews){
+   const rule=this.ruleForPolicy(row.policy_id);
+   if(!rule||rule.enabled!==1){skipped++;continue;}
+   for(const channel of parseChannels(rule.channels)){
+    const key=row.user_id+'\u0000'+channel;
+    if(claimed.has(key))continue;
+    if(!this.eligible(row,channel,rule,'AUTO')){continue;}
+    if(this.existing(row.user_id,channel)){claimed.add(key);skipped++;continue;}
+    const plan=this.freezePlan(rule,row,channel,'AUTO',steps);
+    const published=publishedAt(JSON.parse(row.comment_snapshot||'{}'));
+    const expires=Math.min(now+MAX_AGE_MS,published!==null?published+MAX_AGE_MS:now+MAX_AGE_MS);
+    const state=this.enqueueState(channel,steps,published,now);
+    this.insert({runId:row.run_id,reviewId:row.id,commentId:row.comment_id,channel,recipientId:row.user_id,origin:'AUTO',state:state.state,priority:0,manualNow:0,plan,published,expires,now,reason:state.reason});
+    claimed.add(key);queued++;
    }
   }
   if(queued)this.store.audit('AUTOMATION','SEND_QUEUE_AUTO_ENQUEUED',runId,{queued});
@@ -61,27 +96,53 @@ class LocalSendQueue{
   const row=this.db.prepare("SELECT r.*,b.run_id,b.policy_id,b.policy_revision,b.model,c.user_id,c.ordinal,c.platform_id,c.body,c.source_hash current_source_hash,c.snapshot comment_snapshot,c.post_id,p.platform_id post_platform_id FROM review_results r JOIN review_batches b ON b.id=r.batch_id JOIN run_comments c ON c.id=r.comment_id JOIN run_posts p ON p.id=c.post_id WHERE r.id=?").get(reviewId);
   if(!row)throw new LocalError('REVIEW_RESULT_NOT_FOUND');
   if(row.review_status!=='APPROVED')throw new LocalError('REVIEW_NOT_APPROVED');
-  const run=this.db.prepare('SELECT * FROM collection_runs WHERE id=?').get(row.run_id);
-  const refs=JSON.parse(run.snapshot).strictStages?.contactRules??[];
-  let rule=null;
-  for(const ref of refs){if(ref.policyId===row.policy_id||!ref.policyId){try{const candidate=this.frozenRule(ref);if(candidate.policy_id===row.policy_id){rule=candidate;break;}}catch{}}}
-  if(!rule){rule=this.db.prepare('SELECT * FROM contact_rules WHERE enabled=1 AND policy_id=? ORDER BY authorized_at DESC LIMIT 1').get(row.policy_id)??null;}
-  if(!rule)throw new LocalError('SEND_QUEUE_CONFIGURATION_MISSING');
-  const now=this.store.clock(),on=!!settings(this.db).autoReply;
-  const channels=[...new Set(JSON.parse(rule.plans).map(plan=>plan.channel))];
+  const rule=this.ruleForPolicy(row.policy_id);
+  if(!rule)throw new LocalError('QUEUE_RULE_CONFIGURATION_MISSING');
+  const channels=parseChannels(rule.channels);
+  if(!channels.length)throw new LocalError('QUEUE_RULE_CONFIGURATION_MISSING');
+  const now=this.store.clock(),steps=settings(this.db);
   let queued=0;
   for(const channel of channels){
    if(this.existing(row.user_id,channel))continue;
    if(!this.eligible(row,channel,rule,'MANUAL_REVIEW'))throw new LocalError('SEND_QUEUE_ELIGIBILITY_CHANGED');
-   const plan=this.freezePlan(rule,row,channel,'MANUAL_REVIEW');
+   const plan=this.freezePlan(rule,row,channel,'MANUAL_REVIEW',steps);
    const published=publishedAt(JSON.parse(row.comment_snapshot||'{}'));
    const expires=Math.min(now+MAX_AGE_MS,published!==null?published+MAX_AGE_MS:now+MAX_AGE_MS);
-   const state=published!==null&&published+MAX_AGE_MS<=now?'EXPIRED':on?'READY':'WAITING_SWITCH';
-   this.insert({runId:row.run_id,reviewId:row.id,commentId:row.comment_id,channel,recipientId:row.user_id,origin:'MANUAL_REVIEW',state,priority:0,manualNow:0,plan,published,expires,now,reason:state==='EXPIRED'?'COMMENT_TOO_OLD':null});
+   const state=this.enqueueState(channel,steps,published,now);
+   this.insert({runId:row.run_id,reviewId:row.id,commentId:row.comment_id,channel,recipientId:row.user_id,origin:'MANUAL_REVIEW',state:state.state,priority:0,manualNow:0,plan,published,expires,now,reason:state.reason});
    queued++;
   }
   if(queued)this.store.audit('LOCAL_USER','SEND_QUEUE_REVIEW_ENQUEUED',reviewId,{queued});
   return {queued};
+ }
+
+ /* ---------- 一键生成 ---------- */
+ generate({apply=false}={}){
+  const steps=settings(this.db),now=this.store.clock();
+  const rows=this.db.prepare("SELECT r.*,b.run_id,b.policy_id,c.user_id,c.ordinal,c.platform_id,c.body,c.source_hash current_source_hash,c.snapshot comment_snapshot,c.post_id,p.platform_id post_platform_id,q.id rule_id,q.threshold,q.channels,q.enabled,q.version rule_version FROM review_results r JOIN review_batches b ON b.id=r.batch_id JOIN run_comments c ON c.id=r.comment_id JOIN run_posts p ON p.id=c.post_id JOIN queue_rules q ON q.policy_id=b.policy_id AND q.enabled=1 WHERE b.state='COMPLETED' AND r.review_status IN('PENDING','APPROVED') ORDER BY r.created_at DESC,r.id").all();
+  const claimed=new Set(),comments=new Set();
+  let commentRows=0,dmRows=0,expired=0,skipped=0;
+  const inserts=[];
+  for(const row of rows){
+   const rule={id:row.rule_id,policy_id:row.policy_id,threshold:row.threshold,channels:row.channels,version:row.rule_version,enabled:row.enabled};
+   const origin=row.review_status==='APPROVED'?'MANUAL_REVIEW':'AUTO';
+   for(const channel of parseChannels(rule.channels)){
+    const key=row.user_id+'\u0000'+channel;
+    if(claimed.has(key))continue;
+    if(!this.eligible(row,channel,rule,origin)){skipped++;continue;}
+    if(this.existing(row.user_id,channel)){claimed.add(key);skipped++;continue;}
+    const plan=this.freezePlan(rule,row,channel,origin,steps);
+    const published=publishedAt(JSON.parse(row.comment_snapshot||'{}'));
+    const expires=Math.min(now+MAX_AGE_MS,published!==null?published+MAX_AGE_MS:now+MAX_AGE_MS);
+    const state=this.enqueueState(channel,steps,published,now);
+    if(state.state==='EXPIRED')expired++;
+    claimed.add(key);comments.add(row.id);
+    if(apply)inserts.push({runId:row.run_id,reviewId:row.id,commentId:row.comment_id,channel,recipientId:row.user_id,origin,state:state.state,priority:0,manualNow:0,plan,published,expires,now,reason:state.reason});
+    if(channel==='COMMENT')commentRows++;else dmRows++;
+   }
+  }
+  if(apply&&inserts.length)this.store.transaction(()=>{for(const item of inserts)this.insert(item);this.store.audit('LOCAL_USER','SEND_QUEUE_GENERATED','all',{comments:comments.size,commentRows,dmRows,expired,skipped});});
+  return {apply:!!apply,comments:comments.size,commentRows,dmRows,expired,skipped};
  }
 
  /* ---------- 调度 ---------- */
@@ -91,9 +152,11 @@ class LocalSendQueue{
   this.purge(now);
   this.recoverRows(now);
   if(this.db.prepare("SELECT 1 FROM send_queue WHERE state='SENDING' LIMIT 1").get())return {started:false};
-  const switched=!!steps.autoReply;
-  this.db.prepare("UPDATE send_queue SET state='READY',reason=NULL,updated_at=? WHERE manual_now=0 AND state='WAITING_SWITCH' AND ?=1").run(now,switched?1:0);
-  this.db.prepare("UPDATE send_queue SET state='WAITING_SWITCH',reason='AUTO_REPLY_OFF',updated_at=? WHERE manual_now=0 AND state IN('READY','WAITING_QUOTA') AND ?=0").run(now,switched?1:0);
+  for(const row of this.db.prepare("SELECT id,channel,state FROM send_queue WHERE manual_now=0 AND state IN('WAITING_SWITCH','READY','WAITING_QUOTA')").all()){
+   const on=channelOn(steps,row.channel);
+   if(on&&row.state==='WAITING_SWITCH')this.db.prepare("UPDATE send_queue SET state='READY',reason=NULL,updated_at=? WHERE id=?").run(now,row.id);
+   else if(!on&&row.state!=='WAITING_SWITCH')this.db.prepare("UPDATE send_queue SET state='WAITING_SWITCH',reason=?,updated_at=? WHERE id=?").run(offReason(steps),now,row.id);
+  }
   if(this.db.prepare("SELECT 1 FROM safety_state WHERE id IN('sending','platform') AND reason IS NOT NULL").get())return {started:false,paused:true};
   const rows=this.db.prepare("SELECT * FROM send_queue WHERE state IN('READY','WAITING_QUOTA') ORDER BY priority DESC,enqueued_at,id LIMIT 20").all();
   for(const row of rows){
@@ -104,54 +167,61 @@ class LocalSendQueue{
  });}
 
  scheduleOne(row,now){
-  const plan=JSON.parse(row.plan);
+  const steps=settings(this.db);
+  let plan=JSON.parse(row.plan);
   const rowData=this.db.prepare("SELECT r.*,b.run_id,b.policy_id,b.policy_revision,b.model,c.user_id,c.platform_id,c.body,c.source_hash current_source_hash,c.snapshot comment_snapshot,c.post_id,p.platform_id post_platform_id FROM review_results r JOIN review_batches b ON b.id=r.batch_id JOIN run_comments c ON c.id=r.comment_id JOIN run_posts p ON p.id=c.post_id WHERE r.id=?").get(row.review_id);
-  const manual=row.manual_now===1,origin=manual?'MANUAL_SEND':row.origin;
-  if(!rowData||!this.eligible(rowData,row.channel,{id:plan.ruleId,policy_id:plan.policyId,threshold:plan.threshold,plans:canonical(plan.templates),accounts:canonical(plan.accounts)},origin)){
+  if(!rowData||!this.eligible(rowData,row.channel,{threshold:plan.threshold},row.manual_now===1?'MANUAL_SEND':row.origin)){
    this.db.prepare("UPDATE send_queue SET state='FAILED',reason=?,updated_at=?,settled_at=? WHERE id=?").run('ELIGIBILITY_CHANGED',now,now,row.id);
    this.store.audit('AUTOMATION','SEND_QUEUE_ELIGIBILITY_FAILED',row.id,{});
    return {started:false};
   }
+  if(!(plan.templates??[]).length||!(plan.accounts??[]).length){
+   const rule=this.ruleForPolicy(plan.policyId);
+   if(rule){plan=this.freezePlan(rule,rowData,row.channel,row.manual_now===1?'MANUAL_SEND':row.origin,steps);this.db.prepare('UPDATE send_queue SET plan=?,updated_at=? WHERE id=?').run(canonical(plan),now,row.id);}
+  }
   const picked=this.pickAccount(row,plan,now);
-  if(!picked){this.db.prepare("UPDATE send_queue SET state='WAITING_QUOTA',reason=?,updated_at=? WHERE id=?").run('ACCOUNT_POOL_QUOTA_EXHAUSTED',now,row.id);return {started:false};}
-  const template=this.pickTemplate(plan,row.channel,picked.account.id,row.id);
+  if(!picked.item){this.db.prepare("UPDATE send_queue SET state='WAITING_QUOTA',reason=?,updated_at=? WHERE id=?").run(picked.reason,now,row.id);return {started:false};}
+  const account=picked.item;
+  const template=this.pickTemplate(plan,row.channel,account.account.id,row.id);
   if(!template){this.db.prepare("UPDATE send_queue SET state='FAILED',reason=?,updated_at=?,settled_at=? WHERE id=?").run('TEMPLATE_CHANGED',now,now,row.id);return {started:false};}
-  const scope=this.buildScope(row,plan,rowData,picked.account,template,manual);
-  const at=this.slot(row,plan,picked.account.id,now);
+  const manual=row.manual_now===1;
+  const scope=this.buildScope(row,plan,rowData,account.account,template,manual);
+  const at=this.slot(row,plan,account.account.id,now);
   const authId=randomUUID(),jobId=randomUUID(),jobAt=Math.max(now,at);
   this.db.prepare("INSERT INTO authorizations(id,purpose,scope,scope_hash,state,issuer,parent_proof,created_at,expires_at) VALUES(?,'SEND',?,?,'ACTIVE',?,?,?,?)").run(authId,canonical(scope),hash(scope),manual?'LOCAL_USER':(row.origin==='MANUAL_SEND'?'LOCAL_USER':'AUTOMATION'),canonical({queueId:row.id,runId:row.run_id}),now,Math.min(now+900000,now+3600000));
   this.db.prepare("INSERT INTO jobs(id,request_key,kind,payload,payload_hash,authorization_id,state,created_at,updated_at,available_at) VALUES(?,?,'SEND',?,?,?,'QUEUED',?,?,?)").run(jobId,'sendq:'+row.id+':'+randomUUID(),canonical(scope),hash(scope),authId,now,now,jobAt);
-  this.db.prepare("UPDATE send_queue SET state='SENDING',account_id=?,template_id=?,job_id=?,scope_hash=?,reason=NULL,updated_at=? WHERE id=?").run(picked.account.id,template.templateId??null,jobId,hash(scope),now,row.id);
-  this.store.audit('AUTOMATION','SEND_QUEUE_DISPATCHED',row.id,{jobId,accountId:picked.account.id,channel:row.channel,availableAt:jobAt});
+  this.db.prepare("UPDATE send_queue SET state='SENDING',account_id=?,template_id=?,job_id=?,scope_hash=?,reason=NULL,updated_at=? WHERE id=?").run(account.account.id,template.templateId??null,jobId,hash(scope),now,row.id);
+  this.store.audit('AUTOMATION','SEND_QUEUE_DISPATCHED',row.id,{jobId,accountId:account.account.id,channel:row.channel,availableAt:jobAt});
   return {started:true,id:jobId};
  }
 
  pickAccount(row,plan,now){
-  const accounts=plan.accounts??[];
-  const available=[];
+  const accounts=plan.accounts??[],available=[];
+  let blocked=false,quota=false;
   for(const candidate of accounts){
    try{
     const account=assertConfiguredSendAccount(this.store,candidate.id,candidate.version,row.channel);
-    const limit=limitOf(account,candidate.dailyLimit);
-    if(!(limit>0))continue;
     const day=currentQuotaDay(this.store),used=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(candidate.id,day);
+    if(used?.daily_limit_override===0){quota=true;continue;}
+    const limit=limitOf(used?.daily_limit_override!=null?{...account,daily_limit_override:used.daily_limit_override}:account,candidate.dailyLimit);
+    if(!(limit>0)){quota=true;continue;}
     const pending=this.db.prepare("SELECT count(*) n FROM jobs j WHERE j.kind='SEND' AND j.state IN('QUEUED','RUNNING') AND json_extract(j.payload,'$.accountId')=? AND NOT EXISTS(SELECT 1 FROM send_attempts a WHERE a.request_key=j.request_key)").get(candidate.id).n;
-    if((used?.occupied??0)+pending>=limit)continue;
+    if((used?.occupied??0)+pending>=limit){quota=true;continue;}
     available.push({account,version:candidate.version,dailyLimit:candidate.dailyLimit,limit,remaining:limit-(used?.occupied??0)-pending});
-   }catch{/* 受限或未验证的账号不参与本轮调度 */}
+   }catch{blocked=true;}
   }
-  if(!available.length)return null;
+  if(!available.length)return {item:null,reason:blocked&&!quota?'ACCOUNT_POOL_UNAVAILABLE':quota?'ACCOUNT_POOL_QUOTA_EXHAUSTED':'ACCOUNT_POOL_EMPTY'};
   const last=this.lastScheduled();
   if(last){
    const same=available.find(item=>item.account.id===last.accountId);
    if(same&&same.remaining>0){
     const target=1+hashNumber(dayAt(now)+same.account.id)%5;
     const done=this.db.prepare("SELECT count(*) n FROM send_attempts WHERE account_id=? AND channel=? AND created_at>=?").get(same.account.id,row.channel,dayStart(now)).n;
-    if(done<target)return same;
+    if(done<target)return {item:same,reason:null};
    }
   }
   const others=last?available.filter(item=>item.account.id!==last.accountId):available;
-  return sample(others.length?others:available,hashNumber(row.id+':'+now));
+  return {item:sample(others.length?others:available,hashNumber(row.id+':'+now)),reason:null};
  }
 
  pickTemplate(plan,channel,accountId,queueId){
@@ -198,8 +268,8 @@ class LocalSendQueue{
  retry(id){return this.store.transaction(()=>{
   const row=this.require(id);
   if(row.state!=='FAILED')throw new LocalError('SEND_QUEUE_NOT_RETRYABLE');
-  const on=!!settings(this.db).autoReply;
-  this.db.prepare('UPDATE send_queue SET state=?,reason=NULL,account_id=NULL,template_id=NULL,job_id=NULL,scope_hash=NULL,updated_at=?,settled_at=NULL WHERE id=?').run(row.manual_now||on?'READY':'WAITING_SWITCH',this.store.clock(),id);
+  const steps=settings(this.db),state=this.resumeState(row,steps);
+  this.db.prepare('UPDATE send_queue SET state=?,reason=?,account_id=NULL,template_id=NULL,job_id=NULL,scope_hash=NULL,updated_at=?,settled_at=NULL WHERE id=?').run(state.state,state.reason,this.store.clock(),id);
   this.store.audit('LOCAL_USER','SEND_QUEUE_RETRIED',id,{});
   return {id};
  });}
@@ -208,8 +278,8 @@ class LocalSendQueue{
   const row=this.require(id),now=this.store.clock();
   if(row.state!=='EXPIRED')throw new LocalError('SEND_QUEUE_NOT_EXPIRED');
   if(row.comment_published_at!==null&&row.comment_published_at+MAX_AGE_MS<=now&&!override)throw new LocalError('COMMENT_TOO_OLD');
-  const on=!!settings(this.db).autoReply;
-  this.db.prepare('UPDATE send_queue SET state=?,reason=?,account_id=NULL,template_id=NULL,job_id=NULL,scope_hash=NULL,enqueued_at=?,expires_at=?,updated_at=?,settled_at=NULL WHERE id=?').run(on?'READY':'WAITING_SWITCH',override?'MANUAL_RECOVERED':null,now,now+MAX_AGE_MS,now,id);
+  const steps=settings(this.db),state=this.resumeState(row,steps);
+  this.db.prepare('UPDATE send_queue SET state=?,reason=?,account_id=NULL,template_id=NULL,job_id=NULL,scope_hash=NULL,enqueued_at=?,expires_at=?,updated_at=?,settled_at=NULL WHERE id=?').run(state.state,override?'MANUAL_RECOVERED':state.reason,now,now+MAX_AGE_MS,now,id);
   this.store.audit('LOCAL_USER','SEND_QUEUE_REQUEUED',id,{override});
   return {id};
  });}
@@ -264,7 +334,7 @@ class LocalSendQueue{
   if(typeof query==='string'&&query.trim()){filter+=' AND (c.body LIKE ? OR p.snapshot LIKE ? OR q.recipient_id LIKE ?)';const like='%'+query.trim()+'%';args.push(like,like,like);}
   const total=this.db.prepare('SELECT count(*) n FROM send_queue q JOIN run_comments c ON c.id=q.comment_id JOIN run_posts p ON p.id=c.post_id WHERE '+filter).get(...args).n;
   const rows=this.db.prepare("SELECT q.*,c.body,c.ordinal,p.snapshot post_snapshot,r.score,r.decision,a.name account_name,(SELECT count(*) FROM send_queue x WHERE x.run_id=q.run_id AND x.channel=q.channel AND x.recipient_id=q.recipient_id AND x.state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING','SENT')) same_recipient FROM send_queue q JOIN run_comments c ON c.id=q.comment_id JOIN run_posts p ON p.id=c.post_id JOIN review_results r ON r.id=q.review_id LEFT JOIN accounts a ON a.id=q.account_id WHERE "+filter+' ORDER BY q.priority DESC,q.enqueued_at DESC,q.id DESC LIMIT ? OFFSET ?').all(...args,size,(current-1)*size);
-  return {items:rows.map(row=>{const snapshot=JSON.parse(row.post_snapshot||'{}');return {id:row.id,runId:row.run_id,reviewId:row.review_id,commentId:row.comment_id,channel:row.channel,origin:row.origin,state:row.state,reason:row.reason,priority:row.priority,accountId:row.account_id,accountName:row.account_name,templateId:row.template_id,comment:row.body,commentOrdinal:row.ordinal,postTitle:snapshot.title??snapshot.displayTitle??null,score:row.score,decision:row.decision,recipientId:row.recipient_id,enqueuedAt:row.enqueued_at,expiresAt:row.expires_at,commentPublishedAt:row.comment_published_at,updatedAt:row.updated_at};}),total,page:current,pageSize:size};
+  return {items:rows.map(row=>{const snapshot=JSON.parse(row.post_snapshot||'{}'),plan=JSON.parse(row.plan||'{}');return {id:row.id,runId:row.run_id,reviewId:row.review_id,commentId:row.comment_id,channel:row.channel,origin:row.origin,state:row.state,reason:row.reason,priority:row.priority,accountId:row.account_id,accountName:row.account_name,templateId:row.template_id,comment:row.body,commentOrdinal:row.ordinal,postTitle:snapshot.title??snapshot.displayTitle??null,score:row.score,decision:row.decision,recipientId:row.recipient_id,ruleId:plan.ruleId??null,enqueuedAt:row.enqueued_at,expiresAt:row.expires_at,commentPublishedAt:row.comment_published_at,updatedAt:row.updated_at};}),total,page:current,pageSize:size};
  }
 
  summary(){
@@ -274,11 +344,11 @@ class LocalSendQueue{
   for(const accountId of steps.replyAccountIds??[]){
    const account=this.db.prepare('SELECT * FROM accounts WHERE id=?').get(accountId);if(!account)continue;
    if(account.state!=='VERIFIED'||!account.session_ref||!account.platform_user_id)continue;
-   const used=this.db.prepare('SELECT occupied FROM account_days WHERE account_id=? AND day=?').get(accountId,day)?.occupied??0;
-   const limit=Math.min(...[account.daily_limit_override,account.daily_limit].filter(value=>Number.isFinite(value)&&value>0));
+   const usage=this.db.prepare('SELECT occupied,daily_limit_override FROM account_days WHERE account_id=? AND day=?').get(accountId,day),used=usage?.occupied??0;
+   const limit=Math.min(...[usage?.daily_limit_override,account.daily_limit].filter(value=>Number.isFinite(value)&&value>0));
    if(Number.isFinite(limit))remaining+=Math.max(0,limit-used);
   }
-  return {pending:(counts.WAITING_SWITCH??0)+(counts.READY??0)+(counts.SENDING??0),quota:counts.WAITING_QUOTA??0,failed:counts.FAILED??0,unknown:counts.UNKNOWN??0,expired:counts.EXPIRED??0,sending:counts.SENDING??0,autoReply:!!steps.autoReply,refreshTime:steps.refreshTime??'00:00',remaining};
+  return {pending:(counts.WAITING_SWITCH??0)+(counts.READY??0)+(counts.SENDING??0),quota:counts.WAITING_QUOTA??0,failed:counts.FAILED??0,unknown:counts.UNKNOWN??0,expired:counts.EXPIRED??0,sending:counts.SENDING??0,autoReply:!!steps.autoReply,autoComment:steps.autoComment!==false,autoDm:steps.autoDm!==false,refreshTime:steps.refreshTime??'00:00',remaining};
  }
 
  template(id,channel){const row=this.db.prepare('SELECT * FROM configurations WHERE id=?').get(id);if(!row||row.archived||row.kind!==channel+'_TEMPLATE')throw new LocalError('CONTACT_TEMPLATE_CHANGED');const body=JSON.parse(row.body),content=body.text??body.content;if(typeof content!=='string'||!content.trim())throw new LocalError('CONTACT_TEMPLATE_CHANGED');return {id:row.id,revision:row.revision,channel,content};}
@@ -308,7 +378,7 @@ class LocalSendQueue{
  /* ---------- 内部 ---------- */
  frozenRule(ref){return require('./contact.cjs').LocalContact.prototype.frozen.call({db:this.db},ref);}
  existing(recipientId,channel){
-  if(this.db.prepare("SELECT 1 FROM send_queue WHERE recipient_id=? AND channel=? AND state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING')").get(recipientId,channel))return true;
+  if(this.db.prepare("SELECT 1 FROM send_queue WHERE recipient_id=? AND channel=? AND state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING','SENT')").get(recipientId,channel))return true;
   return !!this.db.prepare("SELECT 1 FROM send_attempts WHERE platform='XHS' AND channel=? AND recipient_id=? AND state IN('RESERVED','DISPATCHED','CONFIRMED','UNKNOWN')").get(channel,recipientId);
  }
  eligible(row,channel,rule,origin){
@@ -317,18 +387,27 @@ class LocalSendQueue{
    if(!row.automatic_contact_allowed||!['PENDING','APPROVED'].includes(row.review_status)||row.decision!=='MATCH'||row.score<rule.threshold)return false;
   }else if(origin==='MANUAL_REVIEW'){
    if(row.review_status!=='APPROVED'||row.manual_decision!=='MATCH')return false;
-  }else if(row.review_status==='REJECTED'){
+  }else if(origin!=='MANUAL_SEND'&&row.review_status==='REJECTED'){
    return false;
   }
-  if(!JSON.parse(rule.plans).some(plan=>plan.channel===channel))return false;
+  if(rule.channels&&!parseChannels(rule.channels).includes(channel))return false;
   const snapshot=JSON.parse(row.comment_snapshot||'{}'),evidence=JSON.parse(row.evidence||'[]');
   if(snapshot.comment!==row.body||snapshot.userId!==row.user_id)return false;
   return evidence.some(item=>item.source==='COMMENT'&&typeof item.quote==='string'&&item.quote.trim()&&row.body.includes(item.quote));
  }
- freezePlan(rule,row,channel,origin){
-  const plans=JSON.parse(rule.plans).filter(plan=>plan.channel===channel).map(plan=>({channel:plan.channel,templateId:plan.templateId??null,templateVersion:plan.templateVersion??null,content:plan.content}));
-  const accounts=JSON.parse(rule.accounts).map(account=>({id:account.id,version:account.version,dailyLimit:account.dailyLimit}));
-  return {ruleId:rule.id,policyId:rule.policy_id,ruleVersion:rule.version,ruleHash:hash({id:rule.id,version:rule.version,policyId:rule.policy_id,policyRevision:rule.policy_revision,model:rule.model,threshold:rule.threshold,plans:JSON.parse(rule.plans),accounts:JSON.parse(rule.accounts)}),threshold:rule.threshold,channel,origin,templates:plans,accounts,eligibilityHash:hash({reviewVersion:row.version,sourceHash:row.source_hash,score:row.score,decision:row.decision,context:row.context,evidence:JSON.parse(row.evidence||'[]')})};
+ freezePlan(rule,row,channel,origin,steps){
+  const templates=this.templatePool(steps,channel),accounts=this.accountPool(steps);
+  return {ruleId:rule.id,policyId:rule.policy_id,ruleVersion:rule.version,ruleHash:hash({id:rule.id,version:rule.version,policyId:rule.policy_id,threshold:rule.threshold,channels:parseChannels(rule.channels)}),threshold:rule.threshold,channel,origin,templates,accounts,eligibilityHash:hash({reviewVersion:row.version,sourceHash:row.source_hash,score:row.score,decision:row.decision,context:row.context,evidence:JSON.parse(row.evidence||'[]')})};
+ }
+ templatePool(steps,channel){const ids=(channel==='DM'?steps.dmTemplateIds:steps.commentTemplateIds)??[];return ids.map(id=>{try{const item=this.template(id,channel);return {channel,templateId:item.id,templateVersion:item.revision,content:item.content};}catch{return null;}}).filter(Boolean);}
+ accountPool(steps){return (steps.replyAccountIds??[]).map(id=>{const row=this.db.prepare('SELECT id,revision,daily_limit FROM accounts WHERE id=?').get(id);return row?{id:row.id,version:row.revision,dailyLimit:row.daily_limit}:null;}).filter(Boolean);}
+ enqueueState(channel,steps,published,now){
+  if(published!==null&&published+MAX_AGE_MS<=now)return {state:'EXPIRED',reason:'COMMENT_TOO_OLD'};
+  return channelOn(steps,channel)?{state:'READY',reason:null}:{state:'WAITING_SWITCH',reason:offReason(steps)};
+ }
+ resumeState(row,steps){
+  if(row.manual_now===1)return {state:'READY',reason:null};
+  return channelOn(steps,row.channel)?{state:'READY',reason:null}:{state:'WAITING_SWITCH',reason:offReason(steps)};
  }
  insert({runId,reviewId,commentId,channel,recipientId,origin,state,priority,manualNow,plan,published,expires,now,reason}){
   this.db.prepare('INSERT INTO send_queue(id,platform,run_id,review_id,comment_id,channel,recipient_id,origin,state,priority,manual_now,plan,reason,comment_published_at,enqueued_at,expires_at,created_at,updated_at) VALUES(?,\'XHS\',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(randomUUID(),runId,reviewId,commentId,channel,recipientId,origin,state,priority,manualNow,canonical(plan),reason,published,now,expires,now,now);

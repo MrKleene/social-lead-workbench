@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {createHash} = require('node:crypto');
-const files = ['schema.sql'];
+const files = ['schema.sql','migrations/002-queue-rules.sql'];
 const migrations = files.map((file, index) => {
   const sql = fs.readFileSync(path.join(__dirname, file), 'utf8');
   return {version: index + 1, sql, checksum: createHash('sha256').update(sql).digest('hex')};

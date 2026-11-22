@@ -15,7 +15,14 @@ test('builtin configurations are seeded read-only and cannot be edited or delete
  assert.ok(rows.every(row=>row.builtin===1));
  const matching=rows.find(row=>row.kind==='MATCHING');
  assert.equal(db.db.prepare('SELECT target FROM review_policies WHERE id=?').get(matching.id).target,matching.body.text);
+ const seeded=service.queueRules();
+ assert.equal(seeded.length,1);
+ assert.equal(seeded[0].policyId,matching.id);
+ assert.equal(seeded[0].threshold,80);
+ assert.deepEqual(seeded[0].channels,['COMMENT','DM']);
+ assert.equal(seeded[0].systemDefault,true);
  assert.deepEqual(service.ensureBuiltinConfigurations(),{created:0,updated:0});
+ assert.equal(service.queueRules().length,1);
  assert.deepEqual(service.configurations().map(row=>row.revision),rows.map(row=>row.revision));
  assert.throws(()=>service.saveConfiguration({id:matching.id,revision:matching.revision,kind:'MATCHING',name:'我改过的匹配',body:{text:'只匹配明确提出开题求助的评论内容。'}}),/BUILTIN_CONFIGURATION_READ_ONLY/);
  assert.throws(()=>service.deleteConfiguration({id:matching.id,revision:matching.revision}),/BUILTIN_CONFIGURATION_READ_ONLY/);

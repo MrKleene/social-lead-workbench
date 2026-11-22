@@ -41,6 +41,37 @@ export function decisionVariant(decision: string | null) {
       : "secondary";
 }
 
+export function queueStatus(row: {
+  review_status: "PENDING" | "APPROVED" | "REJECTED" | null;
+  queue_state: string | null;
+  decision: string | null;
+}) {
+  if (row.queue_state) return { label: "已入队", variant: "success" as const };
+  if (row.review_status === "APPROVED")
+    return { label: "已通过未入队", variant: "success" as const };
+  if (row.review_status === "REJECTED" || row.decision === "NO_MATCH")
+    return { label: "不符合", variant: "secondary" as const };
+  return { label: "待确认", variant: "warning" as const };
+}
+
+/** 只有尚未入队、且不会被自动入队接走的评论才需要人工通过。 */
+export function approvalState(
+  row: {
+    review_status: "PENDING" | "APPROVED" | "REJECTED" | null;
+    queue_state: string | null;
+    decision: string | null;
+    score: number | null;
+  },
+  rule: { threshold: number; enabled: boolean } | null,
+) {
+  if (row.review_status !== "PENDING" || row.queue_state || row.decision === "NO_MATCH")
+    return { canApprove: false, approveHint: undefined as string | undefined };
+  if (!rule) return { canApprove: false, approveHint: "未配置入队规则" };
+  if (row.decision === "UNCERTAIN" || !rule.enabled || (row.score ?? 0) < rule.threshold)
+    return { canApprove: true, approveHint: undefined as string | undefined };
+  return { canApprove: false, approveHint: "自动入队" };
+}
+
 export function statusVariant(status: string | null) {
   return status === "APPROVED"
     ? "success"
@@ -105,5 +136,7 @@ export function toReview(
     review_mode: row.review_mode === "INDEPENDENT" ? "INDEPENDENT" : "FROZEN_RUN",
     review_status: row.review_status ?? "PENDING",
     version: row.version ?? 1,
+    queue_state: row.queue_state,
+    queue_channels: row.queue_channels,
   };
 }

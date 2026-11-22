@@ -31,6 +31,9 @@ class LocalPreferences{
    autoReview:saved.autoReview===true,
    policyId:validId(saved.policyId)&&this.policy(saved.policyId)?saved.policyId:null,
    autoReply:saved.autoReply===true,
+   // 两个渠道各自是否参与自动派发；旧数据没有这两个字段时保持原行为（两个渠道都允许）。
+   autoComment:typeof saved.autoComment==='boolean'?saved.autoComment:true,
+   autoDm:typeof saved.autoDm==='boolean'?saved.autoDm:true,
    // 模板池：可以选多条，发送时从中挑一条（不与上一条重复）。旧数据只有单条，按单元素池读。
    commentTemplateIds:this.templateIds(saved.commentTemplateIds??(saved.commentTemplateId?[saved.commentTemplateId]:[]),'COMMENT'),
    dmTemplateIds:this.templateIds(saved.dmTemplateIds??(saved.dmTemplateId?[saved.dmTemplateId]:[]),'DM'),
@@ -39,18 +42,24 @@ class LocalPreferences{
    threshold:Number.isInteger(saved.threshold)&&saved.threshold>=0&&saved.threshold<=100?saved.threshold:80,
    refreshTime:typeof saved.refreshTime==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(saved.refreshTime)?saved.refreshTime:'00:00'};
  }
- saveSteps({version,autoReview,policyId,autoReply,commentTemplateIds,dmTemplateIds,replyAccountIds,threshold,refreshTime='00:00'}){
+ saveSteps({version,autoReview,policyId,autoReply,autoComment,autoDm,commentTemplateIds,dmTemplateIds,replyAccountIds,threshold,refreshTime='00:00'}){
+  const current=this.steps();
+  const commentOn=typeof autoComment==='boolean'?autoComment:current.autoComment;
+  const dmOn=typeof autoDm==='boolean'?autoDm:current.autoDm;
   const accounts=replyAccountIds??[],comments=commentTemplateIds??[],dms=dmTemplateIds??[];
   const ids=list=>Array.isArray(list)&&list.length<=20&&list.every(id=>validId(id))&&new Set(list).size===list.length;
-  if(!Number.isInteger(version)||version<0||typeof autoReview!=='boolean'||typeof autoReply!=='boolean'||policyId!==null&&!validId(policyId)||!ids(comments)||!ids(dms)||!Array.isArray(accounts)||accounts.length>100||accounts.some(x=>!validId(x))||new Set(accounts).size!==accounts.length||!Number.isInteger(threshold)||threshold<0||threshold>100||typeof refreshTime!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(refreshTime))throw new LocalError('INVALID_AUTOMATION_STEPS');
+  if(!Number.isInteger(version)||version<0||typeof autoReview!=='boolean'||typeof autoReply!=='boolean'||typeof commentOn!=='boolean'||typeof dmOn!=='boolean'||policyId!==null&&!validId(policyId)||!ids(comments)||!ids(dms)||!Array.isArray(accounts)||accounts.length>100||accounts.some(x=>!validId(x))||new Set(accounts).size!==accounts.length||!Number.isInteger(threshold)||threshold<0||threshold>100||typeof refreshTime!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(refreshTime))throw new LocalError('INVALID_AUTOMATION_STEPS');
+  if(autoReply&&!commentOn&&!dmOn)throw new LocalError('AUTOMATION_CHANNEL_REQUIRED');
+  if(autoReply&&(commentOn&&!comments.length||dmOn&&!dms.length))throw new LocalError('AUTOMATION_TEMPLATE_REQUIRED');
+  if(autoReply&&!accounts.length)throw new LocalError('AUTOMATION_ACCOUNT_REQUIRED');
   return this.store.transaction(()=>{
    if(this.steps().version!==version)throw new LocalError('PREFERENCE_CHANGED');
    if(policyId&&!this.policy(policyId))throw new LocalError('REVIEW_POLICY_CHANGED');
    for(const id of comments)if(!this.template(id,'COMMENT'))throw new LocalError('CONTACT_TEMPLATE_CHANGED');
    for(const id of dms)if(!this.template(id,'DM'))throw new LocalError('CONTACT_TEMPLATE_CHANGED');
    for(const id of accounts)if(!this.account(id))throw new LocalError('PREFERRED_ACCOUNT_UNAVAILABLE');
-   this.put('automation-steps',{autoReview,policyId,autoReply,commentTemplateIds:comments,dmTemplateIds:dms,replyAccountIds:accounts,threshold,refreshTime},version+1);
-   this.store.audit('LOCAL_USER','AUTOMATION_STEPS_SAVED',policyId??'none',{version:version+1,autoReview,policyId,autoReply,commentTemplateIds:comments,dmTemplateIds:dms,replyAccountIds:accounts,threshold,refreshTime});
+   this.put('automation-steps',{autoReview,policyId,autoReply,autoComment:commentOn,autoDm:dmOn,commentTemplateIds:comments,dmTemplateIds:dms,replyAccountIds:accounts,threshold,refreshTime},version+1);
+   this.store.audit('LOCAL_USER','AUTOMATION_STEPS_SAVED',policyId??'none',{version:version+1,autoReview,policyId,autoReply,autoComment:commentOn,autoDm:dmOn,commentTemplateIds:comments,dmTemplateIds:dms,replyAccountIds:accounts,threshold,refreshTime});
    return this.steps();
   });
  }

@@ -139,7 +139,6 @@ export function LocalHistory({
                 <SelectItem value={SELECT_EMPTY}>全部</SelectItem>
                 <SelectItem value="PENDING">待确认</SelectItem>
                 <SelectItem value="APPROVED">已通过</SelectItem>
-                <SelectItem value="REJECTED">已排除</SelectItem>
               </SelectContent>
             </Select>
           </FilterField>
@@ -286,18 +285,6 @@ export function LocalHistory({
                     }
                   >
                     通过审核
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={
-                      review.review_status === "REJECTED" ||
-                      history.decide.isPending
-                    }
-                    onClick={() =>
-                      history.decide.mutate({ row: review, status: "REJECTED" })
-                    }
-                  >
-                    排除
                   </Button>
                   {review.review_status === "APPROVED" ? (
                     <Button

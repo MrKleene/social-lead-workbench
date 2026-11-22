@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { SendQueueItem, SendQueueTab } from "./local-api";
+import type { GenerateQueuePreview, SendQueueItem, SendQueueTab } from "./local-api";
 import { useSearchParams } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch, SwitchThumb } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/patterns/empty-state";
 import { ErrorNotice } from "@/components/feedback";
 import { FilterBar, FilterField } from "@/components/patterns/filter-bar";
@@ -53,7 +61,9 @@ const tabs: { id: SendQueueTab; label: string; key: "pending" | "quota" | "faile
 
 const reasonLabels: Record<string, string> = {
   ACCOUNT_POOL_QUOTA_EXHAUSTED: "今日额度已用完",
-  WAITING_SWITCH: "自动发送已关闭",
+  WAITING_SWITCH: "等待开启",
+  AUTO_REPLY_OFF: "自动发送已关闭",
+  AUTO_CHANNEL_OFF: "该渠道自动发送已关闭",
   TEMPLATE_CHANGED: "模板已变化",
   ELIGIBILITY_CHANGED: "评论或配置已变化",
   COMMENT_TOO_OLD: "评论发布超过 7 天",
@@ -103,12 +113,24 @@ export function LocalPending() {
   const requeueAction = useLocalAction("requeueSendQueueItem");
   const dismiss = useLocalAction("dismissSendQueueItem");
   const sendNow = useLocalAction("sendNow");
+  const generate = useLocalAction("generateSendQueue");
+  const [preview, setPreview] = useState<GenerateQueuePreview | null>(null);
 
   const items = records.data?.items ?? [];
   const total = records.data?.total ?? 0;
-  const failure = records.error ?? retry.error ?? cancel.error ?? requeueAction.error ?? dismiss.error ?? sendNow.error;
+  const failure = records.error ?? retry.error ?? cancel.error ?? requeueAction.error ?? dismiss.error ?? sendNow.error ?? generate.error;
   const summaryData = summary.data;
   const autoReply = !!steps.data?.autoReply;
+  const hasChannel = !!steps.data && (steps.data.autoComment || steps.data.autoDm);
+  const hasCommentConfig =
+    !steps.data?.autoComment ||
+    (steps.data.commentTemplateIds.length > 0 &&
+      steps.data.replyAccountIds.length > 0);
+  const hasDmConfig =
+    !steps.data?.autoDm ||
+    (steps.data.dmTemplateIds.length > 0 &&
+      steps.data.replyAccountIds.length > 0);
+  const canEnableAuto = hasChannel && hasCommentConfig && hasDmConfig;
   const channels = Array.from(new Set(selected.map((item) => item.channel)));
   const selectedChannel = channels[0] ?? null;
   const sameChannel = channels.length <= 1;
@@ -163,7 +185,19 @@ export function LocalPending() {
       <PageHeader
         title="待处理发送"
         actions={
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-6">
+            <Button
+              variant="outline"
+              disabled={generate.isPending}
+              onClick={() =>
+                generate.mutate(
+                  { apply: false },
+                  { onSuccess: (data) => setPreview(data) },
+                )
+              }
+            >
+              一键生成待发送
+            </Button>
             <p className="text-body text-muted-foreground">
               今日剩余额度 {summaryData?.remaining ?? 0} 条
             </p>
@@ -171,7 +205,11 @@ export function LocalPending() {
               <span className="text-body">自动发送</span>
               <Switch
                 checked={autoReply}
-                disabled={!steps.data || save.isPending}
+                disabled={
+                  !steps.data ||
+                  save.isPending ||
+                  (!autoReply && !canEnableAuto)
+                }
                 aria-label="自动发送"
                 onCheckedChange={(checked) => {
                   if (!steps.data) return;
@@ -181,6 +219,9 @@ export function LocalPending() {
                 <SwitchThumb />
               </Switch>
             </label>
+            {!autoReply && !canEnableAuto ? (
+              <p className="text-caption text-attention">发送渠道或模板未配置</p>
+            ) : null}
           </div>
         }
       />
@@ -348,7 +389,7 @@ export function LocalPending() {
                                 disabled={item.state === "SENDING" || cancel.isPending}
                                 onClick={() => cancel.mutate({ id: item.id })}
                               >
-                                取消
+                                移出待发送
                               </Button>
                             ) : null}
                             {tab === "failed" || tab === "unknown" ? (
@@ -358,7 +399,7 @@ export function LocalPending() {
                                 disabled={dismiss.isPending}
                                 onClick={() => dismiss.mutate({ id: item.id })}
                               >
-                                忽略
+                                移除记录
                               </Button>
                             ) : null}
                           </div>
@@ -383,6 +424,46 @@ export function LocalPending() {
           </SectionCard>
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={!!preview}
+        onOpenChange={(open) => {
+          if (!open && !generate.isPending) setPreview(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>生成待发送</DialogTitle>
+            <DialogDescription>
+              {preview
+                ? `${preview.comments} 条评论 · 评论 ${preview.commentRows} 条 · 私信 ${preview.dmRows} 条`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {preview ? (
+            <div className="grid gap-2 text-body">
+              <p>已过期 {preview.expired} 条</p>
+              <p>跳过 {preview.skipped} 条</p>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreview(null)}>
+              取消
+            </Button>
+            <Button
+              disabled={generate.isPending}
+              onClick={() => {
+                generate.mutate(
+                  { apply: true },
+                  { onSuccess: () => setPreview(null) },
+                );
+              }}
+            >
+              确认生成
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={sending}

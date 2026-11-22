@@ -93,9 +93,16 @@ class LocalService {
    if(value.kind==='MATCHING')syncReviewPolicy(this.store,definition.id,value.name,value.body.text.trim());
    updated++;
   }
+  this.ensureDefaultQueueRule('builtin-matching');
   if(created||updated)this.store.audit('LOCAL_USER','BUILTIN_CONFIGURATIONS_SYNCED','installation',{created,updated});
   return {created,updated};
  });}
+ ensureDefaultQueueRule(policyId){
+  if(!this.store.db.prepare('SELECT 1 FROM configurations WHERE id=? AND builtin=1 AND kind=\'MATCHING\'').get(policyId))return;
+  if(this.store.db.prepare('SELECT 1 FROM queue_rules WHERE policy_id=?').get(policyId))return;
+  const now=this.store.clock();
+  this.store.db.prepare('INSERT INTO queue_rules(id,policy_id,threshold,channels,enabled,system_default,version,created_at,updated_at) VALUES(?,?,80,?,1,1,1,?,?)').run('queue-'+policyId,policyId,canonical(['COMMENT','DM']),now,now);
+ }
  configurations(){return this.store.db.prepare('SELECT * FROM configurations WHERE archived=0 ORDER BY updated_at DESC,id').all().map(x=>({...x,body:JSON.parse(x.body)}));}
  saveConfiguration(input){const value=validateConfiguration(input);return this.store.transaction(()=>{
   const id=input.id||randomUUID();if(typeof id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(id))throw new LocalError('INVALID_CONFIGURATION');
@@ -119,6 +126,7 @@ class LocalService {
   if(selection&&JSON.parse(selection.value).configId===id)this.store.db.prepare("DELETE FROM settings WHERE key='workspace-selection'").run();
   if(row.kind==='MATCHING'){
    this.store.db.prepare('DELETE FROM automatic_review_authorizations WHERE policy_id=?').run(id);
+   this.store.db.prepare('DELETE FROM queue_rules WHERE policy_id=?').run(id);
    this.store.db.prepare('DELETE FROM contact_rules WHERE policy_id=?').run(id);
    this.store.db.prepare('DELETE FROM review_policies WHERE id=?').run(id);
   }
@@ -150,7 +158,7 @@ class LocalService {
  reviewComments(input){return this.workspace().reviewComments(input);}
  reviewCommentList(input){return this.workspace().reviewCommentList(input);}
  runProgress(input){return this.workspace().runProgress(input); }
- decideReview({id,version,status}){if(typeof id!=='string'||!Number.isInteger(version)||!['APPROVED','REJECTED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_DECISION');return this.store.transaction(()=>{const manual=status==='APPROVED'?'MATCH':status==='REJECTED'?'NO_MATCH':null,n=this.store.db.prepare('UPDATE review_results SET review_status=?,manual_decision=?,version=version+1 WHERE id=? AND version=?').run(status,manual,id,version).changes;if(n!==1)throw new LocalError('REVIEW_CHANGED');let queue=null;if(status==='APPROVED'){try{queue=this.sendQueue().enqueueReviewInTransaction(id);}catch(error){if(error instanceof LocalError&&error.code==='SEND_QUEUE_CONFIGURATION_MISSING')queue={queued:0,skipped:'SEND_QUEUE_CONFIGURATION_MISSING'};else throw error;}}else if(status==='REJECTED'){queue={cancelled:this.store.db.prepare("UPDATE send_queue SET state='CANCELLED',reason='REVIEW_REJECTED',updated_at=?,settled_at=? WHERE review_id=? AND state IN('WAITING_SWITCH','READY','WAITING_QUOTA','FAILED')").run(this.store.clock(),this.store.clock(),id).changes};}this.store.audit('LOCAL_USER','REVIEW_DECISION',id,{status,manualDecision:manual,previousVersion:version,queue});return {updated:true,queue};});}
+ decideReview({id,version,status}){if(typeof id!=='string'||!Number.isInteger(version)||!['APPROVED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_DECISION');return this.store.transaction(()=>{const manual=status==='APPROVED'?'MATCH':null,n=this.store.db.prepare('UPDATE review_results SET review_status=?,manual_decision=?,version=version+1 WHERE id=? AND version=?').run(status,manual,id,version).changes;if(n!==1)throw new LocalError('REVIEW_CHANGED');let queue=null;if(status==='APPROVED'){try{queue=this.sendQueue().enqueueReviewInTransaction(id);}catch(error){if(error instanceof LocalError&&error.code==='QUEUE_RULE_CONFIGURATION_MISSING')queue={queued:0,skipped:'QUEUE_RULE_CONFIGURATION_MISSING'};else throw error;}}this.store.audit('LOCAL_USER','REVIEW_DECISION',id,{status,manualDecision:manual,previousVersion:version,queue});return {updated:true,queue};});}
  sendQueue(){return new(require('./send-queue.cjs').LocalSendQueue)(this.store);}
  sendQueueList(input){return this.sendQueue().list(input);}
  sendQueueSummary(){return this.sendQueue().summary();}
@@ -159,6 +167,10 @@ class LocalService {
  requeueSendQueueItem(input){return this.sendQueue().requeue(input.id,{override:input.override===true});}
  dismissSendQueueItem(input){return this.sendQueue().dismiss(input.id);}
  sendNow(input){return this.sendQueue().sendNow(input);}
+ queueRules(){return this.sendQueue().rules();}
+ saveQueueRule(input){return this.sendQueue().saveRule(input);}
+ deleteQueueRule(input){return this.sendQueue().deleteRule(input);}
+ generateSendQueue(input){return this.sendQueue().generate(input);}
  page(value){if(!Number.isInteger(value)||value<1||value>100000)throw new LocalError('INVALID_PAGE');}
  evidenceOverview(){return this.evidence.list();}
  previewEvidence(input){return this.evidence.preview(input);}

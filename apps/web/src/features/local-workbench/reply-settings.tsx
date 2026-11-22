@@ -1,10 +1,8 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FormField } from "@/components/patterns/form-field";
-import { Input } from "@/components/ui/input";
 import {
-  SELECT_EMPTY,
   Select,
   SelectContent,
   SelectItem,
@@ -23,15 +21,14 @@ const refreshTimes = Array.from({ length: 48 }, (_, index) => {
 });
 
 /**
- * 自动回复配置：账号池、模板池、阈值和额度刷新时间。
- * 开关在「待处理发送」页头，这里不重复放。
+ * 自动发送配置：发送渠道、账号池、模板池和额度刷新时间。
+ * 入队阈值属于「自动入队配置」；总开关在「待处理发送」页头。
  */
 export function ReplySettings() {
   const configs = useLocalRecords("configurations");
   const steps = useLocalRecords("automationSteps");
   const accounts = useLocalRecords("accountDetails");
   const save = useSaveSteps();
-  const [text, setText] = useState("");
 
   const current = steps.data;
   const comment =
@@ -48,13 +45,6 @@ export function ReplySettings() {
     save.mutate({ ...current, ...patch });
   };
 
-  const commitThreshold = () => {
-    const next = Number(text);
-    setText("");
-    if (!Number.isInteger(next) || next < 0 || next > 100) return;
-    if (next !== current?.threshold) persist({ threshold: next });
-  };
-
   const toggleAccount = (id: string, checked: boolean) => {
     persist({
       replyAccountIds: checked
@@ -67,16 +57,27 @@ export function ReplySettings() {
     <div className="flex flex-col gap-4">
       {error ? <ErrorNotice error={error} /> : null}
 
-      <FormField label="满足分数自动发送">
-        <Input
-          type="number"
-          min={0}
-          max={100}
-          value={text || String(current?.threshold ?? 80)}
-          onChange={(event) => setText(event.target.value)}
-          onBlur={commitThreshold}
-        />
-      </FormField>
+      <div className="flex flex-col gap-2">
+        <span className="text-body">发送渠道</span>
+        <div className="flex flex-col divide-y rounded-md border">
+          <label className="flex cursor-pointer items-center gap-2 px-4 py-2">
+            <Checkbox
+              checked={current?.autoComment ?? true}
+              disabled={save.isPending}
+              onCheckedChange={(checked) => persist({ autoComment: checked === true })}
+            />
+            <span className="text-body">评论自动发送</span>
+          </label>
+          <label className="flex cursor-pointer items-center gap-2 px-4 py-2">
+            <Checkbox
+              checked={current?.autoDm ?? true}
+              disabled={save.isPending}
+              onCheckedChange={(checked) => persist({ autoDm: checked === true })}
+            />
+            <span className="text-body">私信自动发送</span>
+          </label>
+        </div>
+      </div>
 
       <FormField label="额度刷新时间">
         <Select
@@ -165,8 +166,14 @@ export function ReplySettings() {
         />
       </FormField>
 
-      {!current?.commentTemplateIds.length && !current?.dmTemplateIds.length ? (
-        <Hint>未选择回复模板</Hint>
+      {!current?.autoComment && !current?.autoDm ? (
+        <Hint>至少选择一个发送渠道</Hint>
+      ) : null}
+      {current?.autoComment && !current.commentTemplateIds.length ? (
+        <Hint>未选择评论回复模板</Hint>
+      ) : null}
+      {current?.autoDm && !current.dmTemplateIds.length ? (
+        <Hint>未选择私信模板</Hint>
       ) : null}
       {!selected.length ? <Hint>未选择回复账号</Hint> : null}
       {blocked ? <Hint>已选账号存在未解除的回复限制</Hint> : null}

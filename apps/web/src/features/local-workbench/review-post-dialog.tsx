@@ -38,17 +38,20 @@ import { ErrorNotice, Loading } from "@/components/feedback";
 import { LocalContact } from "./local-contact";
 import { ReviewDecisionActions } from "./review-actions";
 import { ReviewDetail } from "./review-detail";
+import { useLocalRecords } from "./use-local-records";
 import {
   localApi,
   type LocalReview,
   type ReviewPostSummary,
 } from "./local-api";
 import {
+  approvalState,
   day,
   decisionLabels,
   decisionVariant,
   postLabel,
   postVariant,
+  queueStatus,
   score,
   stateLabels,
   stateVariant,
@@ -78,6 +81,7 @@ export function ReviewPostDialog({
   const [scoreRange, setScoreRange] = useState("all");
   const [detail, setDetail] = useState<LocalReview | null>(null);
   const [contact, setContact] = useState<LocalReview | null>(null);
+  const queueRules = useLocalRecords("queueRules");
 
   const range = scoreRanges.find((item) => item.value === scoreRange) ?? scoreRanges[0];
   useEffect(() => {
@@ -114,7 +118,7 @@ export function ReviewPostDialog({
   });
 
   const decide = useMutation({
-    mutationFn: (input: { id: string; version: number; status: "APPROVED" | "REJECTED" }) =>
+    mutationFn: (input: { id: string; version: number; status: "APPROVED" }) =>
       localApi("decideReview", input),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["local", "reviewComments"] });
@@ -224,7 +228,7 @@ export function ReviewPostDialog({
                 <TableHeader className="sticky top-0 z-10">
                   <TableRow>
                     <TableHead>评论</TableHead>
-                    <TableHead className="w-[96px]">审核状态</TableHead>
+                    <TableHead className="w-[96px]">评论状态</TableHead>
                     <TableHead className="w-[72px]">匹配分</TableHead>
                     <TableHead className="w-[96px]">判断</TableHead>
                     <TableHead className="w-[168px] text-right">操作</TableHead>
@@ -236,6 +240,11 @@ export function ReviewPostDialog({
                       id: post.postId,
                       title: post.title,
                     });
+                    const approval = approvalState(
+                      row,
+                      queueRules.data?.find((rule) => rule.policyId === row.policy_id) ??
+                        null,
+                    );
                     return (
                       <TableRow key={row.id}>
                         <TableCell className="whitespace-normal">
@@ -247,9 +256,15 @@ export function ReviewPostDialog({
                           </p>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={stateVariant(row.state)}>
-                            {stateLabels[row.state]}
-                          </Badge>
+                          {row.review_status ? (
+                            <Badge variant={queueStatus(row).variant}>
+                              {queueStatus(row).label}
+                            </Badge>
+                          ) : (
+                            <Badge variant={stateVariant(row.state)}>
+                              {stateLabels[row.state]}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="tabular-nums">
                           {score(row.score)}
@@ -268,6 +283,8 @@ export function ReviewPostDialog({
                             row={review}
                             state={row.state}
                             pending={decide.isPending}
+                            canApprove={approval.canApprove}
+                            approveHint={approval.approveHint}
                             onDecide={(status) =>
                               decide.mutate({
                                 id: review.id,

@@ -38,6 +38,7 @@ import { ReviewDecisionActions } from "./review-actions";
 import { ReviewDetail } from "./review-detail";
 import { ReviewPostDialog } from "./review-post-dialog";
 import { ReviewPostGrid } from "./review-post-card";
+import { useLocalRecords } from "./use-local-records";
 import {
   localApi,
   type LocalReview,
@@ -45,13 +46,13 @@ import {
 } from "./local-api";
 import {
   day,
+  approvalState,
   decisionLabels,
   decisionVariant,
+  queueStatus,
   score,
   stateLabels,
   stateVariant,
-  statusLabels,
-  statusVariant,
   toReview,
 } from "./review-model";
 
@@ -247,13 +248,14 @@ export function LocalCommentReview() {
     enabled: view === "comments",
   });
 
+  const queueRules = useLocalRecords("queueRules");
   const decide = useMutation({
     mutationFn: ({
       row,
       next,
     }: {
       row: LocalReview;
-      next: "APPROVED" | "REJECTED";
+      next: "APPROVED";
     }) =>
       localApi("decideReview", {
         id: row.id,
@@ -267,7 +269,7 @@ export function LocalCommentReview() {
     (post) => post.postId === selectedPostId,
   );
   const error =
-    workflow.error ?? reviewPosts.error ?? commentList.error ?? decide.error;
+    workflow.error ?? reviewPosts.error ?? commentList.error ?? decide.error ?? queueRules.error;
   const total = view === "posts" ? reviewPosts.data?.total : commentList.data?.total;
   const description =
     total === undefined
@@ -334,7 +336,6 @@ export function LocalCommentReview() {
               <SelectItem value={SELECT_EMPTY}>审核决定</SelectItem>
               <SelectItem value="PENDING">待确认</SelectItem>
               <SelectItem value="APPROVED">已通过</SelectItem>
-              <SelectItem value="REJECTED">已排除</SelectItem>
             </SelectContent>
           </Select>
           <Select value={policyId} onValueChange={(value) => update("policy", value)}>
@@ -514,12 +515,17 @@ export function LocalCommentReview() {
                       id: row.post_id,
                       title: row.post_title,
                     });
+                    const approval = approvalState(
+                      row,
+                      queueRules.data?.find((rule) => rule.policyId === row.policy_id) ??
+                        null,
+                    );
                     return (
                       <TableRow key={row.id}>
                         <TableCell>
                           {row.review_status ? (
-                            <Badge variant={statusVariant(row.review_status)}>
-                              {statusLabels[row.review_status] ?? row.review_status}
+                            <Badge variant={queueStatus(row).variant}>
+                              {queueStatus(row).label}
                             </Badge>
                           ) : (
                             <Badge variant={stateVariant(row.state)}>
@@ -562,6 +568,8 @@ export function LocalCommentReview() {
                             row={review}
                             state={row.state}
                             pending={decide.isPending}
+                            canApprove={approval.canApprove}
+                            approveHint={approval.approveHint}
                             onDecide={(next) => decide.mutate({ row: review, next })}
                             onContact={() => setContact(review)}
                             onOpen={() => setDetail(review)}

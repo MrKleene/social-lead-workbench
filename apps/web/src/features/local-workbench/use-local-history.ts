@@ -12,6 +12,6 @@ export function useLocalHistory(initialTab:'conversations'|'reviews'|'runs'='con
  const conversation=useQuery({queryKey:['local','conversation',thread?.account_id,thread?.sender_id,threadPage],queryFn:()=>localApi('conversation',{accountId:thread!.account_id,senderId:thread!.sender_id,page:threadPage}),enabled:tab==='conversations'&&!!thread});
  const refresh=()=>client.invalidateQueries({queryKey:['local']});
  const read=useMutation({mutationFn:(id:string)=>localApi('markRead',{id}),onSuccess:refresh});
- const decide=useMutation({mutationFn:({row,status}:{row:LocalReview;status:LocalReview['review_status']})=>localApi('decideReview',{id:row.id,version:row.version,status}),onSuccess:refresh});
+ const decide=useMutation({mutationFn:({row}:{row:LocalReview;status:'APPROVED'})=>localApi('decideReview',{id:row.id,version:row.version,status:'APPROVED'}),onSuccess:refresh});
  return {filters,filter,tab,selectTab:(value:typeof tab)=>{setTab(value);setPage(1);setThread(null);},page,setPage,thread,selectThread:(value:LocalThread|null)=>{setThread(value);setThreadPage(1);},threadPage,setThreadPage,conversations,runs,reviews,conversation,read,decide,error:conversations.error||runs.error||reviews.error||conversation.error||read.error||decide.error};
 }
