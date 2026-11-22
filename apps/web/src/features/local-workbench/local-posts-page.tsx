@@ -70,7 +70,7 @@ export function LocalPostsPage(){
    {posts.data?.items.length?<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
     {posts.data.items.map(post=><CollectedPostCard key={post.id} post={post} onOpen={()=>open(post.id,'view')}/>)}
    </div>:null}
-   {posts.data&&posts.data.total?<Pagination page={page} total={posts.data.total} onPageChange={value=>setParams(previous=>{const next=new URLSearchParams(previous);next.set('page',String(value));return next;})} label="帖子列表分页" countLabel="篇笔记"/>:null}
+   {posts.data&&posts.data.total?<Pagination page={page} total={posts.data.total} pageSize={20} onPageChange={value=>setParams(previous=>{const next=new URLSearchParams(previous);next.set('page',String(value));return next;})} label="帖子列表分页" countLabel="篇笔记"/>:null}
   </div>
   {selected&&action==='view'?<LocalPostHistory key={selected.viewPostId} postId={selected.viewPostId} onClose={close} footer={<>
    <Button variant="ghost" onClick={close}>关闭</Button>
