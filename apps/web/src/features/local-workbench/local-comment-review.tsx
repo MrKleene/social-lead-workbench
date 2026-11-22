@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutGrid, List, Search } from "lucide-react";
 import { useSearchParams } from "@/lib/router-compat";
@@ -59,6 +59,9 @@ import {
 export function LocalCommentReview() {
   const [params, setParams] = useSearchParams();
   const [showFilters, setShowFilters] = useState(false);
+  const [queryDraft, setQueryDraft] = useState(params.get("query") || "");
+  const [minDraft, setMinDraft] = useState(params.get("score") || "");
+  const [maxDraft, setMaxDraft] = useState(params.get("maxScore") || "");
   const [commentPageSize, setCommentPageSize] = useState(30);
   const [detail, setDetail] = useState<LocalReview | null>(null);
   const [contact, setContact] = useState<LocalReview | null>(null);
@@ -83,6 +86,7 @@ export function LocalCommentReview() {
   const publication = params.get("publication") || "";
   const sort = params.get("sort") || "newest";
   const policyId = params.get("policy") || "";
+  const queue = params.get("queue") || "";
 
   const update = (key: string, value: string) =>
     setParams(
@@ -96,6 +100,53 @@ export function LocalCommentReview() {
       },
       { replace: true, flushSync: true },
     );
+
+  useEffect(() => {
+    setQueryDraft(query);
+  }, [query]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (queryDraft !== query) update("query", queryDraft);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [queryDraft, query]);
+
+  useEffect(() => {
+    setMinDraft(minScore === 0 ? "" : String(minScore));
+  }, [minScore]);
+
+  useEffect(() => {
+    setMaxDraft(maxScore === 100 ? "" : String(maxScore));
+  }, [maxScore]);
+
+  const commitMin = () => {
+    const text = minDraft.trim();
+    if (!text) {
+      update("score", "");
+      return;
+    }
+    const value = Number(text);
+    if (!Number.isInteger(value) || value < 0 || value > 100) {
+      setMinDraft(minScore === 0 ? "" : String(minScore));
+      return;
+    }
+    update("score", value === 0 ? "" : String(value));
+  };
+
+  const commitMax = () => {
+    const text = maxDraft.trim();
+    if (!text) {
+      update("maxScore", "");
+      return;
+    }
+    const value = Number(text);
+    if (!Number.isInteger(value) || value < 0 || value > 100) {
+      setMaxDraft(maxScore === 100 ? "" : String(maxScore));
+      return;
+    }
+    update("maxScore", value === 100 ? "" : String(value));
+  };
 
   const setView = (next: "posts" | "comments") =>
     setParams(
@@ -154,6 +205,7 @@ export function LocalCommentReview() {
           "from",
           "to",
           "publication",
+          "queue",
           "sort",
           "policy",
           "page",
@@ -164,6 +216,31 @@ export function LocalCommentReview() {
       },
       { replace: true, flushSync: true },
     );
+
+  const hasFilters = Boolean(
+    query ||
+      status ||
+      decision ||
+      context ||
+      mode ||
+      minScore > 0 ||
+      maxScore < 100 ||
+      from ||
+      to ||
+      publication ||
+      policyId ||
+      queue,
+  );
+  const advancedCount = [
+    context,
+    mode,
+    from,
+    to,
+    publication,
+    queue,
+    minScore > 0,
+    maxScore < 100,
+  ].filter(Boolean).length;
 
   const workflow = useQuery({
     queryKey: ["local", "workflow"],
@@ -188,6 +265,7 @@ export function LocalCommentReview() {
       from,
       to,
       publication,
+      queue,
     ],
     queryFn: () =>
       localApi("reviewPosts", {
@@ -205,6 +283,7 @@ export function LocalCommentReview() {
         from,
         to,
         publication,
+        queue,
       }),
     enabled: view === "posts",
   });
@@ -227,6 +306,7 @@ export function LocalCommentReview() {
       from,
       to,
       publication,
+      queue,
       sort,
     ],
     queryFn: () =>
@@ -245,6 +325,7 @@ export function LocalCommentReview() {
         from,
         to,
         publication,
+        queue,
         sort,
       }),
     enabled: view === "comments",
@@ -337,19 +418,19 @@ export function LocalCommentReview() {
             <Input
               type="search"
               maxLength={200}
-              placeholder="搜索评论原文"
-              aria-label="搜索评论原文"
-              value={query}
+              placeholder={view === "posts" ? "搜索帖子或评论" : "搜索评论原文"}
+              aria-label={view === "posts" ? "搜索帖子或评论" : "搜索评论原文"}
+              value={queryDraft}
               className="pl-10"
-              onChange={(event) => update("query", event.target.value)}
+              onChange={(event) => setQueryDraft(event.target.value)}
             />
           </div>
           <Select value={status} onValueChange={(value) => update("status", value)}>
-            <SelectTrigger aria-label="审核决定" className="w-[calc(50%-0.25rem)] sm:w-[128px]">
+            <SelectTrigger aria-label="审核状态" className="w-[calc(50%-0.25rem)] sm:w-[128px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={SELECT_EMPTY}>审核决定</SelectItem>
+              <SelectItem value={SELECT_EMPTY}>全部审核状态</SelectItem>
               <SelectItem value="PENDING">待确认</SelectItem>
               <SelectItem value="APPROVED">已通过</SelectItem>
             </SelectContent>
@@ -359,7 +440,7 @@ export function LocalCommentReview() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={SELECT_EMPTY}>匹配方案</SelectItem>
+              <SelectItem value={SELECT_EMPTY}>全部匹配方案</SelectItem>
               {workflow.data?.policies.map((policy) => (
                 <SelectItem key={policy.id} value={policy.id}>
                   {policy.name}
@@ -367,15 +448,28 @@ export function LocalCommentReview() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={queue} onValueChange={(value) => update("queue", value)}>
+            <SelectTrigger aria-label="入队状态" className="w-[calc(50%-0.25rem)] sm:w-[132px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SELECT_EMPTY}>全部入队状态</SelectItem>
+              <SelectItem value="NONE">未入队</SelectItem>
+              <SelectItem value="QUEUED">已入队</SelectItem>
+              <SelectItem value="SENT">已发送</SelectItem>
+              <SelectItem value="EXPIRED">已过期</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             variant="outline"
             aria-expanded={showFilters}
             onClick={() => setShowFilters((value) => !value)}
           >
-            筛选
+            {showFilters ? "收起筛选" : "更多筛选"}
+            {advancedCount ? <Badge variant="secondary">{advancedCount}</Badge> : null}
           </Button>
-          <Button variant="ghost" onClick={clear}>
-            清除
+          <Button variant="ghost" disabled={!hasFilters} onClick={clear}>
+            清除筛选
           </Button>
           {runId ? (
             <div className="flex items-center gap-2 sm:ms-auto">
@@ -389,9 +483,9 @@ export function LocalCommentReview() {
 
         {showFilters ? (
           <FilterBar>
-            <FilterField label="上下文">
+            <FilterField label="证据上下文">
               <Select value={context} onValueChange={(value) => update("context", value)}>
-                <SelectTrigger aria-label="上下文">
+                <SelectTrigger aria-label="证据上下文">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -401,9 +495,9 @@ export function LocalCommentReview() {
                 </SelectContent>
               </Select>
             </FilterField>
-            <FilterField label="审核来源">
+            <FilterField label="审核方式">
               <Select value={mode} onValueChange={(value) => update("mode", value)}>
-                <SelectTrigger aria-label="审核来源">
+                <SelectTrigger aria-label="审核方式">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -416,43 +510,63 @@ export function LocalCommentReview() {
             <FilterField label="最低匹配分">
               <Input
                 type="number"
+                inputMode="numeric"
                 min={0}
                 max={100}
-                value={minScore}
-                onChange={(event) => update("score", event.target.value)}
+                placeholder="不限"
+                aria-label="最低匹配分"
+                value={minDraft}
+                onChange={(event) => setMinDraft(event.target.value)}
+                onBlur={commitMin}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                }}
               />
             </FilterField>
             <FilterField label="最高匹配分">
               <Input
                 type="number"
+                inputMode="numeric"
                 min={0}
                 max={100}
-                value={maxScore}
-                onChange={(event) => update("maxScore", event.target.value)}
+                placeholder="不限"
+                aria-label="最高匹配分"
+                value={maxDraft}
+                onChange={(event) => setMaxDraft(event.target.value)}
+                onBlur={commitMax}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                }}
               />
             </FilterField>
-            <FilterField label="评论发布开始日期">
+            <FilterField label="评论发布时间从">
               <DatePicker
-                ariaLabel="评论发布开始日期"
+                ariaLabel="评论发布时间从"
                 value={from}
                 placeholder="不限"
                 onChange={(value) => update("from", value)}
               />
             </FilterField>
-            <FilterField label="评论发布结束日期">
+            <FilterField label="评论发布时间到">
               <DatePicker
-                ariaLabel="评论发布结束日期"
+                ariaLabel="评论发布时间到"
                 value={to}
                 placeholder="不限"
                 onChange={(value) => update("to", value)}
               />
             </FilterField>
-            <FilterField label="发布时间">
+            <FilterField label="评论发布时间">
               <Select
                 value={publication}
                 onValueChange={(value) => update("publication", value)}
               >
-                <SelectTrigger aria-label="发布时间">
+                <SelectTrigger aria-label="评论发布时间">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

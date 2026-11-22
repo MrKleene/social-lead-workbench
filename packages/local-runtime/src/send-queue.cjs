@@ -119,8 +119,8 @@ class LocalSendQueue{
  /* ---------- 生成待发送 ---------- */
  generate({apply=false}={}){
   const steps=settings(this.db),now=this.store.clock();
-  const rows=this.db.prepare("SELECT r.*,b.run_id,b.policy_id,c.user_id,c.ordinal,c.platform_id,c.body,c.source_hash current_source_hash,c.snapshot comment_snapshot,c.post_id,p.platform_id post_platform_id,q.id rule_id,q.threshold,q.channels,q.enabled,q.version rule_version FROM review_results r JOIN review_batches b ON b.id=r.batch_id JOIN run_comments c ON c.id=r.comment_id JOIN run_posts p ON p.id=c.post_id JOIN queue_rules q ON q.policy_id=b.policy_id AND q.enabled=1 WHERE b.state='COMPLETED' AND r.review_status IN('PENDING','APPROVED') ORDER BY r.created_at DESC,r.id").all();
-  const claimed=new Set(),comments=new Set();
+  const rows=this.db.prepare("SELECT r.id,r.comment_id,r.review_status,r.decision,r.manual_decision,r.score,r.context,r.source_hash,r.version,r.evidence,r.automatic_contact_allowed,r.created_at,b.run_id,b.policy_id,c.user_id,c.body,c.source_hash current_source_hash,c.snapshot comment_snapshot,q.id rule_id,q.threshold,q.channels,q.enabled,q.version rule_version FROM review_results r JOIN review_batches b ON b.id=r.batch_id JOIN run_comments c ON c.id=r.comment_id JOIN queue_rules q ON q.policy_id=b.policy_id AND q.enabled=1 WHERE b.state='COMPLETED' AND r.review_status IN('PENDING','APPROVED') AND (r.review_status='APPROVED' OR r.score>=q.threshold) AND ((r.review_status='APPROVED' AND coalesce(r.manual_decision,r.decision)='MATCH') OR (r.review_status='PENDING' AND r.decision='MATCH')) ORDER BY r.created_at DESC,r.id").all();
+  const claimed=new Set(),comments=new Set(),existing=this.existingIndex(rows),pools=new Map();let accounts=null;
   let commentRows=0,dmRows=0,expired=0,skipped=0;
   const inserts=[];
   for(const row of rows){
@@ -130,8 +130,10 @@ class LocalSendQueue{
     const key=row.user_id+'\u0000'+channel;
     if(claimed.has(key))continue;
     if(!this.eligible(row,channel,rule,origin)){skipped++;continue;}
-    if(this.existing(row.user_id,channel)){claimed.add(key);skipped++;continue;}
-    const plan=this.freezePlan(rule,row,channel,origin,steps);
+    if(this.existing(row.user_id,channel,existing)){claimed.add(key);skipped++;continue;}
+    const pool=pools.get(channel)??{templates:this.templatePool(steps,channel),accounts:accounts??(accounts=this.accountPool(steps))};
+    pools.set(channel,pool);
+    const plan=this.freezePlan(rule,row,channel,origin,steps,pool);
     const published=publishedAt(JSON.parse(row.comment_snapshot||'{}'));
     const expires=Math.min(now+MAX_AGE_MS,published!==null?published+MAX_AGE_MS:now+MAX_AGE_MS);
     const state=this.enqueueState(channel,steps,published,now);
@@ -377,9 +379,20 @@ class LocalSendQueue{
 
  /* ---------- 内部 ---------- */
  frozenRule(ref){return require('./contact.cjs').LocalContact.prototype.frozen.call({db:this.db},ref);}
- existing(recipientId,channel){
-  if(this.db.prepare("SELECT 1 FROM send_queue WHERE recipient_id=? AND channel=? AND state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING','SENT')").get(recipientId,channel))return true;
-  return !!this.db.prepare("SELECT 1 FROM send_attempts WHERE platform='XHS' AND channel=? AND recipient_id=? AND state IN('RESERVED','DISPATCHED','CONFIRMED','UNKNOWN')").get(channel,recipientId);
+ existingIndex(rows){
+  const queue=new Set(),attempts=new Set(),key=(recipientId,channel)=>recipientId+'|'+channel;
+  const recipients=[...new Set(rows.map(row=>row.user_id))];
+  for(let index=0;index<recipients.length;index+=400){
+   const chunk=recipients.slice(index,index+400),marks=chunk.map(()=>'?').join(',');
+   for(const row of this.db.prepare(`SELECT recipient_id,channel FROM send_queue WHERE recipient_id IN (${marks}) AND state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING','SENT')`).all(...chunk))queue.add(key(row.recipient_id,row.channel));
+   for(const row of this.db.prepare(`SELECT recipient_id,channel FROM send_attempts WHERE platform='XHS' AND recipient_id IN (${marks}) AND state IN('RESERVED','DISPATCHED','CONFIRMED','UNKNOWN')`).all(...chunk))attempts.add(key(row.recipient_id,row.channel));
+  }
+  return {queue,attempts};
+ }
+ existing(recipientId,channel,index=null){
+  const key=recipientId+'|'+channel;
+  if(index?index.queue.has(key):this.db.prepare("SELECT 1 FROM send_queue WHERE recipient_id=? AND channel=? AND state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING','SENT')").get(recipientId,channel))return true;
+  return !!(index?index.attempts.has(key):this.db.prepare("SELECT 1 FROM send_attempts WHERE platform='XHS' AND channel=? AND recipient_id=? AND state IN('RESERVED','DISPATCHED','CONFIRMED','UNKNOWN')").get(channel,recipientId));
  }
  eligible(row,channel,rule,origin){
   if(row.source_hash!==row.current_source_hash||row.context!=='SUFFICIENT')return false;
@@ -395,8 +408,8 @@ class LocalSendQueue{
   if(snapshot.comment!==row.body||snapshot.userId!==row.user_id)return false;
   return evidence.some(item=>item.source==='COMMENT'&&typeof item.quote==='string'&&item.quote.trim()&&row.body.includes(item.quote));
  }
- freezePlan(rule,row,channel,origin,steps){
-  const templates=this.templatePool(steps,channel),accounts=this.accountPool(steps);
+ freezePlan(rule,row,channel,origin,steps,pool=null){
+  const templates=pool?pool.templates:this.templatePool(steps,channel),accounts=pool?pool.accounts:this.accountPool(steps);
   return {ruleId:rule.id,policyId:rule.policy_id,ruleVersion:rule.version,ruleHash:hash({id:rule.id,version:rule.version,policyId:rule.policy_id,threshold:rule.threshold,channels:parseChannels(rule.channels)}),threshold:rule.threshold,channel,origin,templates,accounts,eligibilityHash:hash({reviewVersion:row.version,sourceHash:row.source_hash,score:row.score,decision:row.decision,context:row.context,evidence:JSON.parse(row.evidence||'[]')})};
  }
  templatePool(steps,channel){const ids=(channel==='DM'?steps.dmTemplateIds:steps.commentTemplateIds)??[];return ids.map(id=>{try{const item=this.template(id,channel);return {channel,templateId:item.id,templateVersion:item.revision,content:item.content};}catch{return null;}}).filter(Boolean);}
