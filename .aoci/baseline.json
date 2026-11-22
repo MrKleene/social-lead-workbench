@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-11T10:57:30Z",
-  "updated_at": "2026-11-22T21:32:37Z",
+  "updated_at": "2026-11-22T21:50:19Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -17507,9 +17507,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "b070e7034d79cc9ac5ac0311d8c1a45094ebcf2af9ae3a3c0343fe9044157020",
-      "size": 252475,
-      "normalized_sha256": "b070e7034d79cc9ac5ac0311d8c1a45094ebcf2af9ae3a3c0343fe9044157020"
+      "sha256": "9a61ef26d79c09f68b5cee042a7defd36dbb615801fcfc62b7b707e6d22acb53",
+      "size": 252545,
+      "normalized_sha256": "9a61ef26d79c09f68b5cee042a7defd36dbb615801fcfc62b7b707e6d22acb53"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -18273,9 +18273,9 @@
     },
     "apps/web/src/features/local-workbench/local-api.ts": {
       "role": "index",
-      "sha256": "2e7d5eb0e26d81120eb0a450680f082e26817b9a88921860db084713bc84505d",
-      "size": 27187,
-      "normalized_sha256": "2e7d5eb0e26d81120eb0a450680f082e26817b9a88921860db084713bc84505d"
+      "sha256": "371f3532bccd7fefd88437ac742fba010360fd60f98a39365e91bbb576adebe1",
+      "size": 27446,
+      "normalized_sha256": "371f3532bccd7fefd88437ac742fba010360fd60f98a39365e91bbb576adebe1"
     },
     "apps/web/src/features/local-workbench/local-collect-progress.tsx": {
       "role": "index",
@@ -18375,9 +18375,9 @@
     },
     "apps/web/src/features/local-workbench/local-pending.tsx": {
       "role": "index",
-      "sha256": "4319cbfbeda607a9c0b58bcd2863c7b7219b5e6d244e784e2f090dc584b139c7",
-      "size": 30374,
-      "normalized_sha256": "4319cbfbeda607a9c0b58bcd2863c7b7219b5e6d244e784e2f090dc584b139c7"
+      "sha256": "2f155a330ddca35528405a77a9912a8a4e258cdcffe8a41584438e3b6ef82161",
+      "size": 33645,
+      "normalized_sha256": "2f155a330ddca35528405a77a9912a8a4e258cdcffe8a41584438e3b6ef82161"
     },
     "apps/web/src/features/local-workbench/local-platform.tsx": {
       "role": "index",
@@ -18897,9 +18897,9 @@
     },
     "docs/design/send-queue.md": {
       "role": "index",
-      "sha256": "43e2d274851da780ac66a819f777b1ae6989da1e56d780d0ca0293b9f263276c",
-      "size": 7704,
-      "normalized_sha256": "43e2d274851da780ac66a819f777b1ae6989da1e56d780d0ca0293b9f263276c"
+      "sha256": "a22fe675372d851223da52f424de69b103800c1022d5b447fbe088b31c60f9e3",
+      "size": 8046,
+      "normalized_sha256": "a22fe675372d851223da52f424de69b103800c1022d5b447fbe088b31c60f9e3"
     },
     "docs/design/ui-conformance-audit.md": {
       "role": "index",
@@ -18927,9 +18927,9 @@
     },
     "docs/requirements/MODULES.md": {
       "role": "index",
-      "sha256": "5b181e9058c82d0e637d5055ad95ac4677ae24cdec896f5f1fed9ec3618320f3",
-      "size": 16284,
-      "normalized_sha256": "5b181e9058c82d0e637d5055ad95ac4677ae24cdec896f5f1fed9ec3618320f3"
+      "sha256": "20d316e2e7506ec215312c3d12504c96df253010d84b0f006ec6e358bf4fd088",
+      "size": 16395,
+      "normalized_sha256": "20d316e2e7506ec215312c3d12504c96df253010d84b0f006ec6e358bf4fd088"
     },
     "docs/requirements/OVERVIEW.md": {
       "role": "index",
@@ -21107,9 +21107,9 @@
     },
     "packages/local-runtime/src/send-queue.cjs": {
       "role": "index",
-      "sha256": "0583c51c272567ac59d630e6345fafc491c936380c0d9575715e109ad246817f",
-      "size": 38042,
-      "normalized_sha256": "0583c51c272567ac59d630e6345fafc491c936380c0d9575715e109ad246817f"
+      "sha256": "db38f701fa28c88bd19f26f05ef14b9ca3b5e538bb9a3200969d30b422d6cd95",
+      "size": 39537,
+      "normalized_sha256": "db38f701fa28c88bd19f26f05ef14b9ca3b5e538bb9a3200969d30b422d6cd95"
     },
     "packages/local-runtime/src/send-safety.cjs": {
       "role": "index",
@@ -21149,9 +21149,9 @@
     },
     "packages/local-runtime/test/automation.test.cjs": {
       "role": "index",
-      "sha256": "799b777fdea8507db211bb0dd0d2b3cb90e3141b55534842f6bdf06e344f10c9",
-      "size": 20002,
-      "normalized_sha256": "799b777fdea8507db211bb0dd0d2b3cb90e3141b55534842f6bdf06e344f10c9"
+      "sha256": "cbceeb06c4403e213da7bc8aab5ae442731ced8d20c665e664ca84e905704a05",
+      "size": 21833,
+      "normalized_sha256": "cbceeb06c4403e213da7bc8aab5ae442731ced8d20c665e664ca84e905704a05"
     },
     "packages/local-runtime/test/builtin-configurations.test.cjs": {
       "role": "index",
