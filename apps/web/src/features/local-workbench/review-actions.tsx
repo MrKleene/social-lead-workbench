@@ -15,6 +15,7 @@ export function ReviewDecisionActions({
   onDecide,
   onContact,
   onOpen,
+  onOpenOriginal,
   pending,
   canApprove,
   canReject,
@@ -25,6 +26,7 @@ export function ReviewDecisionActions({
   onDecide: (status: "APPROVED" | "REJECTED" | "PENDING") => void;
   onContact: () => void;
   onOpen: () => void;
+  onOpenOriginal: () => void;
   pending: boolean;
   canApprove: boolean;
   canReject: boolean;
@@ -87,6 +89,7 @@ export function ReviewDecisionActions({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={onOpen}>查看详情</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onOpenOriginal}>查看原帖</DropdownMenuItem>
           {!unreviewed && !row.queue_state && (canReject || rejected) ? (
             <DropdownMenuItem
               onSelect={() => onDecide(rejected ? "PENDING" : "REJECTED")}

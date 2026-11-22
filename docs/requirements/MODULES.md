@@ -72,6 +72,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 整轮采集完成后才开始（阶段屏障）
 - 展示全部评论与真实分数，不人为截断；按 50 条/批调用，单批失败最多自动重试 3 次，耗尽后暂停等待人工恢复，不偷偷抽样
 - 模型失败与费用按实际调用记录，不用估算冒充账单
+- 审核列表可「查看原帖」，用已采集的帖子快照与评论树在弹窗内定位并高亮该评论；不打开平台页面、不占平台会话
 - 审核目标带版本，目标版本变化后回复草稿必须显式确认
 
 **代码**：`packages/domain/src/collection`（`semantic-evaluator.ts`、`qwen-result.ts`、`comment-rules.ts`、

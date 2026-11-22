@@ -36,6 +36,7 @@ import { EmptyState } from "@/components/patterns/empty-state";
 import { Pagination } from "@/components/patterns/pagination";
 import { ErrorNotice, Loading } from "@/components/feedback";
 import { LocalContact } from "./local-contact";
+import { LocalPostHistory } from "./local-post-history";
 import { ReviewDecisionActions } from "./review-actions";
 import { ReviewDetail } from "./review-detail";
 import { useLocalRecords } from "./use-local-records";
@@ -78,6 +79,7 @@ export function ReviewPostDialog({
   const [scoreRange, setScoreRange] = useState("all");
   const [detail, setDetail] = useState<LocalReview | null>(null);
   const [contact, setContact] = useState<LocalReview | null>(null);
+  const [original, setOriginal] = useState<LocalReview | null>(null);
   const queueRules = useLocalRecords("queueRules");
 
   const range = scoreRanges.find((item) => item.value === scoreRange) ?? scoreRanges[0];
@@ -283,6 +285,10 @@ export function ReviewPostDialog({
                             }
                             onContact={() => setContact(review)}
                             onOpen={() => setDetail(review)}
+                            onOpenOriginal={() => {
+                              setDetail(null);
+                              setOriginal(review);
+                            }}
                           />
                         </TableCell>
                       </TableRow>
@@ -315,7 +321,23 @@ export function ReviewPostDialog({
         </DialogContent>
       </Dialog>
 
-      {detail ? <ReviewDetail row={detail} onClose={() => setDetail(null)} /> : null}
+      {detail ? (
+        <ReviewDetail
+          row={detail}
+          onClose={() => setDetail(null)}
+          onOpenOriginal={() => {
+            setOriginal(detail);
+            setDetail(null);
+          }}
+        />
+      ) : null}
+      {original ? (
+        <LocalPostHistory
+          postId={original.post_id}
+          focusCommentId={original.comment_platform_id}
+          onClose={() => setOriginal(null)}
+        />
+      ) : null}
       {contact ? (
         <Dialog open onOpenChange={(open) => !open && setContact(null)}>
           <DialogContent className="sm:max-w-xl">

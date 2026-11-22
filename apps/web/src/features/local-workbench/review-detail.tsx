@@ -20,10 +20,12 @@ export function ReviewDetail({
   row,
   state,
   onClose,
+  onOpenOriginal,
 }: {
   row: LocalReview;
   state?: LocalReviewState;
   onClose: () => void;
+  onOpenOriginal?: () => void;
 }) {
   const reviewed = !state || state === "REVIEWED";
   return (
@@ -60,7 +62,12 @@ export function ReviewDetail({
               {row.evidence.map((item) => item.quote).join(" ")}
             </blockquote>
           ) : null}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            {onOpenOriginal ? (
+              <Button variant="outline" onClick={onOpenOriginal}>
+                查看原帖
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={onClose}>
               关闭
             </Button>

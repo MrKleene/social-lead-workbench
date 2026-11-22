@@ -115,7 +115,7 @@ export function score(value: number | null) {
 }
 
 export function toReview(
-  row: ReviewComment,
+  row: ReviewComment & { comment_platform_id?: string | null },
   runId: string,
   post: { id: string; title: string },
 ): LocalReview {
@@ -124,6 +124,7 @@ export function toReview(
     author_name: row.nickname,
     post_title: post.title,
     post_id: post.id,
+    comment_platform_id: row.comment_platform_id ?? row.platform_id,
     id: row.review_id ?? row.id,
     run_id: runId,
     evidence: [],

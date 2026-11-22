@@ -66,6 +66,16 @@ test('post history nests replies under their root comment',t=>{
  assert.equal(h.comments.items[0].body,'根评论');assert.equal(h.comments.items[0].reply_count,2);
  assert.deepEqual(h.comments.items[0].replies.map(c=>c.body),['回复一','回复二']);
  assert.equal(h.comments.items[0].replies[0].reply_to_nickname,null);
+ const focused=new LocalService(f.store,null).postHistory({postId:post.id,commentPlatformId:'thread-comment-2'});
+ assert.equal(focused.comments.page,1);assert.equal(focused.comments.items[0].body,'根评论');
+ assert.throws(()=>new LocalService(f.store,null).postHistory({postId:post.id,commentPlatformId:'missing'}),/COMMENT_NOT_FOUND/);
+});
+
+test('post history opens the page containing the focused root comment',t=>{
+ const f=fixture(t),texts=Array.from({length:21},(_,i)=>`根${i+1}`),e=entry('focus',texts);
+ const run=collect(f,[e]),post=f.collection.posts(run.runId)[0],{LocalService}=require('../dist/service.cjs');
+ const h=new LocalService(f.store,null).postHistory({postId:post.id,commentPlatformId:'focus-comment-20'});
+ assert.equal(h.comments.roots,21);assert.equal(h.comments.page,2);assert.equal(h.comments.items.length,1);assert.equal(h.comments.items[0].body,'根21');
 });
 
 test('historical diagnostic output reuses validated evidence without exposing source access references',t=>{const f=fixture(t),e=entry('diagnostic'),run=collect(f,[e]),post=f.collection.posts(run.runId)[0],{LocalService}=require('../dist/service.cjs');const snapshot=post.snapshot;snapshot.sourceReference={token:'must-not-leak'};snapshot.imageDiagnostics={unsafe:'must-not-leak'};snapshot.coverUrl='https://img.example/cover.jpg';snapshot.authorNickname='作者';snapshot.authorAvatarUrl='http://img.example/avatar.jpg';snapshot.publishedAt='2026-01-02';f.store.db.prepare('UPDATE run_posts SET snapshot=? WHERE id=?').run(JSON.stringify(snapshot),post.id);f.store.db.exec(`UPDATE run_comments SET snapshot=json_set(snapshot,'$.imageDiagnostics','invalid primitive')`);const h=new LocalService(f.store,null).postHistory({postId:post.id});assert.equal(h.post.platformId,post.platform_id);assert.equal(h.post.coverUrl,'https://img.example/cover.jpg');assert.equal(h.post.authorNickname,'作者');assert.equal(h.post.authorAvatarUrl,null);assert.equal(h.post.publishedAt,'2026-01-02');assert.equal(h.post.imageDiagnostics,null);assert.equal(h.post.boundedRead.state,'COMPLETE');assert.equal(h.comments.items[0].image_diagnostics,null);assert.ok(!JSON.stringify(h).includes('must-not-leak'));assert.equal(f.store.db.prepare('SELECT count(*) n FROM jobs').get().n,1);});

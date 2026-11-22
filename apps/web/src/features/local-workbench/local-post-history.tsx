@@ -38,8 +38,8 @@ function CommentBody({body}:{body:string}){
  </>;
 }
 
-function CommentRow({comment,reply=false}:{comment:PostComment;reply?:boolean}){
- return <div className="flex gap-3">
+function CommentRow({comment,reply=false,focus=false}:{comment:PostComment;reply?:boolean;focus?:boolean}){
+ return <div data-focus-comment={focus?'true':undefined} className={cn('flex gap-3 rounded-md',focus&&'bg-muted p-3 ring-1 ring-ring')}>
   <Avatar className={reply?'size-8 shrink-0':'size-10 shrink-0'}><AvatarImage src={comment.author_avatar_url||undefined} alt=""/><AvatarFallback className="text-caption font-medium">{initial(comment.nickname)}</AvatarFallback></Avatar>
   <div className="min-w-0 flex-1">
    <div className="flex flex-wrap items-center gap-2">
@@ -52,17 +52,29 @@ function CommentRow({comment,reply=false}:{comment:PostComment;reply?:boolean}){
  </div>;
 }
 
-export function LocalPostHistory({postId,onClose,footer}:{postId:string;onClose:()=>void;footer?:ReactNode}){
+export function LocalPostHistory({postId,focusCommentId,onClose,footer}:{postId:string;focusCommentId?:string|null;onClose:()=>void;footer?:ReactNode}){
  const [expanded,setExpanded]=useState<Record<string,boolean>>({}),[failedCover,setFailedCover]=useState<string|null>(null);
- const scrollRef=useRef<HTMLDivElement>(null),loadRef=useRef<HTMLDivElement>(null);
- useEffect(()=>{setExpanded({});setFailedCover(null);},[postId]);
+ const scrollRef=useRef<HTMLDivElement>(null),loadRef=useRef<HTMLDivElement>(null),focusRef=useRef<HTMLDivElement>(null),scrolledKey=useRef('');
+ useEffect(()=>{setExpanded({});setFailedCover(null);scrolledKey.current='';},[postId,focusCommentId]);
  const history=useInfiniteQuery({
-  queryKey:['local','post-history',postId],
-  queryFn:({pageParam})=>localApi('postHistory',{postId,page:pageParam}),
+  queryKey:['local','post-history',postId,focusCommentId||''],
+  queryFn:({pageParam})=>localApi('postHistory',{postId,page:pageParam,commentPlatformId:focusCommentId||undefined}),
   initialPageParam:1,
   getNextPageParam:last=>last.comments.page*last.comments.pageSize<last.comments.roots?last.comments.page+1:undefined,
  });
  const data=history.data?.pages[0],roots=history.data?.pages.flatMap(page=>page.comments.items)??[];
+ const focusRootId=focusCommentId?roots.find(root=>root.platform_id===focusCommentId||root.replies.some(reply=>reply.platform_id===focusCommentId))?.platform_id:null;
+ useEffect(()=>{
+  if(!focusCommentId)return;
+  const key=postId+focusCommentId;
+  if(scrolledKey.current===key)return;
+  const timer=setTimeout(()=>{
+   if(!focusRef.current)return;
+   focusRef.current.scrollIntoView({block:'center'});
+   scrolledKey.current=key;
+  },100);
+  return()=>clearTimeout(timer);
+ },[focusCommentId,data?.comments.page,history.dataUpdatedAt,postId]);
  useEffect(()=>{
   const root=scrollRef.current,target=loadRef.current;
   if(!root||!target||!history.hasNextPage||history.isFetchNextPageError)return;
@@ -109,11 +121,11 @@ export function LocalPostHistory({postId,onClose,footer}:{postId:string;onClose:
       </div>
       {roots.length?<ol className="flex flex-col gap-6">
        {roots.map(root=>{
-        const open=!!expanded[root.id],shown=open?root.replies:root.replies.slice(0,1),hidden=root.replies.length-shown.length;
+        const focusRoot=root.platform_id===focusRootId,open=focusRoot||!!expanded[root.id],shown=open?root.replies:root.replies.slice(0,1),hidden=root.replies.length-shown.length;
         return <li key={root.id}>
-         <CommentRow comment={root}/>
+         <div ref={root.platform_id===focusCommentId?focusRef:undefined}><CommentRow comment={root} focus={root.platform_id===focusCommentId}/></div>
          {root.replies.length?<div className="mt-4 ml-12 flex flex-col gap-5">
-          {shown.map(reply=><CommentRow key={reply.id} comment={reply} reply/>)}
+          {shown.map(reply=><div key={reply.id} ref={reply.platform_id===focusCommentId?focusRef:undefined}><CommentRow comment={reply} reply focus={reply.platform_id===focusCommentId}/></div>)}
           {hidden>0||open?<Button type="button" variant="ghost" size="sm" className="h-auto justify-start px-0 text-caption text-muted-foreground hover:bg-transparent hover:text-foreground" onClick={()=>setExpanded(value=>({...value,[root.id]:!value[root.id]}))}>{open?'收起回复':`展开其余 ${hidden} 条回复`}</Button>:null}
          </div>:null}
         </li>;
