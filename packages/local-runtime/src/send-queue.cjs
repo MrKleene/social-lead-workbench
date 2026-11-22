@@ -357,7 +357,8 @@ class LocalSendQueue{
    if(Number.isFinite(limit))remaining+=Math.max(0,limit-used);
   }
   const pause=this.db.prepare("SELECT reason FROM safety_state WHERE id IN('sending','platform') AND reason IS NOT NULL ORDER BY created_at DESC LIMIT 1").get();
-  return {pending:(counts.WAITING_SWITCH??0)+(counts.READY??0)+(counts.SENDING??0),quota:counts.WAITING_QUOTA??0,failed:counts.FAILED??0,unknown:counts.UNKNOWN??0,expired:counts.EXPIRED??0,sending:counts.SENDING??0,autoReply:!!steps.autoReply,autoComment:steps.autoComment!==false,autoDm:steps.autoDm!==false,refreshTime:steps.refreshTime??'00:00',remaining,paused:!!pause,pauseReason:pause?.reason??null};
+  const checking=this.db.prepare("SELECT count(*) n FROM evidence_auto_tasks WHERE state IN('WAITING','RUNNING')").get().n;
+  return {pending:(counts.WAITING_SWITCH??0)+(counts.READY??0)+(counts.SENDING??0),quota:counts.WAITING_QUOTA??0,failed:counts.FAILED??0,unknown:counts.UNKNOWN??0,expired:counts.EXPIRED??0,sending:counts.SENDING??0,autoReply:!!steps.autoReply,autoComment:steps.autoComment!==false,autoDm:steps.autoDm!==false,refreshTime:steps.refreshTime??'00:00',remaining,paused:!!pause,pauseReason:pause?.reason??null,checking};
  }
 
  template(id,channel){const row=this.db.prepare('SELECT * FROM configurations WHERE id=?').get(id);if(!row||row.archived||row.kind!==channel+'_TEMPLATE')throw new LocalError('CONTACT_TEMPLATE_CHANGED');const body=JSON.parse(row.body),content=body.text??body.content;if(typeof content!=='string'||!content.trim())throw new LocalError('CONTACT_TEMPLATE_CHANGED');return {id:row.id,revision:row.revision,channel,content};}

@@ -8,7 +8,7 @@ const {LocalSendQueue}=require('./send-queue.cjs');
 // Executors are explicitly injected. Opening the desktop never registers a
 // platform adapter or grants permission to resume historical external actions.
 class LocalRunner {
- constructor(store,executors={}){this.store=store;this.queue=new LocalQueue(store);this.sends=new SendSafety(store);this.reviews=new LocalReview(store);this.collection=new LocalCollection(store);this.sendQueue=new LocalSendQueue(store);this.executors=executors;this.owner=randomUUID();this.pending=null;this.stopping=false;}
+ constructor(store,executors={}){this.store=store;this.queue=new LocalQueue(store);this.sends=new SendSafety(store);this.reviews=new LocalReview(store);this.collection=new LocalCollection(store);this.sendQueue=new LocalSendQueue(store);this.executors=executors;this.evidence=executors.EVIDENCE??null;this.owner=randomUUID();this.pending=null;this.stopping=false;}
  tick(){if(this.pending||this.stopping)return this.pending??Promise.resolve(false);this.pending=this.runOne().finally(()=>{this.pending=null;});return this.pending;}
  recoverStartup(){
   new(require('./automatic-review.cjs').AutomaticReview)(this.store).renewPending();
@@ -16,11 +16,12 @@ class LocalRunner {
   // desktop session's one-shot external actions merely because the app opened.
   // Explicit standing automatic-review consent alone retains validated, never-started work.
   this.store.transaction(()=>{this.store.db.exec("UPDATE evidence_checks SET state='INTERRUPTED' WHERE state='RUNNING'; UPDATE post_diagnostics SET state='INTERRUPTED' WHERE state='RUNNING'; UPDATE authorizations SET state='REVOKED' WHERE state='ACTIVE' AND id NOT IN(SELECT j.authorization_id FROM jobs j WHERE j.state='QUEUED' AND j.dispatch_started=0 AND j.cancel_requested=0 AND (j.id IN(SELECT job_id FROM automatic_review_tasks WHERE job_id IS NOT NULL) OR j.id IN(SELECT job_id FROM automatic_review_segments))); UPDATE jobs SET state='INTERRUPTED',cancel_requested=1 WHERE state='QUEUED' AND id NOT IN(SELECT job_id FROM automatic_review_tasks WHERE job_id IS NOT NULL UNION SELECT job_id FROM automatic_review_segments); UPDATE jobs SET lease_until=0 WHERE state='RUNNING'; DELETE FROM account_leases WHERE owner LIKE 'login:%'");this.store.audit('RECOVERY','DESKTOP_SESSION_RECOVERED','installation');});
+  this.evidence?.recoverAuto?.();
   this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();this.sendQueue.recover();
  }
  async runOne(){
   if(this.executors.SEND)try{this.sendQueue.schedule();}catch{this.store.transaction(()=>this.store.audit('RECOVERY','SEND_QUEUE_SCHEDULE_INTERRUPTED','queue'));}
-  this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();if(this.executors.REVIEW)new(require('./automatic-review.cjs').AutomaticReview)(this.store).reconcile();const lease=this.queue.claim(this.owner);if(!lease)return false;
+  this.queue.recover();this.sends.recover();this.reviews.recover();this.collection.recover();if(this.executors.REVIEW)new(require('./automatic-review.cjs').AutomaticReview)(this.store).reconcile();if(this.evidence?.autoTick){const checked=await this.evidence.autoTick();if(checked)return true;}const lease=this.queue.claim(this.owner);if(!lease)return false;
   const executor=this.executors[lease.kind];if(!executor){this.queue.finish(lease,'FAILED',{code:'EXECUTOR_UNAVAILABLE'});return false;}
   const abort=new AbortController();this.abort=abort;let dispatched=false,attemptId,batchId,commentCommand;
   const heartbeat=setInterval(()=>{try{this.queue.heartbeat(lease);if(lease.kind==='INBOX'&&this.store.db.prepare("SELECT 1 FROM jobs WHERE kind='SEND' AND state='QUEUED' AND cancel_requested=0 AND available_at<=?").get(this.store.clock()))abort.abort('INBOX_YIELD_FOR_SEND');}catch{abort.abort();}},5000);heartbeat.unref();
@@ -53,6 +54,6 @@ class LocalRunner {
    new(require('./automation.cjs').LocalAutomation)(this.store,{enabled:()=>!!this.executors.SEND}).reallocate({jobId:lease.id,accountId,runId:lease.payload.basis?.runId});
   }catch{this.store.transaction(()=>this.store.audit('RECOVERY','ACCOUNT_SWITCH_INTERRUPTED',accountId));}
  }
- async stop(){this.stopping=true;this.abort?.abort();await this.pending;}
+ async stop(){this.stopping=true;this.abort?.abort();this.evidence?.cancel?.();await this.pending;}
 }
 module.exports={LocalRunner};

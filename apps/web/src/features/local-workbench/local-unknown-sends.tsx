@@ -19,24 +19,38 @@ export function LocalUnknownSends() {
       {evidence.error ? <ErrorNotice error={evidence.error} /> : null}
       {attempts.length ? (
         <RecordList>
-          {attempts.map((item) => (
+          {attempts.map((item) => {
+            const checking =
+              item.auto_state === "WAITING" || item.auto_state === "RUNNING";
+            const autoFailed =
+              item.auto_state === "UNVERIFIED" || item.auto_state === "STOPPED";
+            return (
             <RecordItem
               key={item.id}
               title={item.account_name + " · " + (item.channel === "DM" ? "私信" : "评论")}
-              meta={new Date(item.updated_at).toLocaleString()}
+              meta={
+                new Date(item.updated_at).toLocaleString() +
+                (checking
+                  ? " · 自动核对中"
+                  : autoFailed
+                    ? " · 自动核对未完成"
+                    : "")
+              }
               action={
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={checking}
                   onClick={() => setAttempt(item)}
                 >
-                  核对结果
+                  {checking ? "自动核对中" : "核对结果"}
                 </Button>
               }
             >
               <span className="break-words">{item.content}</span>
             </RecordItem>
-          ))}
+            );
+          })}
         </RecordList>
       ) : (
         <EmptyState title="没有未知发送。" />

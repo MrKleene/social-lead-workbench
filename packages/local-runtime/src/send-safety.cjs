@@ -139,14 +139,15 @@ class SendSafety {
   if(quota&&(state==='CONFIRMED'||state==='NOT_SUBMITTED'))this.db.prepare('UPDATE send_attempts SET quota_charged=0 WHERE id=?').run(a.id);
   // 一条失败就取消同批次后面排队的消息：不替用户继续猜测发送。
   if(state==='UNKNOWN'&&a.batch_id)this.db.prepare("UPDATE jobs SET cancel_requested=1,updated_at=? WHERE state='QUEUED' AND cancel_requested=0 AND json_extract(payload,'$.batchId')=?").run(now,a.batch_id);
-  if(state==='UNKNOWN')this.pause('SUBMISSION_UNKNOWN',a.id);
+  if(state==='UNKNOWN'){this.pause('SUBMISSION_UNKNOWN',a.id);this.scheduleAuto(a.id,now);}
   this.db.prepare('UPDATE jobs SET state=?,result=?,lease_owner=NULL,lease_until=NULL,updated_at=? WHERE id=?').run(state==='CONFIRMED'?'SUCCEEDED':state==='UNKNOWN'?'UNKNOWN':'FAILED',canonical({attemptId,state}),now,job.id);
   this.store.audit('AUTOMATION','SEND_RESULT',a.id,{state});return state;
  }
  pause(reason,attemptId){const eventId=this.store.audit('RECOVERY','SENDING_PAUSED',attemptId,{reason});this.db.prepare("INSERT INTO safety_state VALUES('sending',1,?,?,?) ON CONFLICT(id) DO UPDATE SET version=version+1,event_id=excluded.event_id,reason=excluded.reason,created_at=excluded.created_at").run(eventId,reason,this.store.clock());}
+ scheduleAuto(attemptId,now,delay=5000){this.db.prepare("INSERT INTO evidence_auto_tasks(attempt_id,state,attempts,next_at,created_at,updated_at) VALUES(?,'WAITING',0,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET state='WAITING',next_at=excluded.next_at,last_reason=NULL,updated_at=excluded.updated_at").run(attemptId,now+delay,now,now);}
  recover(){return this.store.transaction(()=>{
   const rows=this.db.prepare("SELECT s.* FROM send_attempts s JOIN jobs j ON j.request_key=s.request_key WHERE s.state IN('RESERVED','DISPATCHED') AND (j.state<>'RUNNING' OR j.lease_until<=?)").all(this.store.clock());
-  for(const a of rows){const sent=a.state==='DISPATCHED',state=sent?'UNKNOWN':'CANCELLED';this.db.prepare('UPDATE send_attempts SET state=?,updated_at=? WHERE id=?').run(state,this.store.clock(),a.id);if(sent)this.pause('SUBMISSION_UNKNOWN',a.id);else if(a.quota_charged===1){this.db.prepare('UPDATE account_days SET occupied=occupied-1 WHERE account_id=? AND day=? AND occupied>0').run(a.account_id,a.quota_day);this.db.prepare('UPDATE send_attempts SET quota_charged=0 WHERE id=?').run(a.id);}this.store.audit('RECOVERY','SEND_INTERRUPTED',a.id,{state});}return rows.length;
+  for(const a of rows){const sent=a.state==='DISPATCHED',state=sent?'UNKNOWN':'CANCELLED';this.db.prepare('UPDATE send_attempts SET state=?,updated_at=? WHERE id=?').run(state,this.store.clock(),a.id);if(sent){this.pause('SUBMISSION_UNKNOWN',a.id);this.scheduleAuto(a.id,this.store.clock());}else if(a.quota_charged===1){this.db.prepare('UPDATE account_days SET occupied=occupied-1 WHERE account_id=? AND day=? AND occupied>0').run(a.account_id,a.quota_day);this.db.prepare('UPDATE send_attempts SET quota_charged=0 WHERE id=?').run(a.id);}this.store.audit('RECOVERY','SEND_INTERRUPTED',a.id,{state});}return rows.length;
  });}
 }
 module.exports={SendSafety,validateScope,dayAt,quotaDay,currentQuotaDay,refreshOffset,purposeOf,countsQuota};

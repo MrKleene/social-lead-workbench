@@ -259,12 +259,16 @@ export function LocalPending() {
           <AlertTitle>发送已暂停</AlertTitle>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
             <span>
-              {summaryData.pauseReason?.includes("UNKNOWN")
-                ? "有发送结果未知"
-                : "发送结果未知"}
+              {summaryData.checking
+                ? "系统正在自动核对发送结果"
+                : summaryData.pauseReason?.includes("UNKNOWN")
+                  ? "有发送结果未知"
+                  : "发送结果未知"}
             </span>
             <Button asChild variant="outline" size="sm">
-              <Link to="/work/notices">核对结果</Link>
+              <Link to="/work/notices">
+                {summaryData.checking ? "查看进度" : "核对结果"}
+              </Link>
             </Button>
           </AlertDescription>
         </Alert>
