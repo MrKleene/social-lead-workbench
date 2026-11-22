@@ -45,15 +45,16 @@ type DMConversationAction struct {
 	Disabled  bool   `json:"disabled"`
 }
 type DMObservedMessage struct {
- ID string `json:"id"`
- ClassName string `json:"className"`
- Text string `json:"-"`
- ContentHash string `json:"contentSha256"`
- Failed bool `json:"failed"`
- Pending bool `json:"pending"`
+	ID          string `json:"id"`
+	ClassName   string `json:"className"`
+	Attrs       string `json:"attrs"`
+	Text        string `json:"-"`
+	ContentHash string `json:"contentSha256"`
+	Failed      bool   `json:"failed"`
+	Pending     bool   `json:"pending"`
 }
 type DMConversationObservation struct {
- Messages []DMObservedMessage `json:"messages"`
+	Messages []DMObservedMessage `json:"messages"`
 
 	BoundRecipient   bool                   `json:"boundRecipient"`
 	ConversationKind string                 `json:"conversationKind"`

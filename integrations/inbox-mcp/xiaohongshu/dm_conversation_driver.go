@@ -38,7 +38,7 @@ const dmConversationDOM = `(sender,recipient)=>{const guard=JSON.parse((` + dmEn
  const active=Array.from(document.querySelectorAll('.xhs-im-conv-item--active')).filter(visible);
  result.boundRecipient=active.length===1&&active[0].getAttribute('data-conv-id')===recipient;
  if(result.boundRecipient){const kind=active[0].getAttribute('data-conv-kind')||'';result.conversationKind=/^[A-Za-z0-9_-]{1,20}$/.test(kind)?kind:'';const header=document.querySelector('.xhs-im-chat-window__header-name');result.headerName=header&&visible(header)?(header.innerText||header.textContent||'').trim().slice(0,120):'';result.hints=Array.from(document.querySelectorAll('.xhs-im-chat-window .xhs-im-hint__text')).filter(visible).slice(0,4).map(e=>(e.innerText||e.textContent||'').trim().slice(0,200));result.actions=Array.from(document.querySelectorAll('.xhs-im-input-bar-actions button,.xhs-im-input-bar-actions [role="button"]')).filter(visible).slice(0,8).map(e=>({tag:e.tagName,className:cls(e),label:(e.getAttribute('aria-label')||e.getAttribute('title')||e.innerText||e.textContent||'').trim().slice(0,80),disabled:!!e.disabled||e.getAttribute('aria-disabled')==='true'}));}
- if(result.boundRecipient&&result.conversationKind==='c2c'&&!result.loading){result.messages=Array.from(document.querySelectorAll('.xhs-im-chat-window .xhs-im-msg-list .chat-item')).filter(e=>!!e.querySelector('.chat-item__bubble-row--right')).slice(-5).map(e=>({id:(e.getAttribute('data-message-id')||'').slice(0,120),className:cls(e),rawText:(e.querySelector('.chat-item__bubble')?.textContent||'').slice(0,1000),failed:!!e.querySelector('.chat-item__status-btn--failed'),pending:!!e.querySelector('.chat-item__status-loading')}));}
+ if(result.boundRecipient&&result.conversationKind==='c2c'&&!result.loading){result.messages=Array.from(document.querySelectorAll('.xhs-im-chat-window .xhs-im-msg-list .chat-item')).filter(e=>!!e.querySelector('.chat-item__bubble-row--right')).slice(-5).map(e=>({id:(e.getAttribute('data-message-id')||'').slice(0,120),className:cls(e),attrs:Array.from(e.attributes).map(a=>a.name+'='+a.value).join('|').slice(0,500),rawText:(e.querySelector('.chat-item__bubble')?.textContent||'').slice(0,1000),failed:!!e.querySelector('.chat-item__status-btn--failed'),pending:!!e.querySelector('.chat-item__status-loading')}));}
  const resources=[...Array.from(document.querySelectorAll('script[src]')).map(e=>e.src),...performance.getEntriesByType('resource').map(e=>e.name)];
  result.scriptResources=Array.from(new Set(resources.flatMap(s=>{try{const u=new URL(s);const url=u.origin+u.pathname;return u.protocol==='https:'&&!u.username&&!u.password&&(u.hostname==='www.xiaohongshu.com'||u.hostname.endsWith('.xhscdn.com')||u.hostname.endsWith('.xiaohongshu.com'))&&/\.js$/.test(u.pathname)&&url.length<300?[url]:[]}catch{return []}}))).slice(-20);
  result.stateKeys=Object.keys(window.__INITIAL_STATE__||{}).filter(k=>/^[A-Za-z0-9_-]{1,50}$/.test(k)&&/chat|conversation|im/i.test(k)).slice(0,20);
@@ -119,10 +119,18 @@ func (d *DMConversationDriver) Inspect(ctx context.Context, t exactreply.DMConve
 		if e = json.Unmarshal([]byte(value.Value.Str()), &o); e != nil {
 			return o, n, e
 		}
-		var raw struct {Messages []struct {RawText string `json:"rawText"`}}
-        if json.Unmarshal([]byte(value.Value.Str()), &raw) != nil || len(raw.Messages) != len(o.Messages) {return o,n,errors.New("MESSAGE_METADATA_INVALID")}
-        for i := range o.Messages {o.Messages[i].ContentHash=exactreply.Hash(raw.Messages[i].RawText)}
-        if o.Identity == "MISMATCH" || o.Risk || o.LoginChallenge || o.Route == "OTHER" || (len(o.Editors) > 0 && !o.Loading && o.HeaderPresent) || sample == 23 {
+		var raw struct {
+			Messages []struct {
+				RawText string `json:"rawText"`
+			}
+		}
+		if json.Unmarshal([]byte(value.Value.Str()), &raw) != nil || len(raw.Messages) != len(o.Messages) {
+			return o, n, errors.New("MESSAGE_METADATA_INVALID")
+		}
+		for i := range o.Messages {
+			o.Messages[i].ContentHash = exactreply.Hash(raw.Messages[i].RawText)
+		}
+		if o.Identity == "MISMATCH" || o.Risk || o.LoginChallenge || o.Route == "OTHER" || (len(o.Editors) > 0 && !o.Loading && o.HeaderPresent) || sample == 23 {
 			return o, n, nil
 		}
 		timer := time.NewTimer(250 * time.Millisecond)
