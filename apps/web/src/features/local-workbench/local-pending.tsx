@@ -504,7 +504,8 @@ export function LocalPending() {
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="回复模板">
+            <div className="flex min-w-0 flex-col gap-2">
+              <span className="text-body">回复模板</span>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -559,7 +560,7 @@ export function LocalPending() {
                   </div>
                 </PopoverContent>
               </Popover>
-            </FormField>
+            </div>
             {!usableAccounts.length ? (
               <p className="text-caption text-attention">没有可用发送账号</p>
             ) : null}
