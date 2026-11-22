@@ -115,8 +115,11 @@ export function ReviewPostDialog({
   });
 
   const decide = useMutation({
-    mutationFn: (input: { id: string; version: number; status: "APPROVED" }) =>
-      localApi("decideReview", input),
+    mutationFn: (input: {
+      id: string;
+      version: number;
+      status: "APPROVED" | "REJECTED" | "PENDING";
+    }) => localApi("decideReview", input),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["local", "reviewComments"] });
       void client.invalidateQueries({ queryKey: ["local", "reviewPosts"] });
@@ -269,6 +272,7 @@ export function ReviewPostDialog({
                             state={row.state}
                             pending={decide.isPending}
                             canApprove={approval.canApprove}
+                            canReject={false}
                             approveHint={approval.approveHint}
                             onDecide={(status) =>
                               decide.mutate({

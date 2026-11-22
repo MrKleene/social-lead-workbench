@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutGrid, List, Search } from "lucide-react";
+import { toast } from "sonner";
 import { useSearchParams } from "@/lib/router-compat";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
@@ -65,6 +67,8 @@ import {
   toReview,
 } from "./review-model";
 
+type ReviewDecision = "APPROVED" | "REJECTED" | "PENDING";
+
 export function LocalCommentReview() {
   const [params, setParams] = useSearchParams();
   const [showFilters, setShowFilters] = useState(false);
@@ -75,7 +79,11 @@ export function LocalCommentReview() {
   const [detail, setDetail] = useState<LocalReview | null>(null);
   const [contact, setContact] = useState<LocalReview | null>(null);
   const [preview, setPreview] = useState<GenerateQueuePreview | null>(null);
-  const [approve, setApprove] = useState<LocalReview | null>(null);
+  const [decisionPrompt, setDecisionPrompt] = useState<{
+    rows: LocalReview[];
+    next: ReviewDecision;
+  } | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const client = useQueryClient();
   const generate = useLocalAction("generateSendQueue");
 
@@ -338,19 +346,31 @@ export function LocalCommentReview() {
   const queueRules = useLocalRecords("queueRules");
   const decide = useMutation({
     mutationFn: ({
-      row,
+      rows,
       next,
     }: {
-      row: LocalReview;
-      next: "APPROVED";
-    }) =>
-      localApi("decideReview", {
-        id: row.id,
-        version: row.version,
-        status: next,
-      }),
-    onSuccess: () => {
-      setApprove(null);
+      rows: LocalReview[];
+      next: ReviewDecision;
+    }) => {
+      const items = rows.map((row) => ({ id: row.id, version: row.version }));
+      return localApi("decideReviews", { items, status: next });
+    },
+    onSuccess: (result, variables) => {
+      const count = variables.rows.length;
+      if (variables.next === "APPROVED") {
+        const queued = result.queued;
+        toast.success(
+          queued
+            ? `已通过 ${count} 条，加入待发送队列`
+            : `已通过 ${count} 条，当前没有可入队的规则`,
+        );
+      } else if (variables.next === "REJECTED") {
+        toast.success(`已标记 ${count} 条为不符合，可在“不符合”中恢复`);
+      } else {
+        toast.success(`已恢复 ${count} 条为待确认`);
+      }
+      setDecisionPrompt(null);
+      setSelected(new Set());
       void client.invalidateQueries({ queryKey: ["local"] });
     },
   });
@@ -358,6 +378,84 @@ export function LocalCommentReview() {
   const selectedPost = reviewPosts.data?.items.find(
     (post) => post.postId === selectedPostId,
   );
+  const ruleFor = (row: ReviewCommentListItem) =>
+    queueRules.data?.find((rule) => rule.policyId === row.policy_id) ?? null;
+  const approvalFor = (row: ReviewCommentListItem) =>
+    approvalState(row, ruleFor(row));
+  const selectable = (commentList.data?.items ?? []).filter(
+    (row) =>
+      Boolean(row.review_id) &&
+      row.state === "REVIEWED" &&
+      !row.queue_state &&
+      (row.review_status === "REJECTED" ||
+        (row.review_status === "PENDING" &&
+          (approvalFor(row).canApprove || row.decision !== "NO_MATCH"))),
+  );
+  const selectedRows = selectable.filter(
+    (row) => row.review_id && selected.has(row.review_id),
+  );
+  const approvableSelected = selectedRows.filter(
+    (row) =>
+      row.review_status === "PENDING" && approvalFor(row).canApprove,
+  );
+  const rejectableSelected = selectedRows.filter(
+    (row) =>
+      row.review_status === "PENDING" && row.decision !== "NO_MATCH",
+  );
+  const rejectedSelected = selectedRows.filter(
+    (row) => row.review_status === "REJECTED",
+  );
+  const allSelected =
+    selectable.length > 0 &&
+    selectable.every((row) => row.review_id && selected.has(row.review_id));
+  const someSelected = selectable.some(
+    (row) => row.review_id && selected.has(row.review_id),
+  );
+  const toggleSelected = (id: string) =>
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAll = () =>
+    setSelected(
+      allSelected
+        ? new Set()
+        : new Set(
+            selectable
+              .map((row) => row.review_id)
+              .filter((id): id is string => Boolean(id)),
+          ),
+    );
+  const askDecision = (rows: ReviewCommentListItem[], next: ReviewDecision) =>
+    setDecisionPrompt({
+      rows: rows.map((row) =>
+        toReview(row, row.run_id, { id: row.post_id, title: row.post_title }),
+      ),
+      next,
+    });
+  const selectionKey = [
+    view,
+    page,
+    commentPageSize,
+    runId,
+    policyId,
+    query,
+    decision,
+    context,
+    mode,
+    minScore,
+    maxScore,
+    from,
+    to,
+    publication,
+    queue,
+    sort,
+  ].join("|");
+  useEffect(() => {
+    setSelected(new Set());
+  }, [selectionKey]);
   const error =
     workflow.error ?? reviewPosts.error ?? commentList.error ?? decide.error ?? queueRules.error;
   const total = view === "posts" ? reviewPosts.data?.total : commentList.data?.total;
@@ -610,6 +708,49 @@ export function LocalCommentReview() {
 
       {error ? <ErrorNotice error={error} /> : null}
 
+      {view === "comments" && selectedRows.length ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-4 py-3">
+          <span className="text-body">已选 {selectedRows.length} 条</span>
+          {approvableSelected.length ? (
+            <Button
+              size="sm"
+              disabled={decide.isPending}
+              onClick={() => askDecision(approvableSelected, "APPROVED")}
+            >
+              通过 {approvableSelected.length}
+            </Button>
+          ) : null}
+          {rejectableSelected.length ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={decide.isPending}
+              onClick={() => askDecision(rejectableSelected, "REJECTED")}
+            >
+              标记不符合 {rejectableSelected.length}
+            </Button>
+          ) : null}
+          {rejectedSelected.length ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={decide.isPending}
+              onClick={() => askDecision(rejectedSelected, "PENDING")}
+            >
+              恢复待确认 {rejectedSelected.length}
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={decide.isPending}
+            onClick={() => setSelected(new Set())}
+          >
+            取消选择
+          </Button>
+        </div>
+      ) : null}
+
       {view === "posts" ? (
         <>
           {reviewPosts.isLoading ? <Loading /> : null}
@@ -657,9 +798,17 @@ export function LocalCommentReview() {
           ) : null}
           {commentList.data?.items.length ? (
             <div className="overflow-x-auto rounded-lg border">
-              <Table className="min-w-[1080px]" aria-label="全部评论审核记录">
+              <Table className="min-w-[1128px]" aria-label="全部评论审核记录">
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[48px]">
+                      <Checkbox
+                        aria-label="选择本页可处理评论"
+                        checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                        disabled={!selectable.length || decide.isPending}
+                        onCheckedChange={toggleAll}
+                      />
+                    </TableHead>
                     <TableHead>评论</TableHead>
                     <TableHead className="w-[224px]">帖子</TableHead>
                     <TableHead className="w-[80px]">匹配分</TableHead>
@@ -674,13 +823,27 @@ export function LocalCommentReview() {
                       id: row.post_id,
                       title: row.post_title,
                     });
-                    const approval = approvalState(
-                      row,
-                      queueRules.data?.find((rule) => rule.policyId === row.policy_id) ??
-                        null,
-                    );
+                    const approval = approvalFor(row);
+                    const reviewId = row.review_id;
+                    const selectableRow =
+                      Boolean(reviewId) &&
+                      row.state === "REVIEWED" &&
+                      !row.queue_state &&
+                      (row.review_status === "REJECTED" ||
+                        (row.review_status === "PENDING" &&
+                          (approval.canApprove || row.decision !== "NO_MATCH")));
                     return (
                       <TableRow key={row.id}>
+                        <TableCell>
+                          {selectableRow ? (
+                            <Checkbox
+                              aria-label={`选择评论：${row.body.slice(0, 20)}`}
+                              checked={selected.has(reviewId!)}
+                              disabled={decide.isPending}
+                              onCheckedChange={() => toggleSelected(reviewId!)}
+                            />
+                          ) : null}
+                        </TableCell>
                         <TableCell className="whitespace-normal">
                           <button
                             type="button"
@@ -703,6 +866,10 @@ export function LocalCommentReview() {
                           {row.decision ? (
                             <Badge variant={decisionVariant(row.decision)}>
                               {decisionLabels[row.decision] ?? row.decision}
+                              {row.review_status === "APPROVED" ||
+                              row.review_status === "REJECTED"
+                                ? " · 人工"
+                                : ""}
                             </Badge>
                           ) : (
                             <span className="text-caption text-muted-foreground">—</span>
@@ -717,8 +884,13 @@ export function LocalCommentReview() {
                             state={row.state}
                             pending={decide.isPending}
                             canApprove={approval.canApprove}
+                            canReject={
+                              row.review_status === "PENDING" &&
+                              !row.queue_state &&
+                              row.decision !== "NO_MATCH"
+                            }
                             approveHint={approval.approveHint}
-                            onDecide={() => setApprove(review)}
+                            onDecide={(next) => askDecision([row], next)}
                             onContact={() => setContact(review)}
                             onOpen={() => setDetail(review)}
                           />
@@ -800,27 +972,49 @@ export function LocalCommentReview() {
         </DialogContent>
       </Dialog>
       <AlertDialog
-        open={!!approve}
+        open={!!decisionPrompt}
         onOpenChange={(open) => {
-          if (!open && !decide.isPending) setApprove(null);
+          if (!open && !decide.isPending) setDecisionPrompt(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>通过这条评论？</AlertDialogTitle>
+            <AlertDialogTitle>
+              {decisionPrompt?.next === "APPROVED"
+                ? decisionPrompt.rows.length === 1
+                  ? "通过这条评论？"
+                  : `通过选中的 ${decisionPrompt.rows.length} 条评论？`
+                : decisionPrompt?.next === "REJECTED"
+                  ? decisionPrompt.rows.length === 1
+                    ? "标记这条评论为不符合？"
+                    : `标记选中的 ${decisionPrompt.rows.length} 条评论为不符合？`
+                  : decisionPrompt?.rows.length === 1
+                    ? "恢复这条评论为待确认？"
+                    : `恢复选中的 ${decisionPrompt?.rows.length ?? 0} 条评论为待确认？`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              通过后会加入待发送队列，按自动发送配置处理。
+              {decisionPrompt?.next === "APPROVED"
+                ? "通过后会加入待发送队列，按自动发送配置处理。"
+                : decisionPrompt?.next === "REJECTED"
+                  ? "标记后从待确认转为不符合；可在“不符合”筛选中恢复。"
+                  : "恢复后重新进入待确认，并按入队规则处理。"}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {decide.error ? <ErrorNotice error={decide.error} /> : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={decide.isPending}>取消</AlertDialogCancel>
             <Button
+              variant={decisionPrompt?.next === "REJECTED" ? "outline" : "default"}
               pending={decide.isPending}
               onClick={() => {
-                if (approve) decide.mutate({ row: approve, next: "APPROVED" });
+                if (decisionPrompt) decide.mutate(decisionPrompt);
               }}
             >
-              通过
+              {decisionPrompt?.next === "APPROVED"
+                ? "通过"
+                : decisionPrompt?.next === "REJECTED"
+                  ? "标记不符合"
+                  : "恢复待确认"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

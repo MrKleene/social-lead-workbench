@@ -158,7 +158,37 @@ class LocalService {
  reviewComments(input){return this.workspace().reviewComments(input);}
  reviewCommentList(input){return this.workspace().reviewCommentList(input);}
  runProgress(input){return this.workspace().runProgress(input); }
- decideReview({id,version,status}){if(typeof id!=='string'||!Number.isInteger(version)||!['APPROVED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_DECISION');return this.store.transaction(()=>{const manual=status==='APPROVED'?'MATCH':null,n=this.store.db.prepare('UPDATE review_results SET review_status=?,manual_decision=?,version=version+1 WHERE id=? AND version=?').run(status,manual,id,version).changes;if(n!==1)throw new LocalError('REVIEW_CHANGED');let queue=null;if(status==='APPROVED'){try{queue=this.sendQueue().enqueueReviewInTransaction(id);}catch(error){if(error instanceof LocalError&&error.code==='QUEUE_RULE_CONFIGURATION_MISSING')queue={queued:0,skipped:'QUEUE_RULE_CONFIGURATION_MISSING'};else throw error;}}this.store.audit('LOCAL_USER','REVIEW_DECISION',id,{status,manualDecision:manual,previousVersion:version,queue});return {updated:true,queue};});}
+ decideReview(input){return this.store.transaction(()=>{const result=this.decideReviewInTransaction(input);return {updated:true,queue:result.queue};});}
+ decideReviews({items,status}={}){
+  if(!Array.isArray(items)||!items.length||items.length>100)throw new LocalError('INVALID_REVIEW_SELECTION');
+  const seen=new Set();
+  for(const item of items){
+   if(!item||typeof item.id!=='string'||!Number.isInteger(item.version)||seen.has(item.id))throw new LocalError('INVALID_REVIEW_SELECTION');
+   seen.add(item.id);
+  }
+  return this.store.transaction(()=>{
+   let queued=0,skipped=0;
+   for(const item of items){const result=this.decideReviewInTransaction({...item,status});if(result.queue){queued+=result.queue.queued??0;if(result.queue.skipped)skipped++;}}
+   this.store.audit('LOCAL_USER','REVIEW_DECISION_BATCH','batch',{status,count:items.length,queued,skipped});
+   return {updated:items.length,queued,skipped};
+  });
+ }
+ decideReviewInTransaction({id,version,status}){
+  if(typeof id!=='string'||!Number.isInteger(version)||!['APPROVED','REJECTED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_DECISION');
+  const current=this.store.db.prepare('SELECT review_status FROM review_results WHERE id=? AND version=?').get(id,version);
+  if(!current)throw new LocalError('REVIEW_CHANGED');
+  if(status==='PENDING'?current.review_status!=='REJECTED':current.review_status!=='PENDING')throw new LocalError('INVALID_REVIEW_DECISION');
+  const manual=status==='APPROVED'?'MATCH':status==='REJECTED'?'NO_MATCH':null;
+  const changed=this.store.db.prepare('UPDATE review_results SET review_status=?,manual_decision=?,version=version+1 WHERE id=? AND version=? AND review_status=?').run(status,manual,id,version,current.review_status).changes;
+  if(changed!==1)throw new LocalError('REVIEW_CHANGED');
+  let queue=null;
+  if(status==='APPROVED'){
+   try{queue=this.sendQueue().enqueueReviewInTransaction(id);}
+   catch(error){if(error instanceof LocalError&&error.code==='QUEUE_RULE_CONFIGURATION_MISSING')queue={queued:0,skipped:'QUEUE_RULE_CONFIGURATION_MISSING'};else throw error;}
+  }
+  this.store.audit('LOCAL_USER','REVIEW_DECISION',id,{status,manualDecision:manual,previousVersion:version,queue});
+  return {updated:true,queue};
+ }
  sendQueue(){return new(require('./send-queue.cjs').LocalSendQueue)(this.store);}
  sendQueueList(input){return this.sendQueue().list(input);}
  sendQueueSummary(){return this.sendQueue().summary();}

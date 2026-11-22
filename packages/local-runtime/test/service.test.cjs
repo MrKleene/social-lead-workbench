@@ -48,4 +48,18 @@ test('platform hold clears only from process reconciliation, never from a caller
  assert.equal(service.reconcilePlatformHold({liveProcesses:0,sessions:1}).cleared,true);
  assert.equal(service.status().platformPause,null);
  assert.equal(db.db.prepare("SELECT count(*) n FROM audit_events WHERE action='PLATFORM_HOLD_RECONCILED'").get().n,1);
+});test('batch review decisions reject and restore with one audit entry',t=>{
+ const {fixture,collect,evaluate}=require('./flow-fixture.cjs'),f=fixture(t),run=collect(f);evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ const service=new LocalService(f.store),row=service.reviews().items[0];
+ const rejected=service.decideReviews({items:[{id:row.id,version:row.version}],status:'REJECTED'});
+ assert.equal(rejected.updated,1);
+ assert.equal(service.reviews().items[0].review_status,'REJECTED');
+ assert.equal(f.store.db.prepare('SELECT manual_decision FROM review_results WHERE id=?').get(row.id).manual_decision,'NO_MATCH');
+ assert.equal(f.store.db.prepare("SELECT count(*) n FROM audit_events WHERE action='REVIEW_DECISION_BATCH'").get().n,1);
+ const restored=service.reviews().items[0],pending=service.decideReviews({items:[{id:restored.id,version:restored.version}],status:'PENDING'});
+ assert.equal(pending.updated,1);
+ assert.equal(service.reviews().items[0].review_status,'PENDING');
+ assert.equal(f.store.db.prepare('SELECT manual_decision FROM review_results WHERE id=?').get(row.id).manual_decision,null);
+ assert.throws(()=>service.decideReviews({items:[],status:'APPROVED'}),/INVALID_REVIEW_SELECTION/);
+ assert.throws(()=>service.decideReviews({items:[{id:row.id,version:1},{id:row.id,version:1}],status:'REJECTED'}),/INVALID_REVIEW_SELECTION/);
 });

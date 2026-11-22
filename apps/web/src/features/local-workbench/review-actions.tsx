@@ -17,18 +17,21 @@ export function ReviewDecisionActions({
   onOpen,
   pending,
   canApprove,
+  canReject,
   approveHint,
 }: {
   row: LocalReview;
   state?: ReviewComment["state"];
-  onDecide: (status: "APPROVED") => void;
+  onDecide: (status: "APPROVED" | "REJECTED" | "PENDING") => void;
   onContact: () => void;
   onOpen: () => void;
   pending: boolean;
   canApprove: boolean;
+  canReject: boolean;
   approveHint?: string;
 }) {
   const unreviewed = state && state !== "REVIEWED";
+  const rejected = row.review_status === "REJECTED";
   return (
     <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
       {unreviewed ? (
@@ -37,6 +40,15 @@ export function ReviewDecisionActions({
         </span>
       ) : row.queue_state ? (
         <span className="text-caption text-muted-foreground">已入队</span>
+      ) : rejected ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={pending}
+          onClick={() => onDecide("PENDING")}
+        >
+          恢复待确认
+        </Button>
       ) : row.review_status === "APPROVED" ? (
         <Button variant="outline" size="sm" onClick={onContact}>
           准备联系作者
@@ -49,6 +61,15 @@ export function ReviewDecisionActions({
           onClick={() => onDecide("APPROVED")}
         >
           通过
+        </Button>
+      ) : canReject ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={pending}
+          onClick={() => onDecide("REJECTED")}
+        >
+          标记不符合
         </Button>
       ) : (
         <span className="text-caption text-muted-foreground">{approveHint ?? "—"}</span>
@@ -66,6 +87,13 @@ export function ReviewDecisionActions({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={onOpen}>查看详情</DropdownMenuItem>
+          {!unreviewed && !row.queue_state && (canReject || rejected) ? (
+            <DropdownMenuItem
+              onSelect={() => onDecide(rejected ? "PENDING" : "REJECTED")}
+            >
+              {rejected ? "恢复待确认" : "标记不符合"}
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
