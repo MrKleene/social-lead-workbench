@@ -43,6 +43,7 @@ test('review completion queues one waiting row per configured channel without th
  assert.deepEqual(f.automation.afterReview(f.run.runId),{queued:0,skipped:2});
  const rows=queuedRows(f);assert.deepEqual(rows.map(row=>row.channel),['COMMENT','DM']);
  for(const row of rows){const plan=JSON.parse(row.plan);assert.equal(row.state,'WAITING_SWITCH');assert.equal(row.reason,'AUTO_REPLY_OFF');assert.equal(row.origin,'AUTO');assert.equal(plan.ruleId,f.rule.id);assert.equal(plan.threshold,80);assert.equal(plan.templates[0].channel,row.channel);}
+ const list=f.sendQueue.list({tab:'pending'});assert.equal(list.total,2);assert.equal(list.items[0].recipientNickname,'合成用户');assert.equal(f.sendQueue.list({tab:'pending',query:'合成用户'}).total,2);
  assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND'").get().n,0);
 });
 

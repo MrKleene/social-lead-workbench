@@ -111,6 +111,7 @@ export function LocalPending() {
   const failure = records.error ?? retry.error ?? cancel.error ?? requeueAction.error ?? dismiss.error ?? sendNow.error;
   const summaryData = summary.data;
   const autoReply = !!steps.data?.autoReply;
+  const hasAccountPool = (steps.data?.replyAccountIds.length ?? 0) > 0;
   const hasChannel = !!steps.data && (steps.data.autoComment || steps.data.autoDm);
   const hasCommentConfig =
     !steps.data?.autoComment ||
@@ -177,7 +178,9 @@ export function LocalPending() {
         actions={
           <div className="flex flex-wrap items-center gap-6">
             <p className="text-body text-muted-foreground">
-              今日剩余额度 {summaryData?.remaining ?? 0} 条
+              {hasAccountPool
+                ? `今日剩余额度 ${summaryData?.remaining ?? 0} 条`
+                : "未配置发送账号"}
             </p>
             <label className="flex items-center gap-2">
               <span className="text-body">自动发送</span>
@@ -198,7 +201,15 @@ export function LocalPending() {
               </Switch>
             </label>
             {!autoReply && !canEnableAuto ? (
-              <p className="text-caption text-attention">发送渠道或模板未配置</p>
+              <div className="flex items-center gap-2">
+                <p className="text-caption text-attention">发送渠道或模板未配置</p>
+                <Link
+                  to="/configuration?tab=reply"
+                  className="text-caption text-attention underline underline-offset-4"
+                >
+                  去配置
+                </Link>
+              </div>
             ) : null}
           </div>
         }
@@ -270,10 +281,10 @@ export function LocalPending() {
                         <span className="sr-only">选择</span>
                       </TableHead>
                       <TableHead>帖子与评论</TableHead>
-                      <TableHead>收件人</TableHead>
+                      <TableHead>发送账号</TableHead>
                       <TableHead>渠道</TableHead>
                       <TableHead>状态 / 原因</TableHead>
-                      <TableHead>时间</TableHead>
+                      <TableHead>入队时间</TableHead>
                       <TableHead className="text-right">操作</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -302,6 +313,9 @@ export function LocalPending() {
                           </p>
                           <p className="mt-1 line-clamp-2 text-caption leading-relaxed text-muted-foreground break-words">
                             {item.comment}
+                          </p>
+                          <p className="mt-1 text-caption text-muted-foreground">
+                            收件人 {item.recipientNickname || "未知收件人"}
                           </p>
                           <p className="mt-1 text-caption text-muted-foreground">
                             评分 {item.score ?? "—"} · {item.origin === "AUTO" ? "自动入队" : item.origin === "MANUAL_REVIEW" ? "人工通过" : "手动发送"}
@@ -363,7 +377,7 @@ export function LocalPending() {
                             {tab === "pending" || tab === "quota" ? (
                               <Button
                                 size="sm"
-                                variant="ghost"
+                                variant="outline"
                                 disabled={item.state === "SENDING" || cancel.isPending}
                                 onClick={() => cancel.mutate({ id: item.id })}
                               >
@@ -373,7 +387,7 @@ export function LocalPending() {
                             {tab === "failed" || tab === "unknown" ? (
                               <Button
                                 size="sm"
-                                variant="ghost"
+                                variant="outline"
                                 disabled={dismiss.isPending}
                                 onClick={() => dismiss.mutate({ id: item.id })}
                               >
