@@ -125,6 +125,7 @@ export type ReplyHistoryItem = {
     recipientId: string | null; recipientName: string | null; postId: string | null; postTitle: string | null; postUrl: string | null;
     commentId: string | null; originalComment: string | null; content: string;
     createdAt: string; attemptedAt: string | null; confirmedAt: string | null; platformReceipt: string | null; reason: string | null; day: string;
+    autoState: string | null; autoAttempts: number;
     executionEvidence: { at: string; event: unknown }[];
 };
 export type ReplyHistoryPage = { items: ReplyHistoryItem[]; total: number; allTotal: number; confirmedTotal: number; offset: number; limit: number; mode: string };

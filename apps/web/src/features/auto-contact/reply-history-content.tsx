@@ -49,6 +49,9 @@ const planned = (item: ReplyHistoryItem) =>
   !item.attemptedAt &&
   ["NOT_ATTEMPTED", "RESERVED", "CANCELLED"].includes(item.displayStatus);
 
+const unknownStopped = (item: ReplyHistoryItem) =>
+  item.displayStatus === "UNKNOWN" && item.autoState === "UNVERIFIED";
+
 function SenderIdentity({ item }: { item: ReplyHistoryItem }) {
   const name =
     item.senderName ??
@@ -78,9 +81,10 @@ function SenderIdentity({ item }: { item: ReplyHistoryItem }) {
 }
 
 function Outcome({ item }: { item: ReplyHistoryItem }) {
+  const stopped = unknownStopped(item);
   return (
-    <Badge variant={tones[item.displayStatus] ?? "outline"}>
-      {labels[item.displayStatus] ?? "状态待核查"}
+    <Badge variant={stopped ? "outline" : (tones[item.displayStatus] ?? "outline")}>
+      {stopped ? "未确认已停止" : (labels[item.displayStatus] ?? "状态待核查")}
     </Badge>
   );
 }
@@ -153,7 +157,9 @@ export function ReplyHistoryTable({
               <TableCell className="align-top whitespace-normal">
                 <Outcome item={item} />
                 <small className="mt-1.5 block text-caption text-muted-foreground">
-                  {notes[item.displayStatus] ?? "查看记录详情"}
+                  {unknownStopped(item)
+                    ? "已停止，不会重发"
+                    : (notes[item.displayStatus] ?? "查看记录详情")}
                 </small>
               </TableCell>
               <TableCell className="text-right align-top">
@@ -180,7 +186,9 @@ export function ReplyHistoryDetail({ item }: { item: ReplyHistoryItem }) {
       <div className="flex flex-wrap items-center gap-2">
         <Outcome item={item} />
         <span className="text-caption text-muted-foreground">
-          {notes[item.displayStatus] ?? item.displayStatus}
+          {unknownStopped(item)
+            ? "已停止，不会重发"
+            : (notes[item.displayStatus] ?? item.displayStatus)}
         </span>
         <small className="ms-auto text-caption text-muted-foreground">
           {item.origin === "CONVERSATION"
@@ -192,13 +200,26 @@ export function ReplyHistoryDetail({ item }: { item: ReplyHistoryItem }) {
         </small>
       </div>
 
-      {item.displayStatus === "UNKNOWN" ? (
+      {unknownStopped(item) ? (
         <Alert role="status" variant="warning">
-          <AlertDescription>结果未知，待核对。</AlertDescription>
+          <AlertDescription>
+            系统自动回读未确认，已停止，不会重发。
+          </AlertDescription>
+        </Alert>
+      ) : item.displayStatus === "UNKNOWN" ? (
+        <Alert role="status" variant="warning">
+          <AlertDescription>
+            {["WAITING", "RUNNING"].includes(item.autoState ?? "")
+              ? "系统正在自动核对发送结果。"
+              : "结果未知，待核对。"}
+          </AlertDescription>
         </Alert>
       ) : null}
 
-      {item.displayStatus === "UNKNOWN" || item.displayStatus === "FAILED" ? (
+      {item.displayStatus === "FAILED" ||
+      (item.displayStatus === "UNKNOWN" &&
+        !unknownStopped(item) &&
+        !["WAITING", "RUNNING"].includes(item.autoState ?? "")) ? (
         <div>
           <Button asChild variant="outline" size="sm">
             <Link
@@ -264,7 +285,9 @@ export function ReplyHistoryDetail({ item }: { item: ReplyHistoryItem }) {
         <h3 className="text-body font-semibold">结果与时间</h3>
         {item.reason || item.displayStatus === "UNKNOWN" ? (
           <p className="leading-relaxed text-muted-foreground break-words">
-            {item.reason || ""}
+            {unknownStopped(item)
+              ? "系统自动回读未确认，已停止。"
+              : (item.reason || "")}
           </p>
         ) : null}
         <DetailList>
