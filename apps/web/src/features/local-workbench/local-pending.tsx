@@ -301,7 +301,7 @@ export function LocalPending() {
                       <TableHead className="w-[120px]">状态 / 原因</TableHead>
                       <TableHead>入队时间</TableHead>
                       <TableHead>有效期</TableHead>
-                      <TableHead className="sticky right-0 z-10 border-l bg-muted text-right">操作</TableHead>
+                      <TableHead className="sticky right-0 z-10 w-[200px] bg-muted text-right">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -338,7 +338,7 @@ export function LocalPending() {
                           </p>
                         </TableCell>
                         <TableCell className="align-top text-caption text-muted-foreground break-words">
-                          {item.accountName ?? "未分配账号"}
+                          {item.accountName ?? "待分配"}
                         </TableCell>
                         <TableCell className="align-top">
                           <Badge variant="outline">{item.channel === "DM" ? "私信" : "评论"}</Badge>
@@ -369,7 +369,7 @@ export function LocalPending() {
                         <TableCell className="align-top text-caption text-muted-foreground">
                           {at(item.expiresAt)}
                         </TableCell>
-                        <TableCell className="sticky right-0 z-10 border-l bg-card align-top transition-colors group-hover:bg-muted/50">
+                        <TableCell className="sticky right-0 z-10 w-[200px] bg-card align-top transition-colors group-hover:bg-muted/50">
                           <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
                             {tab === "failed" ? (
                               <Button
