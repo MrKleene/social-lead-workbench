@@ -16,10 +16,10 @@ npm test
 - 队列严格串行：存在运行中的任务/核对/诊断，或现在就能被领取的排队任务时，`queue.busy()` 为真，新一轮采集直接拒绝（`QUEUE_BUSY`）而不排队；模型额度耗尽时排不动的 REVIEW 不算前序任务。`status().queueBusy` 供界面禁用「开始自动化采集」。
 - QUEUED → RUNNING 使用 owner/fence/expiry；过期工作必须先对账，不能抢占后盲目重放。Mac 原生监督器退出证明和清理已接入；Windows Job Object 代码仍待真机验收。
 - SEND 必须经 SendSafety 预留和派发；授权绑定精确内容、账号及版本、目标；发送 intent 与授权消费同一事务提交，然后才能执行外部操作。
-- RESERVED/DISPATCHED/UNKNOWN 按渠道阻止同对象重复触达（评论与私信各自独立首联）；`contact_ledger` 的勿联系阻断仍跨渠道。CONFIRMED 阻止同渠道跨账号重复触达。UNKNOWN 保留额度并暂停，不当作失败退款。只有可信执行器证明零次提交且已停止才能释放占用。
+- RESERVED/DISPATCHED/UNKNOWN 按渠道阻止同对象重复触达（评论与私信各自独立首联）；`contact_ledger` 的勿联系阻断仍跨渠道。CONFIRMED 阻止同渠道跨账号重复触达。UNKNOWN 保留额度并自动排队延迟只读核对；确认后转 CONFIRMED，未确认则关闭队列行但保留 UNKNOWN 去重并解除暂停，不当作失败退款。只有可信执行器证明零次提交且已停止才能释放占用。
 - 新建库与迁移备份拒绝任何已存在的目标及 WAL/SHM/journal；一致性快照使用 SQLite backup API，升级前备份走同一路径。桌面端不再提供恢复副本、切换副本与备份文件入口：需要副本时由离线迁移 CLI 生成新库。"数据管理"页只提供按类删除测试数据（`reset.cjs`），运行中的采集/审核会拒绝删除。
 - 凭据存储接受系统 protector 接口；没有可用系统加密时拒绝保存，不生成明文主密钥或退回明文。通用核心本身不提供操作系统加密实现。
-- schema 是单一 v1 基线（由早期 v1–v24 迁移链 squash 而来，测试阶段无历史库包袱）；`PRAGMA user_version` 高于当前基线时启动即提示重建并保留旧文件副本，不做就地迁移。结构变更仍只能追加迁移文件，不修改旧校验和。
+- schema 以 v1 为基线（由早期迁移链 squash 而来），结构变更通过 `migrations/002-queue-rules.sql`、`003-review-indexes.sql`、`004-evidence-auto.sql` 等追加文件完成，不修改旧校验和；`PRAGMA user_version` 高于当前版本时启动即提示重建并保留旧文件副本，不做就地降级。
 
 已迁入采集/审核/收件仓储、整轮屏障、原模型证据规则、精确回执和冻结规则发送资格。桌面已注册模型、采集、收件和 SEND 执行器；平台操作经专用 Mac 原生 MCP 托管，UI 单独预览/授权。旧任务不在启动时恢复，内部 LocalQueue 不能作为 renderer 授权接口。账号 VERIFIED 只由本机平台身份核验流程产生。
 

@@ -60,7 +60,7 @@
 ## 恢复、过期与清理
 
 - 启动或调度时，`SENDING` 但对应 job 已不在 `QUEUED/RUNNING` 的行转 `FAILED`；job 为 `UNKNOWN` 时原因 `SUBMISSION_UNKNOWN`，否则 `SEND_INTERRUPTED`。`UNKNOWN` 行不会自动重发。
-- 进入 `UNKNOWN` 时同时写入 `evidence_auto_tasks`；平台空闲时由 runner 延迟 2~5 分钟随机做一次自动核对（内含两次独立只读回读），不在提交后立即连续打开页面。应用关闭或平台忙时保持等待，重启后继续；确认原消息存在才转 `SENT`。
+- 进入 `UNKNOWN` 时同时写入 `evidence_auto_tasks`；平台空闲时由 runner 延迟 2~5 分钟随机做一次自动核对（内含两次独立只读回读），不在提交后立即连续打开页面。应用关闭或平台忙时保持等待，重启后继续；确认原消息存在才转 `SENT`。回读消息 ID 同时接受平台输出的 `sender.recipient.hex` 与 `recipient.sender.hex` 两种参与方顺序，但仍绑定当前账号与收件人；失败保留具体原因。
 - 发送前若 `DMVERIFY`/`VERIFY` 能力不可用，直接拒绝并保留队列行，不打开平台发送进程。
 - 活动行或 `FAILED` 行在入队满 7 天，或评论发布满 7 天时转 `EXPIRED`；原因为 `QUEUE_TOO_OLD` 或 `COMMENT_TOO_OLD`。
 - `EXPIRED` 行在 `settled_at` 满 30 天后由 `purge` 删除。
@@ -68,6 +68,6 @@
 
 ## 失效条件
 
-- 真实平台发送未验收：以上调度、账号额度和回执处理均以合成测试验证。
+- 评论发送尚未真实验收；私信首联已有平台确认的实测记录，批量、多账号和长期运行仍未验收。
 - 账号存在回复限制（`holds`）、检测中或当前不可用时不会进入可发送账号池；账号池为空、账号不可用与额度用完分别显示不同原因。
 - 结果未知不能按失败直接重发。系统自动核对确认原消息存在后，队列行转 `SENT`；核对不一致时把队列行自动关闭为 `CANCELLED` / `UNKNOWN_UNCONFIRMED`，保留 `send_attempts` 的 `UNKNOWN` 以阻止重复联系，并在没有其他活动未知时解除 `SUBMISSION_UNKNOWN` 暂停、继续派发。连续 3 次无法执行也自动关闭为 `CANCELLED` / `READBACK_UNAVAILABLE` 并恢复派发，不要求用户逐条核对。

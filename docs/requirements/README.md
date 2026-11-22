@@ -26,7 +26,7 @@
 | `ACCEPTANCE.md` | 本轮验收包含哪些、不包含哪些 | 每轮交付 |
 | `three-step-automation.md` | 采集/匹配/回复三阶段、发送队列与统一设置的行为 | 自动化流程变化时 |
 | `inbox-reception.md` | 接收窗口、工具集、历史上限 | 接收能力变化时 |
-| `direct-messages.md` | 私信为什么只有预览、放开的前置条件 | 私信能力变化时 |
+| `direct-messages.md` | 私信发送、会话回复与去重边界 | 私信能力变化时 |
 | `DESKTOP-LOCAL.md` | 桌面版范围、数据与凭据边界、构建状态 | 桌面版变化时 |
 
 ## 不在本目录的

@@ -11,7 +11,7 @@
 | [comment-reply-target.md](comment-reply-target.md) | 回复目标怎么选：直接目标取 `targetComment`，`subComments` 是讨论关系不是目标；嵌套语义仍待真实页面比对 |
 | [dm-templates-and-day-limit.md](dm-templates-and-day-limit.md) | 私信模板独立分类；`AccountDay.dailyLimitOverride` 只作用于 `REAL:Asia/Shanghai:YYYY-MM-DD` 单日桶，不动永久额度与占用数 |
 | [qwen-comment-matching.md](qwen-comment-matching.md) | 模型调用节奏：全局并发 1、两次开始至少间隔 1 秒、429 后退避 60 秒；脱敏、预算与证据守卫 |
-| [send-queue.md](send-queue.md) | 发送队列：审核完成/人工通过按评论所属匹配方案的入队规则（阈值+渠道）入队，入队时冻结规则版本、模板池与账号池；总开关和渠道开关关闭时停留待发送；同账号 30~60 秒、换号 3~5 分钟且每次只派一条 SEND；授权绑定队列行与冻结计划；入队或评论发布满 7 天过期，过期 30 天清理 |
+| [send-queue.md](send-queue.md) | 发送队列：审核完成/人工通过按评论所属匹配方案的入队规则（阈值+渠道）入队，入队时冻结规则版本、模板池与账号池；总开关和渠道开关关闭时停留待发送；同账号 30~60 秒、换号 3~5 分钟且每次只派一条 SEND；页面分「发送队列 / 需要处理」，等待额度与发送中为行内状态；UNKNOWN 自动延迟只读核对，确认后转已发送，未确认自动关闭且不重发；入队或评论发布满 7 天过期，过期 30 天清理 |
 | [review-batching.md](review-batching.md) | 评论审核分批：50 条/批、单批最多 3 次尝试、可重试错误、耗尽暂停、结果未知暂停、评论级完成判定与失败原因展示 |
 | [model-settings-security.md](model-settings-security.md) | 桌面模型凭据：系统保护、保存与授权边界、备份和跨设备恢复 |
 | [dashboard.md](dashboard.md) | 首屏仪表盘：只读本机 SQLite 聚合，`/` 入口；「收到回复」必须有同对象 CONFIRMED 发送且回复晚于发送，14 天趋势与最近 5 条同口径；`/work` 重定向到 `/` |

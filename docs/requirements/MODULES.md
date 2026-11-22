@@ -112,7 +112,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 `live-journal-progress.ts`、`xhs-reply-protocol.ts`、`xhs-reply-transport.ts`、`xhs-restriction-transport.ts`）；
 `packages/local-runtime/src/contact.cjs`、`send-safety.cjs`、`send-executor.cjs`、`send-queue.cjs`、`migrations/002-queue-rules.sql`
 
-**状态**：评论回复已接入 + 合成验证；真实发送需逐次授权
+**状态**：评论发送已接入 + 合成验证；私信首联已有平台确认的实测记录；每条发送仍需逐次授权；评论发送、批量与多账号未验收
 
 **注意**：私信渠道可对评论作者首联发送（模板、额度、跨渠道去重）；收到入站私信后不自动回复，见模块 6
 
@@ -129,7 +129,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 评论审核页头提供「生成待发送」：范围为全部历史审核，不受当前筛选影响；先预览可入队评论数、评论 / 私信行数、过期与跳过数，确认后按历史评论各自匹配方案补齐；重复执行幂等
 - 每条显示渠道、对象、状态与原因；发送队列中除发送中外都可「移出待发送」；同一手动批次在列表上方显示批次进度与当前对象
 - 失败可重试；失败可「移除记录」；未知可「移出队列」；过期可重新排队，评论发布超过 7 天需显式覆盖
-- 未知发送会暂停派发，页头显示「发送已暂停」；系统在平台空闲时延迟 2~5 分钟随机做一次自动核对（两次独立只读回读），确认后队列行转已发送并恢复派发；核对不一致时自动关闭该队列行、保留去重且不重发，无其他活动未知时恢复派发；连续执行失败也自动关闭为未确认并恢复派发
+- 未知发送会暂停派发，页头显示「发送已暂停」；系统在平台空闲时延迟 2~5 分钟随机做一次自动核对（两次独立只读回读），确认后队列行转已发送并恢复派发；核对不一致时自动关闭该队列行、保留去重且不重发，无其他活动未知时恢复派发；连续执行失败也自动关闭为未确认并恢复派发。回读同时接受平台两种消息 ID 参与方顺序，并保留失败原因
 - 发送前确认能力不可用（`DMVERIFY`/`VERIFY`）时不打开发送进程，直接保留队列行
 - 自动发送总开关开启前至少选一个渠道，且每个勾选渠道都有模板与账号；不满足时开关禁用
 - 批量「立即发送」一次只接受同一渠道，可选择账号与多个模板；模板池在批内洗牌分配，每行冻结一条，模板足够时不重复；自动发送期间不可用
@@ -185,7 +185,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 **代码**：`packages/local-runtime/src/inbox.cjs`、`inbox-executor.cjs`、`send-safety.cjs`、`send-executor.cjs`；
 页面 `/inbox`、`/inbox?account=`
 
-**状态**：合成验证；真实发送待验收
+**状态**：私信首联已有平台确认的实测记录；评论回复、批量与多账号未验收
 
 **延伸**：[direct-messages.md](direct-messages.md)、[conversation-replies.md](../design/conversation-replies.md)
 
@@ -282,8 +282,3 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 | `/work/accounts` | `LocalAccountPage` | 8 账号 |
 | `/work/archive` | `LocalHistory` | 历史归档 |
 | `/work/notices` | `LocalNotices` | 本地通知记录 |
-
-## 已知不一致（待处理）
-
-1. `REQUIREMENTS.md` 写"评论与私信可分别选择"，但私信实际只有本地预览，没有发送通道。
-   按模块 6 理解，不要据需求文档认为 DM 已可发。
