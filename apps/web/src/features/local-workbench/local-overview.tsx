@@ -41,7 +41,7 @@ export function LocalOverview() {
       icon: MessageSquare,
     },
     {
-      name: "已回复",
+      name: "已发送",
       value: overview?.confirmed,
       detail:
         "成功 " +
