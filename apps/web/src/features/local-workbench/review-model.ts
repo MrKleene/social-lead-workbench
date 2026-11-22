@@ -69,7 +69,7 @@ export function approvalState(
   if (!rule) return { canApprove: false, approveHint: "未配置入队规则" };
   if (row.decision === "UNCERTAIN" || !rule.enabled || (row.score ?? 0) < rule.threshold)
     return { canApprove: true, approveHint: undefined as string | undefined };
-  return { canApprove: false, approveHint: "待生成" };
+  return { canApprove: false, approveHint: "未入队" };
 }
 
 export function statusVariant(status: string | null) {
