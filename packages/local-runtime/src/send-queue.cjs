@@ -116,7 +116,7 @@ class LocalSendQueue{
   return {queued};
  }
 
- /* ---------- 一键生成 ---------- */
+ /* ---------- 生成待发送 ---------- */
  generate({apply=false}={}){
   const steps=settings(this.db),now=this.store.clock();
   const rows=this.db.prepare("SELECT r.*,b.run_id,b.policy_id,c.user_id,c.ordinal,c.platform_id,c.body,c.source_hash current_source_hash,c.snapshot comment_snapshot,c.post_id,p.platform_id post_platform_id,q.id rule_id,q.threshold,q.channels,q.enabled,q.version rule_version FROM review_results r JOIN review_batches b ON b.id=r.batch_id JOIN run_comments c ON c.id=r.comment_id JOIN run_posts p ON p.id=c.post_id JOIN queue_rules q ON q.policy_id=b.policy_id AND q.enabled=1 WHERE b.state='COMPLETED' AND r.review_status IN('PENDING','APPROVED') ORDER BY r.created_at DESC,r.id").all();

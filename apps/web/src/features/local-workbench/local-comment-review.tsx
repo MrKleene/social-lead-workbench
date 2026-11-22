@@ -8,6 +8,8 @@ import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -38,9 +40,10 @@ import { ReviewDecisionActions } from "./review-actions";
 import { ReviewDetail } from "./review-detail";
 import { ReviewPostDialog } from "./review-post-dialog";
 import { ReviewPostGrid } from "./review-post-card";
-import { useLocalRecords } from "./use-local-records";
+import { useLocalAction, useLocalRecords } from "./use-local-records";
 import {
   localApi,
+  type GenerateQueuePreview,
   type LocalReview,
   type ReviewCommentListItem,
 } from "./local-api";
@@ -59,7 +62,9 @@ export function LocalCommentReview() {
   const [commentPageSize, setCommentPageSize] = useState(30);
   const [detail, setDetail] = useState<LocalReview | null>(null);
   const [contact, setContact] = useState<LocalReview | null>(null);
+  const [preview, setPreview] = useState<GenerateQueuePreview | null>(null);
   const client = useQueryClient();
+  const generate = useLocalAction("generateSendQueue");
 
   const runId = params.get("run") || "";
   const rawView = params.get("view");
@@ -281,29 +286,43 @@ export function LocalCommentReview() {
         title="评论审核"
         description={description}
         actions={
-          <div
-            className="flex items-center gap-1 rounded-md border p-0.5"
-            role="group"
-            aria-label="切换评论审核视图"
-          >
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
-              variant={view === "posts" ? "default" : "ghost"}
-              size="icon-sm"
-              aria-label="按帖子"
-              aria-pressed={view === "posts"}
-              onClick={() => setView("posts")}
+              variant="outline"
+              pending={generate.isPending}
+              onClick={() =>
+                generate.mutate(
+                  { apply: false },
+                  { onSuccess: (data) => setPreview(data) },
+                )
+              }
             >
-              <LayoutGrid />
+              生成待发送
             </Button>
-            <Button
-              variant={view === "comments" ? "default" : "ghost"}
-              size="icon-sm"
-              aria-label="全部评论"
-              aria-pressed={view === "comments"}
-              onClick={() => setView("comments")}
+            <div
+              className="flex items-center gap-1 rounded-md border p-0.5"
+              role="group"
+              aria-label="切换评论审核视图"
             >
-              <List />
-            </Button>
+              <Button
+                variant={view === "posts" ? "default" : "ghost"}
+                size="icon-sm"
+                aria-label="按帖子"
+                aria-pressed={view === "posts"}
+                onClick={() => setView("posts")}
+              >
+                <LayoutGrid />
+              </Button>
+              <Button
+                variant={view === "comments" ? "default" : "ghost"}
+                size="icon-sm"
+                aria-label="全部评论"
+                aria-pressed={view === "comments"}
+                onClick={() => setView("comments")}
+              >
+                <List />
+              </Button>
+            </div>
           </div>
         }
       />
@@ -583,6 +602,50 @@ export function LocalCommentReview() {
         <ReviewPostDialog post={selectedPost} onClose={closePost} />
       ) : null}
       {detail ? <ReviewDetail row={detail} onClose={() => setDetail(null)} /> : null}
+      <Dialog
+        open={!!preview}
+        onOpenChange={(open) => {
+          if (!open && !generate.isPending) setPreview(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>生成待发送</DialogTitle>
+            <DialogDescription>
+              {preview
+                ? `范围：全部历史审核 · ${preview.comments} 条评论 · 评论回复 ${preview.commentRows} 条 · 私信 ${preview.dmRows} 条`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {preview ? (
+            <div className="grid gap-2 text-body">
+              <p>已过期 {preview.expired} 条</p>
+              <p>跳过 {preview.skipped} 条</p>
+            </div>
+          ) : null}
+          {generate.error ? <ErrorNotice error={generate.error} /> : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              pending={generate.isPending}
+              onClick={() => setPreview(null)}
+            >
+              取消
+            </Button>
+            <Button
+              pending={generate.isPending}
+              onClick={() => {
+                generate.mutate(
+                  { apply: true },
+                  { onSuccess: () => setPreview(null) },
+                );
+              }}
+            >
+              确认生成
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {contact ? (
         <Dialog open onOpenChange={(open) => !open && setContact(null)}>
           <DialogContent className="sm:max-w-xl">

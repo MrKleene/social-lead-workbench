@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { GenerateQueuePreview, SendQueueItem, SendQueueTab } from "./local-api";
-import { useSearchParams } from "@/lib/router-compat";
+import type { SendQueueItem, SendQueueTab } from "./local-api";
+import { Link, useSearchParams } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,14 +33,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch, SwitchThumb } from "@/components/ui/switch";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/patterns/empty-state";
 import { ErrorNotice } from "@/components/feedback";
 import { FilterBar, FilterField } from "@/components/patterns/filter-bar";
@@ -113,12 +105,10 @@ export function LocalPending() {
   const requeueAction = useLocalAction("requeueSendQueueItem");
   const dismiss = useLocalAction("dismissSendQueueItem");
   const sendNow = useLocalAction("sendNow");
-  const generate = useLocalAction("generateSendQueue");
-  const [preview, setPreview] = useState<GenerateQueuePreview | null>(null);
 
   const items = records.data?.items ?? [];
   const total = records.data?.total ?? 0;
-  const failure = records.error ?? retry.error ?? cancel.error ?? requeueAction.error ?? dismiss.error ?? sendNow.error ?? generate.error;
+  const failure = records.error ?? retry.error ?? cancel.error ?? requeueAction.error ?? dismiss.error ?? sendNow.error;
   const summaryData = summary.data;
   const autoReply = !!steps.data?.autoReply;
   const hasChannel = !!steps.data && (steps.data.autoComment || steps.data.autoDm);
@@ -186,18 +176,6 @@ export function LocalPending() {
         title="待处理发送"
         actions={
           <div className="flex flex-wrap items-center gap-6">
-            <Button
-              variant="outline"
-              disabled={generate.isPending}
-              onClick={() =>
-                generate.mutate(
-                  { apply: false },
-                  { onSuccess: (data) => setPreview(data) },
-                )
-              }
-            >
-              一键生成待发送
-            </Button>
             <p className="text-body text-muted-foreground">
               今日剩余额度 {summaryData?.remaining ?? 0} 条
             </p>
@@ -412,6 +390,13 @@ export function LocalPending() {
             ) : (
               <EmptyState
                 title={records.isPending ? "正在读取…" : `没有${tabs.find((item) => item.id === tab)?.label ?? "记录"}`}
+                action={
+                  tab === "pending" && !records.isPending ? (
+                    <Button asChild variant="link" size="sm">
+                      <Link to="/comment-review">去评论审核</Link>
+                    </Button>
+                  ) : undefined
+                }
               />
             )}
 
@@ -424,46 +409,6 @@ export function LocalPending() {
           </SectionCard>
         </TabsContent>
       </Tabs>
-
-      <Dialog
-        open={!!preview}
-        onOpenChange={(open) => {
-          if (!open && !generate.isPending) setPreview(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>生成待发送</DialogTitle>
-            <DialogDescription>
-              {preview
-                ? `${preview.comments} 条评论 · 评论 ${preview.commentRows} 条 · 私信 ${preview.dmRows} 条`
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-          {preview ? (
-            <div className="grid gap-2 text-body">
-              <p>已过期 {preview.expired} 条</p>
-              <p>跳过 {preview.skipped} 条</p>
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPreview(null)}>
-              取消
-            </Button>
-            <Button
-              disabled={generate.isPending}
-              onClick={() => {
-                generate.mutate(
-                  { apply: true },
-                  { onSuccess: () => setPreview(null) },
-                );
-              }}
-            >
-              确认生成
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog
         open={sending}
