@@ -49,10 +49,7 @@ import {
   approvalState,
   decisionLabels,
   decisionVariant,
-  queueStatus,
   score,
-  stateLabels,
-  stateVariant,
   toReview,
 } from "./review-model";
 
@@ -500,7 +497,6 @@ export function LocalCommentReview() {
               <Table className="min-w-[1080px]" aria-label="全部评论审核记录">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[96px]">审核状态</TableHead>
                     <TableHead>评论</TableHead>
                     <TableHead className="w-[224px]">帖子</TableHead>
                     <TableHead className="w-[80px]">匹配分</TableHead>
@@ -522,17 +518,6 @@ export function LocalCommentReview() {
                     );
                     return (
                       <TableRow key={row.id}>
-                        <TableCell>
-                          {row.review_status ? (
-                            <Badge variant={queueStatus(row).variant}>
-                              {queueStatus(row).label}
-                            </Badge>
-                          ) : (
-                            <Badge variant={stateVariant(row.state)}>
-                              {stateLabels[row.state]}
-                            </Badge>
-                          )}
-                        </TableCell>
                         <TableCell className="whitespace-normal">
                           <button
                             type="button"

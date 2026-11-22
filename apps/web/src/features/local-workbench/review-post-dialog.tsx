@@ -51,10 +51,7 @@ import {
   decisionVariant,
   postLabel,
   postVariant,
-  queueStatus,
   score,
-  stateLabels,
-  stateVariant,
   toReview,
 } from "./review-model";
 
@@ -228,7 +225,6 @@ export function ReviewPostDialog({
                 <TableHeader className="sticky top-0 z-10">
                   <TableRow>
                     <TableHead>评论</TableHead>
-                    <TableHead className="w-[96px]">评论状态</TableHead>
                     <TableHead className="w-[72px]">匹配分</TableHead>
                     <TableHead className="w-[96px]">判断</TableHead>
                     <TableHead className="w-[168px] text-right">操作</TableHead>
@@ -254,17 +250,6 @@ export function ReviewPostDialog({
                           <p className="mt-1 text-caption text-muted-foreground">
                             {row.nickname ?? "匿名"} · {day(row.published_at)}
                           </p>
-                        </TableCell>
-                        <TableCell>
-                          {row.review_status ? (
-                            <Badge variant={queueStatus(row).variant}>
-                              {queueStatus(row).label}
-                            </Badge>
-                          ) : (
-                            <Badge variant={stateVariant(row.state)}>
-                              {stateLabels[row.state]}
-                            </Badge>
-                          )}
                         </TableCell>
                         <TableCell className="tabular-nums">
                           {score(row.score)}
