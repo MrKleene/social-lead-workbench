@@ -88,9 +88,10 @@ export function LocalModelSettings({ keyConfigured }: { keyConfigured: boolean }
           </Select>
         </FormField>
 
-        <FormField label="千问 API Key">
+        <FormField label="模型 API Key">
           <Input
             type="password"
+            aria-label="模型 API Key"
             value={key}
             autoComplete="off"
             placeholder={keyConfigured ? "已保存" : undefined}

@@ -98,7 +98,7 @@ function Editor({
       kind === "KEYWORDS"
         ? keywordValidation(name, text)
         : !name.trim() || !text.trim()
-          ? "请填写描述和内容。"
+          ? "请填写配置名称和内容。"
           : null;
     if (failure) {
       setError(failure);
@@ -118,12 +118,9 @@ function Editor({
 
   return (
     <form className="flex flex-col gap-3" onSubmit={submit}>
-      <h2 className="text-section font-semibold">
-        {item ? "编辑配置" : "新增配置"}
-      </h2>
-      <FormField label="描述">
+      <FormField label="配置名称">
         <Input
-          aria-label="配置描述"
+          aria-label="配置名称"
           value={name}
           maxLength={100}
           onChange={(event) => setName(event.target.value)}
@@ -132,6 +129,7 @@ function Editor({
       </FormField>
       <FormField label={kind === "KEYWORDS" ? "关键词内容" : "配置内容"}>
         <Textarea
+          aria-label={kind === "KEYWORDS" ? "关键词内容" : "配置内容"}
           value={text}
           rows={8}
           maxLength={kind === "MATCHING" ? 1500 : 4000}
@@ -298,7 +296,9 @@ export function LocalConfigurations() {
                       : "配置详情"
                   }
                   actions={
-                    !editor && selected && !selected.builtin ? (
+                    !editor && selected?.builtin ? (
+                      <Badge variant="outline">只读</Badge>
+                    ) : !editor && selected ? (
                       <>
                         <Button
                           variant="outline"
@@ -320,6 +320,9 @@ export function LocalConfigurations() {
                                 删除后无法恢复。
                               </AlertDialogDescription>
                             </AlertDialogHeader>
+                            {workbench.remove.error ? (
+                              <ErrorNotice error={workbench.remove.error} />
+                            ) : null}
                             <AlertDialogFooter>
                               <AlertDialogCancel>取消</AlertDialogCancel>
                               <AlertDialogAction
@@ -365,7 +368,7 @@ export function LocalConfigurations() {
                   ) : selected ? (
                     <>
                       <DetailList>
-                        <DetailItem label="描述">{selected.name}</DetailItem>
+                        <DetailItem label="配置名称">{selected.name}</DetailItem>
                         <DetailItem label="内容">
                           <span className="whitespace-pre-wrap">
                             {selected.body.keywords?.join("\n") ??
@@ -374,11 +377,6 @@ export function LocalConfigurations() {
                         </DetailItem>
                       </DetailList>
 
-                      {workbench.remove.error ? (
-                        <div className="border-t pt-4">
-                          <ErrorNotice error={workbench.remove.error} />
-                        </div>
-                      ) : null}
                     </>
                   ) : (
                     <p className="text-body text-muted-foreground">

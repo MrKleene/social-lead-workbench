@@ -328,7 +328,7 @@ class LocalSendQueue{
 
  /* ---------- 查询 ---------- */
  list({tab='pending',page=1,pageSize=20,query='',channel=''}={}){
-  const tabs={pending:['WAITING_SWITCH','READY','SENDING'],quota:['WAITING_QUOTA'],failed:['FAILED'],unknown:['UNKNOWN'],expired:['EXPIRED']};
+  const tabs={pending:['WAITING_SWITCH','READY','SENDING'],quota:['WAITING_QUOTA'],sending:['SENDING'],failed:['FAILED'],unknown:['UNKNOWN'],expired:['EXPIRED']};
   if(!tabs[tab])throw new LocalError('INVALID_SEND_QUEUE_TAB');
   if(channel&&channel!=='COMMENT'&&channel!=='DM')throw new LocalError('INVALID_PENDING_FILTER');
   const states=tabs[tab],size=Math.min(100,Math.max(1,Number(pageSize)||20)),current=Math.max(1,Number(page)||1);

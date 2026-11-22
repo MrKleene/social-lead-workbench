@@ -20,16 +20,28 @@ const CATEGORIES = [
   { id: "runs", label: "采集历史" },
   { id: "posts", label: "采集到的帖子" },
   { id: "comments", label: "采集到的评论" },
-  { id: "reviews", label: "评论审核纪录" },
+  { id: "reviews", label: "评论审核记录" },
 ] as const;
 
 type Category = (typeof CATEGORIES)[number]["id"];
 
-const ALL: Category[] = CATEGORIES.map((category) => category.id);
+const children: Record<Category, Category[]> = {
+  runs: ["posts", "comments", "reviews"],
+  posts: ["comments", "reviews"],
+  comments: ["reviews"],
+  reviews: [],
+};
+
+const ancestors: Record<Category, Category[]> = {
+  runs: [],
+  posts: ["runs"],
+  comments: ["posts", "runs"],
+  reviews: ["comments", "posts", "runs"],
+};
 
 export function LocalTestDataReset() {
   const client = useQueryClient();
-  const [selected, setSelected] = useState<Category[]>(ALL);
+  const [selected, setSelected] = useState<Category[]>([]);
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState("");
 
@@ -37,6 +49,7 @@ export function LocalTestDataReset() {
     mutationFn: () => localApi("deleteTestData", { categories: selected }),
     onSuccess: () => {
       setOpen(false);
+      setSelected([]);
       setNotice("已删除");
       void client.invalidateQueries({ queryKey: ["local"] });
     },
@@ -45,9 +58,20 @@ export function LocalTestDataReset() {
 
   const toggle = (id: Category, checked: boolean) => {
     setNotice("");
-    setSelected((value) =>
-      checked ? [...value, id] : value.filter((item) => item !== id),
-    );
+    setSelected((value) => {
+      const next = new Set(value);
+      if (checked) {
+        next.add(id);
+        children[id].forEach((child) => next.add(child));
+      } else {
+        next.delete(id);
+        children[id].forEach((child) => next.delete(child));
+        ancestors[id].forEach((ancestor) => next.delete(ancestor));
+      }
+      return CATEGORIES.map((category) => category.id).filter((category) =>
+        next.has(category),
+      );
+    });
   };
 
   const labels = CATEGORIES.filter((category) =>
@@ -56,7 +80,6 @@ export function LocalTestDataReset() {
 
   return (
     <>
-      {reset.error ? <ErrorNotice error={reset.error} /> : null}
       {notice ? (
         <p role="status" className="text-body text-muted-foreground">
           {notice}
@@ -89,8 +112,12 @@ export function LocalTestDataReset() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>删除所选数据？</AlertDialogTitle>
-              <AlertDialogDescription>删除后不可恢复。</AlertDialogDescription>
+              <AlertDialogDescription>
+                {labels.length ? "将删除：" + labels.join("、") + "。" : ""}
+                删除后不可恢复。
+              </AlertDialogDescription>
             </AlertDialogHeader>
+            {reset.error ? <ErrorNotice error={reset.error} /> : null}
             <AlertDialogFooter>
               <AlertDialogCancel>取消</AlertDialogCancel>
               <AlertDialogAction

@@ -33,6 +33,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch, SwitchThumb } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/patterns/empty-state";
 import { ErrorNotice } from "@/components/feedback";
 import { FilterBar, FilterField } from "@/components/patterns/filter-bar";
@@ -40,30 +48,30 @@ import { FormField } from "@/components/patterns/form-field";
 import { PageHeader } from "@/components/patterns/page-header";
 import { Pagination } from "@/components/patterns/pagination";
 import { SectionCard } from "@/components/patterns/section-card";
+import { pendingReasonLabels } from "./local-status-labels";
 import { useSaveSteps } from "./reply-settings";
 import { useLocalAction, useLocalRecords } from "./use-local-records";
 
-const tabs: { id: SendQueueTab; label: string; key: "pending" | "quota" | "failed" | "unknown" | "expired" }[] = [
+const tabs: {
+  id: SendQueueTab;
+  label: string;
+  key: "pending" | "quota" | "sending" | "failed" | "unknown" | "expired";
+}[] = [
   { id: "pending", label: "待发送", key: "pending" },
   { id: "quota", label: "等待额度", key: "quota" },
+  { id: "sending", label: "发送中", key: "sending" },
   { id: "failed", label: "发送失败", key: "failed" },
   { id: "unknown", label: "结果未知", key: "unknown" },
   { id: "expired", label: "已过期", key: "expired" },
 ];
 
-const reasonLabels: Record<string, string> = {
-  ACCOUNT_POOL_QUOTA_EXHAUSTED: "今日额度已用完",
+const queueStates: Record<string, string> = {
   WAITING_SWITCH: "等待开启",
-  AUTO_REPLY_OFF: "自动发送已关闭",
-  AUTO_CHANNEL_OFF: "该渠道自动发送已关闭",
-  TEMPLATE_CHANGED: "模板已变化",
-  ELIGIBILITY_CHANGED: "评论或配置已变化",
-  COMMENT_TOO_OLD: "评论发布超过 7 天",
-  QUEUE_TOO_OLD: "入队超过 7 天",
-  SEND_INTERRUPTED: "发送中断",
-  SUBMISSION_UNKNOWN: "结果未知",
-  RULE_REVOKED: "自动回复已停用",
-  REVIEW_REJECTED: "评论已排除",
+  WAITING_QUOTA: "等待额度",
+  SENDING: "发送中",
+  FAILED: "发送失败",
+  UNKNOWN: "结果未知",
+  EXPIRED: "已过期",
 };
 
 function at(value: number): string {
@@ -83,6 +91,8 @@ export function LocalPending() {
   const [search, setSearch] = useState(query);
   const [selected, setSelected] = useState<SendQueueItem[]>([]);
   const [requeue, setRequeue] = useState<SendQueueItem | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<SendQueueItem | null>(null);
+  const [dismissTarget, setDismissTarget] = useState<SendQueueItem | null>(null);
   const [override, setOverride] = useState(false);
   const [sending, setSending] = useState(false);
   const [accountId, setAccountId] = useState("");
@@ -124,6 +134,7 @@ export function LocalPending() {
   const canEnableAuto = hasChannel && hasCommentConfig && hasDmConfig;
   const channels = Array.from(new Set(selected.map((item) => item.channel)));
   const selectedChannel = channels[0] ?? null;
+  const selectedChannelLabel = selectedChannel === "DM" ? "私信" : "评论";
   const sameChannel = channels.length <= 1;
 
   const templateKind =
@@ -200,9 +211,11 @@ export function LocalPending() {
                 <SwitchThumb />
               </Switch>
             </label>
-            {!autoReply && !canEnableAuto ? (
+            {!canEnableAuto ? (
               <div className="flex items-center gap-2">
-                <p className="text-caption text-attention">发送渠道或模板未配置</p>
+                <p className="text-caption text-attention">
+                  {hasChannel ? "发送渠道或模板未配置" : "未选择自动发送渠道"}
+                </p>
                 <Link
                   to="/configuration?tab=reply"
                   className="text-caption text-attention underline underline-offset-4"
@@ -274,7 +287,7 @@ export function LocalPending() {
 
             {items.length ? (
               <div className="overflow-hidden rounded-md border">
-                <Table aria-label="待处理发送" className="min-w-[960px]">
+                <Table aria-label="待处理发送" className="min-w-[1080px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10">
@@ -285,6 +298,7 @@ export function LocalPending() {
                       <TableHead>渠道</TableHead>
                       <TableHead>状态 / 原因</TableHead>
                       <TableHead>入队时间</TableHead>
+                      <TableHead>有效期</TableHead>
                       <TableHead className="text-right">操作</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -303,7 +317,7 @@ export function LocalPending() {
                               ) ||
                               (!!selectedChannel && selectedChannel !== item.channel)
                             }
-                            aria-label={`选择 ${item.recipientId}`}
+                            aria-label={`选择 ${item.recipientNickname || item.comment.slice(0, 20)}`}
                             onCheckedChange={(checked) => toggle(item, checked === true)}
                           />
                         </TableCell>
@@ -339,16 +353,19 @@ export function LocalPending() {
                                     : "outline"
                             }
                           >
-                            {item.state === "WAITING_SWITCH" ? "等待开启" : item.state === "WAITING_QUOTA" ? "等待额度" : item.state === "SENDING" ? "发送中" : item.state === "FAILED" ? "失败" : item.state === "UNKNOWN" ? "结果未知" : item.state === "EXPIRED" ? "已过期" : "待发送"}
+                            {queueStates[item.state] ?? "待发送"}
                           </Badge>
                           {item.reason ? (
                             <p className="mt-1 text-caption leading-relaxed text-muted-foreground break-words">
-                              {reasonLabels[item.reason] ?? item.reason}
+                              {pendingReasonLabels[item.reason] ?? "等待处理"}
                             </p>
                           ) : null}
                         </TableCell>
                         <TableCell className="align-top text-caption text-muted-foreground">
                           {at(item.enqueuedAt)}
+                        </TableCell>
+                        <TableCell className="align-top text-caption text-muted-foreground">
+                          {at(item.expiresAt)}
                         </TableCell>
                         <TableCell className="align-top">
                           <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
@@ -379,7 +396,7 @@ export function LocalPending() {
                                 size="sm"
                                 variant="outline"
                                 disabled={item.state === "SENDING" || cancel.isPending}
-                                onClick={() => cancel.mutate({ id: item.id })}
+                                onClick={() => setCancelTarget(item)}
                               >
                                 移出待发送
                               </Button>
@@ -389,7 +406,7 @@ export function LocalPending() {
                                 size="sm"
                                 variant="outline"
                                 disabled={dismiss.isPending}
-                                onClick={() => dismiss.mutate({ id: item.id })}
+                                onClick={() => setDismissTarget(item)}
                               >
                                 移除记录
                               </Button>
@@ -424,19 +441,19 @@ export function LocalPending() {
         </TabsContent>
       </Tabs>
 
-      <AlertDialog
+      <Dialog
         open={sending}
         onOpenChange={(open) => {
           if (!sendNow.isPending) setSending(open);
         }}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>立即发送 {selected.length} 条</AlertDialogTitle>
-            <AlertDialogDescription>
-              选中记录会排在队列前面，当前发送完成后再继续。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>立即发送 {selected.length} 条</DialogTitle>
+            <DialogDescription>
+              将发送 {selected.length} 条{selectedChannelLabel}，占用今日额度，不可撤回。
+            </DialogDescription>
+          </DialogHeader>
           <div className="grid gap-4">
             <FormField label="发送账号">
               <Select
@@ -479,17 +496,18 @@ export function LocalPending() {
               <p className="text-caption text-attention">没有可用回复模板</p>
             ) : null}
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSending(false)}>
+              取消
+            </Button>
+            <Button
+              pending={sendNow.isPending}
               disabled={
                 !accountId ||
                 !templateId ||
-                !sameChannel ||
-                sendNow.isPending
+                !sameChannel
               }
-              onClick={(event) => {
-                event.preventDefault();
+              onClick={() => {
                 sendNow.mutate(
                   {
                     ids: selected.map((item) => item.id),
@@ -506,7 +524,71 @@ export function LocalPending() {
               }}
             >
               立即发送
-            </AlertDialogAction>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => {
+          if (!open && !cancel.isPending) setCancelTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>移出待发送？</AlertDialogTitle>
+            <AlertDialogDescription>
+              这条记录将不再发送。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancel.isPending}>取消</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              pending={cancel.isPending}
+              onClick={() => {
+                if (!cancelTarget) return;
+                cancel.mutate(
+                  { id: cancelTarget.id },
+                  { onSuccess: () => setCancelTarget(null) },
+                );
+              }}
+            >
+              移出待发送
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!dismissTarget}
+        onOpenChange={(open) => {
+          if (!open && !dismiss.isPending) setDismissTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>移除记录？</AlertDialogTitle>
+            <AlertDialogDescription>
+              将从列表删除这条发送记录。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={dismiss.isPending}>取消</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              pending={dismiss.isPending}
+              onClick={() => {
+                if (!dismissTarget) return;
+                dismiss.mutate(
+                  { id: dismissTarget.id },
+                  { onSuccess: () => setDismissTarget(null) },
+                );
+              }}
+            >
+              移除记录
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -521,7 +603,9 @@ export function LocalPending() {
           <AlertDialogHeader>
             <AlertDialogTitle>重新排队</AlertDialogTitle>
             <AlertDialogDescription>
-              {requeue ? `${requeue.postTitle || "无标题笔记"} · ${requeue.recipientId}` : ""}
+              {requeue
+                ? `${requeue.postTitle || "无标题笔记"} · ${requeue.recipientNickname || "未知收件人"}`
+                : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {requeue && isOldComment(requeue) ? (

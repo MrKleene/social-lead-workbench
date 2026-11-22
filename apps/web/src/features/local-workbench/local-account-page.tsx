@@ -39,6 +39,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LocalLoginPanel } from "./local-platform";
 import { useLocalAction, useLocalRecords } from "./use-local-records";
 import { localApi, type AccountDetails } from "./local-api";
+import { accountCapability } from "./local-status-labels";
 
 /** 风险记录的原因码：库里存枚举，界面上必须是可读状态。 */
 const holdLabels: Record<string, string> = {
@@ -88,12 +89,11 @@ function AccountRow({
   account: AccountDetails;
   onOpen: () => void;
 }) {
-  const restricted =
-    account.state === "RESTRICTED" || account.holds.length > 0;
   const title = account.nickname ?? account.name;
+  const capabilities = accountCapability(account);
   const quota =
-    restricted || account.todayLimit === 0
-      ? "今日不可发送"
+    account.todayLimit === 0
+      ? "今日无发送额度"
       : `今日额度 ${account.occupied}/${account.todayLimit}`;
   return (
     <li>
@@ -113,17 +113,23 @@ function AccountRow({
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="text-body font-medium break-words">{title}</span>
           <span className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
-            <Badge
-              variant={
-                restricted
-                  ? "destructive"
-                  : account.hasSession
-                    ? "success"
-                    : "outline"
-              }
-            >
-              {restricted ? "受限" : account.hasSession ? "已登录" : "待重新登录"}
+            <Badge variant={account.hasSession ? "success" : "outline"}>
+              {account.hasSession ? "已登录" : "待重新登录"}
             </Badge>
+            {capabilities.map((label) => (
+              <Badge
+                key={label}
+                variant={
+                  label === "检测中"
+                    ? "warning"
+                    : label.startsWith("不可")
+                      ? "destructive"
+                      : "outline"
+                }
+              >
+                {label}
+              </Badge>
+            ))}
             {account.nickname ? (
               <span className="break-words">本地名称 {account.name}</span>
             ) : null}
@@ -262,7 +268,7 @@ export function LocalAccountPage() {
   const accounts = data.data ?? [];
   const signedIn = accounts.filter((item) => item.hasSession).length;
   const restrictedAccounts = accounts.filter(
-    (item) => item.state === "RESTRICTED" || item.holds.length > 0,
+    (item) => item.contact_state !== "ALLOWED",
   ).length;
   const usedToday = accounts.reduce((total, item) => total + item.occupied, 0);
   const limitToday = accounts.reduce(
@@ -271,7 +277,7 @@ export function LocalAccountPage() {
   );
   const description = data.data
     ? accounts.length
-      ? `${accounts.length} 个账号 · 已登录 ${signedIn} · 今日已用 ${usedToday}/${limitToday}${restrictedAccounts ? ` · ${restrictedAccounts} 个受限` : ""}`
+      ? `${accounts.length} 个账号 · 已登录 ${signedIn} · 今日已用 ${usedToday}/${limitToday}${restrictedAccounts ? ` · ${restrictedAccounts} 个不可私信/评论` : ""}`
       : "还没有账号"
     : undefined;
   // 暂停解除后提示一并收起，避免旧结论挂在页面上。
@@ -280,9 +286,6 @@ export function LocalAccountPage() {
   }, [status.data?.platformPause]);
   // 从列表里现取：账号被删或数据刷新后抽屉自动失效，不会停在旧快照上。
   const selected = accounts.find((item) => item.id === detailId) ?? null;
-  const selectedRestricted = selected
-    ? selected.state === "RESTRICTED" || selected.holds.length > 0
-    : false;
   // 抽屉里要讲清「为什么不能发 + 下一步」，这份判定由运行时按三档给出。
   const diagnostics = useLocalRecords(
     "accountDiagnostics",
@@ -337,7 +340,7 @@ export function LocalAccountPage() {
       ? `正在检查「${sweep.current}」 · 已完成 ${sweep.done}/${sweep.total}`
       : "正在检查…"
     : sweep
-      ? `已检查 ${sweep.total} 个账号 · 新增 ${sweep.restricted} 条限制${sweep.failed ? ` · ${sweep.failed} 个未完成` : ""}${sweep.stopped ? " · 已停止" : ""}`
+      ? `已检查 ${sweep.total} 个账号 · ${sweep.restricted} 个账号受限${sweep.failed ? ` · ${sweep.failed} 个未完成` : ""}${sweep.stopped ? " · 已停止" : ""}`
       : null;
   const sweepPercent =
     sweepAll.isPending && sweep && sweep.total
@@ -359,25 +362,28 @@ export function LocalAccountPage() {
         description={description}
         actions={
           <>
-            <Button
-              variant="outline"
-              disabled={!checkable || check.isPending}
-              onClick={() => {
-                if (sweepAll.isPending) {
+            {sweepAll.isPending ? (
+              <Button
+                variant="outline"
+                onClick={() => {
                   sweepCancelled.current = true;
-                  return;
-                }
-                sweepCancelled.current = false;
-                setSweep(null);
-                sweepAll.mutate();
-              }}
-            >
-              {sweepAll.isPending
-                ? sweep
-                  ? `停止检查 ${sweep.done}/${sweep.total}`
-                  : "停止检查"
-                : "检查全部账号"}
-            </Button>
+                }}
+              >
+                {sweep ? `停止检查 ${sweep.done}/${sweep.total}` : "停止检查"}
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                disabled={!checkable || check.isPending}
+                onClick={() => {
+                  sweepCancelled.current = false;
+                  setSweep(null);
+                  sweepAll.mutate();
+                }}
+              >
+                检查全部账号
+              </Button>
+            )}
             <Button disabled={sweepAll.isPending} onClick={() => setLoginFor("")}>
               添加账号
             </Button>
@@ -530,26 +536,23 @@ export function LocalAccountPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Badge
-                variant={
-                  selectedRestricted
-                    ? "destructive"
-                    : selected.hasSession
-                      ? "success"
-                      : "outline"
-                }
-              >
-                {selectedRestricted
-                  ? "受限"
-                  : selected.hasSession
-                    ? "已登录"
-                    : "待重新登录"}
+              <Badge variant={selected.hasSession ? "success" : "outline"}>
+                {selected.hasSession ? "已登录" : "待重新登录"}
               </Badge>
-              {selected.holds.length ? (
-                <Badge variant="warning">
-                  {selected.holds.length} 条风险记录
+              {accountCapability(selected).map((label) => (
+                <Badge
+                  key={label}
+                  variant={
+                    label === "检测中"
+                      ? "warning"
+                      : label.startsWith("不可")
+                        ? "destructive"
+                        : "outline"
+                  }
+                >
+                  {label}
                 </Badge>
-              ) : null}
+              ))}
               <Badge variant="outline">
                 {selected.todayLimit === 0
                   ? "今日不可发送"
@@ -626,30 +629,7 @@ export function LocalAccountPage() {
                     </p>
                   ) : null}
                 </DetailItem>
-                {diagnostics.data ? (
-                  <DetailItem label="最近检查">
-                    {new Date(diagnostics.data.checkedAt).toLocaleString()}
-                  </DetailItem>
-                ) : null}
               </DetailList>
-            </AccountSection>
-
-            <AccountSection title="风险记录">
-              {selected.holds.length ? (
-                selected.holds.map((hold) => (
-                  <p
-                    key={hold.reason + String(hold.channel)}
-                    className="text-body leading-relaxed break-words"
-                  >
-                    {hold.channel ?? "全部渠道"} ·{" "}
-                    {holdLabels[hold.reason] ?? hold.reason}
-                  </p>
-                ))
-              ) : (
-                <p className="text-body leading-relaxed text-muted-foreground">
-                  {selected.state === "RESTRICTED" ? "账号受限" : "无风险记录"}
-                </p>
-              )}
             </AccountSection>
 
             {editing ? (

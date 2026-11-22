@@ -1,29 +1,31 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "@/lib/router-compat";
+import { Link, useSearchParams } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckboxField } from "@/components/patterns/checkbox-field";
 import { EmptyState } from "@/components/patterns/empty-state";
 import { PageHeader } from "@/components/patterns/page-header";
 import { SectionCard } from "@/components/patterns/section-card";
 import { ErrorNotice } from "@/components/feedback";
 import { LocalReceivePanel } from "./local-platform";
+import { accountCapability } from "./local-status-labels";
 import { LocalCommentReply, LocalDmChat } from "./local-inbox-chat";
 import { useLocalAction, useLocalRecords } from "./use-local-records";
 import type { InboxAccount, LocalNotification } from "./local-api";
 
-function capability(account: InboxAccount) {
-  if (account.collect_state === "CHECKING" || account.contact_state === "CHECKING") {
-    return "检测中";
-  }
-  const collect = account.collect_state === "ALLOWED";
-  const contact = account.contact_state === "ALLOWED";
-  if (collect && contact) return "可采集 · 可私信/评论";
-  if (collect) return "可采集 · 不可私信/评论";
-  if (contact) return "不可采集 · 可私信/评论";
-  return "不可采集 · 不可私信/评论";
-}
+const capability = (account: InboxAccount) =>
+  accountCapability(account).join(" · ");
+
+const time = (value: number | null | undefined) =>
+  value ? new Date(value).toLocaleString() : "未记录";
 
 function change(
   setParams: ReturnType<typeof useSearchParams>[1],
@@ -53,14 +55,21 @@ function AccountList() {
         <p className="text-body text-muted-foreground">正在读取…</p>
       ) : null}
       {!accounts.isPending && !accounts.data?.length ? (
-        <EmptyState title="没有可用账号。" />
+        <EmptyState
+          title="没有可用账号。"
+          action={
+            <Button asChild variant="outline">
+              <Link to="/work/accounts">去账号中心</Link>
+            </Button>
+          }
+        />
       ) : null}
       <div className="grid gap-4 md:grid-cols-2">
         {accounts.data?.map((account) => (
-          <button
+          <Button
             key={account.id}
-            type="button"
-            className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent"
+            variant="outline"
+            className="h-auto flex-col items-start justify-start gap-2 p-4 text-left sm:p-6"
             onClick={() =>
               change(setParams, {
                 account: account.id,
@@ -73,10 +82,15 @@ function AccountList() {
             <span className="text-section font-semibold break-words">{account.name}</span>
             <span className="text-caption text-muted-foreground">{capability(account)}</span>
             <span className="flex flex-wrap gap-3 text-body">
-              <span>私信 {account.unread_dm}</span>
-              <span>评论 {account.unread_comment}</span>
+              <span>未读私信 {account.unread_dm}</span>
+              <span>未读评论 {account.unread_comment}</span>
             </span>
-          </button>
+            <span className="text-caption text-muted-foreground">
+              {account.last_fetched_at
+                ? `上次获取 ${time(account.last_fetched_at)}`
+                : "尚未获取"}
+            </span>
+          </Button>
         ))}
       </div>
     </SectionCard>
@@ -129,13 +143,14 @@ function DmInbox({
             <EmptyState title="没有私信会话。" />
           ) : null}
           {conversations.data?.items.map((item) => (
-            <button
+            <Button
               key={item.sender_id}
-              type="button"
+              variant="ghost"
+              aria-current={item.sender_id === senderId ? "true" : undefined}
               className={
                 item.sender_id === senderId
-                  ? "flex flex-col gap-1 rounded-md bg-accent px-3 py-2 text-left"
-                  : "flex flex-col gap-1 rounded-md px-3 py-2 text-left hover:bg-accent"
+                  ? "h-auto flex-col items-start justify-start gap-1 rounded-md bg-accent px-3 py-2 text-left"
+                  : "h-auto flex-col items-start justify-start gap-1 rounded-md px-3 py-2 text-left"
               }
               onClick={() => {
                 change(setParams, { sender: item.sender_id, message: "" });
@@ -147,15 +162,17 @@ function DmInbox({
                   {item.sender_name || "未命名用户"}
                 </span>
                 {item.unread > 0 ? (
-                  <span className="text-caption text-destructive">{item.unread}</span>
+                  <span className="text-caption text-destructive">
+                    未读 {item.unread}
+                  </span>
                 ) : null}
               </span>
               <span className="text-caption text-muted-foreground break-words">{item.body}</span>
               <span className="text-caption text-muted-foreground">
                 {item.direction === "OUT" ? "已发送" : "收到"} ·{" "}
-                {new Date(item.received_at).toLocaleString()}
+                {time(item.received_at)}
               </span>
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -172,7 +189,18 @@ function DmInbox({
               onSent={onSent}
             />
           ) : (
-            <EmptyState title="会话不可用。" />
+            <EmptyState
+              title="会话不可用。"
+              action={
+                <Button
+                  variant="outline"
+                  pending={conversation.isFetching}
+                  onClick={() => void conversation.refetch()}
+                >
+                  重试
+                </Button>
+              }
+            />
           )}
         </div>
       </div>
@@ -224,13 +252,14 @@ function CommentInbox({
             <EmptyState title="没有评论通知。" />
           ) : null}
           {messages.data?.items.map((message: LocalNotification) => (
-            <button
+            <Button
               key={message.id}
-              type="button"
+              variant="ghost"
+              aria-current={message.id === selectedId ? "true" : undefined}
               className={
                 message.id === selectedId
-                  ? "flex flex-col gap-1 rounded-md bg-accent px-3 py-2 text-left"
-                  : "flex flex-col gap-1 rounded-md px-3 py-2 text-left hover:bg-accent"
+                  ? "h-auto flex-col items-start justify-start gap-1 rounded-md bg-accent px-3 py-2 text-left"
+                  : "h-auto flex-col items-start justify-start gap-1 rounded-md px-3 py-2 text-left"
               }
               onClick={() => {
                 change(setParams, { message: message.id, sender: "" });
@@ -243,9 +272,9 @@ function CommentInbox({
               <span className="text-caption text-muted-foreground break-words">{message.body}</span>
               <span className="text-caption text-muted-foreground">
                 {message.post_title || "未记录笔记标题"} ·{" "}
-                {new Date(message.received_at).toLocaleString()}
+                {time(message.received_at)}
               </span>
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -265,6 +294,7 @@ export function LocalInboxPage() {
   const status = useLocalRecords("status");
   const accounts = useLocalRecords("inboxAccounts");
   const [params, setParams] = useSearchParams();
+  const [fetchOpen, setFetchOpen] = useState(false);
   const client = useQueryClient();
   const accountId = params.get("account") || "";
   const account = accounts.data?.find((item) => item.id === accountId);
@@ -284,42 +314,54 @@ export function LocalInboxPage() {
       <PageHeader
         title={account?.name || "消息通知"}
         actions={
-          <Button variant="outline" onClick={() => change(setParams, { account: "", sender: "", message: "" })}>
-            返回账号
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" onClick={() => setFetchOpen(true)}>
+              获取消息
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                change(setParams, { account: "", sender: "", message: "" })
+              }
+            >
+              返回账号
+            </Button>
+          </div>
         }
       />
 
-      <SectionCard title="获取消息">
-        <LocalReceivePanel
-          accountId={accountId}
-          credentialsAvailable={!!status.data?.credentialsAvailable}
-          onFetched={() => {
-            void client.invalidateQueries({ queryKey: ["local"] });
-          }}
-        />
-      </SectionCard>
-
-      <div role="group" aria-label="消息类型" className="flex gap-2">
-        <Button
-          variant={view === "dm" ? "default" : "outline"}
-          aria-pressed={view === "dm"}
-          onClick={() => change(setParams, { view: "dm", sender: "", message: "" })}
+      <div className="flex flex-wrap items-center gap-4">
+        <Tabs
+          value={view}
+          onValueChange={(value) =>
+            change(setParams, { view: value, sender: "", message: "" })
+          }
         >
-          私信
-        </Button>
-        <Button
-          variant={view === "comment" ? "default" : "outline"}
-          aria-pressed={view === "comment"}
-          onClick={() => change(setParams, { view: "comment", sender: "", message: "" })}
-        >
-          评论
-        </Button>
+          <TabsList aria-label="消息类型">
+            <TabsTrigger value="dm">私信</TabsTrigger>
+            <TabsTrigger value="comment">评论</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {account ? (
+          <p className="text-caption text-muted-foreground">{capability(account)}</p>
+        ) : null}
       </div>
 
-      {account ? (
-        <p className="text-caption text-muted-foreground">{capability(account)}</p>
-      ) : null}
+      <Dialog open={fetchOpen} onOpenChange={setFetchOpen}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>获取消息</DialogTitle>
+          </DialogHeader>
+          <LocalReceivePanel
+            accountId={accountId}
+            credentialsAvailable={!!status.data?.credentialsAvailable}
+            onFetched={() => {
+              void client.invalidateQueries({ queryKey: ["local"] });
+              setFetchOpen(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       {view === "dm" ? (
         <DmInbox accountId={accountId} onSent={() => void client.invalidateQueries({ queryKey: ["local"] })} />

@@ -9,7 +9,7 @@ class LocalRecovery{
   const unknownLegacy=count("SELECT count(*) n FROM legacy_records WHERE entity='ContactAttempt' AND json_extract(body,'$.mode')='REAL' AND json_extract(body,'$.outcome') IN('RESERVED','ATTEMPTED','UNKNOWN') AND NOT EXISTS(SELECT 1 FROM legacy_evidence_links l WHERE l.import_id=legacy_records.import_id AND l.ordinal=legacy_records.ordinal)");
   const unknownModels=count("SELECT count(*) n FROM review_batches WHERE state IN('RESERVED','DISPATCHED','UNKNOWN')");
   const active=count("SELECT (SELECT count(*) FROM jobs WHERE state IN('QUEUED','RUNNING'))+(SELECT count(*) FROM evidence_checks WHERE state='RUNNING') n")+this.db.prepare('SELECT count(*) n FROM account_leases WHERE expires_at>?').get(this.store.clock()).n;
-  const accountRestrictions=count('SELECT count(*) n FROM account_holds');
+  const accountRestrictions=count('SELECT count(DISTINCT account_id) n FROM account_holds');
   const contactBlocks=count('SELECT count(*) n FROM contact_ledger WHERE blocked=1 OR first_contact_blocked=1');
   const imports=this.db.prepare("SELECT details FROM audit_events WHERE action='LEGACY_BUSINESS_IMPORTED' ORDER BY id").all().map(r=>JSON.parse(r.details).nativeHistory).filter(Boolean);
   const sending=holds.find(x=>x.id==='sending');

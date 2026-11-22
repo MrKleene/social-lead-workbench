@@ -48,7 +48,7 @@ export function LocalInitialStateReset() {
             <AlertDialogHeader>
               <AlertDialogTitle>恢复初始状态？</AlertDialogTitle>
               <AlertDialogDescription>
-                删除后不可恢复。仅保留系统默认配置与已选模型。
+                删除后不可恢复。将清空账号与登录状态、采集与审核记录、发送与收件记录、模型授权和本地密钥；仅保留安装标识与已选模型。
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

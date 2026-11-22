@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { LocalReview, ReviewComment } from "./local-api";
+import { stateLabels } from "./review-model";
 
 export function ReviewDecisionActions({
   row,
@@ -27,20 +28,22 @@ export function ReviewDecisionActions({
   canApprove: boolean;
   approveHint?: string;
 }) {
-  if (state && state !== "REVIEWED") {
-    return <span className="text-caption text-muted-foreground">—</span>;
-  }
+  const unreviewed = state && state !== "REVIEWED";
   return (
     <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
-      {row.review_status === "APPROVED" ? (
+      {unreviewed ? (
+        <span className="text-caption text-muted-foreground">
+          {stateLabels[state]}
+        </span>
+      ) : row.queue_state ? (
+        <span className="text-caption text-muted-foreground">已入队</span>
+      ) : row.review_status === "APPROVED" ? (
         <Button variant="outline" size="sm" onClick={onContact}>
           准备联系作者
         </Button>
-      ) : row.queue_state ? (
-        <span className="text-caption text-muted-foreground">已入队</span>
       ) : canApprove ? (
         <Button
-          variant="outline"
+          variant="default"
           size="sm"
           disabled={pending}
           onClick={() => onDecide("APPROVED")}

@@ -11,7 +11,11 @@ function coverageLabel(coverage: CollectedPost["coverage"]) {
 }
 
 function collectedDate(value: number) {
-  return new Date(value).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" });
+  return new Date(value).toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 }
 
 export function CollectedPostCard({
@@ -24,12 +28,16 @@ export function CollectedPostCard({
   const [failed, setFailed] = useState(false);
   const coverUrl = failed ? null : post.coverUrl;
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`查看 ${post.title || "无标题笔记"} 的原文与评论`}
-      className="group flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors hover:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-    >
+    <article className="group relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors hover:border-ring focus-within:ring-2 focus-within:ring-ring focus-within:outline-none">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="absolute inset-0 z-10 rounded-lg focus-visible:outline-none"
+      >
+        <span className="sr-only">
+          查看 {post.title || "无标题笔记"} 的原文与评论
+        </span>
+      </button>
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-muted">
         {coverUrl ? (
           <img
@@ -59,7 +67,7 @@ export function CollectedPostCard({
           </Badge>
         </span>
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 p-4 sm:p-6">
         <div className="flex items-center gap-2 text-caption text-muted-foreground">
           <MessageSquare className="size-4" aria-hidden="true" />
           <span className="tabular-nums">{post.comments} 条评论</span>
@@ -70,10 +78,11 @@ export function CollectedPostCard({
         <p className="truncate text-caption text-muted-foreground tabular-nums">
           采集 {post.collections} 次 · 最近 {collectedDate(post.latestAt)}
         </p>
-        <p className="mt-auto truncate pt-1 text-caption text-muted-foreground">
+        <p className="truncate text-caption text-muted-foreground">
           {post.authorName || "未知作者"} · {post.accountName}
         </p>
+        <p className="mt-auto pt-1 text-caption text-primary">查看原文与评论</p>
       </div>
-    </button>
+    </article>
   );
 }

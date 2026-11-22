@@ -56,9 +56,14 @@ export function ReplySettings() {
   return (
     <div className="flex flex-col gap-4">
       {error ? <ErrorNotice error={error} /> : null}
+      {save.isSuccess && !save.isPending ? (
+        <p role="status" className="text-caption text-muted-foreground">
+          已保存
+        </p>
+      ) : null}
 
-      <div className="flex flex-col gap-2">
-        <span className="text-body">发送渠道</span>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-body">发送渠道</legend>
         <div className="flex flex-col divide-y rounded-md border">
           <label className="flex cursor-pointer items-center gap-2 px-4 py-2">
             <Checkbox
@@ -77,14 +82,14 @@ export function ReplySettings() {
             <span className="text-body">私信自动发送</span>
           </label>
         </div>
-      </div>
+      </fieldset>
 
-      <FormField label="额度刷新时间">
+      <FormField label="每日额度重置时刻">
         <Select
           value={current?.refreshTime ?? "00:00"}
           onValueChange={(value) => value && persist({ refreshTime: value })}
         >
-          <SelectTrigger aria-label="额度刷新时间">
+          <SelectTrigger aria-label="每日额度重置时刻">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -97,12 +102,13 @@ export function ReplySettings() {
         </Select>
       </FormField>
 
-      <div className="flex min-w-0 flex-col gap-2">
-        <span className="text-body">回复账号</span>
+      <fieldset className="flex min-w-0 flex-col gap-2">
+        <legend className="text-body">回复账号</legend>
         {accounts.data?.length ? (
           <div className="flex flex-col divide-y rounded-md border">
             {accounts.data.map((item) => {
-              const usable = item.state === "VERIFIED" && !!item.hasSession;
+              const verified = item.state === "VERIFIED";
+              const usable = verified && !!item.hasSession;
               const restricted = item.holds.length > 0;
               const chosen = selected.includes(item.id);
               return (
@@ -132,7 +138,11 @@ export function ReplySettings() {
                     >
                       每日 {item.daily_limit} 条
                       {restricted ? " · 受限" : ""}
-                      {usable ? "" : " · 需重新登录"}
+                      {!item.hasSession
+                        ? " · 未登录"
+                        : verified
+                          ? ""
+                          : " · 账号不可用"}
                     </span>
                   </span>
                 </label>
@@ -144,7 +154,7 @@ export function ReplySettings() {
             {accounts.isPending ? "正在读取…" : "还没有账号"}
           </p>
         )}
-      </div>
+      </fieldset>
 
       <FormField label="评论回复模板">
         <TemplatePicker

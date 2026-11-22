@@ -66,7 +66,9 @@ class LocalInbox {
   accounts() {
     return this.db.prepare(`SELECT a.id,a.name,a.platform_user_id,a.collect_state,a.contact_state,a.eligibility_checked_at,
       (SELECT count(*) FROM received_messages m WHERE m.account_id=a.id AND m.channel='DM' AND m.is_new=1 AND m.read_at IS NULL) unread_dm,
-      (SELECT count(*) FROM received_messages m WHERE m.account_id=a.id AND m.channel='COMMENT' AND m.is_new=1 AND m.read_at IS NULL) unread_comment
+      (SELECT count(*) FROM received_messages m WHERE m.account_id=a.id AND m.channel='COMMENT' AND m.is_new=1 AND m.read_at IS NULL) unread_comment,
+      (SELECT max(m.received_at) FROM received_messages m WHERE m.account_id=a.id) last_received_at,
+      (SELECT r.updated_at FROM inbox_receivers r WHERE r.account_id=a.id) last_fetched_at
       FROM accounts a WHERE a.state<>'ARCHIVED' ORDER BY a.name,a.id`).all();
   }
   /** 一次性获取：不再维持 15 分钟推送窗口，账号能力与平台锁由队列保证。 */

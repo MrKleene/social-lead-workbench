@@ -3,6 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutGrid, List, Search } from "lucide-react";
 import { useSearchParams } from "@/lib/router-compat";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
@@ -66,6 +75,7 @@ export function LocalCommentReview() {
   const [detail, setDetail] = useState<LocalReview | null>(null);
   const [contact, setContact] = useState<LocalReview | null>(null);
   const [preview, setPreview] = useState<GenerateQueuePreview | null>(null);
+  const [approve, setApprove] = useState<LocalReview | null>(null);
   const client = useQueryClient();
   const generate = useLocalAction("generateSendQueue");
 
@@ -339,7 +349,10 @@ export function LocalCommentReview() {
         version: row.version,
         status: next,
       }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["local"] }),
+    onSuccess: () => {
+      setApprove(null);
+      void client.invalidateQueries({ queryKey: ["local"] });
+    },
   });
 
   const selectedPost = reviewPosts.data?.items.find(
@@ -439,6 +452,8 @@ export function LocalCommentReview() {
               <SelectItem value="NONE">未入队</SelectItem>
               <SelectItem value="QUEUED">已入队</SelectItem>
               <SelectItem value="SENT">已发送</SelectItem>
+              <SelectItem value="FAILED">发送失败</SelectItem>
+              <SelectItem value="UNKNOWN">结果未知</SelectItem>
               <SelectItem value="EXPIRED">已过期</SelectItem>
             </SelectContent>
           </Select>
@@ -580,7 +595,7 @@ export function LocalCommentReview() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="newest">审核时间</SelectItem>
+                    <SelectItem value="newest">审核时间从新到旧</SelectItem>
                     <SelectItem value="score-desc">匹配分从高到低</SelectItem>
                     <SelectItem value="score-asc">匹配分从低到高</SelectItem>
                     <SelectItem value="comment-newest">评论时间从新到旧</SelectItem>
@@ -599,7 +614,16 @@ export function LocalCommentReview() {
         <>
           {reviewPosts.isLoading ? <Loading /> : null}
           {!reviewPosts.isLoading && !reviewPosts.data?.items.length ? (
-            <EmptyState title="没有符合条件的帖子。" />
+            <EmptyState
+              title={hasFilters ? "没有符合条件的帖子。" : "本机还没有可审核的帖子。"}
+              action={
+                hasFilters ? (
+                  <Button variant="outline" onClick={clear}>
+                    清除筛选
+                  </Button>
+                ) : undefined
+              }
+            />
           ) : null}
           {reviewPosts.data?.items.length ? (
             <ReviewPostGrid
@@ -620,7 +644,16 @@ export function LocalCommentReview() {
         <>
           {commentList.isLoading ? <Loading /> : null}
           {!commentList.isLoading && !commentList.data?.items.length ? (
-            <EmptyState title="没有符合条件的评论。" />
+            <EmptyState
+              title={hasFilters ? "没有符合条件的评论。" : "本机还没有可审核的评论。"}
+              action={
+                hasFilters ? (
+                  <Button variant="outline" onClick={clear}>
+                    清除筛选
+                  </Button>
+                ) : undefined
+              }
+            />
           ) : null}
           {commentList.data?.items.length ? (
             <div className="overflow-x-auto rounded-lg border">
@@ -651,7 +684,7 @@ export function LocalCommentReview() {
                         <TableCell className="whitespace-normal">
                           <button
                             type="button"
-                            className="block w-full text-left"
+                            className="block w-full rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                             onClick={() => setDetail(review)}
                           >
                             <span className="line-clamp-2 text-body leading-relaxed break-words">
@@ -685,7 +718,7 @@ export function LocalCommentReview() {
                             pending={decide.isPending}
                             canApprove={approval.canApprove}
                             approveHint={approval.approveHint}
-                            onDecide={(next) => decide.mutate({ row: review, next })}
+                            onDecide={() => setApprove(review)}
                             onContact={() => setContact(review)}
                             onOpen={() => setDetail(review)}
                           />
@@ -712,7 +745,16 @@ export function LocalCommentReview() {
       {selectedPost ? (
         <ReviewPostDialog post={selectedPost} onClose={closePost} />
       ) : null}
-      {detail ? <ReviewDetail row={detail} onClose={() => setDetail(null)} /> : null}
+      {detail ? (
+        <ReviewDetail
+          row={detail}
+          state={
+            commentList.data?.items.find((item) => item.review_id === detail.id)
+              ?.state
+          }
+          onClose={() => setDetail(null)}
+        />
+      ) : null}
       <Dialog
         open={!!preview}
         onOpenChange={(open) => {
@@ -724,7 +766,7 @@ export function LocalCommentReview() {
             <DialogTitle>生成待发送</DialogTitle>
             <DialogDescription>
               {preview
-                ? `范围：全部历史审核 · ${preview.comments} 条评论 · 评论回复 ${preview.commentRows} 条 · 私信 ${preview.dmRows} 条`
+                ? `范围：全部历史审核，不受当前筛选影响 · ${preview.comments} 条评论 · 评论回复 ${preview.commentRows} 条 · 私信 ${preview.dmRows} 条`
                 : ""}
             </DialogDescription>
           </DialogHeader>
@@ -757,6 +799,32 @@ export function LocalCommentReview() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog
+        open={!!approve}
+        onOpenChange={(open) => {
+          if (!open && !decide.isPending) setApprove(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>通过这条评论？</AlertDialogTitle>
+            <AlertDialogDescription>
+              通过后会加入待发送队列，按自动发送配置处理。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={decide.isPending}>取消</AlertDialogCancel>
+            <Button
+              pending={decide.isPending}
+              onClick={() => {
+                if (approve) decide.mutate({ row: approve, next: "APPROVED" });
+              }}
+            >
+              通过
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {contact ? (
         <Dialog open onOpenChange={(open) => !open && setContact(null)}>
           <DialogContent className="sm:max-w-xl">

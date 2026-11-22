@@ -18,39 +18,13 @@ import {
 } from "@/components/ui/tooltip";
 import { Disclosure } from "@/components/disclosure";
 import { DetailItem, DetailList } from "@/components/patterns/detail-sheet";
+import { Link } from "@/lib/router-compat";
 
-const labels: Record<string, string> = {
-  CONFIRMED: "回复成功",
-  NOT_ATTEMPTED: "未发送",
-  UNKNOWN: "结果未知",
-  FAILED: "历史失败",
-  RESERVED: "已预占",
-  ATTEMPTED: "执行中",
-  CANCELLED: "已取消",
-  SIMULATED_SUCCESS: "模拟完成",
-};
-
-const notes: Record<string, string> = {
-  CONFIRMED: "平台已确认",
-  NOT_ATTEMPTED: "提交前停止",
-  UNKNOWN: "保留占用 · 勿重发",
-  FAILED: "提交情况见原因",
-  RESERVED: "等待执行",
-  ATTEMPTED: "待平台确认",
-  CANCELLED: "已取消",
-  SIMULATED_SUCCESS: "未真实发送",
-};
-
-/** 状态 → Badge 变体。语义色只用于状态（DESIGN.md §7）。 */
-const tones: Record<
-  string,
-  "success" | "warning" | "destructive" | "outline"
-> = {
-  CONFIRMED: "success",
-  UNKNOWN: "warning",
-  FAILED: "destructive",
-  ATTEMPTED: "outline",
-};
+import {
+  attemptStatusLabels as labels,
+  attemptStatusNotes as notes,
+  attemptStatusTones as tones,
+} from "@/features/local-workbench/local-status-labels";
 
 const time = (value: string | null) =>
   value
@@ -85,7 +59,9 @@ function SenderIdentity({ item }: { item: ReplyHistoryItem }) {
       {item.senderId ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <strong className="font-medium">{name}</strong>
+            <strong className="font-medium" tabIndex={0}>
+              {name}
+            </strong>
           </TooltipTrigger>
           <TooltipContent>{item.senderId}</TooltipContent>
         </Tooltip>
@@ -124,7 +100,7 @@ export function ReplyHistoryTable({
         </TableCaption>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[190px]">发送人</TableHead>
+            <TableHead className="w-[190px]">发送账号</TableHead>
             <TableHead>接收人</TableHead>
             <TableHead>原帖与评论</TableHead>
             <TableHead className="w-[144px]">回复内容</TableHead>
@@ -220,6 +196,22 @@ export function ReplyHistoryDetail({ item }: { item: ReplyHistoryItem }) {
         <Alert role="status" variant="warning">
           <AlertDescription>结果未知，待核对。</AlertDescription>
         </Alert>
+      ) : null}
+
+      {item.displayStatus === "UNKNOWN" || item.displayStatus === "FAILED" ? (
+        <div>
+          <Button asChild variant="outline" size="sm">
+            <Link
+              to={
+                item.displayStatus === "UNKNOWN"
+                  ? "/auto-contact/pending?tab=unknown"
+                  : "/auto-contact/pending?tab=failed"
+              }
+            >
+              去待处理发送
+            </Link>
+          </Button>
+        </div>
       ) : null}
 
       <DetailList>

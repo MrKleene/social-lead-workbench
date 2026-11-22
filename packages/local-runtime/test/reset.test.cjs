@@ -40,9 +40,12 @@ test('reset refuses while collection or review work is queued',t=>{
  assert.equal(count(f.store,'jobs'),1);
 });
 
-test('reset keeps the one-time grant of a queued send and drops unused collection grants',t=>{
+test('reset refuses a queued send, then keeps its one-time grant and drops unused collection grants',t=>{
  const f=fixture(t),collectGrant=f.queue.authorize('COLLECT',{n:1}),sendScope={platform:'XHS',channel:'DM',accountId:'account',accountRevision:1,recipientId:'recipient',content:'synthetic text',target:{recipientId:'recipient'}},sendGrant=f.queue.authorize('SEND',sendScope);
  f.queue.enqueue('SEND',sendScope,sendGrant,'queued-send');
+ assert.throws(()=>new LocalReset(f.store).delete({categories:['reviews']}),/RESET_REQUIRES_IDLE/);
+ assert.equal(count(f.store,'jobs'),1);
+ f.store.db.prepare("UPDATE jobs SET state='SUCCEEDED' WHERE request_key='queued-send'").run();
  new LocalReset(f.store).delete({categories:['reviews']});
  const grants=f.store.db.prepare('SELECT id,purpose FROM authorizations').all();
  assert.equal(grants.length,1);assert.equal(grants[0].purpose,'SEND');assert.notEqual(grants[0].id,collectGrant);

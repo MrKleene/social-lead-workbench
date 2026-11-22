@@ -103,6 +103,9 @@ function QueueRuleEditor({
   const [done, setDone] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
 
+  const score = Number(threshold);
+  const invalidScore =
+    !threshold.trim() || !Number.isInteger(score) || score < 0 || score > 100;
   const failure = save.error ?? remove.error;
   const toggleChannel = (channel: "COMMENT" | "DM", checked: boolean) => {
     setDone(false);
@@ -111,8 +114,7 @@ function QueueRuleEditor({
     );
   };
   const persist = () => {
-    const score = Number(threshold);
-    if (!Number.isInteger(score) || score < 0 || score > 100 || !channels.length) return;
+    if (invalidScore || !channels.length) return;
     save.mutate(
       {
         id: rule.id,
@@ -130,7 +132,7 @@ function QueueRuleEditor({
   };
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border p-4">
+    <section className="flex flex-col gap-4 border-b pb-6 last:border-b-0 last:pb-0">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-section font-semibold break-words">{policyName}</h2>
         {rule.systemDefault ? <Badge variant="outline">系统默认</Badge> : null}
@@ -184,6 +186,7 @@ function QueueRuleEditor({
         </label>
       </div>
 
+      {invalidScore ? <Hint>入队分数须为 0–100 的整数</Hint> : null}
       {!channels.length ? <Hint>至少选择一个入队渠道</Hint> : null}
       {failure ? <ErrorNotice error={failure} /> : null}
       {done ? <p role="status" className="text-caption text-muted-foreground">已保存</p> : null}
@@ -191,7 +194,7 @@ function QueueRuleEditor({
       <div className="flex flex-wrap gap-3">
         <Button
           pending={save.isPending}
-          disabled={!channels.length || remove.isPending}
+          disabled={invalidScore || !channels.length || remove.isPending}
           onClick={persist}
         >
           保存

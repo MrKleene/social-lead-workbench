@@ -16,8 +16,8 @@ function plan(input){
  return selected;
 }
 
-// 只有采集与审核会写这些派生表。在途发送不算忙：删除不碰 send_attempts 与证据链。
-const BUSY="SELECT (SELECT count(*) FROM jobs WHERE state IN('QUEUED','RUNNING') AND kind IN('COLLECT','REVIEW'))+(SELECT count(*) FROM review_batches WHERE state IN('RESERVED','DISPATCHED'))+(SELECT count(*) FROM account_leases WHERE expires_at>?)+(SELECT count(*) FROM post_diagnostics WHERE state='RUNNING') AS n";
+// 删除会碰审核结果与待发送队列；在途采集、审核或发送时都先拒绝，避免删掉正在使用的行。
+const BUSY="SELECT (SELECT count(*) FROM jobs WHERE state IN('QUEUED','RUNNING') AND kind IN('COLLECT','REVIEW','SEND'))+(SELECT count(*) FROM review_batches WHERE state IN('RESERVED','DISPATCHED'))+(SELECT count(*) FROM send_queue WHERE state='SENDING')+(SELECT count(*) FROM account_leases WHERE expires_at>?)+(SELECT count(*) FROM post_diagnostics WHERE state='RUNNING') AS n";
 
 const ORPHAN_JOBS=`DELETE FROM jobs WHERE kind IN('COLLECT','REVIEW')
  AND NOT EXISTS(SELECT 1 FROM collection_runs r WHERE r.job_id=jobs.id)
@@ -44,7 +44,11 @@ class LocalReset{
   if(this.db.prepare(BUSY).get(this.store.clock()).n>0)throw new LocalError('RESET_REQUIRES_IDLE');
   const counts=this.store.transaction(()=>{
    const out={},drop=table=>{out[table]=this.db.prepare('DELETE FROM '+table).run().changes;};
-   if(selected.has('reviews')){drop('automation_decisions');drop('model_submissions');drop('review_results');drop('review_batches');}
+   if(selected.has('reviews')){
+    // send_queue.review_id 没有外键；先按审核结果清掉待发送行，避免留下指向已删审核的孤儿队列。
+    out.sendQueue=this.db.prepare('DELETE FROM send_queue WHERE review_id IN(SELECT id FROM review_results)').run().changes;
+    drop('automation_decisions');drop('model_submissions');drop('review_results');drop('review_batches');
+   }
    if(selected.has('comments')||selected.has('posts'))drop('collection_run_events');
    if(selected.has('comments'))drop('run_comments');
    if(selected.has('comments')||selected.has('posts'))out.comments=this.db.prepare('DELETE FROM comments WHERE NOT EXISTS(SELECT 1 FROM run_comments c WHERE c.comment_id=comments.id)').run().changes;

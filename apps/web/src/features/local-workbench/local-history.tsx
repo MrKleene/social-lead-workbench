@@ -74,7 +74,7 @@ function RunStatus({
   if (status === "PARTIAL") return <Badge variant="warning">部分完成</Badge>;
   if (status === "FAILED") return <Badge variant="destructive">失败</Badge>;
   if (status === "RUNNING") return <Badge variant="secondary">进行中</Badge>;
-  return <Badge variant="outline">{statusLabels[status] ?? status}</Badge>;
+  return <Badge variant="outline">{statusLabels[status] ?? "未知状态"}</Badge>;
 }
 
 export function LocalHistory({
@@ -339,7 +339,7 @@ export function LocalHistory({
         <Table aria-label="采集历史">
           <TableHeader>
             <TableRow>
-              <TableHead>轮次</TableHead>
+              <TableHead>来源配置</TableHead>
               <TableHead>开始时间</TableHead>
               <TableHead className="text-right">笔记</TableHead>
               <TableHead className="text-right">评论</TableHead>
@@ -380,7 +380,7 @@ export function LocalHistory({
                       审核
                     </Button>
                     <Button size="xs" variant="outline" asChild>
-                      <Link to={`/reply-history?run=${run.id}`}>回复</Link>
+                      <Link to={`/reply-history?run=${run.id}`}>发送记录</Link>
                     </Button>
                   </div>
                 </TableCell>

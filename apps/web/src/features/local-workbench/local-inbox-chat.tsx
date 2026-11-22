@@ -15,7 +15,7 @@ const label: Record<QueueState, string> = {
   QUEUED: "排队中",
   SENDING: "发送中",
   SENT: "已发送",
-  UNKNOWN: "未确认",
+  UNKNOWN: "结果未知",
   FAILED: "发送失败",
   UNSENT: "未发送",
 };
@@ -157,7 +157,7 @@ async function pump(scopeKey: string) {
             items: getScope(scopeKey).items.map((item) =>
               item.state === "QUEUED" ? { ...item, state: "FAILED" as const } : item,
             ),
-            error: new Error(result === "UNKNOWN" ? "发送状态未确认，后续消息已取消。" : "发送失败，后续消息已取消。"),
+            error: new Error(result === "UNKNOWN" ? "发送结果未知，后续消息已取消。" : "发送失败，后续消息已取消。"),
           });
           break;
         }
@@ -332,7 +332,7 @@ export function LocalDmChat({
                 <p className="text-body leading-relaxed break-words">{item.content}</p>
                 <p className="text-caption opacity-70">
                   {new Date(item.at).toLocaleString()}
-                  {item.direction === "OUT" && item.outcome === "UNKNOWN" ? " · 未确认" : ""}
+                  {item.direction === "OUT" && item.outcome === "UNKNOWN" ? " · 结果未知" : ""}
                   {item.direction === "OUT" && item.outcome === "FAILED" ? " · 失败" : ""}
                 </p>
               </div>

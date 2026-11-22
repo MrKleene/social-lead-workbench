@@ -163,7 +163,7 @@ export function ReviewPostDialog({
               value={stateFilter || SELECT_EMPTY}
               onValueChange={(value) => setStateFilter(value === SELECT_EMPTY ? "" : value)}
             >
-              <SelectTrigger className="w-[calc(50%-0.25rem)] sm:w-[140px]" aria-label="审核状态">
+              <SelectTrigger className="w-[calc(50%-0.25rem)] sm:w-[140px]" aria-label="评分状态">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -172,7 +172,7 @@ export function ReviewPostDialog({
                 <SelectItem value="PROCESSING">审核中</SelectItem>
                 <SelectItem value="PENDING">待审核</SelectItem>
                 <SelectItem value="UNKNOWN">结果未知</SelectItem>
-                <SelectItem value="FAILED">失败</SelectItem>
+                <SelectItem value="FAILED">评分失败</SelectItem>
                 <SelectItem value="SKIPPED">已跳过</SelectItem>
               </SelectContent>
             </Select>

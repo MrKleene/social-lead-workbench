@@ -1,3 +1,4 @@
+import {useEffect,useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {useSearchParams} from '@/lib/router-compat';
 import {Button} from '@/components/ui/button';
@@ -23,6 +24,11 @@ export function LocalPostsPage(){
  const open=(id:string,action:string)=>setParams(previous=>{const next=new URLSearchParams(previous);next.set('post',id);next.set('action',action);return next;});
  const close=()=>setParams(previous=>{const next=new URLSearchParams(previous);next.delete('post');next.delete('action');return next;});
  const query=get('query'),coverage=get('coverage'),accountId=get('account'),from=get('from'),to=get('to');
+ const [search,setSearch]=useState(query);
+ useEffect(()=>setSearch(query),[query]);
+ useEffect(()=>{const timer=setTimeout(()=>{if(search!==query)change('query',search)},300);return()=>clearTimeout(timer)},[search,query]);
+ const hasFilters=!!(query||coverage||accountId||from||to);
+ const clearFilters=()=>setParams(previous=>{const next=new URLSearchParams(previous);for(const key of ['query','coverage','account','from','to','page'])next.delete(key);return next;},{replace:true});
  const posts=useQuery({queryKey:['local','collected-posts',page,query,coverage,accountId,from,to],queryFn:()=>localApi('collectedPosts',{page,query,coverage,accountId,from,to})});
  const accounts=useQuery({queryKey:['local','platform-accounts'],queryFn:()=>localApi('accountOverview')});
  const selected=posts.data?.items.find(item=>item.id===get('post')),action=get('action');
@@ -30,7 +36,7 @@ export function LocalPostsPage(){
   <PageHeader title="帖子列表" description={posts.data?`${posts.data.total} 篇笔记`:'已采集的笔记'}/>
   <div className="flex flex-col gap-3">
    <FilterBar>
-    <FilterField label="搜索帖子标题"><Input type="search" maxLength={200} value={query} onChange={event=>change('query',event.target.value)}/></FilterField>
+    <FilterField label="搜索帖子标题"><Input type="search" maxLength={200} value={search} onChange={event=>setSearch(event.target.value)}/></FilterField>
     <FilterField label="完整度">
      <Select value={coverage} onValueChange={value=>change('coverage',value)}>
       <SelectTrigger aria-label="完整度"><SelectValue/></SelectTrigger>
@@ -53,11 +59,15 @@ export function LocalPostsPage(){
     <FilterField label="最近采集开始日期"><DatePicker ariaLabel="最近采集开始日期" value={from} placeholder="不限" onChange={value=>change('from',value)}/></FilterField>
     <FilterField label="最近采集结束日期"><DatePicker ariaLabel="最近采集结束日期" value={to} placeholder="不限" onChange={value=>change('to',value)}/></FilterField>
    </FilterBar>
+   {hasFilters?<div className="flex justify-end"><Button variant="ghost" onClick={clearFilters}>清除筛选</Button></div>:null}
    {accounts.error?<ErrorNotice error={accounts.error}/>:null}
    {posts.error?<ErrorNotice error={posts.error}/>:null}
    {posts.isPending?<p className="text-body text-muted-foreground">正在读取…</p>:null}
-   {!posts.isPending&&!posts.data?.total?<EmptyState title="还没有采集的帖子。"/>:null}
-   {posts.data?.items.length?<div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
+   {!posts.isPending&&posts.data&&!posts.data.items.length?<div className="flex flex-col items-center gap-3 py-8">
+    <EmptyState title={hasFilters?'没有符合条件的帖子。':'还没有采集的帖子。'}/>
+    {hasFilters?<Button variant="outline" onClick={clearFilters}>清除筛选</Button>:null}
+   </div>:null}
+   {posts.data?.items.length?<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
     {posts.data.items.map(post=><CollectedPostCard key={post.id} post={post} onOpen={()=>open(post.id,'view')}/>)}
    </div>:null}
    {posts.data&&posts.data.total?<Pagination page={page} total={posts.data.total} onPageChange={value=>setParams(previous=>{const next=new URLSearchParams(previous);next.set('page',String(value));return next;})} label="帖子列表分页" countLabel="篇笔记"/>:null}

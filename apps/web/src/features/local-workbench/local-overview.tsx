@@ -6,12 +6,14 @@ import { Card } from "@/components/ui/card";
 import { DetailItem, DetailList } from "@/components/patterns/detail-sheet";
 import { EmptyState } from "@/components/patterns/empty-state";
 import { PageHeader } from "@/components/patterns/page-header";
+import { platformReason } from "./local-platform";
 import { RecordItem, RecordList } from "@/components/patterns/record-list";
 import { SectionCard } from "@/components/patterns/section-card";
 import { ErrorNotice } from "@/components/feedback";
 import type { DashboardReply } from "./local-api";
 import { LocalInitialStateReset } from "./local-initial-state-reset";
 import { LocalTestDataReset } from "./local-test-data-reset";
+import { holdLabel } from "./local-hold-labels";
 import { useLocalRecords } from "./use-local-records";
 
 export function LocalOverview() {
@@ -30,7 +32,7 @@ export function LocalOverview() {
       name: "采集笔记",
       value: overview?.collectedPosts,
       detail: (overview?.runs ?? 0) + " 轮采集",
-      url: "/work/archive",
+      url: "/posts",
       icon: Layers,
     },
     {
@@ -43,11 +45,7 @@ export function LocalOverview() {
     {
       name: "已发送",
       value: overview?.confirmed,
-      detail:
-        "成功 " +
-        (overview?.confirmed ?? 0) +
-        " · 结果未知 " +
-        (overview?.unknown ?? 0),
+      detail: "结果未知 " + (overview?.unknown ?? 0) + " 条",
       url: "/reply-history",
       icon: Send,
     },
@@ -71,7 +69,7 @@ export function LocalOverview() {
         }
         actions={
           <Button asChild>
-            <Link to="/automation">进入自动化任务</Link>
+            <Link to="/automation">进入获客数据采集</Link>
           </Button>
         }
       />
@@ -85,7 +83,10 @@ export function LocalOverview() {
             asChild
             className="gap-2 p-6 transition-colors hover:bg-accent"
           >
-            <Link to={url}>
+            <Link
+              to={url}
+              className="rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
               <span className="flex items-start justify-between gap-2">
                 <span className="text-caption text-muted-foreground">
                   {name}
@@ -111,7 +112,7 @@ export function LocalOverview() {
         overview.latestRun.status,
       ) ? (
         <p role="status" className="text-body break-words text-warning">
-          最近一轮采集未完成 ·{" "}
+          最近一轮采集{latestRunLabel(overview.latestRun.status)} ·{" "}
           <Link
             to="/work/archive"
             className="text-primary underline-offset-4 hover:underline"
@@ -168,11 +169,11 @@ export function LocalOverview() {
         <SectionCard title="需要核对的暂停">
           {overview.holds.map((hold) => (
             <p key={hold.id} className="text-body break-words">
-              {hold.id} · {hold.reason}
+              {holdLabel(hold)}
             </p>
           ))}
           <Link
-            to="/data"
+            to="/work/notices"
             className="text-body text-primary underline-offset-4 hover:underline"
           >
             查看核对入口
@@ -206,6 +207,13 @@ function formatDateTime(value: number) {
 
 function formatDay(value: string) {
   return value.slice(5).replace("-", "/");
+}
+
+function latestRunLabel(status: string) {
+  if (status === "FAILED") return "失败";
+  if (status === "PARTIAL") return "部分完成";
+  if (status === "INTERRUPTED") return "已中断";
+  return "未完成";
 }
 
 function ReplyTrend({ days }: { days: { day: string; count: number }[] }) {
@@ -315,10 +323,16 @@ export function LocalDataPage() {
   return (
     <>
       <PageHeader title="数据管理" />
-      <SectionCard title="删除测试数据">
+      <SectionCard
+        title="删除测试数据"
+        description="删除本机采集、评论与审核记录；不会删除账号与登录状态。"
+      >
         <LocalTestDataReset />
       </SectionCard>
-      <SectionCard title="恢复初始状态">
+      <SectionCard
+        title="恢复初始状态"
+        description="清空业务数据、账号与登录状态、模型授权和本地密钥。"
+      >
         <LocalInitialStateReset />
       </SectionCard>
     </>
@@ -332,7 +346,7 @@ export function LocalCapabilities() {
   const capabilities: Array<[string, boolean | undefined]> = [
     ["账号登录", status.data?.platform.ready],
     ["有界采集", workflow.data?.capabilities.collect],
-    ["限时收件", workflow.data?.capabilities.inbox],
+    ["一次性收件", workflow.data?.capabilities.inbox],
     ["精确评论与私信", workflow.data?.capabilities.send],
     ["模型审核适配器", workflow.data?.capabilities.review],
     ["系统凭据保护", status.data?.credentialsAvailable],
@@ -345,7 +359,13 @@ export function LocalCapabilities() {
         <DetailList className="gap-3 sm:grid-cols-2">
           {capabilities.map(([label, ready]) => (
             <DetailItem key={label} label={label}>
-              {ready ? "可用" : "不可用"}
+              {ready === undefined
+                ? "读取中"
+                : ready
+                  ? "可用"
+                  : label === "账号登录" && status.data?.platform.reason
+                    ? `不可用 · ${platformReason(status.data.platform.reason)}`
+                    : "不可用"}
             </DetailItem>
           ))}
         </DetailList>

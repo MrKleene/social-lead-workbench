@@ -43,13 +43,13 @@ const STARTING_STEPS: JourneyStep[] = [
 ];
 
 /**
- * 自动化任务页。
+ * 获客数据采集页。
  *
- * 结构：页头三个动作（查看采集历史 / 采集设置 / 开始自动化采集）+ 本轮进度步骤条 +
+ * 结构：页头三个动作（查看采集历史 / 采集与审核设置 / 开始自动化采集）+ 本轮进度步骤条 +
  * 当前步骤内容。「查看采集历史」跳独立页面（`/work/archive`），不在本页弹窗——历史需要
  * 筛选、分页和每轮多个动作，弹窗装不下，也会挡住步骤条。
  *
- * 「采集设置」是采集与评论匹配两步的设置，不是全局配置页。
+ * 「采集与审核设置」是采集与评论匹配两步的设置，不是全局配置页。
  *
  * 步骤会自己往前走：采集完成后自动进「评论匹配」。
  * 判定在 `followStage` 里，只跟随本次挂载中观察到的跃迁——打开历史轮次不会自己跳。
@@ -130,7 +130,7 @@ export function LocalTaskPage() {
   if (!configId) {
     missing.push({ tab: "collect", text: "采集关键词组" });
   } else if (!accountCount) {
-    // 一个账号都没有时，「采集设置」里只有空下拉——账号只能去账号中心登录。
+    // 一个账号都没有时，「采集与审核设置」里只有空下拉——账号只能去账号中心登录。
     missing.push({ to: "/work/accounts", action: "去登录", text: "采集账号" });
   } else if (!preferences.data?.accountId) {
     missing.push({ tab: "collect", text: "采集账号" });
@@ -161,16 +161,10 @@ export function LocalTaskPage() {
   /**
    * 一次算完两个改动：`setParams` 基于本次渲染的 params 快照，同一 tick 里连调两次
    * 会让后一次覆盖前一次。
-   *
-   * `replySkipped` 非空表示这轮采集起来了、但自动回复没进去（例如回复账号受限）。
    */
-  const handleStarted = (started: { id: string; replySkipped: string | null }) => {
+  const handleStarted = (started: { id: string }) => {
     setStartingRunId(started.id);
-    setNotice(
-      started.replySkipped
-        ? `已加入队列 · 本轮未包含自动回复 · ${started.replySkipped}`
-        : "已加入队列",
-    );
+    setNotice("已加入队列");
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
@@ -185,7 +179,7 @@ export function LocalTaskPage() {
   return (
     <>
       <PageHeader
-        title="自动化任务"
+        title="获客数据采集"
         actions={
           <>
             <Button variant="outline" asChild>
@@ -198,7 +192,7 @@ export function LocalTaskPage() {
                 setSettingsOpen(true);
               }}
             >
-              采集设置
+              采集与审核设置
             </Button>
             <Button
               disabled={running || queueBusy || starting}
@@ -238,6 +232,10 @@ export function LocalTaskPage() {
             caption="正在启动"
             attention={false}
           />
+        </SectionCard>
+      ) : runs.error ? (
+        <SectionCard title="本轮进度" description="读取失败">
+          <p className="text-body text-muted-foreground">本轮进度暂时不可用。</p>
         </SectionCard>
       ) : runId ? (
         <RunWorkspace

@@ -6,16 +6,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { LocalReview } from "./local-api";
-import { day, decisionLabels, decisionVariant } from "./review-model";
+import type { LocalReview, ReviewComment } from "./local-api";
+import {
+  day,
+  decisionLabels,
+  decisionVariant,
+  stateLabels,
+} from "./review-model";
+
+type LocalReviewState = ReviewComment["state"];
 
 export function ReviewDetail({
   row,
+  state,
   onClose,
 }: {
   row: LocalReview;
+  state?: LocalReviewState;
   onClose: () => void;
 }) {
+  const reviewed = !state || state === "REVIEWED";
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-2xl">
@@ -24,12 +34,19 @@ export function ReviewDetail({
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={decisionVariant(row.decision)}>
-              {decisionLabels[row.decision] ?? row.decision}
-            </Badge>
-            <span className="text-caption text-muted-foreground tabular-nums">
-              {row.score} 分
-            </span>
+            {reviewed && row.decision ? (
+              <>
+                <Badge variant={decisionVariant(row.decision)}>
+                  {decisionLabels[row.decision] ?? row.decision}
+                </Badge>
+                <span className="text-caption text-muted-foreground tabular-nums">
+                  {row.score} 分
+                </span>
+              </>
+            ) : (
+              <Badge variant="secondary">{stateLabels[state ?? "PENDING"]}</Badge>
+            )}
+            {row.queue_state ? <Badge variant="outline">已入队</Badge> : null}
           </div>
           <p className="text-body leading-relaxed break-words whitespace-pre-wrap">
             {row.body}

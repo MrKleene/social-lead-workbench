@@ -29,12 +29,12 @@ import { LocalCollectionPanel } from "./local-collection";
 import { useLocalRecords } from "./use-local-records";
 
 /**
- * 「采集设置」弹窗：采集与评论匹配两步的开关与选择。
+ * 「采集与审核设置」弹窗：采集与评论匹配两步的开关与选择。
  *
  * 布局照 shadcn-admin 的设置页：左边一列步骤（带状态），右边一张内容卡。
  * 两步是先后关系而不是并列分类，竖排比横向页签更能表达顺序，也能顺带显示每步配好没有。
  *
- * 自动回复不在采集设置里配置：入队阈值与渠道在「配置管理 → 自动加入待发送队列配置」，
+ * 自动回复不在采集与审核设置里配置：入队阈值与渠道在「配置管理 → 自动加入待发送队列配置」，
  * 账号池、模板池、渠道开关和额度刷新时间在「配置管理 → 自动发送配置」，
  * 运行总开关在「待处理发送」页头。
  *
@@ -94,12 +94,12 @@ export function AutomationSettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>采集设置</DialogTitle>
+          <DialogTitle>采集与审核设置</DialogTitle>
         </DialogHeader>
 
         <div className="flex min-h-0 gap-4">
           <nav
-            aria-label="采集设置分组"
+            aria-label="采集与审核设置分组"
             className="flex w-44 shrink-0 flex-col gap-1"
           >
             {order.map((id, index) => {

@@ -3,6 +3,7 @@ import { Link } from "@/lib/router-compat";
 import { LoaderCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ErrorNotice } from "@/components/feedback";
 import { SectionCard } from "@/components/patterns/section-card";
 import { useLocalRecords } from "./use-local-records";
 import type { ReviewPostSummary } from "./local-api";
@@ -44,7 +45,11 @@ export function LocalRunReview({ runId }: { runId: string }) {
               : "PENDING"
       : null;
   const completed = status === "COMPLETED";
-  const statusLabel = completed
+  const statusLabel = progress.error
+    ? "读取失败"
+    : !reviewProgress && progress.isPending
+      ? "读取中"
+      : completed
     ? "已完成"
     : status === "PROCESSING"
       ? "审核中"
@@ -72,6 +77,8 @@ export function LocalRunReview({ runId }: { runId: string }) {
         </div>
       }
     >
+      {progress.error ? <ErrorNotice error={progress.error} /> : null}
+
       {reviewProgress ? (
         completed ? (
           <div className="flex flex-col gap-2">

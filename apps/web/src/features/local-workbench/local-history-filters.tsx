@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "@/lib/router-compat";
 import { Disclosure } from "@/components/disclosure";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -34,6 +35,30 @@ export function LocalHistoryFilters({ tab }: { tab: "runs" | "reviews" }) {
   const workflow = useLocalRecords("workflowOverview");
 
   const get = (key: string) => params.get(key) || "";
+  const query = get("query");
+  const [search, setSearch] = useState(query);
+  useEffect(() => setSearch(query), [query]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (search !== query) change("query", search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, query]);
+  const hasFilters = [
+    "query",
+    "state",
+    "config",
+    "account",
+    "policy",
+    "evaluation",
+    "from",
+    "to",
+    "decision",
+    "context",
+    "mode",
+    "publication",
+    "sort",
+  ].some((key) => !!params.get(key));
   const change = (key: string, value: string) =>
     setParams(
       (previous) => {
@@ -55,8 +80,8 @@ export function LocalHistoryFilters({ tab }: { tab: "runs" | "reviews" }) {
           <Input
             type="search"
             maxLength={200}
-            value={get("query")}
-            onChange={(event) => change("query", event.target.value)}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
           />
         </FilterField>
 
@@ -100,12 +125,12 @@ export function LocalHistoryFilters({ tab }: { tab: "runs" | "reviews" }) {
                 </SelectContent>
               </Select>
             </FilterField>
-            <FilterField label="采集账号筛选">
+            <FilterField label="采集账号">
               <Select
                 value={get("account")}
                 onValueChange={(value) => change("account", value)}
               >
-                <SelectTrigger aria-label="采集账号筛选">
+                <SelectTrigger aria-label="采集账号">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -291,6 +316,7 @@ export function LocalHistoryFilters({ tab }: { tab: "runs" | "reviews" }) {
       <div>
         <Button
           variant="ghost"
+          disabled={!hasFilters}
           onClick={() =>
             setParams(
               params.get("run") ? { run: params.get("run")! } : {},
@@ -298,7 +324,7 @@ export function LocalHistoryFilters({ tab }: { tab: "runs" | "reviews" }) {
             )
           }
         >
-          清除页面筛选
+          清除筛选
         </Button>
       </div>
     </div>
@@ -332,7 +358,9 @@ export function LocalUnreviewed() {
               title={comment.body}
               meta={`${comment.post_title || "未保存标题"} · ${comment.batch_state ?? "尚无请求"}`}
             >
-              {comment.error_code ? <p>{comment.error_code}</p> : null}
+              {comment.error_code ? (
+                <p className="text-body text-destructive">读取失败</p>
+              ) : null}
               <Link
                 to={`/automation?run=${comment.run_id}&stage=review`}
                 className="text-body text-primary underline-offset-4 hover:underline"
@@ -342,9 +370,11 @@ export function LocalUnreviewed() {
             </RecordItem>
           ))}
         </RecordList>
-      ) : (
+      ) : data.isPending ? (
+        <EmptyState title="正在读取评论原文。" />
+      ) : data.data ? (
         <EmptyState title="没有符合条件的评论原文。" />
-      )}
+      ) : null}
       <Pagination
         page={page}
         total={data.data?.total ?? 0}

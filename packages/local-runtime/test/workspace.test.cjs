@@ -25,4 +25,14 @@ test('review filters by queue status across comments, posts and reviews',t=>{
  assert.equal(w.reviewCommentList({runId:run.runId,queue:'QUEUED'}).total,0);
  assert.equal(w.reviewCommentList({runId:run.runId,queue:'SENT'}).total,1);
  assert.equal(w.reviewPosts({runId:run.runId,queue:'SENT'}).total,1);
+ f.store.db.prepare("UPDATE send_queue SET state='FAILED' WHERE id='queue-filter'").run();
+ assert.equal(w.reviewCommentList({runId:run.runId,queue:'FAILED'}).total,1);
+ assert.equal(w.reviewCommentList({runId:run.runId,queue:'UNKNOWN'}).total,0);
+ assert.equal(w.reviewPosts({runId:run.runId,queue:'FAILED'}).total,1);
+ assert.equal(w.reviews({runId:run.runId,queue:'FAILED'}).total,1);
+ f.store.db.prepare("UPDATE send_queue SET state='UNKNOWN' WHERE id='queue-filter'").run();
+ assert.equal(w.reviewCommentList({runId:run.runId,queue:'UNKNOWN'}).total,1);
+ assert.equal(w.reviewCommentList({runId:run.runId,queue:'FAILED'}).total,0);
+ assert.equal(w.reviewPosts({runId:run.runId,queue:'UNKNOWN'}).total,1);
+ assert.equal(w.reviews({runId:run.runId,queue:'UNKNOWN'}).total,1);
 });

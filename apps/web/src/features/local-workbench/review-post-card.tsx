@@ -19,15 +19,19 @@ export function ReviewPostCard({
   const [failed, setFailed] = useState(false);
   const coverUrl = failed ? null : post.coverUrl;
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`查看 ${post.title} 的评论审核`}
+    <article
       className={cn(
-        "group flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors hover:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "group relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors hover:border-ring focus-within:ring-2 focus-within:ring-ring focus-within:outline-none",
         active && "border-ring ring-2 ring-ring/20",
       )}
     >
+      <button
+        type="button"
+        onClick={onOpen}
+        className="absolute inset-0 z-10 rounded-lg focus-visible:outline-none"
+      >
+        <span className="sr-only">查看 {post.title} 的评论审核</span>
+      </button>
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-muted">
         {coverUrl ? (
           <img
@@ -54,7 +58,7 @@ export function ReviewPostCard({
           </span>
         ) : null}
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 p-4 sm:p-6">
         <div className="flex items-center gap-2 text-caption text-muted-foreground">
           <MessageSquare className="size-4" aria-hidden="true" />
           <span className="tabular-nums">{post.total + post.skipped} 条评论</span>
@@ -80,11 +84,12 @@ export function ReviewPostCard({
             />
           </div>
         ) : null}
-        <p className="mt-auto truncate pt-1 text-caption text-muted-foreground">
+        <p className="truncate text-caption text-muted-foreground">
           {post.authorName ?? "匿名"}
         </p>
+        <p className="mt-auto pt-1 text-caption text-primary">查看评论</p>
       </div>
-    </button>
+    </article>
   );
 }
 
@@ -100,15 +105,19 @@ function ReviewPostRow({
   const [failed, setFailed] = useState(false);
   const coverUrl = failed ? null : post.coverUrl;
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`查看 ${post.title} 的评论审核`}
+    <article
       className={cn(
-        "flex min-w-0 items-center gap-3 border-b py-3 text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "relative flex min-w-0 items-center gap-3 border-b py-3 text-left transition-colors hover:bg-muted/50 focus-within:ring-2 focus-within:ring-ring focus-within:outline-none",
         active && "bg-muted",
       )}
     >
+      <button
+        type="button"
+        onClick={onOpen}
+        className="absolute inset-0 z-10 focus-visible:outline-none"
+      >
+        <span className="sr-only">查看 {post.title} 的评论审核</span>
+      </button>
       <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
         {coverUrl ? (
           <img
@@ -141,7 +150,7 @@ function ReviewPostRow({
         </p>
       </div>
       <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-    </button>
+    </article>
   );
 }
 

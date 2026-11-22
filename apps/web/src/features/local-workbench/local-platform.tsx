@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { useLocalPlatform } from "./use-local-platform";
 
 /** 平台组件不可用时，把后端给的原因翻成人话。 */
-function platformReason(reason: string) {
+export function platformReason(reason: string) {
   switch (reason) {
     case "PACKAGED_NATIVE_RESOURCES_UNAVAILABLE":
       return "平台组件未构建";

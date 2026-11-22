@@ -19,6 +19,11 @@ import { Pagination } from "@/components/patterns/pagination";
 import { RecordItem, RecordList } from "@/components/patterns/record-list";
 import { SectionCard } from "@/components/patterns/section-card";
 import { ErrorNotice } from "@/components/feedback";
+import { auditActionLabel, holdLabel } from "./local-hold-labels";
+import {
+  attemptStatusLabels,
+  attemptStatusOrder,
+} from "./local-status-labels";
 import {
   ReplyHistoryDetail,
   ReplyHistoryTable,
@@ -30,7 +35,7 @@ import { useLocalAction, useLocalRecords } from "./use-local-records";
 const labels: Record<string, string> = {
   COLLECT: "采集",
   REVIEW: "评论匹配",
-  SEND: "回复",
+  SEND: "发送",
   INBOX: "接收消息",
   QUEUED: "排队中",
   RUNNING: "执行中",
@@ -41,15 +46,9 @@ const labels: Record<string, string> = {
   UNKNOWN: "结果未知",
 };
 
-const resultStates: Array<[string, string]> = [
-  ["CONFIRMED", "回复成功"],
-  ["UNKNOWN", "结果未知"],
-  ["RESERVED", "已预占"],
-  ["ATTEMPTED", "执行中"],
-  ["NOT_ATTEMPTED", "未发送"],
-  ["CANCELLED", "已取消"],
-  ["FAILED", "历史失败"],
-];
+const resultStates = attemptStatusOrder.map(
+  (value) => [value, attemptStatusLabels[value]] as [string, string],
+);
 
 export function LocalReplyHistory() {
   const [params, setParams] = useSearchParams();
@@ -344,7 +343,7 @@ export function LocalNotices() {
         {holds.length ? (
           holds.map((hold) => (
             <p key={hold.id} className="text-body break-words">
-              {hold.id} · {hold.reason}
+              {holdLabel(hold)}
             </p>
           ))
         ) : (
@@ -364,10 +363,10 @@ export function LocalNotices() {
             {items.map((notice) => (
               <RecordItem
                 key={notice.id}
-                title={notice.action}
+                title={auditActionLabel(notice.action)}
                 meta={new Date(notice.created_at).toLocaleString()}
               >
-                记录：{notice.entity_id}
+                {notice.entity_name ? "账号：" + notice.entity_name : "本机运行记录"}
               </RecordItem>
             ))}
           </RecordList>
