@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-11T10:57:30Z",
-  "updated_at": "2026-11-22T20:45:14Z",
+  "updated_at": "2026-11-22T20:54:10Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -17507,9 +17507,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "6645c0f3df8b916092c795084293f7bb85439a220b8d5ef13bab49e9f1a354bd",
-      "size": 250721,
-      "normalized_sha256": "6645c0f3df8b916092c795084293f7bb85439a220b8d5ef13bab49e9f1a354bd"
+      "sha256": "fb621a78148ea1b191dff8418d714b1f421798ab0d01c7d3457e52755b941444",
+      "size": 250826,
+      "normalized_sha256": "fb621a78148ea1b191dff8418d714b1f421798ab0d01c7d3457e52755b941444"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -18375,9 +18375,9 @@
     },
     "apps/web/src/features/local-workbench/local-pending.tsx": {
       "role": "index",
-      "sha256": "b7cc01124e67836a7cf0033bec45a5b8e1a9c0e978fa7c5e6bf764fb27d89b4f",
-      "size": 26224,
-      "normalized_sha256": "b7cc01124e67836a7cf0033bec45a5b8e1a9c0e978fa7c5e6bf764fb27d89b4f"
+      "sha256": "ef81b09d5a1ad33ebd2dff1eb9c94fb523d2fa98d214590e27112469d23e54e0",
+      "size": 28543,
+      "normalized_sha256": "ef81b09d5a1ad33ebd2dff1eb9c94fb523d2fa98d214590e27112469d23e54e0"
     },
     "apps/web/src/features/local-workbench/local-platform.tsx": {
       "role": "index",
@@ -18891,9 +18891,9 @@
     },
     "docs/design/send-queue.md": {
       "role": "index",
-      "sha256": "86b99fc59b9157870acb600473a1726434a4fc5f3c16cd6cf1d52b4d30a51a14",
-      "size": 6881,
-      "normalized_sha256": "86b99fc59b9157870acb600473a1726434a4fc5f3c16cd6cf1d52b4d30a51a14"
+      "sha256": "0c139dfedc4614f6f119726ef107e81cd0e78373272d7af00bab5b5ebcdaa27c",
+      "size": 7028,
+      "normalized_sha256": "0c139dfedc4614f6f119726ef107e81cd0e78373272d7af00bab5b5ebcdaa27c"
     },
     "docs/design/ui-conformance-audit.md": {
       "role": "index",
@@ -18921,9 +18921,9 @@
     },
     "docs/requirements/MODULES.md": {
       "role": "index",
-      "sha256": "5794cc1db52608035a41e2fd01cd19246632e4f950ac4a85145380096cd67f3d",
-      "size": 15843,
-      "normalized_sha256": "5794cc1db52608035a41e2fd01cd19246632e4f950ac4a85145380096cd67f3d"
+      "sha256": "a56a36b62579b8c1dd391638102cb2d8c5bccae4ec5b6b4e3262f99334c2f638",
+      "size": 15930,
+      "normalized_sha256": "a56a36b62579b8c1dd391638102cb2d8c5bccae4ec5b6b4e3262f99334c2f638"
     },
     "docs/requirements/OVERVIEW.md": {
       "role": "index",
@@ -21095,9 +21095,9 @@
     },
     "packages/local-runtime/src/send-queue.cjs": {
       "role": "index",
-      "sha256": "6a29f49f7515e8f32d1cf1b70839493516e38dba1f3d933fe0f5598ffaa6faab",
-      "size": 36870,
-      "normalized_sha256": "6a29f49f7515e8f32d1cf1b70839493516e38dba1f3d933fe0f5598ffaa6faab"
+      "sha256": "142328591a936c6ba820d62f76b08760fbd25982bfe0c0366b83ebf7c33da9bf",
+      "size": 37702,
+      "normalized_sha256": "142328591a936c6ba820d62f76b08760fbd25982bfe0c0366b83ebf7c33da9bf"
     },
     "packages/local-runtime/src/send-safety.cjs": {
       "role": "index",
@@ -21137,9 +21137,9 @@
     },
     "packages/local-runtime/test/automation.test.cjs": {
       "role": "index",
-      "sha256": "bbd42c0db15eb8d010a078efad1c70794e7128e6f6f964c995f16e0ea8064e97",
-      "size": 16871,
-      "normalized_sha256": "bbd42c0db15eb8d010a078efad1c70794e7128e6f6f964c995f16e0ea8064e97"
+      "sha256": "fdae31b8397187f060a4b03c729ecd7528c16c559aebaf14904bc6967f7521ee",
+      "size": 18850,
+      "normalized_sha256": "fdae31b8397187f060a4b03c729ecd7528c16c559aebaf14904bc6967f7521ee"
     },
     "packages/local-runtime/test/builtin-configurations.test.cjs": {
       "role": "index",
