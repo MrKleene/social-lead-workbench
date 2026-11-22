@@ -129,6 +129,23 @@ test('manual send now requires one channel and freezes the chosen account and te
  assert.equal(f.store.db.prepare('SELECT issuer FROM authorizations WHERE id=?').get(job.authorization_id).issuer,'LOCAL_USER');
 });
 
+test('manual send now accepts a template pool and freezes one template per queued row',t=>{
+ const f=reviewed(t,{autoReply:false,channels:['DM']});
+ f.automation.afterReview(f.run.runId);
+ f.store.db.exec("INSERT INTO configurations(id,kind,name,body,updated_at) VALUES('dt2','DM_TEMPLATE','私信模板2','{\"text\":\"合成私信2\"}',0),('dt3','DM_TEMPLATE','私信模板3','{\"text\":\"合成私信3\"}',0)");
+ const source=f.store.db.prepare("SELECT * FROM send_queue WHERE channel='DM'").get();
+ f.store.db.prepare('DELETE FROM send_queue').run();
+ const insert=f.store.db.prepare("INSERT INTO send_queue(id,platform,run_id,review_id,comment_id,channel,recipient_id,origin,state,priority,manual_now,plan,comment_published_at,enqueued_at,expires_at,created_at,updated_at) VALUES(?,'XHS',?,?,?,'DM',?,'MANUAL_REVIEW','WAITING_SWITCH',0,0,?,?,?,?,?,?)");
+ for(const [index,id] of ['q1','q2','q3'].entries())insert.run(id,source.run_id,source.review_id,source.comment_id,'recipient-'+index,source.plan,source.comment_published_at,source.enqueued_at,source.expires_at,source.created_at,source.updated_at);
+ assert.throws(()=>f.sendQueue.sendNow({ids:['q1'],accountId:'account',templateIds:[]}),/SEND_QUEUE_TEMPLATE_REQUIRED/);
+ assert.throws(()=>f.sendQueue.sendNow({ids:['q1'],accountId:'account',templateIds:['ct']}),/CONTACT_TEMPLATE_CHANGED/);
+ assert.deepEqual(f.sendQueue.sendNow({ids:['q1','q2','q3'],accountId:'account',templateIds:['dt','dt2','dt3']}),{count:3});
+ const picked=f.store.db.prepare("SELECT id,plan FROM send_queue ORDER BY id").all().map(row=>({id:row.id,template:JSON.parse(row.plan).templates}));
+ assert.deepEqual(picked.map(item=>item.template.length),[1,1,1]);assert.equal(new Set(picked.map(item=>item.template[0].templateId)).size,3);
+ assert.ok(picked.every(item=>['dt','dt2','dt3'].includes(item.template[0].templateId)));
+ assert.ok(picked.every(item=>['合成私信','合成私信2','合成私信3'].includes(item.template[0].content)));
+});
+
 test('quota exhaustion leaves the item waiting with a remaining-quota summary',t=>{
  const f=reviewed(t,{autoReply:true,channels:['DM'],accounts:['account']});f.automation.afterReview(f.run.runId);
  const day=require('../dist/send-safety.cjs').currentQuotaDay(f.store);

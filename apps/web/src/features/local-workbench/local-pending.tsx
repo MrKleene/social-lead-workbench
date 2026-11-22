@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import type { SendQueueItem, SendQueueTab } from "./local-api";
 import { Link, useSearchParams } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch, SwitchThumb } from "@/components/ui/switch";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -96,7 +102,7 @@ export function LocalPending() {
   const [override, setOverride] = useState(false);
   const [sending, setSending] = useState(false);
   const [accountId, setAccountId] = useState("");
-  const [templateId, setTemplateId] = useState("");
+  const [templateIds, setTemplateIds] = useState<string[]>([]);
 
   useEffect(() => setSearch(query), [query]);
   useEffect(() => {
@@ -143,6 +149,12 @@ export function LocalPending() {
     configs.data?.filter((item) => item.kind === templateKind) ?? [];
   const usableAccounts =
     accounts.data?.filter((item) => item.state === "VERIFIED") ?? [];
+  const templateSummary =
+    templateIds.length === 0
+      ? "未选择模板"
+      : templateIds.length === 1
+        ? "已选 1 个"
+        : `已选 ${templateIds.length} 个 · 随机使用`;
 
   const filter = (key: string, value: string) => {
     setParams((previous) => {
@@ -177,10 +189,15 @@ export function LocalPending() {
   };
 
   const openSend = (rows: SendQueueItem[] = selected) => {
-    const kind = rows[0]?.channel === "DM" ? "DM_TEMPLATE" : "COMMENT_TEMPLATE";
+    const channel = rows[0]?.channel ?? "COMMENT";
+    const kind = channel === "DM" ? "DM_TEMPLATE" : "COMMENT_TEMPLATE";
     const pool = configs.data?.filter((item) => item.kind === kind) ?? [];
+    const configured =
+      (channel === "DM" ? steps.data?.dmTemplateIds : steps.data?.commentTemplateIds) ??
+      [];
+    const available = new Set(pool.map((item) => item.id));
     setAccountId(usableAccounts[0]?.id ?? "");
-    setTemplateId(pool[0]?.id ?? "");
+    setTemplateIds([...new Set(configured)].filter((id) => available.has(id)));
     setSending(true);
   };
 
@@ -488,21 +505,60 @@ export function LocalPending() {
               </Select>
             </FormField>
             <FormField label="回复模板">
-              <Select
-                value={templateId}
-                onValueChange={(value) => value && setTemplateId(value)}
-              >
-                <SelectTrigger aria-label="回复模板">
-                  <SelectValue placeholder="选择模板" />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between font-normal"
+                    aria-label="回复模板"
+                  >
+                    <span
+                      className={
+                        templateIds.length ? undefined : "text-muted-foreground"
+                      }
+                    >
+                      {templateSummary}
+                    </span>
+                    <ChevronDown
+                      className="size-4 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-72 p-2">
+                  <div className="flex max-h-80 flex-col overflow-y-auto">
+                    {templates.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-start gap-2 rounded-sm px-2 py-2 hover:bg-muted"
+                      >
+                        <Checkbox
+                          id={`send-template-${item.id}`}
+                          checked={templateIds.includes(item.id)}
+                          onCheckedChange={(checked) =>
+                            setTemplateIds((current) =>
+                              checked === true
+                                ? current.includes(item.id)
+                                  ? current
+                                  : [...current, item.id]
+                                : current.filter((id) => id !== item.id),
+                            )
+                          }
+                          className="mt-0.5"
+                          aria-label={item.name}
+                        />
+                        <label
+                          htmlFor={`send-template-${item.id}`}
+                          className="cursor-pointer text-body break-words"
+                        >
+                          {item.name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </FormField>
             {!usableAccounts.length ? (
               <p className="text-caption text-attention">没有可用发送账号</p>
@@ -519,7 +575,7 @@ export function LocalPending() {
               pending={sendNow.isPending}
               disabled={
                 !accountId ||
-                !templateId ||
+                !templateIds.length ||
                 !sameChannel
               }
               onClick={() => {
@@ -527,7 +583,7 @@ export function LocalPending() {
                   {
                     ids: selected.map((item) => item.id),
                     accountId,
-                    templateId,
+                    templateIds,
                   },
                   {
                     onSuccess: () => {

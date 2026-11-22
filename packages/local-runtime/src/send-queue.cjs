@@ -1,5 +1,5 @@
 'use strict';
-const {randomUUID}=require('node:crypto');
+const {randomInt,randomUUID}=require('node:crypto');
 const {LocalError,canonical,hash}=require('./database.cjs');
 const {LocalReview}=require('./review.cjs');
 const {assertConfiguredSendAccount}=require('./account-safety.cjs');
@@ -17,6 +17,7 @@ function settings(db){const row=db.prepare("SELECT value FROM settings WHERE key
 function publishedAt(snapshot){const value=snapshot&&snapshot.publishedAt;const at=typeof value==='string'?Date.parse(value):NaN;return Number.isFinite(at)?at:null;}
 function limitOf(account,dailyLimit){const override=account.daily_limit_override;return Math.min(...[override,dailyLimit,account.daily_limit].filter(value=>Number.isFinite(value)&&value>0));}
 function sample(list,seed){if(!list.length)return null;return list[Math.abs(seed)%list.length];}
+function shuffle(list){const copy=[...list];for(let index=copy.length-1;index>0;index--){const swap=randomInt(index+1);[copy[index],copy[swap]]=[copy[swap],copy[index]];}return copy;}
 function parseChannels(value){try{const list=Array.isArray(value)?value:JSON.parse(value);return [...new Set((Array.isArray(list)?list:[]).filter(channel=>channel==='COMMENT'||channel==='DM'))];}catch{return [];}}
 function channelOn(steps,channel){if(steps.autoReply!==true)return false;return channel==='COMMENT'?steps.autoComment!==false:steps.autoDm!==false;}
 function offReason(steps){return steps.autoReply===true?'AUTO_CHANNEL_OFF':'AUTO_REPLY_OFF';}
@@ -303,10 +304,11 @@ class LocalSendQueue{
   return {id};
  });}
 
- sendNow({ids,accountId,templateId}){return this.store.transaction(()=>{
+ sendNow({ids,accountId,templateId,templateIds}){return this.store.transaction(()=>{
   if(!Array.isArray(ids)||!ids.length||ids.length>200)throw new LocalError('INVALID_SEND_QUEUE_SELECTION');
   if(typeof accountId!=='string'||!accountId)throw new LocalError('ACCOUNT_NOT_FOUND');
-  if(typeof templateId!=='string'||!templateId)throw new LocalError('SEND_TEMPLATE_REQUIRED');
+  const requested=Array.isArray(templateIds)?templateIds:(typeof templateId==='string'&&templateId?[templateId]:[]);
+  if(!requested.length||requested.length>100||requested.some(id=>typeof id!=='string'||!id))throw new LocalError('SEND_QUEUE_TEMPLATE_REQUIRED');
   const rows=ids.map(id=>this.require(id));
   const channel=rows[0].channel;
   if(rows.some(row=>row.channel!==channel))throw new LocalError('SEND_QUEUE_CHANNEL_MIXED');
@@ -314,15 +316,17 @@ class LocalSendQueue{
   const account=this.db.prepare('SELECT * FROM accounts WHERE id=?').get(accountId);
   if(!account)throw new LocalError('ACCOUNT_NOT_FOUND');
   assertConfiguredSendAccount(this.store,account.id,account.revision,channel);
-  const template=this.template(templateId,channel);
+  const unique=[...new Set(requested)],pool=unique.map(id=>this.template(id,channel));
+  const order=shuffle(pool),last=this.db.prepare('SELECT template_id FROM send_attempts WHERE account_id=? AND channel=? ORDER BY created_at DESC,rowid DESC LIMIT 1').get(accountId,channel)?.template_id??null;
+  if(order.length>1&&order[0].id===last){const index=order.findIndex(item=>item.id!==last);if(index>0)[order[0],order[index]]=[order[index],order[0]];}
   const now=this.store.clock();
-  for(const row of rows){
-   const plan=JSON.parse(row.plan);
+  for(const [index,row] of rows.entries()){
+   const template=order[index%order.length],plan=JSON.parse(row.plan);
    plan.accounts=[{id:account.id,version:account.revision,dailyLimit:account.daily_limit}];
    plan.templates=[{channel:template.channel,templateId:template.id,templateVersion:template.revision,content:template.content}];
    this.db.prepare("UPDATE send_queue SET state='READY',priority=1,manual_now=1,plan=?,reason=NULL,account_id=NULL,template_id=NULL,job_id=NULL,scope_hash=NULL,updated_at=?,settled_at=NULL WHERE id=?").run(canonical(plan),now,row.id);
   }
-  this.store.audit('LOCAL_USER','SEND_QUEUE_SEND_NOW',ids[0],{count:rows.length,accountId,templateId,channel});
+  this.store.audit('LOCAL_USER','SEND_QUEUE_SEND_NOW',ids[0],{count:rows.length,accountId,templateIds:unique,channel});
   return {count:rows.length};
  });}
 
