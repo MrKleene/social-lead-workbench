@@ -230,12 +230,12 @@ export function LocalCommentReview() {
       queue,
   );
   const advancedCount = [
+    policyId,
     context,
     mode,
     from,
     to,
     publication,
-    queue,
     minScore > 0,
     maxScore < 100,
   ].filter(Boolean).length;
@@ -430,21 +430,8 @@ export function LocalCommentReview() {
               <SelectItem value="UNCERTAIN">不确定</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={policyId} onValueChange={(value) => update("policy", value)}>
-            <SelectTrigger aria-label="匹配方案" className="w-[calc(50%-0.25rem)] sm:w-[148px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SELECT_EMPTY}>全部匹配方案</SelectItem>
-              {workflow.data?.policies.map((policy) => (
-                <SelectItem key={policy.id} value={policy.id}>
-                  {policy.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={queue} onValueChange={(value) => update("queue", value)}>
-            <SelectTrigger aria-label="入队状态" className="w-[calc(50%-0.25rem)] sm:w-[132px]">
+            <SelectTrigger aria-label="入队状态" className="w-[calc(50%-0.25rem)] sm:w-[150px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -478,6 +465,21 @@ export function LocalCommentReview() {
 
         {showFilters ? (
           <FilterBar>
+            <FilterField label="匹配方案">
+              <Select value={policyId} onValueChange={(value) => update("policy", value)}>
+                <SelectTrigger aria-label="匹配方案">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_EMPTY}>全部匹配方案</SelectItem>
+                  {workflow.data?.policies.map((policy) => (
+                    <SelectItem key={policy.id} value={policy.id}>
+                      {policy.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
             <FilterField label="证据上下文">
               <Select value={context} onValueChange={(value) => update("context", value)}>
                 <SelectTrigger aria-label="证据上下文">
