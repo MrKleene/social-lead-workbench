@@ -3,7 +3,7 @@ const {randomUUID,createHash}=require('node:crypto'),{LocalError,hash,canonical}
 const digest=s=>createHash('sha256').update(s).digest('hex'),pid=s=>typeof s==='string'&&/^[a-f0-9]{24}$/.test(s);
 class LocalEvidence{
  constructor(store,vault,runtime,wire){this.store=store;this.db=store.db;this.vault=vault;this.runtime=runtime;this.wire=wire;this.current=null;}
- list(){return {attempts:this.db.prepare("SELECT s.id,s.channel,s.content,s.recipient_id,s.account_id,s.updated_at,a.name account_name,t.state auto_state,t.attempts auto_attempts FROM send_attempts s JOIN accounts a ON a.id=s.account_id LEFT JOIN evidence_auto_tasks t ON t.attempt_id=s.id WHERE s.state='UNKNOWN' ORDER BY s.updated_at DESC LIMIT 100").all(),checks:this.db.prepare('SELECT id,attempt_id,state,started_at,finished_at,details FROM evidence_checks ORDER BY started_at DESC LIMIT 30').all().map(r=>({...r,details:JSON.parse(r.details)}))};}
+ list(){return {attempts:this.db.prepare("SELECT s.id,s.channel,s.content,s.recipient_id,s.account_id,s.updated_at,a.name account_name,t.state auto_state,t.attempts auto_attempts,t.last_reason auto_reason FROM send_attempts s JOIN accounts a ON a.id=s.account_id LEFT JOIN evidence_auto_tasks t ON t.attempt_id=s.id LEFT JOIN send_queue q ON q.job_id=(SELECT j.id FROM jobs j WHERE j.request_key=s.request_key) WHERE s.state='UNKNOWN' AND (q.state IS NULL OR q.state<>'CANCELLED') AND (t.last_reason IS NULL OR t.last_reason<>'UNKNOWN_UNCONFIRMED') ORDER BY s.updated_at DESC LIMIT 100").all(),checks:this.db.prepare('SELECT id,attempt_id,state,started_at,finished_at,details FROM evidence_checks ORDER BY started_at DESC LIMIT 30').all().map(r=>({...r,details:JSON.parse(r.details)}))};}
  scope({attemptId,replyId}){
   const a=this.db.prepare("SELECT * FROM send_attempts WHERE id=? AND state='UNKNOWN'").get(attemptId);if(!a)throw new LocalError('UNKNOWN_ATTEMPT_REQUIRED');
   const account=this.db.prepare("SELECT * FROM accounts WHERE id=? AND state IN('VERIFIED','RESTRICTED')").get(a.account_id);if(!account?.session_ref||!pid(account.platform_user_id)||account.platform_user_id!==a.sender_id||!pid(a.recipient_id))throw new LocalError('EVIDENCE_ACCOUNT_LOGIN_REQUIRED');
@@ -28,14 +28,29 @@ class LocalEvidence{
  }
  updateAuto(attemptId,state,reason,now){this.db.prepare('UPDATE evidence_auto_tasks SET state=?,last_reason=?,updated_at=? WHERE attempt_id=?').run(state,reason??null,now,attemptId);}
  clearPauseIfSettled(attemptId,now){
-  if(this.db.prepare("SELECT 1 FROM send_attempts WHERE state='UNKNOWN' LIMIT 1").get())return false;
+  if(this.db.prepare("SELECT 1 FROM send_attempts s JOIN jobs j ON j.request_key=s.request_key JOIN send_queue q ON q.job_id=j.id WHERE s.state='UNKNOWN' AND q.state NOT IN('CANCELLED','SENT') LIMIT 1").get())return false;
   const row=this.db.prepare("SELECT reason FROM safety_state WHERE id='sending'").get();
   if(row?.reason!=='SUBMISSION_UNKNOWN')return false;
   this.store.audit('RECOVERY','SENDING_RESUMED_AFTER_READBACK',attemptId,{});
   this.db.prepare("UPDATE safety_state SET reason=NULL,event_id=NULL,version=version+1,created_at=? WHERE id='sending'").run(now);
   return true;
  }
- recoverAuto(){const now=this.store.clock();return this.db.prepare("UPDATE evidence_auto_tasks SET state='WAITING',next_at=?,updated_at=? WHERE state='RUNNING'").run(now+1000,now).changes;}
+ closeUnconfirmed(attemptId,now){
+  const job=this.db.prepare('SELECT id FROM jobs WHERE request_key=(SELECT request_key FROM send_attempts WHERE id=?)').get(attemptId);
+  if(job){
+   this.db.prepare("UPDATE send_queue SET state='CANCELLED',reason='UNKNOWN_UNCONFIRMED',updated_at=?,settled_at=? WHERE state='UNKNOWN' AND job_id=?").run(now,now,job.id);
+   this.db.prepare("UPDATE jobs SET state='FAILED',result=?,updated_at=? WHERE id=? AND state='UNKNOWN'").run(canonical({attemptId,state:'UNKNOWN_UNCONFIRMED'}),now,job.id);
+  }
+  this.updateAuto(attemptId,'UNVERIFIED','UNKNOWN_UNCONFIRMED',now);
+  this.store.audit('RECOVERY','UNKNOWN_AUTO_CLOSED',attemptId,{});
+  this.clearPauseIfSettled(attemptId,now);
+ }
+ recoverAuto(){
+  const now=this.store.clock();
+  const legacy=this.db.prepare("SELECT t.attempt_id FROM evidence_auto_tasks t JOIN send_attempts s ON s.id=t.attempt_id JOIN jobs j ON j.request_key=s.request_key JOIN send_queue q ON q.job_id=j.id WHERE t.state='UNVERIFIED' AND t.last_reason='EVIDENCE_UNVERIFIED' AND s.state='UNKNOWN' AND q.state='UNKNOWN'").all();
+  for(const row of legacy)this.closeUnconfirmed(row.attempt_id,now);
+  return this.db.prepare("UPDATE evidence_auto_tasks SET state='WAITING',next_at=?,updated_at=? WHERE state='RUNNING'").run(now+1000,now).changes;
+ }
  /**
   * 自动只读核对：只处理已提交但回执未知的发送。没有平台任务占用时运行一次；
   * 确认成功才清除 SUBMISSION_UNKNOWN 暂停，绝不自动重发。
@@ -53,7 +68,8 @@ class LocalEvidence{
   try{
    const result=await this.verifyAutomatic(task.attempt_id);
    if(result.state==='CONFIRMED')this.updateAuto(task.attempt_id,'CONFIRMED',null,this.store.clock());
-   else this.updateAuto(task.attempt_id,'UNVERIFIED',result.state==='UNVERIFIED'?'EVIDENCE_UNVERIFIED':'AUTO_UNKNOWN',this.store.clock());
+   else if(result.state==='UNVERIFIED')this.closeUnconfirmed(task.attempt_id,this.store.clock());
+   else this.updateAuto(task.attempt_id,'UNVERIFIED','AUTO_UNKNOWN',this.store.clock());
    return true;
   }catch(error){
    const attempts=(task.attempts??0)+1,reason=error instanceof LocalError?error.code:(error?.code||'EVIDENCE_AUTO_FAILED');
