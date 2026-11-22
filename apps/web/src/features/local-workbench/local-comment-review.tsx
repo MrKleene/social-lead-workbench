@@ -75,7 +75,6 @@ export function LocalCommentReview() {
   const page = Math.max(1, Number(params.get("page")) || 1);
   const selectedPostId = params.get("post") || "";
   const query = params.get("query") || "";
-  const status = params.get("status") || "";
   const decision = params.get("decision") || "";
   const context = params.get("context") || "";
   const mode = params.get("mode") || "";
@@ -219,7 +218,6 @@ export function LocalCommentReview() {
 
   const hasFilters = Boolean(
     query ||
-      status ||
       decision ||
       context ||
       mode ||
@@ -256,7 +254,6 @@ export function LocalCommentReview() {
       runId,
       policyId,
       query,
-      status,
       decision,
       context,
       minScore,
@@ -274,7 +271,6 @@ export function LocalCommentReview() {
         runId,
         policyId,
         query,
-        status,
         decision,
         context,
         minScore,
@@ -297,7 +293,6 @@ export function LocalCommentReview() {
       runId,
       policyId,
       query,
-      status,
       decision,
       context,
       minScore,
@@ -316,7 +311,6 @@ export function LocalCommentReview() {
         runId,
         policyId,
         query,
-        status,
         decision,
         context,
         minScore,
@@ -425,14 +419,15 @@ export function LocalCommentReview() {
               onChange={(event) => setQueryDraft(event.target.value)}
             />
           </div>
-          <Select value={status} onValueChange={(value) => update("status", value)}>
-            <SelectTrigger aria-label="审核状态" className="w-[calc(50%-0.25rem)] sm:w-[128px]">
+          <Select value={decision} onValueChange={(value) => update("decision", value)}>
+            <SelectTrigger aria-label="判断" className="w-[calc(50%-0.25rem)] sm:w-[128px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={SELECT_EMPTY}>全部审核状态</SelectItem>
-              <SelectItem value="PENDING">待确认</SelectItem>
-              <SelectItem value="APPROVED">已通过</SelectItem>
+              <SelectItem value={SELECT_EMPTY}>全部判断</SelectItem>
+              <SelectItem value="MATCH">符合</SelectItem>
+              <SelectItem value="NO_MATCH">不符合</SelectItem>
+              <SelectItem value="UNCERTAIN">不确定</SelectItem>
             </SelectContent>
           </Select>
           <Select value={policyId} onValueChange={(value) => update("policy", value)}>
