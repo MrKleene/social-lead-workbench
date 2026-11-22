@@ -1,33 +1,35 @@
 # 发送队列、冻结计划与调度
 
-审核完成或人工通过后，评论/私信发送不会直接执行，而是先写入 `send_queue`。队列表由迁移 `packages/local-runtime/src/migrations/024-send-queue.sql` 建立，逻辑在 `packages/local-runtime/src/send-queue.cjs` 的 `LocalSendQueue`；调度入口是 `runner.cjs` 每轮 tick 调用的 `sendQueue.schedule()`。
+审核完成或人工通过后，评论/私信发送不会直接执行，而是先写入 `send_queue`。队列表定义在 `packages/local-runtime/src/schema.sql`，入队配置表 `queue_rules` 由迁移 `packages/local-runtime/src/migrations/002-queue-rules.sql` 建立；逻辑在 `packages/local-runtime/src/send-queue.cjs` 的 `LocalSendQueue`，调度入口是 `runner.cjs` 每轮 tick 调用的 `sendQueue.schedule()`。
 
 ## 入队
 
 - 自动入队发生在本轮审核屏障就绪之后。只读取 `review_batches.state = 'COMPLETED'` 的 `review_results`，按 `user_id + channel` 去重；同一收件人在同一渠道只入队一次。
-- 自动入队要求结果仍是 `PENDING` 或 `APPROVED`、`decision = MATCH`、分数不低于当时阈值，且评论允许自动联系；评论正文、用户与 `source_hash` 必须仍与审核时一致，证据里要有该评论的逐字引用。
-- 人工通过（`APPROVED`）只要求人工结论为 `MATCH`，不再卡模型分数；审核被排除（`REJECTED`）时，该条已入队的活动行转为 `CANCELLED`，原因 `REVIEW_REJECTED`。
+- 每条评论按自己的 `policy_id` 找 `queue_rules`：规则启用、`decision = MATCH` 且分数不低于该方案阈值，才为规则勾选的每个渠道各生成一行；没有规则或规则停用的方案不自动入队。
+- 自动入队还要求结果仍是 `PENDING` 或 `APPROVED`、评论允许自动联系；评论正文、用户与 `source_hash` 必须仍与审核时一致，证据里要有该评论的逐字引用。
+- 人工通过把 `PENDING` 写成 `APPROVED + MATCH` 并按规则入队，不再卡模型分数；`NO_MATCH` 不提供通过。旧数据里的 `REJECTED` 只读保留，不再产生新的排除动作。
+- 历史评论可用「一键生成待发送」按各自方案的规则补入队；预览返回评论数、评论/私信行数、过期数与跳过数，应用后重复执行保持幂等。
 - 已有活动队列行，或 `send_attempts` 中已有该渠道的 `RESERVED/DISPATCHED/CONFIRMED/UNKNOWN` 时跳过，不重复入队。
 - 评论发布已超过 7 天的记录直接以 `EXPIRED` / `COMMENT_TOO_OLD` 入队，不会进入发送。
-- 自动发送开关只决定新行是 `READY` 还是 `WAITING_SWITCH`；关闭开关时仍会入队并停留在「待发送」。
+- 自动发送总开关或评论/私信渠道开关只决定新行是 `READY` 还是 `WAITING_SWITCH`；关闭时仍会入队并停留在「待发送」，原因为 `AUTO_REPLY_OFF` 或 `AUTO_CHANNEL_OFF`。
 
 ## 冻结计划
 
-回复规则在开始采集时随本轮范围冻结；自动发送开关只决定入队后的状态，不影响是否冻结。入队时把当时配置写进 `plan` JSON：规则 id 与版本、`policy_id`、阈值、渠道、来源、评论与帖子平台 id、收件人、渠道模板池、账号池和资格哈希。之后修改配置不会改动已入队行；派发时重新校验资格，失败转 `FAILED` / `ELIGIBILITY_CHANGED`，模板被删除则 `FAILED` / `TEMPLATE_CHANGED`。
+采集不再冻结回复规则。入队时按该评论所属 `queue_rules` 与当前自动发送配置写 `plan` JSON：规则 id 与版本、`policy_id`、阈值、渠道、来源、评论与帖子平台 id、收件人、渠道模板池、账号池和资格哈希。之后修改配置不会改动已入队行；派发时重新校验资格，失败转 `FAILED` / `ELIGIBILITY_CHANGED`，模板被删除则 `FAILED` / `TEMPLATE_CHANGED`。
 
 ## 状态
 
 | 状态 | 含义 |
 | --- | --- |
-| `WAITING_SWITCH` | 已入队，自动发送开关关闭 |
+| `WAITING_SWITCH` | 已入队，自动发送总开关或该渠道开关关闭 |
 | `READY` | 可被调度 |
 | `WAITING_QUOTA` | 账号池今日额度已用完，等待刷新或人工处理 |
 | `SENDING` | 已派发 SEND job，等待执行与回执 |
 | `SENT` | 执行器确认成功 |
-| `FAILED` | 明确失败，可重试或忽略 |
+| `FAILED` | 明确失败，可重试或移除记录 |
 | `UNKNOWN` | 提交结果未知，禁止自动重发 |
 | `EXPIRED` | 入队超 7 天或评论发布超 7 天 |
-| `CANCELLED` | 人工取消、忽略或规则撤销 |
+| `CANCELLED` | 人工移出待发送、移除记录或规则撤销 |
 
 活动状态是 `WAITING_SWITCH / READY / WAITING_QUOTA / SENDING`。唯一索引 `(platform, channel, recipient_id)` 只约束活动行；渠道独立，同一收件人的评论与私信可各有一条活动行。
 
@@ -50,8 +52,9 @@
 - **立即发送**：同一批 1~200 条，必须同渠道；只接受可发送状态；所选账号与模板覆盖该批行的计划，状态转 `READY`、优先级提到最高。
 - **重试**：只对 `FAILED`；开关打开或 `manual_now = 1` 时转 `READY`，否则转 `WAITING_SWITCH`。
 - **重新排队**：只对 `EXPIRED`；评论发布已超 7 天时必须显式勾选覆盖，否则拒绝 `COMMENT_TOO_OLD`；重新计时 7 天。
-- **取消**：活动状态或 `WAITING_QUOTA`；`SENDING` 不允许取消。
-- **忽略**：只对 `FAILED / UNKNOWN / EXPIRED`，转 `CANCELLED`。
+- **移出待发送**：活动状态或 `WAITING_QUOTA`；`SENDING` 不允许移出。
+- **移除记录**：只对 `FAILED / UNKNOWN / EXPIRED`，转 `CANCELLED`。
+- **一键生成待发送**：扫描历史已完成审核，按每条评论所属方案的入队规则补齐缺失渠道；跳过已入队、已发送、不符合或已联系的记录，过期评论仍生成并标记 `EXPIRED`。
 
 ## 恢复、过期与清理
 
@@ -63,5 +66,5 @@
 ## 失效条件
 
 - 真实平台发送未验收：以上调度、账号额度和回执处理均以合成测试验证。
-- 账号存在回复限制（`holds`）时不会进入可发送账号池，页面显示「今日剩余额度 0 条」。
+- 账号存在回复限制（`holds`）、检测中或当前不可用时不会进入可发送账号池；账号池为空、账号不可用与额度用完分别显示不同原因。
 - 结果未知必须人工对账；不能按失败直接重发。
