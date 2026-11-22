@@ -168,11 +168,13 @@ export function LocalConfigurations() {
   const [editor, setEditor] = useState<LocalConfiguration | "new" | null>(null);
   const [dirty, setDirty] = useState(false);
   const [remove, setRemove] = useState(false);
+  const [queueAdd, setQueueAdd] = useState(false);
 
   useEffect(() => {
     setEditor(null);
     setDirty(false);
     setRemove(false);
+    setQueueAdd(false);
   }, [tab]);
 
   const leave = async () =>
@@ -184,14 +186,18 @@ export function LocalConfigurations() {
       <PageHeader
         title="配置管理"
         actions={
-          tab === "model" || tab === "reply" || tab === "queue" ? undefined : (
+          tab === "model" || tab === "reply" ? undefined : (
             <Button
-              onClick={async () => {
-                if (await leave()) {
-                  setEditor("new");
-                  setRemove(false);
-                }
-              }}
+              onClick={
+                tab === "queue"
+                  ? () => setQueueAdd(true)
+                  : async () => {
+                      if (await leave()) {
+                        setEditor("new");
+                        setRemove(false);
+                      }
+                    }
+              }
             >
               新增配置
             </Button>
@@ -218,8 +224,8 @@ export function LocalConfigurations() {
               keyConfigured={!!workbench.status.data?.modelKeyConfigured}
             />
           ) : tab === "queue" ? (
-            <SectionCard title="自动入队配置">
-              <QueueSettings />
+            <SectionCard title="自动加入待发送队列配置">
+              <QueueSettings adding={queueAdd} onAddingChange={setQueueAdd} />
             </SectionCard>
           ) : tab === "reply" ? (
             <SectionCard title="自动发送配置">

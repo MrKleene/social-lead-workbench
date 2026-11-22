@@ -22,7 +22,7 @@ const refreshTimes = Array.from({ length: 48 }, (_, index) => {
 
 /**
  * 自动发送配置：发送渠道、账号池、模板池和额度刷新时间。
- * 入队阈值属于「自动入队配置」；总开关在「待处理发送」页头。
+ * 入队阈值属于「自动加入待发送队列配置」；总开关在「待处理发送」页头。
  */
 export function ReplySettings() {
   const configs = useLocalRecords("configurations");
