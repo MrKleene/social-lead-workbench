@@ -431,11 +431,11 @@ export function LocalCommentReview() {
             </SelectContent>
           </Select>
           <Select value={queue} onValueChange={(value) => update("queue", value)}>
-            <SelectTrigger aria-label="入队状态" className="w-[calc(50%-0.25rem)] sm:w-[150px]">
+            <SelectTrigger aria-label="入队状态" className="w-[calc(50%-0.25rem)] sm:w-[160px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={SELECT_EMPTY}>全部入队状态</SelectItem>
+              <SelectItem value={SELECT_EMPTY}>全部队列</SelectItem>
               <SelectItem value="NONE">未入队</SelectItem>
               <SelectItem value="QUEUED">已入队</SelectItem>
               <SelectItem value="SENT">已发送</SelectItem>
