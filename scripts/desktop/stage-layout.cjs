@@ -32,7 +32,7 @@ function packageFiles(root){
  // Internal runtime helpers required by collection.cjs via relative require, but not public exports.
  for(const name of ['keyword-plan.cjs','post-identity.cjs'])add('packages/local-runtime/dist/'+name,moduleRoot+'/dist/'+name);
  add('packages/local-runtime/dist/schema.sql',moduleRoot+'/dist/schema.sql');
- for(const name of fs.readdirSync(path.join(root,'packages/local-runtime/dist/migrations')))add('packages/local-runtime/dist/migrations/'+name,moduleRoot+'/dist/migrations/'+name);
+ if(fs.existsSync(path.join(root,'packages/local-runtime/dist/migrations')))for(const name of fs.readdirSync(path.join(root,'packages/local-runtime/dist/migrations')))add('packages/local-runtime/dist/migrations/'+name,moduleRoot+'/dist/migrations/'+name);
  for(const name of fs.readdirSync(path.join(root,'packages/local-runtime/dist')).filter(name=>name.endsWith('-build.json')||name.endsWith('-NOTICES.txt')||name.endsWith('-LICENSES.txt')))add('packages/local-runtime/dist/'+name,moduleRoot+'/dist/'+name);
  files.set(moduleRoot+'/package.json',Buffer.from(JSON.stringify({name:metadata.name,version:metadata.version,private:true,exports},null,2)+'\n'));
  const version=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).version;

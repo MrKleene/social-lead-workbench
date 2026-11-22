@@ -2,6 +2,7 @@
 const {app,BrowserWindow,protocol,ipcMain,dialog,screen}=require('electron');
 const fs=require('node:fs'),path=require('node:path');
 const {LocalDatabase,LocalError}=require('@crm/local-runtime/database');
+const {SCHEMA_VERSION}=require('@crm/local-runtime/migrations');
 const {CredentialStore}=require('@crm/local-runtime/credentials');
 const {LocalService}=require('@crm/local-runtime/service');
 const {validateCall}=require('./ipc-policy.cjs');
@@ -57,7 +58,11 @@ async function main(){
  // 凭据加密用本机派生密钥，不再依赖 Electron safeStorage / 系统钥匙串，理由见 local-crypto.cjs。
  const protector=createProtector({fixture:!!fixture});
  const checkPrivateFile=file=>{if(process.platform==='win32')windowsNative(app,{operation:'file',path:file});};
- const vault=new CredentialStore(credentials,protector,{checkPrivateFile});store=new LocalDatabase(path.join(data,'workbench.sqlite'),{checkPrivateFile});
+ // 旧库（迁移 squash 前的 user_version 高于当前基线）无法就地迁移，启动前先探测并让用户重建。
+ const userVersion=file=>{try{const fd=fs.openSync(file,'r'),head=Buffer.alloc(100),read=fs.readSync(fd,head,0,100,0);fs.closeSync(fd);if(read<100||head.toString('latin1',0,15)!=='SQLite format 3')return 0;return head.readUInt32BE(60);}catch{return 0;}};
+ const databasePath=path.join(data,'workbench.sqlite'),diskVersion=userVersion(databasePath);
+ if(diskVersion>SCHEMA_VERSION){const choice=dialog.showMessageBoxSync({type:'warning',buttons:['重建并启动','退出'],defaultId:0,cancelId:1,noLink:true,title:'需要重建数据库',message:`检测到旧版数据库（v${diskVersion}）。`,detail:'重建会清空本机数据，旧文件保留为副本。'});if(choice!==0){app.quit();return;}const stamp=new Date().toISOString().replace(/[:.]/g,'-');for(const suffix of ['','-wal','-shm']){const from=databasePath+suffix;if(fs.existsSync(from))fs.renameSync(from,databasePath+'.v'+diskVersion+'-backup-'+stamp+suffix);}}
+ const vault=new CredentialStore(credentials,protector,{checkPrivateFile});store=new LocalDatabase(databasePath,{checkPrivateFile});
  const resources=new NativeResources(app.isPackaged?path.join(process.resourcesPath,'native',process.platform+'-'+process.arch):path.join(root,'apps/desktop/dist/native',process.platform+'-'+process.arch),{windowsCheck:(file,directory)=>windowsNative(app,{operation:directory?'resource-directory':'executable',path:file})});
  // 未打包时把平台 helper 的 stderr 接到主进程终端：扫码/采集/发送失败能直接看到 Go 侧原因
  // （logrus 默认写 stderr）。每次拉起浏览器都有 4-5 行 info，扫码期间每 2 秒一次会把终端刷满，

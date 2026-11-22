@@ -1,8 +1,33 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {DatabaseSync}=require('node:sqlite'),{createHash}=require('node:crypto');
+const {DatabaseSync}=require('node:sqlite');
 const {LocalDatabase,SCHEMA_VERSION}=require('../dist/database.cjs');
 const {migrations}=require('../dist/migrations.cjs');
-function v1(t){const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'local-migration-test-'))),file=path.join(dir,'v1.sqlite');t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));const db=new DatabaseSync(file);fs.chmodSync(file,0o600);db.exec(migrations[0].sql);db.prepare('INSERT INTO schema_migrations VALUES(1,?,0)').run(migrations[0].checksum);db.exec("INSERT INTO installation VALUES('fixture',0); INSERT INTO settings VALUES('preserved','true',1); PRAGMA user_version=1");db.close();return {dir,file};}
-test('versioned upgrade retains v1 checksum, settings and a consistent pre-upgrade backup',t=>{const f=v1(t),db=new LocalDatabase(f.file);assert.equal(db.db.prepare('PRAGMA user_version').get().user_version,SCHEMA_VERSION);assert.equal(db.db.prepare("SELECT value FROM settings WHERE key='preserved'").get().value,'true');const backup=new DatabaseSync(db.migrationBackup,{readOnly:true});assert.equal(backup.prepare('PRAGMA user_version').get().user_version,1);assert.equal(backup.prepare('PRAGMA integrity_check').get().integrity_check,'ok');backup.close();db.close();const reopened=new LocalDatabase(f.file);assert.equal(reopened.migrationBackup,undefined);reopened.close();});
-test('tampered v1 checksum is refused without upgrading or creating a migration backup',t=>{const f=v1(t),db=new DatabaseSync(f.file);db.exec("UPDATE schema_migrations SET checksum='wrong'");db.close();assert.throws(()=>new LocalDatabase(f.file),/CHECKSUM/);const unchanged=new DatabaseSync(f.file);assert.equal(unchanged.prepare('PRAGMA user_version').get().user_version,1);unchanged.close();assert.equal(fs.readdirSync(f.dir).some(x=>x.includes('pre-migration')),false);});
-test('v9 desktop upgrade preserves business settings, creates a v9 backup and starts new persistent authorities empty',t=>{const f=v1(t),old=new DatabaseSync(f.file);old.exec('BEGIN');for(const m of migrations.filter(m=>m.version>1&&m.version<=9)){old.exec(m.sql);old.prepare('INSERT INTO schema_migrations VALUES(?,?,0)').run(m.version,m.checksum);}old.exec('PRAGMA user_version=9; COMMIT');old.close();const db=new LocalDatabase(f.file);try{assert.equal(db.db.prepare('PRAGMA user_version').get().user_version,SCHEMA_VERSION);assert.equal(db.db.prepare('SELECT count(*) n FROM automatic_review_authorizations').get().n,0);assert.equal(db.db.prepare('SELECT count(*) n FROM post_diagnostics').get().n,0);const backup=new DatabaseSync(db.migrationBackup,{readOnly:true});assert.equal(backup.prepare('PRAGMA user_version').get().user_version,9);assert.equal(backup.prepare("SELECT value FROM settings WHERE key='preserved'").get().value,'true');backup.close();}finally{db.close();}});
+function workspace(t){const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'local-migration-test-')));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return {dir,file:path.join(dir,'workbench.sqlite')};}
+test('fresh database installs the single squashed baseline',t=>{
+ const f=workspace(t),db=new LocalDatabase(f.file);
+ try{
+  assert.equal(SCHEMA_VERSION,1);
+  assert.equal(db.db.prepare('PRAGMA user_version').get().user_version,1);
+  assert.deepEqual(db.db.prepare('SELECT version,checksum FROM schema_migrations').all().map(row=>({version:row.version,checksum:row.checksum})),[{version:1,checksum:migrations[0].checksum}]);
+  assert.equal(db.db.prepare('SELECT count(*) n FROM installation').get().n,1);
+  const tables=db.db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map(row=>row.name);
+  for(const name of ['posts','comments','send_queue','review_results','configurations'])assert.ok(tables.includes(name),name);
+  for(const name of ['captured_posts','captured_comments','inbox_messages'])assert.ok(!tables.includes(name),name);
+  assert.ok(db.db.prepare('PRAGMA table_xinfo(configurations)').all().some(column=>column.name==='builtin'));
+  assert.ok(db.db.prepare('PRAGMA table_xinfo(model_profile)').all().some(column=>column.name==='daily_limit'&&column.notnull===0));
+  assert.equal(db.migrationBackup,undefined);
+ }finally{db.close();}
+});
+test('tampered baseline checksum is refused without touching the file',t=>{
+ const f=workspace(t);new LocalDatabase(f.file).close();
+ const raw=new DatabaseSync(f.file);fs.chmodSync(f.file,0o600);raw.exec("UPDATE schema_migrations SET checksum='wrong'");raw.close();
+ assert.throws(()=>new LocalDatabase(f.file),error=>error.code==='MIGRATION_CHECKSUM_MISMATCH');
+ assert.equal(fs.readdirSync(f.dir).some(name=>name.includes('pre-migration')),false);
+ const unchanged=new DatabaseSync(f.file);assert.equal(unchanged.prepare('PRAGMA user_version').get().user_version,1);unchanged.close();
+});
+test('a database from a newer app is refused before any write',t=>{
+ const f=workspace(t),raw=new DatabaseSync(f.file);fs.chmodSync(f.file,0o600);raw.exec(migrations[0].sql);raw.prepare('INSERT INTO schema_migrations VALUES(1,?,0)').run(migrations[0].checksum);raw.exec('PRAGMA user_version=2');raw.close();
+ assert.throws(()=>new LocalDatabase(f.file),error=>error.code==='DATABASE_FROM_NEWER_APP');
+ assert.equal(fs.readdirSync(f.dir).some(name=>name.includes('pre-migration')),false);
+ const unchanged=new DatabaseSync(f.file);assert.equal(unchanged.prepare('PRAGMA user_version').get().user_version,2);unchanged.close();
+});
