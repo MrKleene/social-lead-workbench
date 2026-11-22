@@ -59,7 +59,9 @@ export function LocalRecoveryCheck() {
           <p className="text-body text-muted-foreground">
             {data.recovery.data?.unknownModels
               ? "未知模型请求需要先作废，才能继续审核。"
-              : "当前无需解除暂停。"}
+              : data.recovery.data?.unknownSends || data.recovery.data?.unknownLegacy
+                ? "有发送结果未核对。"
+                : "当前无需解除暂停。"}
           </p>
         )
       ) : null}

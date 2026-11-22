@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, CircleAlert } from "lucide-react";
 import type { SendQueueItem, SendQueueTab } from "./local-api";
 import { Link, useSearchParams } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -111,8 +112,9 @@ export function LocalPending() {
   }, [tab, page, query, channel]);
 
   const steps = useLocalRecords("automationSteps");
-  const summary = useLocalRecords("sendQueueSummary");
-  const records = useLocalRecords("sendQueueList", { tab, page, query, channel });
+  const fast = { refetchInterval: tab === "pending" || tab === "sending" || tab === "unknown" ? 1000 : 5000 };
+  const summary = useLocalRecords("sendQueueSummary", undefined, fast);
+  const records = useLocalRecords("sendQueueList", { tab, page, query, channel }, fast);
   const accounts = useLocalRecords("accountDetails");
   const configs = useLocalRecords("configurations");
   const save = useSaveSteps();
@@ -251,6 +253,22 @@ export function LocalPending() {
         <ErrorNotice error={summary.error ?? steps.error} />
       ) : null}
       {failure ? <ErrorNotice error={failure} /> : null}
+      {summaryData?.paused ? (
+        <Alert variant="warning">
+          <CircleAlert aria-hidden="true" />
+          <AlertTitle>发送已暂停</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>
+              {summaryData.pauseReason?.includes("UNKNOWN")
+                ? "有发送结果未知"
+                : "发送结果未知"}
+            </span>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/work/notices">核对结果</Link>
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <Tabs value={tab} onValueChange={changeTab}>
         <TabsList className="w-full sm:w-fit" aria-label="发送状态">
@@ -433,7 +451,7 @@ export function LocalPending() {
                                 </Button>
                               </>
                             ) : null}
-                            {tab === "failed" || tab === "unknown" ? (
+                            {tab === "failed" ? (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -442,6 +460,21 @@ export function LocalPending() {
                               >
                                 移除记录
                               </Button>
+                            ) : null}
+                            {tab === "unknown" ? (
+                              <>
+                                <Button asChild size="sm" variant="outline">
+                                  <Link to="/work/notices">核对结果</Link>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={dismiss.isPending}
+                                  onClick={() => setDismissTarget(item)}
+                                >
+                                  移出队列
+                                </Button>
+                              </>
                             ) : null}
                           </div>
                         </TableCell>

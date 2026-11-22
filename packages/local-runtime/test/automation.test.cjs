@@ -37,6 +37,17 @@ test('queue rules are unique per policy, versioned and never create a second sys
  assert.throws(()=>f.sendQueue.deleteRule({id:f.rule.id,version:2}),/QUEUE_RULE_SYSTEM_DEFAULT/);
 });
 
+test('pending list follows dispatch order and summary exposes a send pause',t=>{
+ const f=reviewed(t,{autoReply:false,channels:['DM']});f.automation.afterReview(f.run.runId);const row=f.store.db.prepare('SELECT * FROM send_queue').get(),now=Date.now();
+ f.store.db.prepare('DELETE FROM send_queue').run();
+ const insert=f.store.db.prepare('INSERT INTO send_queue(id,run_id,review_id,comment_id,channel,recipient_id,origin,state,priority,manual_now,plan,enqueued_at,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+ for(const [id,at] of [['third',now+300],['first',now+100],['second',now+200]])insert.run(id,row.run_id,row.review_id,row.comment_id,'DM','recipient-'+id,'AUTO','READY',0,0,'{}',at,now+86400000,at,at);
+ assert.deepEqual(f.sendQueue.list({tab:'pending'}).items.map(item=>item.id),['first','second','third']);
+ assert.equal(f.sendQueue.summary().paused,false);
+ f.store.db.prepare("INSERT INTO safety_state(id,reason,created_at) VALUES('sending','SUBMISSION_UNKNOWN',?)").run(now);
+ const summary=f.sendQueue.summary();assert.equal(summary.paused,true);assert.equal(summary.pauseReason,'SUBMISSION_UNKNOWN');
+});
+
 test('review completion queues one waiting row per configured channel without the old contact rule snapshot',t=>{
  const f=reviewed(t,{autoReply:false,channels:['DM','COMMENT']});
  assert.deepEqual(f.automation.afterReview(f.run.runId),{queued:2,skipped:0});

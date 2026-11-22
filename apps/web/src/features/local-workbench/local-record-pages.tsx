@@ -30,6 +30,7 @@ import {
 } from "@/features/auto-contact/reply-history-content";
 import { LocalRecoveryCheck } from "./local-recovery-hold";
 import { LocalUnknownModels } from "./local-model-unknown";
+import { LocalUnknownSends } from "./local-unknown-sends";
 import { useLocalAction, useLocalRecords } from "./use-local-records";
 
 const labels: Record<string, string> = {
@@ -354,6 +355,8 @@ export function LocalNotices() {
       </SectionCard>
 
       <LocalRecoveryCheck />
+
+      <LocalUnknownSends />
 
       <LocalUnknownModels />
 
