@@ -397,7 +397,8 @@ class LocalSendQueue{
   return !!(index?index.attempts.has(key):this.db.prepare("SELECT 1 FROM send_attempts WHERE platform='XHS' AND channel=? AND recipient_id=? AND state IN('RESERVED','DISPATCHED','CONFIRMED','UNKNOWN')").get(channel,recipientId));
  }
  eligible(row,channel,rule,origin){
-  if(row.source_hash!==row.current_source_hash||row.context!=='SUFFICIENT')return false;
+  if(row.source_hash!==row.current_source_hash)return false;
+  if(origin==='AUTO'&&row.context!=='SUFFICIENT')return false;
   if(origin==='AUTO'){
    if(!row.automatic_contact_allowed||!['PENDING','APPROVED'].includes(row.review_status)||row.decision!=='MATCH'||row.score<rule.threshold)return false;
   }else if(origin==='MANUAL_REVIEW'){

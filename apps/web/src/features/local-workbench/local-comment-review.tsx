@@ -999,6 +999,18 @@ export function LocalCommentReview() {
                   ? "标记后从待确认转为不符合；可在“不符合”筛选中恢复。"
                   : "恢复后重新进入待确认，并按入队规则处理。"}
             </AlertDialogDescription>
+            {decisionPrompt?.next === "APPROVED" &&
+            decisionPrompt.rows.some((row) => row.context !== "SUFFICIENT") ? (
+              <p className="text-caption text-warning">
+                含{" "}
+                {
+                  decisionPrompt.rows.filter(
+                    (row) => row.context !== "SUFFICIENT",
+                  ).length
+                }{" "}
+                条上下文不足的评论。
+              </p>
+            ) : null}
           </AlertDialogHeader>
           {decide.error ? <ErrorNotice error={decide.error} /> : null}
           <AlertDialogFooter>
