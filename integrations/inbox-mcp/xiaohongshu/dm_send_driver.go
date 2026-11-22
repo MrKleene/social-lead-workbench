@@ -127,7 +127,8 @@ func (d *DMSendDriver) Receipt(ctx context.Context, c exactreply.DMCommand) (exa
 	return d.waitReceipt(ctx, c, "")
 }
 func (d *DMSendDriver) waitReceipt(ctx context.Context, c exactreply.DMCommand, want string) (exactreply.DMReceipt, error) {
-	for i := 0; i < 40; i++ {
+	// 同一页面低频观察，不再为了确认而反复打开新页面。
+	for i := 0; i < 15; i++ {
 		s, err := d.state(ctx, c)
 		if err != nil {
 			return exactreply.DMReceipt{}, err
@@ -145,7 +146,7 @@ func (d *DMSendDriver) waitReceipt(ctx context.Context, c exactreply.DMCommand, 
 		if len(s.Matches) == 1 && !s.Pending && (want == "" || s.Matches[0] == want) {
 			return exactreply.DMReceipt{MessageID: s.Matches[0], SenderID: c.SenderID, RecipientID: c.RecipientID, ContentHash: c.ContentHash, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}, nil
 		}
-		timer := time.NewTimer(200 * time.Millisecond)
+		timer := time.NewTimer(time.Second)
 		select {
 		case <-ctx.Done():
 			timer.Stop()

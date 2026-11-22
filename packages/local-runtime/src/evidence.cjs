@@ -1,5 +1,5 @@
 'use strict';
-const {randomUUID,createHash}=require('node:crypto'),{LocalError,hash,canonical}=require('./database.cjs'),{validDmMessageId}=require('@crm/local-runtime/policy');
+const {randomInt,randomUUID,createHash}=require('node:crypto'),{LocalError,hash,canonical}=require('./database.cjs'),{validDmMessageId}=require('@crm/local-runtime/policy');
 const digest=s=>createHash('sha256').update(s).digest('hex'),pid=s=>typeof s==='string'&&/^[a-f0-9]{24}$/.test(s);
 class LocalEvidence{
  constructor(store,vault,runtime,wire){this.store=store;this.db=store.db;this.vault=vault;this.runtime=runtime;this.wire=wire;this.current=null;}
@@ -23,7 +23,7 @@ class LocalEvidence{
   const now=this.store.clock();
   return this.db.prepare("SELECT (SELECT count(*) FROM jobs WHERE state='RUNNING')+(SELECT count(*) FROM send_attempts WHERE state IN('RESERVED','DISPATCHED'))+(SELECT count(*) FROM review_batches WHERE state IN('RESERVED','DISPATCHED'))+(SELECT count(*) FROM account_leases WHERE expires_at>?)+(SELECT count(*) FROM evidence_checks WHERE state='RUNNING')+(SELECT count(*) FROM post_diagnostics WHERE state='RUNNING') AS n").get(now).n>0;
  }
- scheduleAuto(attemptId,now,delay=5000){
+ scheduleAuto(attemptId,now,delay=120000+randomInt(180001)){
   this.db.prepare("INSERT INTO evidence_auto_tasks(attempt_id,state,attempts,next_at,created_at,updated_at) VALUES(?,'WAITING',0,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET state='WAITING',next_at=excluded.next_at,last_reason=NULL,updated_at=excluded.updated_at").run(attemptId,now+delay,now,now);
  }
  updateAuto(attemptId,state,reason,now){this.db.prepare('UPDATE evidence_auto_tasks SET state=?,last_reason=?,updated_at=? WHERE attempt_id=?').run(state,reason??null,now,attemptId);}
@@ -49,7 +49,7 @@ class LocalEvidence{
   const now=this.store.clock();
   const legacy=this.db.prepare("SELECT t.attempt_id FROM evidence_auto_tasks t JOIN send_attempts s ON s.id=t.attempt_id JOIN jobs j ON j.request_key=s.request_key JOIN send_queue q ON q.job_id=j.id WHERE t.state='UNVERIFIED' AND t.last_reason='EVIDENCE_UNVERIFIED' AND s.state='UNKNOWN' AND q.state='UNKNOWN'").all();
   for(const row of legacy)this.closeUnconfirmed(row.attempt_id,now);
-  return this.db.prepare("UPDATE evidence_auto_tasks SET state='WAITING',next_at=?,updated_at=? WHERE state='RUNNING'").run(now+1000,now).changes;
+  return this.db.prepare("UPDATE evidence_auto_tasks SET state='WAITING',next_at=?,updated_at=? WHERE state='RUNNING'").run(now+120000+randomInt(180001),now).changes;
  }
  /**
   * 自动只读核对：只处理已提交但回执未知的发送。没有平台任务占用时运行一次；
@@ -74,7 +74,7 @@ class LocalEvidence{
   }catch(error){
    const attempts=(task.attempts??0)+1,reason=error instanceof LocalError?error.code:(error?.code||'EVIDENCE_AUTO_FAILED');
    if(attempts>=3)this.closeUnconfirmed(task.attempt_id,this.store.clock(),'READBACK_UNAVAILABLE');
-   else this.db.prepare("UPDATE evidence_auto_tasks SET state='WAITING',next_at=?,last_reason=?,updated_at=? WHERE attempt_id=?").run(this.store.clock()+Math.min(60000,5000*attempts),reason,this.store.clock(),task.attempt_id);
+   else this.db.prepare("UPDATE evidence_auto_tasks SET state='WAITING',next_at=?,last_reason=?,updated_at=? WHERE attempt_id=?").run(this.store.clock()+120000*attempts+randomInt(60000),reason,this.store.clock(),task.attempt_id);
    return true;
   }
  }

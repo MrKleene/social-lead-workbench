@@ -52,6 +52,10 @@ const planned = (item: ReplyHistoryItem) =>
 const unknownStopped = (item: ReplyHistoryItem) =>
   item.displayStatus === "UNKNOWN" && item.autoState === "UNVERIFIED";
 
+const unknownChecking = (item: ReplyHistoryItem) =>
+  item.displayStatus === "UNKNOWN" &&
+  ["WAITING", "RUNNING"].includes(item.autoState ?? "");
+
 function SenderIdentity({ item }: { item: ReplyHistoryItem }) {
   const name =
     item.senderName ??
@@ -82,9 +86,18 @@ function SenderIdentity({ item }: { item: ReplyHistoryItem }) {
 
 function Outcome({ item }: { item: ReplyHistoryItem }) {
   const stopped = unknownStopped(item);
+  const checking = unknownChecking(item);
   return (
-    <Badge variant={stopped ? "outline" : (tones[item.displayStatus] ?? "outline")}>
-      {stopped ? "未确认已停止" : (labels[item.displayStatus] ?? "状态待核查")}
+    <Badge
+      variant={
+        stopped || checking ? "outline" : (tones[item.displayStatus] ?? "outline")
+      }
+    >
+      {stopped
+        ? "未确认已停止"
+        : checking
+          ? "核对中"
+          : (labels[item.displayStatus] ?? "状态待核查")}
     </Badge>
   );
 }
@@ -159,7 +172,9 @@ export function ReplyHistoryTable({
                 <small className="mt-1.5 block text-caption text-muted-foreground">
                   {unknownStopped(item)
                     ? "已停止，不会重发"
-                    : (notes[item.displayStatus] ?? "查看记录详情")}
+                    : unknownChecking(item)
+                      ? "系统自动回读中"
+                      : (notes[item.displayStatus] ?? "查看记录详情")}
                 </small>
               </TableCell>
               <TableCell className="text-right align-top">
@@ -188,7 +203,9 @@ export function ReplyHistoryDetail({ item }: { item: ReplyHistoryItem }) {
         <span className="text-caption text-muted-foreground">
           {unknownStopped(item)
             ? "已停止，不会重发"
-            : (notes[item.displayStatus] ?? item.displayStatus)}
+            : unknownChecking(item)
+              ? "系统自动回读中"
+              : (notes[item.displayStatus] ?? item.displayStatus)}
         </span>
         <small className="ms-auto text-caption text-muted-foreground">
           {item.origin === "CONVERSATION"

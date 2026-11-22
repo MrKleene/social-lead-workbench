@@ -60,7 +60,8 @@
 ## 恢复、过期与清理
 
 - 启动或调度时，`SENDING` 但对应 job 已不在 `QUEUED/RUNNING` 的行转 `FAILED`；job 为 `UNKNOWN` 时原因 `SUBMISSION_UNKNOWN`，否则 `SEND_INTERRUPTED`。`UNKNOWN` 行不会自动重发。
-- 进入 `UNKNOWN` 时同时写入 `evidence_auto_tasks`，平台空闲时由 runner 自动做两次只读核对；应用关闭或平台忙时保持等待，重启后继续。
+- 进入 `UNKNOWN` 时同时写入 `evidence_auto_tasks`；平台空闲时由 runner 延迟 2~5 分钟随机做一次自动核对（内含两次独立只读回读），不在提交后立即连续打开页面。应用关闭或平台忙时保持等待，重启后继续；确认原消息存在才转 `SENT`。
+- 发送前若 `DMVERIFY`/`VERIFY` 能力不可用，直接拒绝并保留队列行，不打开平台发送进程。
 - 活动行或 `FAILED` 行在入队满 7 天，或评论发布满 7 天时转 `EXPIRED`；原因为 `QUEUE_TOO_OLD` 或 `COMMENT_TOO_OLD`。
 - `EXPIRED` 行在 `settled_at` 满 30 天后由 `purge` 删除。
 - 规则被撤销时，该规则的活动队列行转 `CANCELLED` / `RULE_REVOKED`，并取消对应的排队 SEND job 与授权。

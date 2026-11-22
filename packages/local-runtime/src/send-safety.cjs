@@ -1,5 +1,5 @@
 'use strict';
-const {randomUUID}=require('node:crypto');
+const {randomInt,randomUUID}=require('node:crypto');
 const {LocalError,canonical,hash}=require('./database.cjs');
 const {LocalQueue}=require('./queue.cjs');
 function dayAt(timestamp){const f=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'});return f.format(new Date(timestamp));}
@@ -96,12 +96,13 @@ class SendSafety {
   return validateCommand({protocol:PROTOCOL,attemptId:a.id,requestKey:a.request_key,accountId:a.account_id,senderId:a.sender_id,recipientId:a.recipient_id,content:a.content,contentSha256:require('./inbox.cjs').digest(a.content),maxSubmissions:1,expiresAt:new Date(a.execution_deadline).toISOString(),...(a.purpose==='INBOX_REPLY'?{replyTo:{messageId:target.anchorPlatformId,contentSha256:target.inboundHash}}:{})});
  }
  resultDm(lease,attemptId,raw){
-  let evidence={kind:'UNKNOWN'};
+  let evidence={kind:'UNKNOWN'},risk=null,riskReason=null;
   try{const command=this.commandForDm(attemptId),r=require('./dm-protocol.cjs').parseDmExecution(raw,command),a=this.db.prepare('SELECT scope_hash FROM send_attempts WHERE id=?').get(attemptId);
    if(r.kind==='CONFIRMED')evidence={kind:'CONFIRMED',scopeHash:a.scope_hash,receipt:r.receipt.messageId,submissions:1,stopped:true};
    else if(r.kind==='NOT_SENT'&&r.submissions===0&&r.stopped)evidence={kind:'NOT_SUBMITTED',submissions:0,stopped:true};
+   const mapped={PLATFORM_SEND_FAILED:'PLATFORM_REFUSED',PLATFORM_REFUSED:'PLATFORM_REFUSED',RATE_LIMITED:'RATE_LIMITED',VERIFY_REQUIRED:'VERIFY_REQUIRED',RESTRICTED:'RESTRICTED'}[r.reason];if(mapped){risk=mapped;riskReason=r.reason;}
   }catch{/* Malformed, mismatched or incomplete transport evidence remains unknown. */}
-  return this.result(lease,attemptId,evidence);
+  return this.store.transaction(()=>{const state=this.resultInTransaction(lease,attemptId,evidence);if(risk)require('./account-safety.cjs').retainAccountRiskInTransaction(this.store,this.db.prepare('SELECT account_id FROM send_attempts WHERE id=?').get(attemptId).account_id,'DM',risk,{attemptId,reason:riskReason});return state;});
  }
  commandForComment(attemptId,postReference){
   const a=this.db.prepare("SELECT * FROM send_attempts WHERE id=? AND channel='COMMENT' AND state='DISPATCHED'").get(attemptId);if(!a)throw new LocalError('INVALID_COMMENT_ATTEMPT');
@@ -144,7 +145,7 @@ class SendSafety {
   this.store.audit('AUTOMATION','SEND_RESULT',a.id,{state});return state;
  }
  pause(reason,attemptId){const eventId=this.store.audit('RECOVERY','SENDING_PAUSED',attemptId,{reason});this.db.prepare("INSERT INTO safety_state VALUES('sending',1,?,?,?) ON CONFLICT(id) DO UPDATE SET version=version+1,event_id=excluded.event_id,reason=excluded.reason,created_at=excluded.created_at").run(eventId,reason,this.store.clock());}
- scheduleAuto(attemptId,now,delay=5000){this.db.prepare("INSERT INTO evidence_auto_tasks(attempt_id,state,attempts,next_at,created_at,updated_at) VALUES(?,'WAITING',0,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET state='WAITING',next_at=excluded.next_at,last_reason=NULL,updated_at=excluded.updated_at").run(attemptId,now+delay,now,now);}
+ scheduleAuto(attemptId,now,delay=120000+randomInt(180001)){this.db.prepare("INSERT INTO evidence_auto_tasks(attempt_id,state,attempts,next_at,created_at,updated_at) VALUES(?,'WAITING',0,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET state='WAITING',next_at=excluded.next_at,last_reason=NULL,updated_at=excluded.updated_at").run(attemptId,now+delay,now,now);}
  recover(){return this.store.transaction(()=>{
   const rows=this.db.prepare("SELECT s.* FROM send_attempts s JOIN jobs j ON j.request_key=s.request_key WHERE s.state IN('RESERVED','DISPATCHED') AND (j.state<>'RUNNING' OR j.lease_until<=?)").all(this.store.clock());
   for(const a of rows){const sent=a.state==='DISPATCHED',state=sent?'UNKNOWN':'CANCELLED';this.db.prepare('UPDATE send_attempts SET state=?,updated_at=? WHERE id=?').run(state,this.store.clock(),a.id);if(sent){this.pause('SUBMISSION_UNKNOWN',a.id);this.scheduleAuto(a.id,this.store.clock());}else if(a.quota_charged===1){this.db.prepare('UPDATE account_days SET occupied=occupied-1 WHERE account_id=? AND day=? AND occupied>0').run(a.account_id,a.quota_day);this.db.prepare('UPDATE send_attempts SET quota_charged=0 WHERE id=?').run(a.id);}this.store.audit('RECOVERY','SEND_INTERRUPTED',a.id,{state});}return rows.length;

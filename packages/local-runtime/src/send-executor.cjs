@@ -11,6 +11,7 @@ class LocalSendExecutor{
   this.safety.notPaused();if(this.store.db.prepare("SELECT 1 FROM safety_state WHERE id='platform' AND reason IS NOT NULL").get())throw new LocalError('PLATFORM_PROCESS_RECONCILIATION_REQUIRED');
   const a=this.store.db.prepare("SELECT * FROM accounts WHERE id=? AND revision=? AND state='VERIFIED'").get(scope.accountId,scope.accountRevision);
   if(!a?.session_ref||!this.vault.has('PLATFORM_SESSION',a.session_ref)||!this.runtime.available(scope.channel))throw new LocalError('SEND_ACCOUNT_UNAVAILABLE');
+  if(!this.runtime.available(scope.channel==='DM'?'DMVERIFY':'VERIFY'))throw new LocalError('SEND_CONFIRMATION_UNAVAILABLE');
   if(scope.channel==='COMMENT'){
    const row=this.store.db.prepare('SELECT source_reference_ref FROM run_posts WHERE platform_id=? AND source_reference_ref IS NOT NULL ORDER BY rowid DESC LIMIT 1').get(scope.target.postId);
    if(!row)throw new LocalError('COMMENT_REFERENCE_UNAVAILABLE');this.reference=JSON.parse(this.vault.get('POST_REFERENCE',row.source_reference_ref));
