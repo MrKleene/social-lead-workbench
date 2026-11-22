@@ -7,13 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { LocalReview } from "./local-api";
-import {
-  day,
-  decisionLabels,
-  decisionVariant,
-  statusLabels,
-  statusVariant,
-} from "./review-model";
+import { day, decisionLabels, decisionVariant } from "./review-model";
 
 export function ReviewDetail({
   row,
@@ -30,9 +24,6 @@ export function ReviewDetail({
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={statusVariant(row.review_status)}>
-              {statusLabels[row.review_status] ?? row.review_status}
-            </Badge>
             <Badge variant={decisionVariant(row.decision)}>
               {decisionLabels[row.decision] ?? row.decision}
             </Badge>
