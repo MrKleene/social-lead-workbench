@@ -10,6 +10,7 @@ import { RecordItem, RecordList } from "@/components/patterns/record-list";
 import { SectionCard } from "@/components/patterns/section-card";
 import { ErrorNotice } from "@/components/feedback";
 import type { DashboardReply } from "./local-api";
+import { LocalInitialStateReset } from "./local-initial-state-reset";
 import { LocalTestDataReset } from "./local-test-data-reset";
 import { useLocalRecords } from "./use-local-records";
 
@@ -316,6 +317,9 @@ export function LocalDataPage() {
       <PageHeader title="数据管理" />
       <SectionCard title="删除测试数据">
         <LocalTestDataReset />
+      </SectionCard>
+      <SectionCard title="恢复初始状态">
+        <LocalInitialStateReset />
       </SectionCard>
     </>
   );

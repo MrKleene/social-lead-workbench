@@ -1,7 +1,7 @@
 'use strict';
 const {app,BrowserWindow,protocol,ipcMain,dialog,screen}=require('electron');
 const fs=require('node:fs'),path=require('node:path');
-const {LocalDatabase}=require('@crm/local-runtime/database');
+const {LocalDatabase,LocalError}=require('@crm/local-runtime/database');
 const {CredentialStore}=require('@crm/local-runtime/credentials');
 const {LocalService}=require('@crm/local-runtime/service');
 const {validateCall}=require('./ipc-policy.cjs');
@@ -69,6 +69,15 @@ async function main(){
  const bindRuntime=()=>{accounts=new LocalAccounts(store,vault,platformRuntime,inspectAccountRestriction);service=new LocalService(store,vault,{accounts,diagnostic:new(require('@crm/local-runtime/post-diagnostic').PostDiagnostic)(store,vault,platformRuntime),evidence:new LocalEvidence(store,vault,platformRuntime,evidenceWire),capabilities:()=>({review:!fixture,collect:nativeReady,inbox:nativeReady,send:nativeReady})});try{service.ensureBuiltinConfigurations();}catch(error){console.error('BUILTIN_CONFIGURATION_SYNC_FAILED',error?.message||error);}runner=new LocalRunner(store,fixture?{}:{REVIEW:new LocalModelExecutor(store,vault),...(nativeReady?{SEND:new LocalSendExecutor(store,vault,platformRuntime,sendWire),COLLECT:new LocalCollectionExecutor(store,vault,platformRuntime),INBOX:new LocalInboxExecutor(store,platformRuntime,{wireFactory:(endpoint,sender,signal)=>new DesktopInboxWire(endpoint,sender,signal)})}:{})});runner.recoverStartup();};
  const startTicker=()=>{ticker=setInterval(()=>{if(!closing)void runner.tick().catch(()=>{});},1000);ticker.unref();};
  bindRuntime();startTicker();
+ // 恢复初始状态：先停 ticker 与在途任务，再清库/凭据/浏览器目录，最后重建运行时。
+ // runner.stop() 会把 stopping 置 true 且不可逆，所以必须重绑，不能复用旧实例。
+ const clearNativeSessions=()=>{const directory=path.join(data,'native-sessions');if(!fs.existsSync(directory))return;for(const name of fs.readdirSync(directory))fs.rmSync(path.join(directory,name),{recursive:true,force:true});};
+ const restoreInitialState=async()=>{
+  if(accounts?.attempt)throw new LocalError('RESTORE_REQUIRES_IDLE');
+  clearInterval(ticker);ticker=null;await runner?.stop();
+  try{await accounts?.close();const result=service.restoreInitialState();clearNativeSessions();return result;}
+  finally{bindRuntime();startTicker();}
+ };
  // 停止未确认时写下的平台暂停，由系统自己判断是否还成立：会话目录里记着我们拉起的
  // helper / 浏览器进程号（.owner.json），全部不在了就说明确实停住了，直接对账清除。
  // 用户不需要、也无法替系统做这个判断。
@@ -102,6 +111,8 @@ async function main(){
    if(method==='cancelLogin')return {ok:true,data:await service.cancelLogin(input)};
    // 只触发对账：真正清不清由主进程核对进程表决定，渲染层给不了这个判断。
    if(method==='reconcilePlatform')return {ok:true,data:reconcilePlatform()};
+   // 恢复初始状态要停掉 ticker 重建运行时，和普通 service 调用不是同一条路径。
+   if(method==='restoreInitialState'){const operation=operations.then(()=>restoreInitialState());operations=operation.catch(()=>{});return {ok:true,data:await operation};}
    // 渲染层变更串行执行：同一时刻只有一个本地操作在写库。
    const operation=operations.then(()=>service[method](input));operations=operation.catch(()=>{});return {ok:true,data:await operation};
   }catch(error){const code=typeof error?.code==='string'?error.code:'LOCAL_OPERATION_FAILED';return {ok:false,error:code};}

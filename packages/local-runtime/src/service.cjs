@@ -126,6 +126,8 @@ class LocalService {
   this.store.audit('LOCAL_USER','CONFIGURATION_DELETED',id,{kind:row.kind});return {deleted:true};
  });}
  deleteTestData(input){return new(require('./reset.cjs').LocalReset)(this.store).delete(input);}
+ /** 恢复初始状态：清业务数据与凭据，再把 10 条内置配置写回来。 */
+ restoreInitialState(){const result=new(require('./reset.cjs').LocalReset)(this.store).restoreInitialState({vault:this.vault});this.ensureBuiltinConfigurations();return result;}
  review(){return new(require('./review.cjs').LocalReview)(this.store);}
  automationProgress(input){return this.automation.progress(input);}
  unknownModelSubmissions(){return this.review().unknown();}

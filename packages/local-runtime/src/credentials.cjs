@@ -27,5 +27,18 @@ class CredentialStore {
  get(kind,id){this.ready();const file=this.file(kind,id);this.check(file);const encrypted=fs.readFileSync(file);try{const parsed=JSON.parse(this.protector.decrypt(encrypted));if(parsed.version!==1||parsed.kind!==kind||parsed.id!==id||typeof parsed.value!=='string')throw Error();return parsed.value;}catch{throw new LocalError('CREDENTIAL_DECRYPTION_FAILED');}finally{encrypted.fill(0);}}
  has(kind,id){const file=this.file(kind,id);if(!entryExists(file))return false;this.check(file);return true;}
  remove(kind,id){const file=this.file(kind,id);if(entryExists(file)){this.check(file);fs.unlinkSync(file);}}
+ /** 按 kind 清空全部凭据（出厂恢复用）。只删 <kind>-<id>.sealed，别的文件不碰。 */
+ purge(list){
+  if(!Array.isArray(list)||!list.length||list.some(kind=>!kinds.has(kind)))throw new LocalError('INVALID_CREDENTIAL_REFERENCE');
+  let removed=0;
+  for(const name of fs.readdirSync(this.root)){
+   const kind=list.find(value=>name.startsWith(value+'-')&&name.endsWith('.sealed'));
+   if(!kind)continue;
+   const id=name.slice(kind.length+1,-'.sealed'.length);
+   if(!/^[-a-zA-Z0-9_]{1,100}$/.test(id))continue;
+   this.remove(kind,id);removed++;
+  }
+  return removed;
+ }
 }
 module.exports={CredentialStore};

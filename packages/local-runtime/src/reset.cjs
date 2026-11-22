@@ -25,6 +25,9 @@ const ORPHAN_JOBS=`DELETE FROM jobs WHERE kind IN('COLLECT','REVIEW')
  AND NOT EXISTS(SELECT 1 FROM automation_decisions d WHERE d.job_id=jobs.id)
  AND NOT EXISTS(SELECT 1 FROM automatic_review_tasks t WHERE t.job_id=jobs.id)`;
 
+// 恢复初始状态要保留的三张表：迁移记录、安装标识、用户已选的模型。
+const KEEP_TABLES=new Set(['schema_migrations','installation','model_profile']);
+
 // 已用掉的发送授权被 send_attempts 永久占用；这里只收拾没人再引用的一次性授权，
 // 发送授权的 scope.basis.reviewId 指向仍存在的审核结果时也留着。
 const ORPHAN_GRANTS=`DELETE FROM authorizations WHERE
@@ -55,6 +58,29 @@ class LocalReset{
   // 用户要的是把库打回干净状态：删完把空闲页还给磁盘，文件里不留已删行的残影。
   this.db.exec('VACUUM');
   return {deleted:true,counts};
+ }
+ /** 回到刚装好的状态：清空所有业务表，只留迁移记录、安装标识和已选型号；
+  *  内置配置由 service 重新写入。凭据单独清，数据库里不留任何账号引用。 */
+ restoreInitialState({vault}={}){
+  if(this.store.active())throw new LocalError('RESTORE_REQUIRES_IDLE');
+  const tables=this.db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map(row=>row.name).filter(name=>!KEEP_TABLES.has(name));
+  // 外键只能在事务外关闭；关掉后按任意顺序 DELETE，提交前用 foreign_key_check 证明没有留下悬空引用。
+  this.db.exec('PRAGMA foreign_keys=OFF');
+  try{
+   this.db.exec('BEGIN IMMEDIATE');
+   try{
+    for(const name of tables)this.db.prepare('DELETE FROM "'+name.replace(/"/g,'""')+'"').run();
+    this.db.prepare('DELETE FROM sqlite_sequence').run();
+    // 型号保留（下拉选择不能丢），但 Key 已清，授权状态必须回到「未配置」。
+    this.db.prepare("UPDATE model_profile SET authorized=0,daily_limit=NULL,price_ack='',consent=''").run();
+    if(this.db.prepare('PRAGMA foreign_key_check').all().length)throw new LocalError('RESTORE_INTEGRITY_FAILED');
+    this.store.audit('LOCAL_USER','INITIAL_STATE_RESTORED','installation',{tables:tables.length});
+    this.db.exec('COMMIT');
+   }catch(error){try{this.db.exec('ROLLBACK');}catch{}throw error;}
+  }finally{this.db.exec('PRAGMA foreign_keys=ON');}
+  const secrets=typeof vault?.purge==='function'?vault.purge(['MODEL_KEY','PLATFORM_SESSION','POST_REFERENCE']):0;
+  this.db.exec('VACUUM');
+  return {restored:true,secrets};
  }
 }
 module.exports={LocalReset};
