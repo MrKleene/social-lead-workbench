@@ -327,12 +327,14 @@ class LocalSendQueue{
  });}
 
  /* ---------- 查询 ---------- */
- list({tab='pending',page=1,pageSize=20,query=''}={}){
+ list({tab='pending',page=1,pageSize=20,query='',channel=''}={}){
   const tabs={pending:['WAITING_SWITCH','READY','SENDING'],quota:['WAITING_QUOTA'],failed:['FAILED'],unknown:['UNKNOWN'],expired:['EXPIRED']};
   if(!tabs[tab])throw new LocalError('INVALID_SEND_QUEUE_TAB');
+  if(channel&&channel!=='COMMENT'&&channel!=='DM')throw new LocalError('INVALID_PENDING_FILTER');
   const states=tabs[tab],size=Math.min(100,Math.max(1,Number(pageSize)||20)),current=Math.max(1,Number(page)||1);
   const args=[...states],where='q.state IN('+states.map(()=>'?').join(',')+')';
   let filter=where;
+  if(channel){filter+=' AND q.channel=?';args.push(channel);}
   if(typeof query==='string'&&query.trim()){filter+=" AND (c.body LIKE ? OR p.snapshot LIKE ? OR q.recipient_id LIKE ? OR json_extract(c.snapshot,'$.authorNickname') LIKE ?)";const like='%'+query.trim()+'%';args.push(like,like,like,like);}
   const total=this.db.prepare('SELECT count(*) n FROM send_queue q JOIN run_comments c ON c.id=q.comment_id JOIN run_posts p ON p.id=c.post_id WHERE '+filter).get(...args).n;
   const rows=this.db.prepare("SELECT q.*,c.body,c.ordinal,json_extract(c.snapshot,'$.authorNickname') recipient_nickname,p.snapshot post_snapshot,r.score,r.decision,a.name account_name,(SELECT count(*) FROM send_queue x WHERE x.run_id=q.run_id AND x.channel=q.channel AND x.recipient_id=q.recipient_id AND x.state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING','SENT')) same_recipient FROM send_queue q JOIN run_comments c ON c.id=q.comment_id JOIN run_posts p ON p.id=c.post_id JOIN review_results r ON r.id=q.review_id LEFT JOIN accounts a ON a.id=q.account_id WHERE "+filter+' ORDER BY q.priority DESC,q.enqueued_at DESC,q.id DESC LIMIT ? OFFSET ?').all(...args,size,(current-1)*size);
