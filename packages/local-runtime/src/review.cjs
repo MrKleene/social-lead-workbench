@@ -197,7 +197,7 @@ class LocalReview {
   /** 完成判定按评论而不是按批次：同一规则修订下每条评论都恰好有一条原文一致的结果。 */
   barrier(runId){
     const collected=this.collection.barrier(runId);if(!collected.ready)return collected;
-    const run=this.db.prepare('SELECT * FROM collection_runs WHERE id=?').get(runId),frozen=JSON.parse(run.snapshot).strictStages.policies,posts=this.collection.posts(runId);
+    const run=this.db.prepare('SELECT * FROM collection_runs WHERE id=?').get(runId),frozen=JSON.parse(run.snapshot).strictStages.policies,posts=this.collection.posts(runId).filter(post=>post.coverage==='COMPLETE');
     if(!frozen.length)return {ready:false,reason:'本轮未启用评论匹配'};
     // 完成判定按评论：整帖请求容量不是完成条件，每条可送审评论都必须恰有一条对应原文的结果。
     for(const p of frozen)for(const post of posts){
