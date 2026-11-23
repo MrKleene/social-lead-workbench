@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, CircleAlert, Clock, Loader2 } from "lucide-react";
+import { ChevronDown, CircleAlert, Clock, Loader2, MoreHorizontal } from "lucide-react";
 import type { SendQueueItem, SendQueueTab } from "./local-api";
 import { Link, useSearchParams } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch, SwitchThumb } from "@/components/ui/switch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverContent,
@@ -86,6 +92,13 @@ function isOldComment(item: SendQueueItem): boolean {
   return item.commentPublishedAt !== null && Date.now() - item.commentPublishedAt > 7 * 86400000;
 }
 
+const rowInteractive =
+  'button,a,input,textarea,select,label,[role="checkbox"],[role="menuitem"]';
+
+function isRowInteractive(target: EventTarget | null): boolean {
+  return target instanceof Element && !!target.closest(rowInteractive);
+}
+
 export function LocalPending() {
   const [params, setParams] = useSearchParams();
   const rawTab = params.get("tab");
@@ -102,6 +115,7 @@ export function LocalPending() {
   const [cancelTarget, setCancelTarget] = useState<SendQueueItem | null>(null);
   const [dismissTarget, setDismissTarget] = useState<SendQueueItem | null>(null);
   const [original, setOriginal] = useState<SendQueueItem | null>(null);
+  const [more, setMore] = useState<SendQueueItem | null>(null);
   const [override, setOverride] = useState(false);
   const [sending, setSending] = useState(false);
   const [accountId, setAccountId] = useState("");
@@ -111,6 +125,7 @@ export function LocalPending() {
   useEffect(() => {
     setSelected([]);
     setSending(false);
+    setMore(null);
   }, [tab, page, query, channel]);
 
   const steps = useLocalRecords("automationSteps");
@@ -227,6 +242,51 @@ export function LocalPending() {
     setAccountId(usableAccounts[0]?.id ?? "");
     setTemplateIds([...new Set(configured)].filter((id) => available.has(id)));
     setSending(true);
+  };
+
+  const moreActions = (item: SendQueueItem) => {
+    const actions: {
+      label: string;
+      destructive?: boolean;
+      run: () => void;
+    }[] = [
+      {
+        label: "查看原文",
+        run: () => {
+          setMore(null);
+          setOriginal(item);
+        },
+      },
+    ];
+    if (tab === "queue" && item.state !== "SENDING") {
+      actions.push({
+        label: "移出待发送",
+        run: () => {
+          setMore(null);
+          setCancelTarget(item);
+        },
+      });
+    }
+    if (tab === "attention" && item.state === "FAILED") {
+      actions.push({
+        label: "移除记录",
+        destructive: true,
+        run: () => {
+          setMore(null);
+          setDismissTarget(item);
+        },
+      });
+    }
+    if (tab === "attention" && item.state === "UNKNOWN") {
+      actions.push({
+        label: "移出队列",
+        run: () => {
+          setMore(null);
+          setDismissTarget(item);
+        },
+      });
+    }
+    return actions;
   };
 
   return (
@@ -424,7 +484,14 @@ export function LocalPending() {
                   </TableHeader>
                   <TableBody>
                     {items.map((item) => (
-                      <TableRow key={item.id} className="group">
+                      <TableRow
+                        key={item.id}
+                        className="group cursor-pointer"
+                        onClick={(event) => {
+                          if (isRowInteractive(event.target)) return;
+                          setMore(item);
+                        }}
+                      >
                         <TableCell className="align-top">
                           <Checkbox
                             checked={selected.some((row) => row.id === item.id)}
@@ -442,20 +509,9 @@ export function LocalPending() {
                           />
                         </TableCell>
                         <TableCell className="min-w-[250px] max-w-[320px] whitespace-normal align-top">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <p className="min-w-0 flex-1 font-medium break-words">
-                              {item.postTitle || "无标题笔记"}
-                            </p>
-                            <Button
-                              type="button"
-                              variant="link"
-                              size="sm"
-                              className="shrink-0 px-0 text-caption"
-                              onClick={() => setOriginal(item)}
-                            >
-                              查看原文
-                            </Button>
-                          </div>
+                          <p className="font-medium break-words">
+                            {item.postTitle || "无标题笔记"}
+                          </p>
                           <p className="mt-1 line-clamp-2 text-caption leading-relaxed text-muted-foreground break-words">
                             {item.comment}
                           </p>
@@ -513,24 +569,14 @@ export function LocalPending() {
                             {tab === "attention" ? (
                               <>
                                 {item.state === "FAILED" ? (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={retry.isPending}
-                                      onClick={() => retry.mutate({ id: item.id })}
-                                    >
-                                      重试
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={dismiss.isPending}
-                                      onClick={() => setDismissTarget(item)}
-                                    >
-                                      移除记录
-                                    </Button>
-                                  </>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={retry.isPending}
+                                    onClick={() => retry.mutate({ id: item.id })}
+                                  >
+                                    重试
+                                  </Button>
                                 ) : null}
                                 {item.state === "EXPIRED" ? (
                                   <Button
@@ -545,19 +591,9 @@ export function LocalPending() {
                                   </Button>
                                 ) : null}
                                 {item.state === "UNKNOWN" ? (
-                                  <>
-                                    <Button asChild size="sm" variant="outline">
-                                      <Link to="/work/notices">核对结果</Link>
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={dismiss.isPending}
-                                      onClick={() => setDismissTarget(item)}
-                                    >
-                                      移出队列
-                                    </Button>
-                                  </>
+                                  <Button asChild size="sm" variant="outline">
+                                    <Link to="/work/notices">核对结果</Link>
+                                  </Button>
                                 ) : null}
                               </>
                             ) : item.state === "SENDING" ? (
@@ -565,27 +601,43 @@ export function LocalPending() {
                                 发送中
                               </span>
                             ) : (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setSelected([item]);
-                                    openSend([item]);
-                                  }}
-                                >
-                                  发送
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={cancel.isPending}
-                                  onClick={() => setCancelTarget(item)}
-                                >
-                                  移出待发送
-                                </Button>
-                              </>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelected([item]);
+                                  openSend([item]);
+                                }}
+                              >
+                                发送
+                              </Button>
                             )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label="更多操作"
+                                >
+                                  <MoreHorizontal aria-hidden="true" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {moreActions(item).map((action) => (
+                                  <DropdownMenuItem
+                                    key={action.label}
+                                    className={
+                                      action.destructive
+                                        ? "text-destructive"
+                                        : undefined
+                                    }
+                                    onSelect={action.run}
+                                  >
+                                    {action.label}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -864,6 +916,46 @@ export function LocalPending() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={!!more}
+        onOpenChange={(open) => {
+          if (!open) setMore(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>更多操作</DialogTitle>
+            <DialogDescription>
+              {more
+                ? `${more.postTitle || "无标题笔记"} · ${more.recipientNickname || "未知收件人"}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {more ? (
+            <div className="grid gap-2">
+              <p className="line-clamp-3 text-body leading-relaxed text-muted-foreground break-words">
+                {more.comment}
+              </p>
+              {moreActions(more).map((action) => (
+                <Button
+                  key={action.label}
+                  variant={action.destructive ? "destructive" : "outline"}
+                  className="justify-start"
+                  onClick={action.run}
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMore(null)}>
+              关闭
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {original ? (
         <LocalPostHistory
