@@ -11,7 +11,7 @@
  */
 
 import { readFile, readdir } from 'node:fs/promises'
-import { join, relative, extname } from 'node:path'
+import { join, relative, extname, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -72,6 +72,9 @@ const LEGACY_PREFIX = /^(?:local|configuration|journey|graphite|reply-history)-/
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-desktop', '.git', 'assets'])
 
+const toPosix = (value) => value.split(sep).join('/')
+const relFromScan = (file) => toPosix(relative(SCAN_DIR, file))
+
 async function walk(dir, out = []) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue
@@ -85,7 +88,7 @@ async function walk(dir, out = []) {
 const findings = []
 const allowedHits = []
 function add({ rule, level, file, detail, snippet }) {
-  const rel = relative(SCAN_DIR, file)
+  const rel = relFromScan(file)
   const key = `${rel}::${rule}`
   if (allowedKey.has(key)) {
     allowedHits.push({ rule, file: rel, detail, reason: allowedReason.get(key) })
@@ -114,7 +117,7 @@ function collect(content, re) {
 function checkCss(file, content) {
   // 注释里的示例代码不算违规；保留换行以维持行号
   content = content.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-  const isTokenSource = TOKEN_SOURCE.has(relative(SCAN_DIR, file))
+  const isTokenSource = TOKEN_SOURCE.has(relFromScan(file))
 
   // 1. 硬编码颜色（theme.css 是 token 定义处，豁免）
   if (!isTokenSource) {
@@ -330,7 +333,7 @@ function checkTsx(file, content) {
   }
 
   // 7. 越界字号（Tailwind 默认档位里不在 12/14/16/20/24 的）。shadcn 组件本身豁免。
-  if (!file.includes('/components/ui/')) {
+  if (!relFromScan(file).startsWith('components/ui/')) {
     const offScale = collect(content, /\btext-(lg|3xl|4xl|5xl|6xl|7xl|8xl|9xl)\b/g)
     if (offScale.length) {
       add({
@@ -372,7 +375,7 @@ function checkTsx(file, content) {
   }
 
   // 10. 遗留方言棘轮：className 里出现手写 CSS 时代的类名
-  const rel = relative(SCAN_DIR, file)
+  const rel = relFromScan(file)
   if (!LEGACY_CLASS_ALLOWED.has(rel)) {
     const legacyHits = []
     for (const m of content.matchAll(/className=(?:"([^"]*)"|'([^']*)')/g)) {

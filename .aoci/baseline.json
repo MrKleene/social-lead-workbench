@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-11T10:57:30Z",
-  "updated_at": "2026-11-23T16:29:33Z",
+  "updated_at": "2026-11-23T16:46:13Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -11,9 +11,9 @@
     },
     ".github/workflows/ci.yml": {
       "role": "index",
-      "sha256": "a7abcaa3835a7bbee17cf8734abc7c928220dc09b6dc2444e902a2a77185e52d",
-      "size": 1026,
-      "normalized_sha256": "a7abcaa3835a7bbee17cf8734abc7c928220dc09b6dc2444e902a2a77185e52d"
+      "sha256": "3c77d8860f0592b5e643a4bc9a491d768a44257a4bcdcd950cded0939b6852ee",
+      "size": 1024,
+      "normalized_sha256": "3c77d8860f0592b5e643a4bc9a491d768a44257a4bcdcd950cded0939b6852ee"
     },
     ".gitignore": {
       "role": "index",
@@ -17525,9 +17525,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "47b5da1a0abdf1d5a0dfdad1666e7b2b5c01176acd5935d6e401046ed5f240b2",
-      "size": 257683,
-      "normalized_sha256": "47b5da1a0abdf1d5a0dfdad1666e7b2b5c01176acd5935d6e401046ed5f240b2"
+      "sha256": "7436e19bca61d7ee5d1851adcd33b7d2be4064f5d256a3a3b5f4a3f587a7a0d3",
+      "size": 257676,
+      "normalized_sha256": "7436e19bca61d7ee5d1851adcd33b7d2be4064f5d256a3a3b5f4a3f587a7a0d3"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -21455,9 +21455,9 @@
     },
     "scripts/check-ui-conventions.mjs": {
       "role": "index",
-      "sha256": "a3f38f79301cd3505b8b64c6b34c7484313e17738e1554aebb438144e64ccdbd",
-      "size": 19536,
-      "normalized_sha256": "a3f38f79301cd3505b8b64c6b34c7484313e17738e1554aebb438144e64ccdbd"
+      "sha256": "567b85a43ec122b3c0cd4591611b2b843e6c0148385793c6a8ff7210f5e87aa8",
+      "size": 19653,
+      "normalized_sha256": "567b85a43ec122b3c0cd4591611b2b843e6c0148385793c6a8ff7210f5e87aa8"
     },
     "scripts/desktop/browser-licenses.cjs": {
       "role": "index",
