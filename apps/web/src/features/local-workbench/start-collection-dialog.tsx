@@ -10,7 +10,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ErrorNotice } from "@/components/feedback";
-import { CheckboxField } from "@/components/patterns/checkbox-field";
 import { localApi } from "./local-api";
 import { useLocalRecords } from "./use-local-records";
 
@@ -54,12 +53,8 @@ export function StartCollectionDialog({
   });
   /** 本轮搜索计划由本机随机抽取并冻结；每次打开弹窗重新抽一次，展示的和授权的是同一份。 */
   const [planRound, setPlanRound] = useState(0);
-  const [consent, setConsent] = useState(false);
   useEffect(() => {
-    if (open) {
-      setPlanRound((round) => round + 1);
-      setConsent(false);
-    }
+    if (open) setPlanRound((round) => round + 1);
   }, [open]);
   const planPreview = useQuery({
     queryKey: [
@@ -176,10 +171,6 @@ export function StartCollectionDialog({
                 }
               />
             </dl>
-
-            <CheckboxField checked={consent} onCheckedChange={setConsent}>
-              允许读取该账号的小红书页面数据。
-            </CheckboxField>
           </>
         )}
 
@@ -188,7 +179,7 @@ export function StartCollectionDialog({
             取消
           </Button>
           <Button
-            disabled={!ready || !consent || planPreview.isPending}
+            disabled={!ready || planPreview.isPending}
             pending={start.isPending}
             onClick={() =>
               start.mutate({
