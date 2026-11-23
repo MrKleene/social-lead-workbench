@@ -77,7 +77,11 @@ function markerClass(state: RowState) {
   return "border-destructive/40 bg-destructive-soft text-destructive";
 }
 
-function eventRows(events: CollectionRunEvent[], status: string) {
+function eventRows(
+  events: CollectionRunEvent[],
+  status: string,
+  currentPost: RunProgress["currentPost"],
+) {
   const posts = new Map<
     string,
     { index: number; title: string; start: number; last: CollectionRunEvent }
@@ -140,10 +144,20 @@ function eventRows(events: CollectionRunEvent[], status: string) {
         state: "failed",
       };
     }
+    const progress =
+      currentPost && currentPost.platformId === last.platformId
+        ? [
+            `已读取 ${currentPost.comments} 条`,
+            currentPost.declared === null ? null : `平台显示 ${currentPost.declared} 条`,
+            `已用时 ${formatDuration(Date.now() - currentPost.startedAt)}`,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : null;
     return {
       key: last.platformId ?? String(last.sequence),
       title: `第 ${post.index} 篇 · ${post.title}`,
-      detail: "采集中",
+      detail: progress ?? (status === "RUNNING" ? "采集中" : "部分完成"),
       at: last.createdAt,
       state: status === "RUNNING" ? "running" : "partial",
     };
@@ -240,7 +254,7 @@ export function LocalCollectProgress({
       keywords: run.keywords,
     });
   }
-  rows.push(...eventRows(data.events, run.status));
+  rows.push(...eventRows(data.events, run.status, data.currentPost));
   const terminal = terminalRow(data);
   if (terminal) rows.push(terminal);
 

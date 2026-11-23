@@ -47,6 +47,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 - 每次手动一轮；真实采集当前最多 3 帖
 - 评论采集是有限窗口，不宣称读尽全平台
 - 历史查看不执行新任务；失败或部分读取照实显示，不算成功
+- 采集进度显示当前篇已读条数、平台声明总数与已用时；没有声明总数时只显示已读与用时，不估算进度或剩余时间
 - 单帖重读只更新采集与审核，**不派生自动发送**
 
 **代码**：`packages/domain/src/collection`（`collector.ts`、`run-coverage.ts`、`comment-checkpoint.ts`）；
