@@ -350,6 +350,7 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 	var actionDeadline time.Time
 	var recoveryDeadline time.Time
 	var hydrationDeadline time.Time
+	var emptyDeadline time.Time
 	hydrationObservation := ""
 	var loadingDeadline time.Time
 	chunkBytes := 0
@@ -555,6 +556,19 @@ func (s *CommentChunkSession) Read(ctx context.Context, p boundedPage, id string
 				break
 			}
 			if (declaredTreeExhausted(report.Final) || report.ChunkSummary.Complete()) && len(s.known)+len(delta) == len(records) {
+				emptyPending := len(records) == 0 && report.Final.Ready.EmptyVisible && report.Final.Total.State != "EXACT"
+				if emptyPending {
+					if emptyDeadline.IsZero() {
+						emptyDeadline = time.Now().Add(commentsEmptySettleWait)
+					}
+					if time.Now().Before(emptyDeadline) {
+						if !chunkWait(ctx) {
+							report.Reason = boundedError(ctx, ctx.Err())
+							break
+						}
+						continue
+					}
+				}
 				report.State = "COMPLETE"
 				report.Reason = "DECLARED_TREE_EXHAUSTED"
 				report.ReplyStop = "DECLARED_REPLIES_LOADED"
@@ -665,6 +679,7 @@ func chunkFingerprint(rows []chunkRecord) string {
 // scroll on. Pace every platform-visible action like that reader instead of
 // bursting clicks, and give every readingPauseEvery-th action a longer pause.
 var commentsLoadingWait = 8 * time.Second
+var commentsEmptySettleWait = 2200 * time.Millisecond
 var replyExpandPace = 2500 * time.Millisecond
 var replyExpandJitter = 2500 * time.Millisecond
 var rootScrollPace = 3000 * time.Millisecond

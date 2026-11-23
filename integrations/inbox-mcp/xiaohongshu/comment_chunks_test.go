@@ -19,12 +19,17 @@ type chunkFixture struct {
 	fail                                    bool
 	reverse                                 bool
 	invalidTotal, emptyVisible, explicitEnd bool
-	loading                                 int
+	loading, emptyFrames                    int
 }
 
 func (f *chunkFixture) Snapshot(context.Context) ([]byte, CoverageReady, error) {
 	if f.fail {
 		return nil, CoverageReady{}, errors.New("PLATFORM_LIMIT")
+	}
+	if f.emptyFrames > 0 {
+		f.emptyFrames--
+		b, _ := json.Marshal(map[string]any{"note": map[string]any{"note": map[string]any{"noteId": "note"}, "comments": map[string]any{"list": []any{}, "hasMore": false, "commentCount": "unknown"}}})
+		return b, CoverageReady{Document: "complete", Container: true, EmptyVisible: true}, nil
 	}
 	if f.loading > 0 {
 		f.loading--
@@ -186,6 +191,9 @@ func TestChunksReplayBudgetAndCancellation(t *testing.T) {
 }
 
 func TestChunksEmptyExplicitAndUnknown(t *testing.T) {
+	wait := commentsEmptySettleWait
+	commentsEmptySettleWait = 50 * time.Millisecond
+	defer func() { commentsEmptySettleWait = wait }()
 	for _, explicit := range []bool{false, true} {
 		f := &chunkFixture{roots: 0, visible: 0, invalidTotal: true, emptyVisible: explicit}
 		s, _ := NewCommentChunkSession(nil)
@@ -203,6 +211,9 @@ func TestChunksEmptyExplicitAndUnknown(t *testing.T) {
 }
 
 func TestChunksWaitsForLoadingBeforeEmpty(t *testing.T) {
+	wait := commentsEmptySettleWait
+	commentsEmptySettleWait = 50 * time.Millisecond
+	defer func() { commentsEmptySettleWait = wait }()
 	f := &chunkFixture{roots: 0, visible: 0, invalidTotal: true, emptyVisible: true, loading: 3}
 	s, _ := NewCommentChunkSession(nil)
 	r, e := s.Read(context.Background(), f, "note", chunkConfig())
@@ -214,6 +225,24 @@ func TestChunksWaitsForLoadingBeforeEmpty(t *testing.T) {
 	}
 	if len(r.Chunk.Rows) != 0 {
 		t.Fatal("loading placeholder produced rows")
+	}
+}
+
+func TestChunksWaitsForLateCommentsBeforeCertifyingEmpty(t *testing.T) {
+	wait := commentsEmptySettleWait
+	commentsEmptySettleWait = 900 * time.Millisecond
+	defer func() { commentsEmptySettleWait = wait }()
+	f := &chunkFixture{roots: 2, visible: 2, emptyFrames: 3}
+	s, _ := NewCommentChunkSession(nil)
+	r, e := s.Read(context.Background(), f, "note", chunkConfig())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if r.BoundedRead.State != "COMPLETE" || len(r.Chunk.Rows) != 2 {
+		t.Fatalf("late comments were not read: %s rows=%d", r.BoundedRead.State, len(r.Chunk.Rows))
+	}
+	if f.emptyFrames != 0 {
+		t.Fatal("fixture did not expose late comments")
 	}
 }
 
