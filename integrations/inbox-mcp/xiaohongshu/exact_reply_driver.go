@@ -143,6 +143,25 @@ func (d *exactReplyPage) Inspect(ctx context.Context, c exactreply.Command) (exa
 	if err != nil {
 		return exactreply.Snapshot{}, err
 	}
+	// A nested target may exist in state while its DOM node is still collapsed.
+	// Expand only that floor's own show-more control, then re-read state so the
+	// snapshot includes every sibling that is visible after expansion.
+	if path, ok := exactCommentPath(s.Comments, c.TargetID); ok {
+		expanded, expandErr := d.expandNestedTarget(ctx, c, path)
+		if expandErr != nil {
+			return exactreply.Snapshot{PostID: s.NoteID, SenderID: s.SenderID}, expandErr
+		}
+		if expanded {
+			s, err = d.state(ctx, c, false)
+			if err != nil {
+				return exactreply.Snapshot{PostID: s.NoteID, SenderID: s.SenderID}, err
+			}
+			rows, err = exactComments(s.Comments)
+			if err != nil {
+				return exactreply.Snapshot{}, err
+			}
+		}
+	}
 	result := exactreply.Snapshot{PostID: s.NoteID, SenderID: s.SenderID, ExistingIDs: map[string]bool{}}
 	count := 0
 	for _, r := range rows {

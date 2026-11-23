@@ -70,7 +70,7 @@ export const pendingReasonLabels: Record<string, string> = {
   COMMENT_TOO_OLD: "评论发布超过 7 天",
   QUEUE_TOO_OLD: "入队超过 7 天",
   SEND_INTERRUPTED: "发送中断",
-  COMMENT_NESTED_REPLY_UNSUPPORTED: "二级回复暂不支持，请改用私信",
+  COMMENT_NESTED_REPLY_UNSUPPORTED: "旧记录，未发送",
   COMMENT_REFERENCE_UNVERIFIED: "原帖引用已失效",
   COMMENT_PAGE_UNAVAILABLE: "原帖页面无法打开",
   COMMENT_POST_UNAVAILABLE: "原帖不可用或已变化",

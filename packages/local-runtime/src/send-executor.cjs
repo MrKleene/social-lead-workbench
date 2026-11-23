@@ -35,8 +35,6 @@ class LocalSendExecutor{
   if(scope.channel==='COMMENT'){
    const row=this.store.db.prepare('SELECT source_reference_ref FROM run_posts WHERE platform_id=? AND source_reference_ref IS NOT NULL ORDER BY rowid DESC LIMIT 1').get(scope.target.postId);
    if(!row)throw new LocalError('COMMENT_REFERENCE_UNAVAILABLE');this.reference=JSON.parse(this.vault.get('POST_REFERENCE',row.source_reference_ref));
-   const comment=this.store.db.prepare('SELECT parent_id FROM run_comments WHERE platform_id=? ORDER BY rowid DESC LIMIT 1').get(scope.target.commentId);
-   if(comment?.parent_id)throw new LocalError('COMMENT_NESTED_REPLY_UNSUPPORTED');
    const target={protocol:'workbench.xhs.exact-preflight.v2',accountId:a.id,senderId:a.platform_user_id,postId:scope.target.postId,targetCommentId:scope.target.commentId,recipientId:scope.recipientId,postReference:this.reference};
    const session=await this.runtime.openSaved({accountId:a.id,senderId:a.platform_user_id,sessionRef:a.session_ref,purpose:'PREFLIGHT'},signal);let result;
    try{result=await this.wire.inspectComment(session,target,signal);}finally{if(!await session.stop())throw new LocalError('PLATFORM_PROCESS_STOP_UNCONFIRMED');}

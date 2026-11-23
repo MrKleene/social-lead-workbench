@@ -19,7 +19,8 @@ func NewExactPreflightDriver(p *rod.Page, closeBrowser func()) *ExactPreflightDr
 
 var _ exactreply.ReadOnlyInspector = (*ExactPreflightDriver)(nil)
 
-// Pure DOM reads; no click, focus, input, event dispatch, fetch, state setter or scroll.
+// DOM reads plus a bounded .show-more expansion when a nested target is collapsed;
+// no reply click, focus, input, submission, fetch or state setter.
 const exactPreflightDOM = `(target,author) => {
  const nodes=Array.from(document.querySelectorAll('#comment-'+target));
  const cardinality=n=>n===0?'MISSING':n===1?'UNIQUE':'AMBIGUOUS';
@@ -38,7 +39,8 @@ const exactPreflightDOM = `(target,author) => {
 
 func (d *ExactPreflightDriver) Inspect(ctx context.Context, t exactreply.PreflightTarget) (o exactreply.PreflightObservation, err error) {
 	c := exactreply.Command{AccountID: t.AccountID, SenderID: t.SenderID, PostID: t.PostID, TargetID: t.TargetID, RecipientID: t.RecipientID, Reference: t.Reference}
-	// One navigation by the existing reader, then bounded state-only samples. No reload.
+	// One navigation by the existing reader, then bounded state samples. A nested target
+	// may click its floor's show-more; the page is never reloaded.
 	o, err = exactreply.WaitForReadOnlyState(ctx, t, func() (sample exactreply.PreflightObservation, inspectErr error) {
 		sample.Snapshot, inspectErr = d.read.Inspect(ctx, c)
 		sample.Sources = exactreply.FieldSources{Identity: "INITIAL_STATE_USER_INFO", Target: "INITIAL_STATE_NOTE_COMMENTS", DOM: "UNOBSERVED"}

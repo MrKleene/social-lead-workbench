@@ -64,7 +64,7 @@
 - 启动或调度时，`SENDING` 但对应 job 已不在 `QUEUED/RUNNING` 的行转 `FAILED`；job 为 `UNKNOWN` 时原因 `SUBMISSION_UNKNOWN`，否则保留 job result 里的具体错误码（如 `COMMENT_TARGET_NOT_FOUND`），读不到才落到 `SEND_INTERRUPTED`。`UNKNOWN` 行不会自动重发。
 - 进入 `UNKNOWN` 时同时写入 `evidence_auto_tasks`；平台空闲时由 runner 延迟 2~5 分钟随机做一次自动核对（内含两次独立只读回读），不在提交后立即连续打开页面。应用关闭或平台忙时保持等待，重启后继续；确认原消息存在才转 `SENT`。回读消息 ID 同时接受平台输出的 `sender.recipient.hex` 与 `recipient.sender.hex` 两种参与方顺序，但仍绑定当前账号与收件人；失败保留具体原因。
 - 发送前若 `DMVERIFY`/`VERIFY` 能力不可用，直接拒绝并保留队列行，不打开平台发送进程。
-- 评论发送前做只读精确预检。二级回复（`run_comments.parent_id` 非空）在打开平台会话前直接拒绝为 `COMMENT_NESTED_REPLY_UNSUPPORTED`；其余预检失败保留具体原因（引用失效、页面不可用、目标缺失、目标不可见等），不再统一显示“发送中断”。
+- 评论发送前做平台数据只读的精确预检。一级评论与二级回复（`run_comments.parent_id` 非空）使用同一目标协议：直接目标取该评论的 `platform_id` 与作者，展开只用于定位；二级目标被折叠时，预检只点击所属楼层的 `.show-more` 展开，最多 12 次、5 秒，不点回复按钮、不输入、不提交。失败保留具体原因（引用失效、页面不可用、目标缺失、目标不可见等），不再统一显示“发送中断”。旧记录里的 `COMMENT_NESTED_REPLY_UNSUPPORTED` 只表示历史未发送，不重试。
 - 评论行若同一作者另一渠道已有 `SENT` 或平台确认记录，列表返回 `otherChannelSent`，界面提示“同作者私信已发送”或“同作者评论已发送”，避免重复联系。
 - 活动行或 `FAILED` 行在入队满 7 天，或评论发布满 7 天时转 `EXPIRED`；原因为 `QUEUE_TOO_OLD` 或 `COMMENT_TOO_OLD`。
 - `EXPIRED` 行在 `settled_at` 满 30 天后由 `purge` 删除。
@@ -72,6 +72,6 @@
 
 ## 失效条件
 
-- 评论发送尚未真实验收；私信首联已有平台确认的实测记录，批量、多账号和长期运行仍未验收。
+- 评论回复（含二级回复）已有单条平台确认的实测记录；评论与私信的批量、多账号和长期运行仍未验收。
 - 账号存在回复限制（`holds`）、检测中或当前不可用时不会进入可发送账号池；账号池为空、账号不可用与额度用完分别显示不同原因。
 - 结果未知不能按失败直接重发。系统自动核对确认原消息存在后，队列行转 `SENT`；核对不一致时把队列行自动关闭为 `CANCELLED` / `UNKNOWN_UNCONFIRMED`，保留 `send_attempts` 的 `UNKNOWN` 以阻止重复联系，并在没有其他活动未知时解除 `SUBMISSION_UNKNOWN` 暂停、继续派发。连续 3 次无法执行也自动关闭为 `CANCELLED` / `READBACK_UNAVAILABLE` 并恢复派发，不要求用户逐条核对。
