@@ -9,6 +9,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import cp from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+const { writeBrowserLicenses } = require('./browser-licenses.cjs')
 
 const root = path.resolve(import.meta.dirname, '../..')
 const source = process.argv[2]
@@ -100,4 +104,5 @@ fs.writeFileSync(
     2
   ) + '\n'
 )
+writeBrowserLicenses(path.dirname(destination))
 console.log(JSON.stringify({ browserPrepared: true, files: Object.keys(files).length, executed: false }))

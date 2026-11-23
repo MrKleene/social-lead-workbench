@@ -22,6 +22,8 @@ test('staged workspace resolves its runtime without the checkout or installed de
  try{assert.ok(new (requireStaged('@crm/local-runtime/service').LocalService)(db,null));}finally{db.close();}
  assert.ok(requireStaged('@crm/local-runtime/policy').commentDigest);
  assert.ok(requireStaged('@crm/local-runtime/platform-provider').Client);
+ // runner.cjs requires internal helpers that are not package exports (send-queue.cjs).
+ assert.ok(requireStaged('@crm/local-runtime/runner').LocalRunner);
  assert.ok(files.has('node_modules/@crm/local-runtime/dist/PLATFORM-LICENSES.txt'));
  assert.ok([...files.keys()].every(file=>!file.includes('legacy-migration')&&!file.includes('/adapters/')&&!file.includes('/test/')));
  assert.throws(()=>requireStaged('@crm/local-runtime/adapters/collection/qwen-provider'),/not defined by "exports"/);

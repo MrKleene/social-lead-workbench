@@ -3,7 +3,8 @@ Copyright 2026 Social Lead Desktop contributors
 
 本产品随安装包分发第三方软件，或包含基于第三方软件修改的代码。
 以下是主要组件与声明；Go 组件与浏览器组件的完整许可文本随安装包放在
-native/<平台>/ 目录下的 *-LICENSES.txt。
+native/<平台>/ 目录（MCP-LICENSES.txt、BROWSER-LICENSES.txt、
+CHROMIUM-LICENSES.html、ELECTRON-LICENSE.txt）。
 
 1. xiaohongshu-mcp（Apache License 2.0）
 
