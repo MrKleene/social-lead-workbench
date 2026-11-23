@@ -22,7 +22,7 @@ async function verifyPackage(app){
  const windowsCheck=(file,directory)=>require('../../apps/desktop/src/windows-native.cjs').windowsNative({isPackaged:true,resourcesPath:resources},{operation:directory?'resource-directory':'executable',path:file});
  const nativeVerified=!!new (require('../../apps/desktop/src/native-resources.cjs').NativeResources)(path.join(resources,'native',process.platform+'-'+process.arch),{windowsCheck}).inspect();
  if(nativeVerified)for(const file of ['BROWSER-LICENSES.txt','MCP-LICENSES.txt'])assert.equal(fs.readFileSync(path.join(root,'apps/desktop/dist/native',process.platform+'-'+process.arch,file)).equals(fs.readFileSync(path.join(resources,'native',process.platform+'-'+process.arch,file))),true,'Native license missing or stale');
- const fuses=await getCurrentFuseWire(app),expected={RunAsNode:48,EnableCookieEncryption:49,EnableNodeOptionsEnvironmentVariable:48,EnableNodeCliInspectArguments:48,EnableEmbeddedAsarIntegrityValidation:49,OnlyLoadAppFromAsar:49,GrantFileProtocolExtraPrivileges:48};
+ const fuses=await getCurrentFuseWire(app),expected={RunAsNode:48,EnableCookieEncryption:48,EnableNodeOptionsEnvironmentVariable:48,EnableNodeCliInspectArguments:48,EnableEmbeddedAsarIntegrityValidation:49,OnlyLoadAppFromAsar:49,GrantFileProtocolExtraPrivileges:48};
  for(const [name,value] of Object.entries(expected))assert.equal(fuses[FuseV1Options[name]],value,'Fuse mismatch: '+name);
  console.log(JSON.stringify({files,asarBytes:fs.statSync(archive).size,forbiddenFiles:0,staleFiles:0,fusesVerified:true,nativeVerified,platform:process.platform,nativeWindowsVerified:process.platform==='win32'&&nativeVerified}));
 }

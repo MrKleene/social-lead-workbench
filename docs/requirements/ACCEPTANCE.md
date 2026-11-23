@@ -55,12 +55,21 @@
 - 账号：本机 2 个账号记录。
 - 未覆盖：收件（`received_messages` 0 条、`inbox_receivers` 0 个）、平台会话回复、评论自动派发、多账号、多轮长期稳定性与自然新消息。
 
+## macOS 预览包重建与钥匙串修复（2026-11-24）
+
+- 0.1.0 首次启动会请求钥匙串条目 `SocialLeadDesktop Safe Storage`。该条目来自 Electron 的 Cookie 加密 fuse，不是平台登录态：平台会话使用临时 `cookies.json` 并在停止后封入项目 vault，`~/Library/Application Support/SocialLeadDesktop/Cookies` 为 0 条记录。
+- 已关闭 `enableCookieEncryption`（`apps/desktop/electron-builder.cjs`），包校验期望值同步改为 48。
+- 包：`Social-Lead-Desktop-0.1.0-mac-arm64.dmg`，287,919,082 字节，SHA-256 `bab04aaf6057eaecad51d132ec42bccdf8cb54812d26fcf5802910b32c0e49ba`。`verify-package.cjs` 输出 135 个文件、0 个禁用文件、fuse 与原生资源校验通过。
+- 从 DMG 复制到 `/private/tmp` 后 `--self-test` 回执通过；正常启动到仪表盘，未出现钥匙串授权弹窗。
+- 未覆盖：其他机器安装/升级、Gatekeeper 下载隔离、Intel Mac。
+
 ## Windows 预览包构建与虚拟机验证（2026-11-24）
 
 - 环境：Parallels Desktop 中的 Windows 11 ARM64 虚拟机（build 26300.9974），x64 程序经系统模拟运行；Node.js 24.22.3 x64、Go 1.27.4 windows/amd64、.NET Framework `csc.exe`。
 - 原生：`scripts/test-windows-native.mjs` 通过 DPAPI 往返、ACL、junction 拒绝与 owned 子进程终止；`windows-host.exe` 与 `desktop-mcp.exe` 均为 x64 原生构建。
-- 包：`Social-Lead-Desktop-0.1.0-win-x64.exe`，276,067,578 字节，SHA-256 `8522ed6e426ac68cbcc273397f17be342b5b38301b99995dbc00c2b7c62f33c4`。`verify-package.cjs` 输出 135 个文件、0 个禁用文件、fuse 与原生资源校验通过。
-- 安装：以 `/S /D=C:\SocialLeadInstalled` 安装到自定义目录后，打包自检回执通过；正常启动可拉起主进程、GPU、网络与渲染进程。
+- 包：`Social-Lead-Desktop-0.1.0-win-x64.exe`，276,067,636 字节，SHA-256 `286716bd67857d197226f50974fdf15b98e55f584c0e921ba5bb5453286e6b40`。`verify-package.cjs` 输出 135 个文件、0 个禁用文件、fuse 与原生资源校验通过。
+- 本包在关闭 Cookie 加密 fuse 后重建（`enableCookieEncryption=false`）；win-unpacked 与安装目录的 `--self-test` 均回执通过。
+- 安装：以 `/S /D=C:\SocialLeadInstalled2` 安装到自定义目录后，安装目录的 `--self-test` 回执通过。
 - 未覆盖：Windows 11 x64 真机、默认用户安装路径、升级/卸载、干净机器安装、签名与真实平台链路。
 
 ## 工程验证

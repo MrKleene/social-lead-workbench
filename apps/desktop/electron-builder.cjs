@@ -30,7 +30,7 @@ module.exports={
  extraMetadata:{main:'apps/desktop/src/main.cjs',description:'Social Lead local desktop workbench'},
  files:['apps/desktop/src/**','apps/web/dist-desktop/**','node_modules/@crm/local-runtime/**','package.json'],
  asar:true,
- electronFuses:{runAsNode:false,enableCookieEncryption:true,enableNodeOptionsEnvironmentVariable:false,enableNodeCliInspectArguments:false,enableEmbeddedAsarIntegrityValidation:true,onlyLoadAppFromAsar:true,grantFileProtocolExtraPrivileges:false,resetAdHocDarwinSignature:true},
+ electronFuses:{runAsNode:false,enableCookieEncryption:false,enableNodeOptionsEnvironmentVariable:false,enableNodeCliInspectArguments:false,enableEmbeddedAsarIntegrityValidation:true,onlyLoadAppFromAsar:true,grantFileProtocolExtraPrivileges:false,resetAdHocDarwinSignature:true},
  win:{icon:path.resolve(__dirname,'build/icon.png'),artifactName:'Social-Lead-Desktop-${version}-win-${arch}.${ext}',target:[{target:'nsis',arch:['x64']}],extraResources:[{from:native,to:'native/win32-x64',filter:['desktop-mcp.exe','*-build.json','windows-validation.json','*-LICENSES.txt','CHROMIUM-LICENSES.html','ELECTRON-LICENSE.txt','browser/**/*']},{from:'apps/desktop/dist/native/windows-host.exe',to:'native/windows-host.exe'},{from:'apps/desktop/dist/native/windows-build.json',to:'native/windows-build.json'}]},
  nsis:{oneClick:false,perMachine:false,allowToChangeInstallationDirectory:false,deleteAppDataOnUninstall:false},
  mac:{icon:path.resolve(__dirname,'build/icon.icns'),...(macIdentity?{identity:macIdentity,...macTimestamp}:{}),signIgnore:['Contents/Resources/native/.*'],target:[{target:'dmg',arch:['arm64']}],category:'public.app-category.productivity',minimumSystemVersion:'13.0.0',artifactName:'Social-Lead-Desktop-${version}-mac-${arch}.${ext}'},
