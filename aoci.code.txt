@@ -733,7 +733,7 @@ index.tsx[EU4T]: F:帖子列表路由 /posts：挂载 LocalPostsPage | R:code:ap
 
 ===/Users/kleene/projects/social-lead-workbench/.github/workflows/===
 ci.yml[CI7T]: F:GitHub Actions 持续集成：私有仓库 macOS 15 跑 npm run check，Windows Server 2022 跑结构、UI 与类型检查 | R:code:package.json,code:scripts/check-structure.mjs,code:scripts/check-ui-conventions.mjs | A:verify,static-windows | S:macos-14 对私有仓库不可用，arm64 macOS 用 macos-15；CI 只验证源码不产出安装包，PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 避免下载无关浏览器
-pages.yml[CI7T]: F:静态官网的 GitHub Pages 部署工作流：push main 且 site/** 变化时上传 site 并发布 | R:code:.github/workflows/ci.yml,code:site/index.html,code:README.md | A:deploy | S:只上传 site，不做构建；需仓库 Pages Source=GitHub Actions；pages 与 id-token 权限、github-pages environment 必须保留；并发组 pages 会取消旧部署；workflow_dispatch 可手动重跑。
+pages.yml[CI7T]: F:静态官网的 GitHub Pages 部署工作流：push main 且 site/** 变化时上传 site 并发布 | R:code:.github/workflows/ci.yml,code:site/index.html,code:README.md | A:deploy | S:只上传 site，不做构建；Pages Source 必须为 GitHub Actions；pages/id-token 权限与 github-pages environment 必须保留；并发组 pages 取消旧部署；workflow_dispatch 可手动重跑；upload-pages-artifact 后需等待 5 秒再 deploy-pages，否则会报 No artifacts。
 
 ===/Users/kleene/projects/social-lead-workbench/site/assets/===
 icon.svg[SU2T]: F:官网与应用的品牌图标：深色圆角底、白色漏斗和一颗红色匹配点 | R:code:site/index.html,code:apps/desktop/build/icon.svg | A:- | S:1024 留 100px Dock 边；漏斗描边磨圆；红点 #ff2e4d；与桌面 icon 同源。
