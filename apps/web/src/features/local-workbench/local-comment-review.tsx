@@ -14,7 +14,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
@@ -57,6 +56,7 @@ import {
   localApi,
   type GenerateQueuePreview,
   type LocalReview,
+  type ReviewAuthorGroup,
   type ReviewCommentListItem,
 } from "./local-api";
 import {
@@ -81,11 +81,11 @@ export function LocalCommentReview() {
   const [contact, setContact] = useState<LocalReview | null>(null);
   const [original, setOriginal] = useState<LocalReview | null>(null);
   const [preview, setPreview] = useState<GenerateQueuePreview | null>(null);
-  const [decisionPrompt, setDecisionPrompt] = useState<{
-    rows: LocalReview[];
+  const [groupDetail, setGroupDetail] = useState<ReviewAuthorGroup | null>(null);
+  const [groupPrompt, setGroupPrompt] = useState<{
+    group: ReviewAuthorGroup;
     next: ReviewDecision;
   } | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const client = useQueryClient();
   const generate = useLocalAction("generateSendQueue");
 
@@ -304,10 +304,10 @@ export function LocalCommentReview() {
     enabled: view === "posts",
   });
 
-  const commentList = useQuery({
+  const groupList = useQuery({
     queryKey: [
       "local",
-      "reviewCommentList",
+      "reviewAuthorGroups",
       page,
       commentPageSize,
       runId,
@@ -325,7 +325,7 @@ export function LocalCommentReview() {
       sort,
     ],
     queryFn: () =>
-      localApi("reviewCommentList", {
+      localApi("reviewAuthorGroups", {
         page,
         pageSize: commentPageSize,
         runId,
@@ -346,33 +346,49 @@ export function LocalCommentReview() {
   });
 
   const queueRules = useLocalRecords("queueRules");
-  const decide = useMutation({
+  const pendingComments = (group: ReviewAuthorGroup) =>
+    group.comments.filter((row) => row.review_status === "PENDING");
+  const unmatchedPending = (group: ReviewAuthorGroup) =>
+    pendingComments(group).filter((row) => row.decision === "NO_MATCH");
+  const actionCount = (group: ReviewAuthorGroup, next: ReviewDecision) =>
+    next === "APPROVED"
+      ? pendingComments(group).length - unmatchedPending(group).length
+      : next === "REJECTED"
+        ? pendingComments(group).length
+        : group.comments.filter((row) => row.review_status === "REJECTED").length;
+  const decideGroup = useMutation({
     mutationFn: ({
-      rows,
+      group,
       next,
     }: {
-      rows: LocalReview[];
+      group: ReviewAuthorGroup;
       next: ReviewDecision;
     }) => {
-      const items = rows.map((row) => ({ id: row.id, version: row.version }));
-      return localApi("decideReviews", { items, status: next });
+      const items = group.comments.flatMap((row) =>
+        row.review_id && row.version !== null
+          ? [{ id: row.review_id, version: row.version }]
+          : [],
+      );
+      return localApi("decideReviewGroup", {
+        representativeId: group.representative.review_id ?? "",
+        items,
+        status: next,
+      });
     },
     onSuccess: (result, variables) => {
-      const count = variables.rows.length;
+      const count = actionCount(variables.group, variables.next);
       if (variables.next === "APPROVED") {
-        const queued = result.queued;
+        const unmatched = unmatchedPending(variables.group).length;
         toast.success(
-          queued
-            ? `已通过 ${count} 条，加入待发送队列`
-            : `已通过 ${count} 条，当前没有可入队的规则`,
+          `已通过这位作者的 ${count} 条评论${result.queued ? "，加入待发送队列" : ""}${unmatched ? `；${unmatched} 条不符合已标记` : ""}`,
         );
       } else if (variables.next === "REJECTED") {
-        toast.success(`已标记 ${count} 条为不符合，可在“不符合”中恢复`);
+        toast.success(`已标记这位作者的 ${count} 条评论为不符合`);
       } else {
-        toast.success(`已恢复 ${count} 条为待确认`);
+        toast.success(`已恢复这位作者的 ${count} 条评论为待确认`);
       }
-      setDecisionPrompt(null);
-      setSelected(new Set());
+      setGroupPrompt(null);
+      setGroupDetail(null);
       void client.invalidateQueries({ queryKey: ["local"] });
     },
   });
@@ -382,91 +398,41 @@ export function LocalCommentReview() {
   );
   const ruleFor = (row: ReviewCommentListItem) =>
     queueRules.data?.find((rule) => rule.policyId === row.policy_id) ?? null;
-  const approvalFor = (row: ReviewCommentListItem) =>
-    approvalState(row, ruleFor(row));
-  const selectable = (commentList.data?.items ?? []).filter(
-    (row) =>
-      Boolean(row.review_id) &&
-      row.state === "REVIEWED" &&
-      !row.queue_state &&
-      (row.review_status === "REJECTED" ||
-        (row.review_status === "PENDING" &&
-          (approvalFor(row).canApprove || row.decision !== "NO_MATCH"))),
-  );
-  const selectedRows = selectable.filter(
-    (row) => row.review_id && selected.has(row.review_id),
-  );
-  const approvableSelected = selectedRows.filter(
-    (row) =>
-      row.review_status === "PENDING" && approvalFor(row).canApprove,
-  );
-  const rejectableSelected = selectedRows.filter(
-    (row) =>
-      row.review_status === "PENDING" && row.decision !== "NO_MATCH",
-  );
-  const rejectedSelected = selectedRows.filter(
-    (row) => row.review_status === "REJECTED",
-  );
-  const allSelected =
-    selectable.length > 0 &&
-    selectable.every((row) => row.review_id && selected.has(row.review_id));
-  const someSelected = selectable.some(
-    (row) => row.review_id && selected.has(row.review_id),
-  );
-  const toggleSelected = (id: string) =>
-    setSelected((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const toggleAll = () =>
-    setSelected(
-      allSelected
-        ? new Set()
-        : new Set(
-            selectable
-              .map((row) => row.review_id)
-              .filter((id): id is string => Boolean(id)),
-          ),
+  const groupApproval = (group: ReviewAuthorGroup) => {
+    const pending = group.comments.filter(
+      (row) => row.review_status === "PENDING",
     );
-  const askDecision = (rows: ReviewCommentListItem[], next: ReviewDecision) =>
-    setDecisionPrompt({
-      rows: rows.map((row) =>
-        toReview(row, row.run_id, { id: row.post_id, title: row.post_title }),
-      ),
-      next,
-    });
-  const selectionKey = [
-    view,
-    page,
-    commentPageSize,
-    runId,
-    policyId,
-    query,
-    decision,
-    context,
-    mode,
-    minScore,
-    maxScore,
-    from,
-    to,
-    publication,
-    queue,
-    sort,
-  ].join("|");
-  useEffect(() => {
-    setSelected(new Set());
-  }, [selectionKey]);
+    const candidates = pending.filter((row) => row.decision !== "NO_MATCH");
+    const fallbackRow = candidates[0] ?? pending[0] ?? group.representative;
+    const matched = candidates
+      .map((row) => approvalState(row, ruleFor(row)))
+      .find((item) => item.canApprove);
+    const approval = matched ?? approvalState(fallbackRow, ruleFor(fallbackRow));
+    return {
+      canApprove:
+        !group.queueState &&
+        Boolean(group.representative.review_id) &&
+        Boolean(matched),
+      canReject: !group.queueState && pending.length > 0,
+      approveHint: approval.approveHint,
+    };
+  };
+  const askGroupDecision = (group: ReviewAuthorGroup, next: ReviewDecision) =>
+    setGroupPrompt({ group, next });
   const error =
-    workflow.error ?? reviewPosts.error ?? commentList.error ?? decide.error ?? queueRules.error;
-  const total = view === "posts" ? reviewPosts.data?.total : commentList.data?.total;
+    workflow.error ??
+    reviewPosts.error ??
+    groupList.error ??
+    decideGroup.error ??
+    queueRules.error;
+  const total =
+    view === "posts" ? reviewPosts.data?.total : groupList.data?.total;
   const description =
     total === undefined
       ? "正在读取…"
       : view === "posts"
         ? total + " 篇帖子"
-        : total + " 条评论";
+        : `${total} 位作者 · ${groupList.data?.commentTotal ?? 0} 条评论`;
 
   return (
     <>
@@ -710,49 +676,6 @@ export function LocalCommentReview() {
 
       {error ? <ErrorNotice error={error} /> : null}
 
-      {view === "comments" && selectedRows.length ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-4 py-3">
-          <span className="text-body">已选 {selectedRows.length} 条</span>
-          {approvableSelected.length ? (
-            <Button
-              size="sm"
-              disabled={decide.isPending}
-              onClick={() => askDecision(approvableSelected, "APPROVED")}
-            >
-              通过 {approvableSelected.length}
-            </Button>
-          ) : null}
-          {rejectableSelected.length ? (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={decide.isPending}
-              onClick={() => askDecision(rejectableSelected, "REJECTED")}
-            >
-              标记不符合 {rejectableSelected.length}
-            </Button>
-          ) : null}
-          {rejectedSelected.length ? (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={decide.isPending}
-              onClick={() => askDecision(rejectedSelected, "PENDING")}
-            >
-              恢复待确认 {rejectedSelected.length}
-            </Button>
-          ) : null}
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={decide.isPending}
-            onClick={() => setSelected(new Set())}
-          >
-            取消选择
-          </Button>
-        </div>
-      ) : null}
-
       {view === "posts" ? (
         <>
           {reviewPosts.isLoading ? <Loading /> : null}
@@ -785,10 +708,10 @@ export function LocalCommentReview() {
         </>
       ) : (
         <>
-          {commentList.isLoading ? <Loading /> : null}
-          {!commentList.isLoading && !commentList.data?.items.length ? (
+          {groupList.isLoading ? <Loading /> : null}
+          {!groupList.isLoading && !groupList.data?.items.length ? (
             <EmptyState
-              title={hasFilters ? "没有符合条件的评论。" : "本机还没有可审核的评论。"}
+              title={hasFilters ? "没有符合条件的作者。" : "本机还没有可审核的评论。"}
               action={
                 hasFilters ? (
                   <Button variant="outline" onClick={clear}>
@@ -798,80 +721,66 @@ export function LocalCommentReview() {
               }
             />
           ) : null}
-          {commentList.data?.items.length ? (
+          {groupList.data?.items.length ? (
             <div className="overflow-x-auto rounded-lg border">
-              <Table className="min-w-[1128px]" aria-label="全部评论审核记录">
+              <Table className="min-w-[1128px]" aria-label="按作者聚合的评论审核记录">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[48px]">
-                      <Checkbox
-                        aria-label="选择本页可处理评论"
-                        checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                        disabled={!selectable.length || decide.isPending}
-                        onCheckedChange={toggleAll}
-                      />
-                    </TableHead>
-                    <TableHead>评论</TableHead>
+                    <TableHead>作者与评论</TableHead>
                     <TableHead className="w-[224px]">帖子</TableHead>
-                    <TableHead className="w-[80px]">匹配分</TableHead>
-                    <TableHead className="w-[104px]">判断</TableHead>
+                    <TableHead className="w-[80px]">最高分</TableHead>
+                    <TableHead className="w-[120px]">判断</TableHead>
                     <TableHead className="w-[96px]">时间</TableHead>
                     <TableHead className="w-[168px] text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {commentList.data.items.map((row: ReviewCommentListItem) => {
+                  {groupList.data.items.map((group) => {
+                    const row = group.representative;
                     const review = toReview(row, row.run_id, {
                       id: row.post_id,
                       title: row.post_title,
                     });
-                    const approval = approvalFor(row);
-                    const reviewId = row.review_id;
-                    const selectableRow =
-                      Boolean(reviewId) &&
-                      row.state === "REVIEWED" &&
-                      !row.queue_state &&
-                      (row.review_status === "REJECTED" ||
-                        (row.review_status === "PENDING" &&
-                          (approval.canApprove || row.decision !== "NO_MATCH")));
+                    const approval = groupApproval(group);
+                    const posts = new Set(group.comments.map((item) => item.post_id));
                     return (
-                      <TableRow key={row.id}>
-                        <TableCell>
-                          {selectableRow ? (
-                            <Checkbox
-                              aria-label={`选择评论：${row.body.slice(0, 20)}`}
-                              checked={selected.has(reviewId!)}
-                              disabled={decide.isPending}
-                              onCheckedChange={() => toggleSelected(reviewId!)}
-                            />
-                          ) : null}
-                        </TableCell>
+                      <TableRow key={`${group.authorId}:${group.policyId}`}>
                         <TableCell className="whitespace-normal">
                           <button
                             type="button"
                             className="block w-full rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                            onClick={() => setDetail(review)}
+                            onClick={() => setGroupDetail(group)}
                           >
-                            <span className="line-clamp-2 text-body leading-relaxed break-words">
+                            <span className="flex min-w-0 flex-wrap items-center gap-2 text-body font-medium">
+                              <span className="truncate">{group.nickname ?? "匿名"}</span>
+                              <Badge variant="secondary">{group.count} 条评论</Badge>
+                            </span>
+                            <span className="mt-1 line-clamp-2 text-body leading-relaxed break-words text-muted-foreground">
                               {row.body}
                             </span>
                             <span className="mt-1 block text-caption text-muted-foreground">
-                              {row.nickname ?? "匿名"} · {day(row.published_at)}
+                              {day(row.published_at)}
                             </span>
                           </button>
                         </TableCell>
                         <TableCell className="text-caption whitespace-normal text-muted-foreground">
-                          <span className="line-clamp-2">{row.post_title}</span>
+                          <span className="line-clamp-2">
+                            {posts.size > 1 ? `${posts.size} 篇帖子` : row.post_title}
+                          </span>
                         </TableCell>
-                        <TableCell className="tabular-nums">{score(row.score)}</TableCell>
+                        <TableCell className="tabular-nums">{score(group.highest)}</TableCell>
                         <TableCell>
-                          {row.decision ? (
+                          {group.queueState ? (
+                            <Badge variant="success">已入队</Badge>
+                          ) : group.reviewStatus === "APPROVED" ? (
+                            <Badge variant="success">已通过</Badge>
+                          ) : group.reviewStatus === "REJECTED" ? (
+                            <Badge variant="outline">不符合</Badge>
+                          ) : group.reviewStatus === "MIXED" ? (
+                            <Badge variant="secondary">部分已通过</Badge>
+                          ) : row.decision ? (
                             <Badge variant={decisionVariant(row.decision)}>
                               {decisionLabels[row.decision] ?? row.decision}
-                              {row.review_status === "APPROVED" ||
-                              row.review_status === "REJECTED"
-                                ? " · 人工"
-                                : ""}
                             </Badge>
                           ) : (
                             <span className="text-caption text-muted-foreground">—</span>
@@ -884,19 +793,15 @@ export function LocalCommentReview() {
                           <ReviewDecisionActions
                             row={review}
                             state={row.state}
-                            pending={decide.isPending}
+                            pending={decideGroup.isPending}
                             canApprove={approval.canApprove}
-                            canReject={
-                              row.review_status === "PENDING" &&
-                              !row.queue_state &&
-                              row.decision !== "NO_MATCH"
-                            }
+                            canReject={approval.canReject}
                             approveHint={approval.approveHint}
-                            onDecide={(next) => askDecision([row], next)}
+                            onDecide={(next) => askGroupDecision(group, next)}
                             onContact={() => setContact(review)}
-                            onOpen={() => setDetail(review)}
+                            onOpen={() => setGroupDetail(group)}
                             onOpenOriginal={() => {
-                              setDetail(null);
+                              setGroupDetail(null);
                               setOriginal(review);
                             }}
                           />
@@ -910,10 +815,10 @@ export function LocalCommentReview() {
           ) : null}
           <Pagination
             page={page}
-            total={commentList.data?.total ?? 0}
+            total={groupList.data?.total ?? 0}
             pageSize={commentPageSize}
             onPageChange={setPage}
-            countLabel="条评论"
+            countLabel="位作者"
             pageSizeOptions={[20, 30, 50]}
             onPageSizeChange={setCommentPageSize}
           />
@@ -926,10 +831,9 @@ export function LocalCommentReview() {
       {detail ? (
         <ReviewDetail
           row={detail}
-          state={
-            commentList.data?.items.find((item) => item.review_id === detail.id)
-              ?.state
-          }
+          state={groupList.data?.items
+            .flatMap((group) => group.comments)
+            .find((item) => item.review_id === detail.id)?.state}
           onClose={() => setDetail(null)}
           onOpenOriginal={() => {
             setOriginal(detail);
@@ -988,40 +892,117 @@ export function LocalCommentReview() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <AlertDialog
-        open={!!decisionPrompt}
+      <Dialog
+        open={!!groupDetail}
         onOpenChange={(open) => {
-          if (!open && !decide.isPending) setDecisionPrompt(null);
+          if (!open && !decideGroup.isPending) setGroupDetail(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {groupDetail?.nickname ?? "匿名"} · {groupDetail?.count ?? 0} 条评论
+            </DialogTitle>
+            <DialogDescription>
+              最高分 {score(groupDetail?.highest ?? null)} · 通过后只发送一条
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+            {groupDetail?.comments.map((row) => {
+              const review = toReview(row, row.run_id, {
+                id: row.post_id,
+                title: row.post_title,
+              });
+              return (
+                <div key={row.id} className="rounded-md border p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="min-w-0 flex-1 text-body leading-relaxed break-words">
+                      {row.body}
+                    </p>
+                    {row.decision ? (
+                      <Badge variant={decisionVariant(row.decision)}>
+                        {decisionLabels[row.decision] ?? row.decision}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    {row.post_title} · {day(row.published_at)} · 匹配分 {score(row.score)}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setGroupDetail(null);
+                        setDetail(review);
+                      }}
+                    >
+                      查看详情
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setGroupDetail(null);
+                        setOriginal(review);
+                      }}
+                    >
+                      查看原帖
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            {groupDetail && groupApproval(groupDetail).canReject ? (
+              <Button
+                variant="outline"
+                disabled={decideGroup.isPending}
+                onClick={() => askGroupDecision(groupDetail, "REJECTED")}
+              >
+                标记不符合
+              </Button>
+            ) : null}
+            {groupDetail && groupApproval(groupDetail).canApprove ? (
+              <Button
+                disabled={decideGroup.isPending}
+                onClick={() => askGroupDecision(groupDetail, "APPROVED")}
+              >
+                通过作者
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog
+        open={!!groupPrompt}
+        onOpenChange={(open) => {
+          if (!open && !decideGroup.isPending) setGroupPrompt(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {decisionPrompt?.next === "APPROVED"
-                ? decisionPrompt.rows.length === 1
-                  ? "通过这条评论？"
-                  : `通过选中的 ${decisionPrompt.rows.length} 条评论？`
-                : decisionPrompt?.next === "REJECTED"
-                  ? decisionPrompt.rows.length === 1
-                    ? "标记这条评论为不符合？"
-                    : `标记选中的 ${decisionPrompt.rows.length} 条评论为不符合？`
-                  : decisionPrompt?.rows.length === 1
-                    ? "恢复这条评论为待确认？"
-                    : `恢复选中的 ${decisionPrompt?.rows.length ?? 0} 条评论为待确认？`}
+              {groupPrompt?.next === "APPROVED"
+                ? `通过这位作者的 ${actionCount(groupPrompt.group, "APPROVED")} 条评论？`
+                : groupPrompt?.next === "REJECTED"
+                  ? `标记这位作者的 ${actionCount(groupPrompt.group, "REJECTED")} 条评论为不符合？`
+                  : `恢复这位作者的 ${groupPrompt ? actionCount(groupPrompt.group, "PENDING") : 0} 条评论为待确认？`}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {decisionPrompt?.next === "APPROVED"
-                ? "通过后会加入待发送队列，按自动发送配置处理。"
-                : decisionPrompt?.next === "REJECTED"
+              {groupPrompt?.next === "APPROVED"
+                ? `通过后合并为一次发送，其余评论只记录审核结果。${unmatchedPending(groupPrompt.group).length ? ` ${unmatchedPending(groupPrompt.group).length} 条不符合将标记为不符合。` : ""}`
+                : groupPrompt?.next === "REJECTED"
                   ? "标记后从待确认转为不符合；可在“不符合”筛选中恢复。"
                   : "恢复后重新进入待确认，并按入队规则处理。"}
             </AlertDialogDescription>
-            {decisionPrompt?.next === "APPROVED" &&
-            decisionPrompt.rows.some((row) => row.context !== "SUFFICIENT") ? (
+            {groupPrompt?.next === "APPROVED" &&
+            groupPrompt.group.comments.some((row) => row.context !== "SUFFICIENT") ? (
               <p className="text-caption text-warning">
                 含{" "}
                 {
-                  decisionPrompt.rows.filter(
+                  groupPrompt.group.comments.filter(
                     (row) => row.context !== "SUFFICIENT",
                   ).length
                 }{" "}
@@ -1029,19 +1010,19 @@ export function LocalCommentReview() {
               </p>
             ) : null}
           </AlertDialogHeader>
-          {decide.error ? <ErrorNotice error={decide.error} /> : null}
+          {decideGroup.error ? <ErrorNotice error={decideGroup.error} /> : null}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={decide.isPending}>取消</AlertDialogCancel>
+            <AlertDialogCancel disabled={decideGroup.isPending}>取消</AlertDialogCancel>
             <Button
-              variant={decisionPrompt?.next === "REJECTED" ? "outline" : "default"}
-              pending={decide.isPending}
+              variant={groupPrompt?.next === "REJECTED" ? "outline" : "default"}
+              pending={decideGroup.isPending}
               onClick={() => {
-                if (decisionPrompt) decide.mutate(decisionPrompt);
+                if (groupPrompt) decideGroup.mutate(groupPrompt);
               }}
             >
-              {decisionPrompt?.next === "APPROVED"
+              {groupPrompt?.next === "APPROVED"
                 ? "通过"
-                : decisionPrompt?.next === "REJECTED"
+                : groupPrompt?.next === "REJECTED"
                   ? "标记不符合"
                   : "恢复待确认"}
             </Button>

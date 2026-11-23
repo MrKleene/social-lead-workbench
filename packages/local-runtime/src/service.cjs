@@ -157,6 +157,7 @@ class LocalService {
  reviewPosts(input){return this.workspace().reviewPosts(input);}
  reviewComments(input){return this.workspace().reviewComments(input);}
  reviewCommentList(input){return this.workspace().reviewCommentList(input);}
+  reviewAuthorGroups(input){return this.workspace().reviewAuthorGroups(input);}
  runProgress(input){return this.workspace().runProgress(input); }
  decideReview(input){return this.store.transaction(()=>{const result=this.decideReviewInTransaction(input);return {updated:true,queue:result.queue};});}
  decideReviews({items,status}={}){
@@ -173,7 +174,30 @@ class LocalService {
    return {updated:items.length,queued,skipped};
   });
  }
- decideReviewInTransaction({id,version,status}){
+ decideReviewGroup({representativeId,items,status}={}){
+   if(!Array.isArray(items)||!items.length||items.length>200||typeof representativeId!=='string'||!['APPROVED','REJECTED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_SELECTION');
+   const seen=new Set();
+   for(const item of items){if(!item||typeof item.id!=='string'||!Number.isInteger(item.version)||seen.has(item.id))throw new LocalError('INVALID_REVIEW_SELECTION');seen.add(item.id);}
+   return this.store.transaction(()=>{
+    const rows=items.map(item=>{const row=this.store.db.prepare("SELECT r.id,r.version,r.review_status,r.score,r.context,coalesce(r.manual_decision,r.decision) decision,c.user_id,b.policy_id FROM review_results r JOIN run_comments c ON c.id=r.comment_id JOIN review_batches b ON b.id=r.batch_id WHERE r.id=? AND r.version=?").get(item.id,item.version);if(!row)throw new LocalError('REVIEW_CHANGED');return row;});
+    const first=rows[0];
+    if(rows.some(row=>row.user_id!==first.user_id||row.policy_id!==first.policy_id))throw new LocalError('INVALID_REVIEW_SELECTION');
+    const pending=rows.filter(row=>row.review_status==='PENDING'),rejected=rows.filter(row=>row.review_status==='REJECTED');
+    const target=status==='PENDING'?rejected:status==='REJECTED'?pending:pending.filter(row=>row.decision!=='NO_MATCH');
+    if(!target.length)throw new LocalError('INVALID_REVIEW_DECISION');
+    const representative=status==='APPROVED'?target.find(row=>row.id===representativeId)??[...target].sort((a,b)=>(b.score??0)-(a.score??0))[0]:null;
+    let updated=0,queued=0,skipped=0;
+    if(status==='APPROVED')for(const row of pending.filter(item=>item.decision==='NO_MATCH')){const changed=this.store.db.prepare("UPDATE review_results SET review_status='REJECTED',manual_decision='NO_MATCH',version=version+1 WHERE id=? AND version=? AND review_status='PENDING'").run(row.id,row.version).changes;if(changed!==1)throw new LocalError('REVIEW_CHANGED');updated++;}
+    const ordered=status==='APPROVED'?[representative,...target.filter(row=>row.id!==representative.id)]:target;
+    for(const row of ordered){
+     if(status==='APPROVED'&&row.id!==representative.id){const changed=this.store.db.prepare("UPDATE review_results SET review_status='APPROVED',manual_decision='MATCH',version=version+1 WHERE id=? AND version=? AND review_status='PENDING'").run(row.id,row.version).changes;if(changed!==1)throw new LocalError('REVIEW_CHANGED');updated++;continue;}
+     const result=this.decideReviewInTransaction({id:row.id,version:row.version,status});updated++;if(result.queue){queued+=result.queue.queued??0;if(result.queue.skipped)skipped++;}
+    }
+    this.store.audit('LOCAL_USER','REVIEW_DECISION_GROUP',representative?.id??representativeId,{status,count:updated,authorId:first.user_id,policyId:first.policy_id,representativeId:representative?.id??null,queued,skipped});
+    return {updated,queued,skipped,representativeId:representative?.id??representativeId};
+   });
+  }
+  decideReviewInTransaction({id,version,status}){
   if(typeof id!=='string'||!Number.isInteger(version)||!['APPROVED','REJECTED','PENDING'].includes(status))throw new LocalError('INVALID_REVIEW_DECISION');
   const current=this.store.db.prepare('SELECT review_status FROM review_results WHERE id=? AND version=?').get(id,version);
   if(!current)throw new LocalError('REVIEW_CHANGED');
