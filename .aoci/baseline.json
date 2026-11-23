@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-11T10:57:30Z",
-  "updated_at": "2026-11-23T17:13:50Z",
+  "updated_at": "2026-11-23T17:18:41Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -17533,9 +17533,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "488a3c1b2d3b3ed43da6825c7815aa63063b78145d7fa2fb1f4a5a25b7a7299d",
-      "size": 258527,
-      "normalized_sha256": "488a3c1b2d3b3ed43da6825c7815aa63063b78145d7fa2fb1f4a5a25b7a7299d"
+      "sha256": "992cc298537098a2bbb96f91d4cdd1a178e673d27921f1350e84bcf0b07c700d",
+      "size": 258603,
+      "normalized_sha256": "992cc298537098a2bbb96f91d4cdd1a178e673d27921f1350e84bcf0b07c700d"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -18299,9 +18299,9 @@
     },
     "apps/web/src/features/local-workbench/local-api.ts": {
       "role": "index",
-      "sha256": "3381031cd9e42ca73a2a6a5e41f25fc8291c8fa5c989edf42696d1ac8a7c0325",
-      "size": 29473,
-      "normalized_sha256": "3381031cd9e42ca73a2a6a5e41f25fc8291c8fa5c989edf42696d1ac8a7c0325"
+      "sha256": "dfcd6102858d7ad6b010a9aea54cc28ffbdfc9443deec4f81652ff88c86a6fef",
+      "size": 29446,
+      "normalized_sha256": "dfcd6102858d7ad6b010a9aea54cc28ffbdfc9443deec4f81652ff88c86a6fef"
     },
     "apps/web/src/features/local-workbench/local-collect-progress.tsx": {
       "role": "index",
@@ -18953,9 +18953,9 @@
     },
     "docs/requirements/MODULES.md": {
       "role": "index",
-      "sha256": "61fa5a1739dc3a9eec8992b4f7d2b6eea7beee0d1487f7b8155aa7d31f1f287a",
-      "size": 17897,
-      "normalized_sha256": "61fa5a1739dc3a9eec8992b4f7d2b6eea7beee0d1487f7b8155aa7d31f1f287a"
+      "sha256": "395287e2edfd75352ab3a62cf72d38c22b7d3632998f7e63424bf9ac6145697c",
+      "size": 17957,
+      "normalized_sha256": "395287e2edfd75352ab3a62cf72d38c22b7d3632998f7e63424bf9ac6145697c"
     },
     "docs/requirements/OVERVIEW.md": {
       "role": "index",
