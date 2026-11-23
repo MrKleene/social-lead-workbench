@@ -56,6 +56,7 @@ import { PageHeader } from "@/components/patterns/page-header";
 import { Pagination } from "@/components/patterns/pagination";
 import { SectionCard } from "@/components/patterns/section-card";
 import { pendingReasonLabels } from "./local-status-labels";
+import { LocalPostHistory } from "./local-post-history";
 import { useSaveSteps } from "./reply-settings";
 import { useLocalAction, useLocalRecords } from "./use-local-records";
 
@@ -100,6 +101,7 @@ export function LocalPending() {
   const [requeue, setRequeue] = useState<SendQueueItem | null>(null);
   const [cancelTarget, setCancelTarget] = useState<SendQueueItem | null>(null);
   const [dismissTarget, setDismissTarget] = useState<SendQueueItem | null>(null);
+  const [original, setOriginal] = useState<SendQueueItem | null>(null);
   const [override, setOverride] = useState(false);
   const [sending, setSending] = useState(false);
   const [accountId, setAccountId] = useState("");
@@ -440,9 +442,20 @@ export function LocalPending() {
                           />
                         </TableCell>
                         <TableCell className="min-w-[250px] max-w-[320px] whitespace-normal align-top">
-                          <p className="font-medium break-words">
-                            {item.postTitle || "无标题笔记"}
-                          </p>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <p className="min-w-0 flex-1 font-medium break-words">
+                              {item.postTitle || "无标题笔记"}
+                            </p>
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              className="shrink-0 px-0 text-caption"
+                              onClick={() => setOriginal(item)}
+                            >
+                              查看原文
+                            </Button>
+                          </div>
                           <p className="mt-1 line-clamp-2 text-caption leading-relaxed text-muted-foreground break-words">
                             {item.comment}
                           </p>
@@ -851,6 +864,15 @@ export function LocalPending() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {original ? (
+        <LocalPostHistory
+          key={original.id}
+          postId={original.postId}
+          focusCommentId={original.commentPlatformId}
+          onClose={() => setOriginal(null)}
+        />
+      ) : null}
     </>
   );
 }
