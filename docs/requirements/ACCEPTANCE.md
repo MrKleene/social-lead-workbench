@@ -30,9 +30,20 @@
 - 其中 1 条最初因回读消息 ID 参与方顺序被误判为结果未知；修正回读后完成平台确认，恢复队列行并解除发送暂停。
 - 未覆盖：评论回复、批量发送、多账号、自动发送长期运行与自然新消息。
 
+## 作者本机实测记录（2026-11-22 ~ 2026-11-23）
+
+数据源为本机数据库 `workbench.sqlite`（含 WAL）的只读核对。
+
+- 采集：3 轮真实采集落库，`collection_runs` 3 条、`run_posts` 16 条、`run_comments` 1347 条。11-22 23:43 完成 3 帖 34 条；11-23 18:25 完成 3 帖 2 条；11-23 18:26 部分完成 10 帖 1311 条。
+- 审核：11 个 `review_batches` 全部 `COMPLETED`，`review_results` 43 条评论级判定（MATCH 9、NO_MATCH 27、UNCERTAIN 14），`model_submissions` 11 次真实付费调用。
+- 入队：7 条评论行与 7 条私信行进入队列。评论行 6 条因自动回复总开关关闭停在 `WAITING_SWITCH`（等待，不是失败），1 条超过 7 天转 `EXPIRED`；私信行 3 条已发送、1 条等待额度、3 条等待开关。
+- 发送：`send_attempts` 共 3 条，全部为私信首联 `CONFIRMED`，与上节一致。
+- 账号：本机 2 个账号记录。
+- 未覆盖：评论发送（`send_attempts` 无 COMMENT 记录）、收件（`received_messages` 0 条、`inbox_receivers` 0 个）、平台会话回复、多账号、多轮长期稳定性与自然新消息。
+
 ## 工程验证
 
-运行 `npm run check`、`npm run build`、`npm run check:legacy`、`npm run desktop:stage` 和 `npm run desktop:test:ui`。
+运行 `npm run check`、`npm run build`、`npm run desktop:stage` 和 `npm run desktop:test:ui`。
 路径与打包回归必须覆盖含空格/中文路径、Windows 模拟路径、ASAR 通配归档、解包和内容白名单。
 
 离线测试使用临时 SQLite、模拟兼容仓储及合成平台数据；实际 Electron 界面测试禁用真实平台、付费模型和系统凭据。
