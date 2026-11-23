@@ -6,7 +6,7 @@ Administrator entry: `/inbox` shows accounts; selecting one opens `/inbox?accoun
 
 Sending is a separate preview/confirm operation (`previewChat`/`authorizeChat`, `previewCommentReply`/`authorizeCommentReply` over local IPC), not first-contact marketing. The account cannot be substituted. The preview freezes the account revision, recipient, content and, for comment replies, the exact received message and post source reference. Every dispatch rechecks permissions, account capability, do-not-contact evidence, concurrent sends, quota where applicable and platform pause.
 
-DM sending has two purposes. A never-answered inbound message uses `INBOX_REPLY` and consumes that inbound message once. Once a DM is confirmed, later messages use `CHAT_FOLLOW_UP`; there is no user-visible follow-up counter and no conversation message limit. Comment replies use `INBOX_COMMENT_REPLY` and are allowed only when the notification's post has a stored source reference.
+DM sending has two purposes. A never-answered inbound message uses `INBOX_REPLY` and consumes that inbound message once. Once a DM is confirmed, later messages use `CHAT_FOLLOW_UP`; there is no user-visible follow-up counter and no conversation message limit. Comment replies use `INBOX_COMMENT_REPLY` and are allowed only when the notification's post has a stored source reference. Nested replies (a comment with a parent) are rejected before any platform session opens; other preflight failures keep their exact reason instead of collapsing into a generic interruption.
 
 ## Send and uncertainty
 

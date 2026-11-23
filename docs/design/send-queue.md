@@ -60,9 +60,11 @@
 
 ## 恢复、过期与清理
 
-- 启动或调度时，`SENDING` 但对应 job 已不在 `QUEUED/RUNNING` 的行转 `FAILED`；job 为 `UNKNOWN` 时原因 `SUBMISSION_UNKNOWN`，否则 `SEND_INTERRUPTED`。`UNKNOWN` 行不会自动重发。
+- 启动或调度时，`SENDING` 但对应 job 已不在 `QUEUED/RUNNING` 的行转 `FAILED`；job 为 `UNKNOWN` 时原因 `SUBMISSION_UNKNOWN`，否则保留 job result 里的具体错误码（如 `COMMENT_TARGET_NOT_FOUND`），读不到才落到 `SEND_INTERRUPTED`。`UNKNOWN` 行不会自动重发。
 - 进入 `UNKNOWN` 时同时写入 `evidence_auto_tasks`；平台空闲时由 runner 延迟 2~5 分钟随机做一次自动核对（内含两次独立只读回读），不在提交后立即连续打开页面。应用关闭或平台忙时保持等待，重启后继续；确认原消息存在才转 `SENT`。回读消息 ID 同时接受平台输出的 `sender.recipient.hex` 与 `recipient.sender.hex` 两种参与方顺序，但仍绑定当前账号与收件人；失败保留具体原因。
 - 发送前若 `DMVERIFY`/`VERIFY` 能力不可用，直接拒绝并保留队列行，不打开平台发送进程。
+- 评论发送前做只读精确预检。二级回复（`run_comments.parent_id` 非空）在打开平台会话前直接拒绝为 `COMMENT_NESTED_REPLY_UNSUPPORTED`；其余预检失败保留具体原因（引用失效、页面不可用、目标缺失、目标不可见等），不再统一显示“发送中断”。
+- 评论行若同一作者另一渠道已有 `SENT` 或平台确认记录，列表返回 `otherChannelSent`，界面提示“同作者私信已发送”或“同作者评论已发送”，避免重复联系。
 - 活动行或 `FAILED` 行在入队满 7 天，或评论发布满 7 天时转 `EXPIRED`；原因为 `QUEUE_TOO_OLD` 或 `COMMENT_TOO_OLD`。
 - `EXPIRED` 行在 `settled_at` 满 30 天后由 `purge` 删除。
 - 规则被撤销时，该规则的活动队列行转 `CANCELLED` / `RULE_REVOKED`，并取消对应的排队 SEND job 与授权。

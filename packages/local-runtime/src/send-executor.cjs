@@ -3,6 +3,26 @@ const {createHash}=require('node:crypto');
 const {LocalError,hash}=require('./database.cjs'),{LocalQueue}=require('./queue.cjs'),{SendSafety,validateScope}=require('./send-safety.cjs');
 const {assertSendAccount,retainAccountRisk}=require('./account-safety.cjs');
 const digest=s=>createHash('sha256').update(s).digest('hex');
+const preflightCode=result=>({
+ PREFLIGHT_REFERENCE_UNVERIFIED:'COMMENT_REFERENCE_UNVERIFIED',
+ PREFLIGHT_NAVIGATION_UNVERIFIED:'COMMENT_PAGE_UNAVAILABLE',
+ STATE_POST_MISSING:'COMMENT_POST_UNAVAILABLE',
+ STATE_POST_MISMATCH:'COMMENT_POST_UNAVAILABLE',
+ STATE_COMMENTS_MISSING:'COMMENT_TREE_UNAVAILABLE',
+ STATE_INVALID:'COMMENT_TREE_UNAVAILABLE',
+ STATE_UNAVAILABLE:'COMMENT_TREE_UNAVAILABLE',
+ EXACT_TARGET_MISSING_OR_AMBIGUOUS:'COMMENT_TARGET_NOT_FOUND',
+ DOM_LOCATOR_UNVERIFIED:'COMMENT_TARGET_NOT_VISIBLE',
+ TARGET_MISMATCH:'COMMENT_TARGET_MISMATCH',
+ DEPTH_LIMIT:'COMMENT_TREE_TOO_LARGE',
+ ROW_LIMIT:'COMMENT_TREE_TOO_LARGE',
+}[result?.result?.diagnostic?.code]??'COMMENT_PREFLIGHT_FAILED');
+const unavailableCode=reason=>({
+ INVALID_TARGET:'COMMENT_PREFLIGHT_INVALID',
+ DISABLED:'COMMENT_PREFLIGHT_DISABLED',
+ PROTOCOL_UNAVAILABLE:'COMMENT_PREFLIGHT_UNAVAILABLE',
+ STOP_UNCONFIRMED:'PLATFORM_PROCESS_STOP_UNCONFIRMED',
+}[reason]??'COMMENT_PREFLIGHT_FAILED');
 class LocalSendExecutor{
  constructor(store,vault,runtime,wire){this.store=store;this.vault=vault;this.runtime=runtime;this.wire=wire;this.queue=new LocalQueue(store);this.safety=new SendSafety(store);this.reference=null;}
  async prepare(scope,signal,{lease}){
@@ -15,11 +35,14 @@ class LocalSendExecutor{
   if(scope.channel==='COMMENT'){
    const row=this.store.db.prepare('SELECT source_reference_ref FROM run_posts WHERE platform_id=? AND source_reference_ref IS NOT NULL ORDER BY rowid DESC LIMIT 1').get(scope.target.postId);
    if(!row)throw new LocalError('COMMENT_REFERENCE_UNAVAILABLE');this.reference=JSON.parse(this.vault.get('POST_REFERENCE',row.source_reference_ref));
+   const comment=this.store.db.prepare('SELECT parent_id FROM run_comments WHERE platform_id=? ORDER BY rowid DESC LIMIT 1').get(scope.target.commentId);
+   if(comment?.parent_id)throw new LocalError('COMMENT_NESTED_REPLY_UNSUPPORTED');
    const target={protocol:'workbench.xhs.exact-preflight.v2',accountId:a.id,senderId:a.platform_user_id,postId:scope.target.postId,targetCommentId:scope.target.commentId,recipientId:scope.recipientId,postReference:this.reference};
    const session=await this.runtime.openSaved({accountId:a.id,senderId:a.platform_user_id,sessionRef:a.session_ref,purpose:'PREFLIGHT'},signal);let result;
    try{result=await this.wire.inspectComment(session,target,signal);}finally{if(!await session.stop())throw new LocalError('PLATFORM_PROCESS_STOP_UNCONFIRMED');}
    if(result?.kind==='READ_ONLY_RESULT'&&result.result.kind==='RISK'){const reason={RATE_LIMITED:'RATE_LIMITED',VERIFICATION:'VERIFY_REQUIRED',BANNED:'RESTRICTED',PLATFORM_REFUSED:'PLATFORM_REFUSED'}[result.result.diagnostic.code];if(reason)retainAccountRisk(this.store,a.id,'COMMENT',reason,{code:result.result.diagnostic.code});}
-   if(result?.kind!=='READ_ONLY_RESULT'||result.result.kind!=='MATCHED_READ_ONLY')throw new LocalError('COMMENT_CAPABILITY_REQUIRED');
+   if(result?.kind!=='READ_ONLY_RESULT'){const code=unavailableCode(result?.reason);this.store.audit('AUTOMATION','SEND_PREFLIGHT_REJECTED',scope.basis?.queueId??scope.target.commentId,{code,reason:result?.reason??null});throw new LocalError(code);}
+   if(result.result.kind!=='MATCHED_READ_ONLY'){const code=preflightCode(result);this.store.audit('AUTOMATION','SEND_PREFLIGHT_REJECTED',scope.basis?.queueId??scope.target.commentId,{code,preflightCode:result.result.diagnostic?.code??null});throw new LocalError(code);}
    this.queue.current(lease);if(signal.aborted)throw new LocalError('SEND_CANCELLED');
    this.store.transaction(()=>{const current=this.store.db.prepare('SELECT * FROM accounts WHERE id=?').get(a.id);if(current.revision!==a.revision||current.session_ref!==a.session_ref)throw new LocalError('ACCOUNT_IDENTITY_CHANGED');const now=this.store.clock();this.store.db.prepare("INSERT INTO account_capabilities(account_id,channel,account_revision,sender_id,session_hash,driver_hash,evidence_hash,verified_at,expires_at) VALUES(?,'COMMENT',?,?,?,?,?,?,?) ON CONFLICT(account_id,channel) DO UPDATE SET account_revision=excluded.account_revision,sender_id=excluded.sender_id,session_hash=excluded.session_hash,verified_at=excluded.verified_at,expires_at=excluded.expires_at,driver_hash=excluded.driver_hash,evidence_hash=excluded.evidence_hash").run(a.id,a.revision,a.platform_user_id,digest(a.session_ref),session.binaryHash,hash(result.result),now,now+300000);});
   }

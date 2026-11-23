@@ -449,6 +449,11 @@ export function LocalPending() {
                           <p className="mt-1 text-caption text-muted-foreground">
                             收件人 {item.recipientNickname || "未知收件人"}
                           </p>
+                          {item.otherChannelSent ? (
+                            <p className="mt-1 text-caption text-muted-foreground">
+                              同作者{item.channel === "COMMENT" ? "私信" : "评论"}已发送
+                            </p>
+                          ) : null}
                           <p className="mt-1 text-caption text-muted-foreground">
                             评分 {item.score ?? "—"} · {item.origin === "AUTO" ? "自动入队" : item.origin === "MANUAL_REVIEW" ? "人工通过" : "手动发送"}
                           </p>

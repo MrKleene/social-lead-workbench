@@ -69,6 +69,8 @@ test('review completion queues one waiting row per configured channel without th
  const rows=queuedRows(f);assert.deepEqual(rows.map(row=>row.channel),['COMMENT','DM']);
  for(const row of rows){const plan=JSON.parse(row.plan);assert.equal(row.state,'WAITING_SWITCH');assert.equal(row.reason,'AUTO_REPLY_OFF');assert.equal(row.origin,'AUTO');assert.equal(plan.ruleId,f.rule.id);assert.equal(plan.threshold,80);assert.equal(plan.templates[0].channel,row.channel);}
  const list=f.sendQueue.list({tab:'pending'});assert.equal(list.total,2);assert.equal(list.items[0].recipientNickname,'合成用户');assert.equal(f.sendQueue.list({tab:'pending',query:'合成用户'}).total,2);const dm=f.sendQueue.list({tab:'pending',channel:'DM'}),comment=f.sendQueue.list({tab:'pending',channel:'COMMENT'});assert.equal(dm.total,1);assert.equal(dm.items.length,1);assert.equal(dm.items[0].channel,'DM');assert.equal(comment.total,1);assert.equal(comment.items[0].channel,'COMMENT');assert.throws(()=>f.sendQueue.list({tab:'pending',channel:'OTHER'}),/INVALID_PENDING_FILTER/);
+ const dmRow=rows.find(row=>row.channel==='DM');f.store.db.prepare("UPDATE send_queue SET state='SENT' WHERE id=?").run(dmRow.id);
+ const contacted=f.sendQueue.list({tab:'pending',channel:'COMMENT'});assert.equal(contacted.total,1);assert.equal(contacted.items[0].otherChannelSent,true);assert.equal(f.sendQueue.list({tab:'pending',channel:'DM'}).total,0);
  assert.equal(f.store.db.prepare("SELECT count(*) n FROM jobs WHERE kind='SEND'").get().n,0);
 });
 
@@ -82,6 +84,15 @@ test('switching automatic replies on schedules the enabled channel and leaves th
  assert.equal(payload.basis.type,'AUTOMATIC_QUEUE');assert.equal(payload.basis.queueId,dm.id);assert.equal(grant.issuer,'AUTOMATION');assert.equal(f.sendQueue.assertScope(payload,grant),20);
 });
 
+test('queue recovery keeps the failed job diagnostic instead of a generic interruption',t=>{
+ const f=reviewed(t,{autoReply:true,channels:['DM']});f.automation.afterReview(f.run.runId);
+ const started=f.sendQueue.schedule();assert.equal(started.started,true);
+ f.store.db.prepare("UPDATE jobs SET state='FAILED',result=? WHERE id=?").run(JSON.stringify({code:'COMMENT_NESTED_REPLY_UNSUPPORTED'}),started.id);
+ f.store.db.prepare("UPDATE send_queue SET state='SENDING' WHERE job_id=?").run(started.id);
+ f.sendQueue.recover();
+ const row=f.store.db.prepare('SELECT state,reason FROM send_queue WHERE job_id=?').get(started.id);
+ assert.equal(row.state,'FAILED');assert.equal(row.reason,'COMMENT_NESTED_REPLY_UNSUPPORTED');
+});
 test('switching automatic replies off returns ready items to the waiting switch queue',t=>{
  const f=reviewed(t,{autoReply:true,channels:['DM']});
  f.automation.afterReview(f.run.runId);
