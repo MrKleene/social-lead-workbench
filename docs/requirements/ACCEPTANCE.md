@@ -30,16 +30,23 @@
 - 其中 1 条最初因回读消息 ID 参与方顺序被误判为结果未知；修正回读后完成平台确认，恢复队列行并解除发送暂停。
 - 未覆盖：评论回复、批量发送、多账号、自动发送长期运行与自然新消息。
 
+## 评论发送实测（2026-11-23）
+
+- 从「待处理」手动发送 1 条首联评论（发送队列行 `89d9293e`、来源 `MANUAL_REVIEW`、`manual_now=1`），目标帖子 `6afc6b0f…`、目标评论 `6afff5f8…`、收件作者 `661226…0375`。
+- 平台回执新评论 `6b045cee…`，`send_attempts` 转 `CONFIRMED`，回读证据 `{"kind":"CONFIRMED","stopped":true,"submissions":1}`，队列行转 `SENT`。
+- 同一时段 3 条评论行由人工取消（`DISMISSED`），2 条仍因自动回复总开关关闭停在 `WAITING_SWITCH`，1 条超 7 天 `EXPIRED`。
+- 未覆盖：总开关开启后的自动派发、评论回复、批量与多账号、长期运行。
+
 ## 作者本机实测记录（2026-11-22 ~ 2026-11-23）
 
 数据源为本机数据库 `workbench.sqlite`（含 WAL）的只读核对。
 
 - 采集：3 轮真实采集落库，`collection_runs` 3 条、`run_posts` 16 条、`run_comments` 1347 条。11-22 23:43 完成 3 帖 34 条；11-23 18:25 完成 3 帖 2 条；11-23 18:26 部分完成 10 帖 1311 条。
 - 审核：11 个 `review_batches` 全部 `COMPLETED`，`review_results` 43 条评论级判定（MATCH 9、NO_MATCH 27、UNCERTAIN 14），`model_submissions` 11 次真实付费调用。
-- 入队：7 条评论行与 7 条私信行进入队列。评论行 6 条因自动回复总开关关闭停在 `WAITING_SWITCH`（等待，不是失败），1 条超过 7 天转 `EXPIRED`；私信行 3 条已发送、1 条等待额度、3 条等待开关。
-- 发送：`send_attempts` 共 3 条，全部为私信首联 `CONFIRMED`，与上节一致。
+- 入队：7 条评论行与 8 条私信行进入队列。评论行 1 条已发送、3 条人工取消、2 条因总开关关闭停在 `WAITING_SWITCH`（等待，不是失败）、1 条超过 7 天转 `EXPIRED`；私信行 4 条已发送、1 条等待额度、3 条等待开关。
+- 发送：`send_attempts` 共 5 条，全部 `CONFIRMED` 且均取得平台回执：私信首联 4 条、评论 1 条。
 - 账号：本机 2 个账号记录。
-- 未覆盖：评论发送（`send_attempts` 无 COMMENT 记录）、收件（`received_messages` 0 条、`inbox_receivers` 0 个）、平台会话回复、多账号、多轮长期稳定性与自然新消息。
+- 未覆盖：收件（`received_messages` 0 条、`inbox_receivers` 0 个）、平台会话回复、评论自动派发、多账号、多轮长期稳定性与自然新消息。
 
 ## 工程验证
 
