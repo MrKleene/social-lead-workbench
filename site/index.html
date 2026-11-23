@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Social Lead · 本地社媒获客工作台</title>
+<meta name="description" content="Social Lead 是一个在本机运行的社媒获客工作台：关键词采集、模型匹配、人工审核、评论与私信首联。数据留在本机，个人非商业使用。">
+<meta name="theme-color" content="#f2efe7">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://mrkleene.github.io/social-lead-workbench/">
+<link rel="stylesheet" href="styles.css">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Social Lead · 本地社媒获客工作台">
+<meta property="og:description" content="先采集，再审核，最后才发送。数据留在本机的社媒获客工作台。">
+<meta property="og:url" content="https://mrkleene.github.io/social-lead-workbench/">
+<meta property="og:image" content="https://mrkleene.github.io/social-lead-workbench/assets/screens/review.png">
+<meta name="twitter:card" content="summary_large_image">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+
+<header class="site-head" data-head>
+  <a class="brand" href="#top" aria-label="Social Lead 首页">
+    <img src="assets/icon.svg" alt="" width="30" height="30">
+    <span class="brand-name">Social Lead</span>
+    <span class="brand-note">本机工作台</span>
+  </a>
+  <nav class="site-nav" aria-label="页面导航">
+    <a href="#workflow">流程</a>
+    <a href="#review">审核</a>
+    <a href="#local">数据</a>
+    <a href="#download">下载</a>
+    <a href="#limits">边界</a>
+  </nav>
+  <div class="head-right">
+    <span class="version-tag">v0.1.0 · 预览</span>
+    <a class="head-gh" href="https://github.com/MrKleene/social-lead-workbench">GitHub <span aria-hidden="true">↗</span></a>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" id="top">
+    <div class="hero-topline">
+      <span>LOCAL-FIRST / SOCIAL LEAD WORKBENCH</span>
+      <span>macOS · Windows</span>
+    </div>
+
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="kicker">关键词采集 · 模型匹配 · 人工审核 · 评论 / 私信</p>
+        <h1>先采集，<br>再审核，<br><span class="accent">最后才发送。</span></h1>
+        <p class="lede">Social Lead 是一个在本机运行的社媒获客工作台。关键词下的笔记与评论收进一张表，模型按匹配方案标出可能的需求，由你逐条确认，最后才发出评论回复或私信首联。</p>
+
+        <div class="cta-row">
+          <a class="btn btn--ink" href="https://github.com/MrKleene/social-lead-workbench/releases/download/v0.1.0/Social-Lead-Desktop-0.1.0-mac-arm64.dmg">
+            <span class="btn-label">下载 macOS 版</span>
+            <span class="btn-meta">dmg · 288 MB</span>
+          </a>
+          <a class="btn btn--line" href="https://github.com/MrKleene/social-lead-workbench/releases/download/v0.1.0/Social-Lead-Desktop-0.1.0-win-x64.exe">
+            <span class="btn-label">Windows 版</span>
+            <span class="btn-meta">exe · 276 MB</span>
+          </a>
+        </div>
+        <p class="cta-note">0.1.0 预览版，安装包未签名。macOS 首次打开需右键；Windows 会出现 SmartScreen 提示。</p>
+      </div>
+
+      <figure class="hero-figure">
+        <span class="shot-stamp">界面示意 / SYNTHETIC</span>
+        <div class="frame frame--hero">
+          <img src="assets/screens/dashboard.png" alt="Social Lead 仪表盘暗色界面，显示采集笔记、符合评论、已发送和收到回复四张卡片" width="1440" height="960">
+        </div>
+        <figcaption>
+          <span>001 / 仪表盘</span>
+          <span>采集、审核、发送、回复共用同一条记录链</span>
+          <b>合成数据</b>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="ledger" aria-label="本机试用记录">
+    <div class="ledger-head">
+      <span>本机试用记录</span>
+      <span>2026.11.22 — 11.24</span>
+    </div>
+    <dl class="ledger-grid">
+      <div>
+        <dt>采集轮次</dt>
+        <dd><strong>3</strong><small>完整 / 部分完成都按实际状态显示</small></dd>
+      </div>
+      <div>
+        <dt>样本</dt>
+        <dd><strong>16 帖 / 1,347 评论</strong><small>3 轮真实采集记录</small></dd>
+      </div>
+      <div>
+        <dt>审核</dt>
+        <dd><strong>11 批 / 43 判定</strong><small>模型判定，人工可复核</small></dd>
+      </div>
+      <div>
+        <dt>发送回执</dt>
+        <dd><strong>7 条</strong><small>5 条私信 + 2 条评论</small></dd>
+      </div>
+    </dl>
+    <p class="ledger-note">以上为作者本机试用记录；下方界面截图为合成数据，仅用于展示布局与状态，不代表真实客户数据。</p>
+  </section>
+
+  <section class="section" id="workflow">
+    <header class="section-head">
+      <p class="section-index"><span>01</span> / 流程</p>
+      <h2>四步，<br>每一步都留痕。</h2>
+      <p class="section-intro">不是一键群发。采集、审核、发送、记录各自有明确状态；失败、部分完成和未知结果都不会被写成成功。</p>
+    </header>
+
+    <div class="step-list">
+      <article class="step reveal">
+        <div class="step-media">
+          <figure class="frame frame--shot">
+            <img src="assets/screens/collection.png" alt="采集历史页面，列出三轮采集的开始时间、笔记数、评论数与状态" width="1440" height="960" loading="lazy">
+            <figcaption><span>采集历史 / 3 轮</span><b>合成数据</b></figcaption>
+          </figure>
+        </div>
+        <div class="step-body">
+          <p class="step-no">01</p>
+          <h3>采集：从关键词到评论</h3>
+          <p>按关键词组拉取笔记与评论。单帖重读只更新采集与审核，不派生自动发送。</p>
+          <ul class="ticks">
+            <li>每轮采集保留覆盖范围与失败原因</li>
+            <li>部分完成、失败、暂停分别显示</li>
+            <li>评论与作者身份写入本机 SQLite</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-media">
+          <figure class="frame frame--shot">
+            <img src="assets/screens/review.png" alt="评论审核页面，按作者分组展示评论、帖子、最高分、判断和操作" width="1440" height="960" loading="lazy">
+            <figcaption><span>评论审核 / 41 位作者</span><b>合成数据</b></figcaption>
+          </figure>
+        </div>
+        <div class="step-body">
+          <p class="step-no">02</p>
+          <h3>审核：模型标出需求，人工确认</h3>
+          <p>模型按匹配方案逐条打分；同一作者任一评论匹配，整组标为符合。你可以改判、恢复或标记不符合。</p>
+          <ul class="ticks">
+            <li>分数、判断与理由一起展示</li>
+            <li>匹配不等于发送</li>
+            <li>审核结果可按作者与帖子回看</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-media">
+          <figure class="frame frame--shot">
+            <img src="assets/screens/send-queue.png" alt="待处理发送页面，显示发送队列、需要处理、今日剩余额度与每条队列的状态" width="1440" height="960" loading="lazy">
+            <figcaption><span>待处理发送 / 5 条队列</span><b>合成数据</b></figcaption>
+          </figure>
+        </div>
+        <div class="step-body">
+          <p class="step-no">03</p>
+          <h3>发送：评论与私信分开排队</h3>
+          <p>评论回复和私信首联使用各自模板池；同一人同渠道只做一次首联，日额度、去重与风险保护始终生效。</p>
+          <ul class="ticks">
+            <li>等待账号、额度或开关时保持排队</li>
+            <li>过期评论可重新排队</li>
+            <li>未知结果先只读核对，确认前不重发</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-media">
+          <figure class="frame frame--shot">
+            <img src="assets/screens/replies.png" alt="回复记录页面，展示发送账号、接收人、原帖与评论、回复内容、渠道和结果" width="1440" height="960" loading="lazy">
+            <figcaption><span>回复记录 / 平台已确认</span><b>合成数据</b></figcaption>
+          </figure>
+        </div>
+        <div class="step-body">
+          <p class="step-no">04</p>
+          <h3>记录：每次发送都有回执</h3>
+          <p>发送授权、平台回执与最终状态写进回复记录；没确认的结果保持未知，不显示成已发送。</p>
+          <ul class="ticks">
+            <li>按账号、渠道、结果筛选</li>
+            <li>原帖、评论与回复内容保持关联</li>
+            <li>可直接查看每次执行证据</li>
+          </ul>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="section section--dark" id="review">
+    <div class="dark-inner">
+      <header class="section-head">
+        <p class="section-index"><span>02</span> / 审核</p>
+        <h2>模型给判断，<br>你保留决定权。</h2>
+        <p class="section-intro">审核页不是聊天窗口，是一张可以逐条改判的表。模型只负责把可疑评论挑出来，发送仍要经过你的确认，或你明确开启的自动规则。</p>
+      </header>
+
+      <div class="review-grid">
+        <div class="decision-wrap reveal">
+          <p class="decision-label">审核卡片 / 单条示例</p>
+          <div class="decision-card">
+            <div class="decision-head">
+              <span>@木棉巷 · 2 小时前</span>
+              <span class="state">待确认</span>
+            </div>
+            <blockquote>“开题报告的章节顺序有推荐吗？”</blockquote>
+            <div class="decision-score">
+              <span>匹配分</span>
+              <strong>91</strong>
+              <span>/ 100</span>
+            </div>
+            <div class="decision-reasons">
+              <span>明确提出开题模板需求</span>
+              <span>目标人群相符</span>
+            </div>
+            <div class="decision-actions">
+              <span class="decision-btn decision-btn--ghost">标记不符合</span>
+              <span class="decision-btn">确认匹配</span>
+            </div>
+            <p class="decision-foot">示例数据 · 不是真实评论</p>
+          </div>
+        </div>
+
+        <div class="review-copy reveal">
+          <p class="big-quote">“匹配”不是自动发送。</p>
+          <ol class="review-list">
+            <li>
+              <span>01</span>
+              <div><b>先看分数与理由</b><p>每条判定都带分数、上下文与模型给出的证据，不把“像客户”当成结论。</p></div>
+            </li>
+            <li>
+              <span>02</span>
+              <div><b>同作者合并判断</b><p>同一作者任意一条评论匹配，整组标为符合；避免同一个人被反复打扰。</p></div>
+            </li>
+            <li>
+              <span>03</span>
+              <div><b>改判会留记录</b><p>人工决定覆盖模型判断，原始结果仍保留；后续入队按你的决定执行。</p></div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="local">
+    <header class="section-head">
+      <p class="section-index"><span>03</span> / 数据</p>
+      <h2>数据留在本机，<br>不经过我们的服务器。</h2>
+      <p class="section-intro">没有账号服务器，也不需要 Docker、PostgreSQL 或 Redis。业务数据是一份本机 SQLite 文件；模型 Key 与平台 Cookie 单独加密保存。</p>
+    </header>
+
+    <div class="local-grid">
+      <div class="local-copy reveal">
+        <p class="big-quote">能备份，也能删干净。</p>
+        <p>采集、审核、发送、收件与回复记录都落在同一个数据目录。备份、迁移或删除都以该目录为准；卸载应用不会删除业务数据。</p>
+        <p>模型能力不是本机模型：当你执行评论匹配时，评论内容会直接发送给你配置的模型服务商，受其条款与计费约束。</p>
+      </div>
+
+      <dl class="spec-table reveal">
+        <div>
+          <dt>业务数据</dt>
+          <dd><code>~/Library/Application Support/SocialLeadDesktop</code><small>macOS</small></dd>
+        </div>
+        <div>
+          <dt>业务数据</dt>
+          <dd><code>%LOCALAPPDATA%\SocialLeadDesktop</code><small>Windows</small></dd>
+        </div>
+        <div>
+          <dt>凭证</dt>
+          <dd><code>AES-256-GCM · 本机硬件标识派生密钥</code><small>独立密文文件，不进入业务数据库</small></dd>
+        </div>
+        <div>
+          <dt>服务器</dt>
+          <dd><code>无</code><small>仓库与安装包不包含真实账号、Cookie、Key 或客户数据</small></dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="principles">
+      <article class="reveal">
+        <span>01</span>
+        <h3>本机优先</h3>
+        <p>采集、审核、发送、收件记录都在本机；没有云端同步，也没有需要注册的产品账号。</p>
+      </article>
+      <article class="reveal">
+        <span>02</span>
+        <h3>最小授权</h3>
+        <p>发送前需要授权；结果未知时只读核对，确认之前不重发，确认之后才显示已发送。</p>
+      </article>
+      <article class="reveal">
+        <span>03</span>
+        <h3>可退出</h3>
+        <p>数据目录可直接备份、迁移或删除；不需要导出到另一套服务才能拿回自己的记录。</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section section--download" id="download">
+    <div class="download-inner">
+      <header class="section-head">
+        <p class="section-index"><span>04</span> / 下载</p>
+        <h2>0.1.0 预览版</h2>
+        <p class="section-intro">两个安装包都内置浏览器、平台组件与原生监督器，不需要另装 Node.js、Go 或浏览器。下载后请先核对 SHA-256。</p>
+      </header>
+
+      <div class="download-grid">
+        <article class="download-card reveal">
+          <div class="download-top">
+            <span class="os">macOS</span>
+            <span class="req">13+ · Apple Silicon</span>
+          </div>
+          <h3>Social Lead Desktop</h3>
+          <p class="file">Social-Lead-Desktop-0.1.0-mac-arm64.dmg</p>
+          <div class="dl-meta"><span>287,919,082 字节</span><span>未签名</span></div>
+          <a class="btn btn--ink" href="https://github.com/MrKleene/social-lead-workbench/releases/download/v0.1.0/Social-Lead-Desktop-0.1.0-mac-arm64.dmg">
+            <span class="btn-label">下载 dmg</span>
+            <span class="btn-meta">GitHub Releases ↗</span>
+          </a>
+          <div class="hash">
+            <span>SHA-256</span>
+            <code>bab04aaf6057eaecad51d132ec42bccdf8cb54812d26fcf5802910b32c0e49ba</code>
+            <button type="button" class="copy" data-copy="bab04aaf6057eaecad51d132ec42bccdf8cb54812d26fcf5802910b32c0e49ba">复制</button>
+          </div>
+        </article>
+
+        <article class="download-card reveal">
+          <div class="download-top">
+            <span class="os">Windows</span>
+            <span class="req">Windows 11 · x64</span>
+          </div>
+          <h3>Social Lead Desktop</h3>
+          <p class="file">Social-Lead-Desktop-0.1.0-win-x64.exe</p>
+          <div class="dl-meta"><span>276,067,636 字节</span><span>未签名</span></div>
+          <a class="btn btn--ink" href="https://github.com/MrKleene/social-lead-workbench/releases/download/v0.1.0/Social-Lead-Desktop-0.1.0-win-x64.exe">
+            <span class="btn-label">下载 exe</span>
+            <span class="btn-meta">GitHub Releases ↗</span>
+          </a>
+          <div class="hash">
+            <span>SHA-256</span>
+            <code>286716bd67857d197226f50974fdf15b98e55f584c0e921ba5bb5453286e6b40</code>
+            <button type="button" class="copy" data-copy="286716bd67857d197226f50974fdf15b98e55f584c0e921ba5bb5453286e6b40">复制</button>
+          </div>
+        </article>
+      </div>
+
+      <div class="install-grid">
+        <div>
+          <h3>macOS 首次打开</h3>
+          <p>把 <code>Social Lead Desktop.app</code> 拖入「应用程序」后再启动，不要直接在只读 DMG 卷内运行。应用未签名，首次启动请在 Finder 中右键应用 →「打开」，或执行：</p>
+          <pre><code>xattr -dr com.apple.quarantine "/Applications/Social Lead Desktop.app"</code></pre>
+        </div>
+        <div>
+          <h3>Windows 首次运行</h3>
+          <p>SmartScreen 提示「Windows 已保护你的电脑」时，选择「更多信息 → 仍要运行」。安装到当前用户目录；卸载不删除业务数据。</p>
+          <p class="install-note">Windows 包在 Windows 11 ARM64 虚拟机内构建、自检并安装；尚未在 Windows 11 x64 真机验证。</p>
+        </div>
+      </div>
+
+      <div class="verify">
+        <p><b>核验下载</b> macOS 执行 <code>shasum -a 256 文件名</code>；Windows 执行 <code>certutil -hashfile 文件名 SHA256</code>。结果应与上方一致。</p>
+        <p><a href="https://github.com/MrKleene/social-lead-workbench/releases/tag/v0.1.0">在 GitHub 查看完整 Release <span aria-hidden="true">↗</span></a></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="limits">
+    <header class="section-head">
+      <p class="section-index"><span>05</span> / 边界</p>
+      <h2>已知边界，<br>写在前面。</h2>
+      <p class="section-intro">这是 0.1.0 预览版。以下不是“以后再说”的脚注，而是当前版本真实的能力边界。</p>
+    </header>
+
+    <div class="limits-grid">
+      <details class="limit reveal" open>
+        <summary>收件尚未真实验收<span>01</span></summary>
+        <p>本机目前 0 条收件记录。界面与记录流程已经实现，但没有在真实账号上完成评论通知与私信会话的验收。不要把“收到回复”当作已证明的能力。</p>
+      </details>
+      <details class="limit reveal">
+        <summary>Windows 11 x64 未真机验证<span>02</span></summary>
+        <p>安装包在 Windows 11 ARM64 虚拟机内构建、自检并安装；尚未在 x64 真机、默认用户路径升级/卸载和陌生机器 SmartScreen 上验证。</p>
+      </details>
+      <details class="limit reveal">
+        <summary>安装包未签名<span>03</span></summary>
+        <p>macOS 未使用 Developer ID 签名与公证；Windows 未做代码签名。首次打开需要手动放行，macOS 需在系统设置中允许。</p>
+      </details>
+      <details class="limit reveal">
+        <summary>平台页面变化会失效<span>04</span></summary>
+        <p>采集与发送依赖平台页面结构。平台改版可能导致采集中断或发送失败，需要更新随包组件。</p>
+      </details>
+      <details class="limit reveal">
+        <summary>不是全自动群发<span>05</span></summary>
+        <p>自动发送需要账号、模板、日额度与开关同时满足；私信自动回复不在当前范围。发送前仍可人工复核。</p>
+      </details>
+      <details class="limit reveal">
+        <summary>个人非商业许可<span>06</span></summary>
+        <p>项目以 PolyForm Noncommercial 1.0.0 发布：允许个人使用、研究、试验与爱好者项目；不允许商业用途。商业使用需要单独授权。</p>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <div class="foot-main">
+    <div>
+      <p class="foot-brand">Social Lead</p>
+      <p class="foot-sub">本地社媒获客工作台 · 0.1.0 预览版</p>
+    </div>
+    <nav class="foot-links" aria-label="页脚链接">
+      <a href="https://github.com/MrKleene/social-lead-workbench">GitHub</a>
+      <a href="https://github.com/MrKleene/social-lead-workbench/releases">Releases</a>
+      <a href="https://github.com/MrKleene/social-lead-workbench/blob/main/README.md">使用说明</a>
+      <a href="https://github.com/MrKleene/social-lead-workbench/blob/main/LICENSE">许可</a>
+      <a href="https://github.com/MrKleene/social-lead-workbench/blob/main/NOTICE">第三方声明</a>
+    </nav>
+  </div>
+  <div class="foot-bottom">
+    <span>© 2026 Social Lead</span>
+    <span>数据留在本机 · 个人非商业使用</span>
+  </div>
+</footer>
+
+<script src="main.js"></script>
+</body>
+</html>
