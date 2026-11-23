@@ -739,6 +739,6 @@ pages.yml[CI7T]: F:静态官网的 GitHub Pages 部署工作流：push main 且 
 icon.svg[SU2T]: F:官网与应用的品牌图标：深色圆角底、白色漏斗和一颗红色匹配点 | R:code:site/index.html,code:apps/desktop/build/icon.svg | A:- | S:1024 留 100px Dock 边；漏斗描边磨圆；红点 #ff2e4d；与桌面 icon 同源。
 
 ===/Users/kleene/projects/social-lead-workbench/site/===
-index.html[SU6L]: F:单页产品官网：首屏定位与双平台下载、本机试用记录、四步流程、审核原则、本机数据、安装说明、已知边界 | R:code:site/styles.css,code:site/main.js,code:README.md,code:LICENSE,code:NOTICE | A:- | S:纯静态单页，无框架；下载地址与 SHA-256 固定为 v0.1.0 资产，发新版必须同步；截图全部标注合成数据，不能换成真实评论；文案不得超出 ACCEPTANCE（收件 0、Windows x64 未验收、未签名、非商业）；canonical 与 og:url 仍指默认 Pages 地址。
+index.html[SU6S]: F:单页产品官网（H 浅色 Bento 版）：首屏定位与双平台下载、四步流程、审核示例、本机数据、安装说明、复制 SHA-256 与已知边界 | R:code:site/styles.css,code:site/main.js,code:README.md,code:LICENSE,code:NOTICE | A:- | S:纯静态单页，无框架；下载地址与 SHA-256 固定为 v0.1.0 资产，发新版必须同步；截图全部为合成数据，不能换成真实评论；文案不得超出 ACCEPTANCE（收件 0、Windows x64 未验收、未签名、非商业）；canonical 与 og:url 仍指默认 Pages 地址；复制按钮依赖 main.js，删脚本会静默失效。
 main.js[SU3T]: F:官网交互：滚动时给页头加阴影、用 IntersectionObserver 渐显内容、复制 SHA-256、填当前年份 | R:code:site/index.html,code:site/styles.css | A:- | S:无依赖；reduce-motion 直显；复制失败回退 textarea；1.6 秒复原。
-styles.css[SU8L]: F:官网视觉系统：纸纹底、六列竖线、宋体大标题、等宽标签、黑色厚框截图、深色审核段与响应式 | R:code:site/index.html,code:apps/web/DESIGN.md | A:- | S:token 只在本文件 :root；--red #bd3d26 与纸底对比约 4.73；hero h1 上限 88px 且 .accent nowrap，否则“送。”会换行；.install-grid>* 设 min-width:0 防移动端横向溢出；断点 1120/900/760/520；print 隐藏导航与按钮。
+styles.css[SU8M]: F:H 浅色产品页视觉系统：Bento 网格、黑白产品截图、暖灰审核区、蓝色强调、复制按钮与 900/760/420 响应式 | R:code:site/index.html | A:- | S:页面底色 #f7f7f4、墨色 #111、强调蓝 #2f6bff；审核段用 #efeee7 暖灰 + 48px 网格，禁止改回蓝紫粉渐变（曾被判像 AI）；桌面内容宽 1120，900px 隐藏主导航，760px Bento 单列，420px 再缩小；.finstall>* 必须 min-width:0，否则长 xattr 命令会撑出横向滚动。
