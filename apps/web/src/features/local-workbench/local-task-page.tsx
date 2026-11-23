@@ -17,7 +17,10 @@ import {
   MissingConfigDialog,
   type MissingItem,
 } from "./missing-config-dialog";
-import { LocalCollectProgress } from "./local-collect-progress";
+import {
+  collectionObservedOnly,
+  LocalCollectProgress,
+} from "./local-collect-progress";
 import { LocalPosts } from "./local-posts";
 import { LocalRunReview } from "./local-run-review";
 import { StartCollectionDialog } from "./start-collection-dialog";
@@ -309,11 +312,13 @@ function RunWorkspace({
   const reviews = data?.reviews ?? {};
   const reviewReady = !!data?.reviewReady;
   const collectActive = ACTIVE_RUN.includes(runStatus);
+  const collectObserved = data ? collectionObservedOnly(data) : false;
   // 采到了笔记但评论树被读取预算截断：仍是有效轮次，不能一直显示「等待采集完成」。
-  const collectPartial = runStatus === "PARTIAL" && (data?.posts ?? 0) > 0;
+  const collectPartial =
+    runStatus === "PARTIAL" && (data?.posts ?? 0) > 0 && !collectObserved;
   // 有界搜索会保留 PARTIAL，但每篇帖子的评论读取可能都已完整；两种状态要分开表达。
   const collectSettled =
-    (runStatus === "COMPLETE" && !data?.run.reason) || collectPartial;
+    (runStatus === "COMPLETE" && !data?.run.reason) || runStatus === "PARTIAL";
   const reviewRunning = (reviews.DISPATCHED ?? 0) > 0 || !!data?.reviewActivity;
   const reviewPaused = (data?.reviewPauses ?? []).length > 0;
 
@@ -345,7 +350,9 @@ function RunWorkspace({
                 ? "partial"
                 : "complete"
               : runStatus === "PARTIAL"
-                ? "partial"
+                ? collectObserved
+                  ? "complete"
+                  : "partial"
                 : "paused",
       status: !data
         ? "正在读取"
@@ -358,7 +365,9 @@ function RunWorkspace({
                 ? "部分完成"
                 : "已完成"
               : runStatus === "PARTIAL"
-                ? "部分完成"
+                ? collectObserved
+                  ? "已采集"
+                  : "部分完成"
                 : "已结束",
     },
     {
@@ -419,15 +428,19 @@ function RunWorkspace({
               ? "正在读取"
               : collectActive
                 ? "进行中"
-                : collectPartial
-                  ? "有笔记待补读"
-                  : data.run.reason
-                    ? "本轮已停止"
-                    : "已完成"
+                : collectObserved
+                  ? "已采集"
+                  : collectPartial
+                    ? "有笔记待补读"
+                    : data.run.reason
+                      ? "本轮已停止"
+                      : "已完成"
           }
-          attention={!!data?.run.reason && !collectPartial}
+          attention={
+            !!data?.run.reason && !collectPartial && !collectObserved
+          }
           details={
-            data?.run.reason
+            data?.run.reason && !collectObserved
               ? [reasonLabels[data.run.reason] ?? data.run.reason]
               : []
           }

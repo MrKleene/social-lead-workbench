@@ -8,6 +8,7 @@ import {Avatar,AvatarFallback,AvatarImage} from '@/components/ui/avatar';
 import {Dialog,DialogContent,DialogTitle} from '@/components/ui/dialog';
 import {ErrorNotice} from '@/components/feedback';
 import {BoundedReadEvidence,BoundedReadWindows} from '@/features/collection/bounded-read-evidence';
+import {observedReadOnly} from '@/features/collection/collection-outcome';
 import {ImageDiagnostics} from '@/features/collection/image-diagnostics';
 import {cn} from '@/lib/utils';
 import {localApi,type PostComment} from './local-api';
@@ -105,7 +106,7 @@ export function LocalPostHistory({postId,focusCommentId,onClose,footer}:{postId:
      <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
       <div className="flex flex-wrap items-start gap-2">
        <h2 className="min-w-0 flex-1 text-title font-semibold break-words">{data.post.title||'历史笔记原文'}</h2>
-       <Badge variant={data.post.coverage==='COMPLETE'?'success':data.post.coverage==='PARTIAL'?'warning':'outline'}>{data.post.coverage==='COMPLETE'?'完整':data.post.coverage==='PARTIAL'?'待补读':'完整性未确认'}</Badge>
+       <Badge variant={data.post.coverage==='COMPLETE'?'success':observedReadOnly(data.post.coverage,data.post.boundedRead,data.comments.total)?'outline':data.post.coverage==='PARTIAL'?'warning':'outline'}>{data.post.coverage==='COMPLETE'?'完整':observedReadOnly(data.post.coverage,data.post.boundedRead,data.comments.total)?'已读取':data.post.coverage==='PARTIAL'?'待补读':'完整性未确认'}</Badge>
       </div>
       <p className="text-caption text-muted-foreground">保存于 {data.post.observedAt?new Date(data.post.observedAt).toLocaleString():'时间未记录'}</p>
       <p className="text-body leading-relaxed whitespace-pre-wrap break-words">{data.post.body}</p>

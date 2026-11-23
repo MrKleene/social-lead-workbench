@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Check, ChevronDown, CircleAlert, LoaderCircle } from "lucide-react";
+import { safeRunCoverage } from "@crm/contracts";
+import { Check, ChevronDown, CircleAlert, Info, LoaderCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionCard } from "@/components/patterns/section-card";
 import { cn } from "@/lib/utils";
+import { readingInterruption } from "../collection/collection-outcome";
 import { reasonLabels } from "../collection/types";
 import type { CollectionRunEvent, LocalMethods } from "./local-api";
 
@@ -46,7 +48,49 @@ function reasonLabel(reason: string | null) {
   return reasonLabels[reason] ?? reason;
 }
 
-type RowState = "complete" | "running" | "partial" | "failed";
+type RowState = "complete" | "observed" | "running" | "partial" | "failed";
+
+type PostCoverage = { saved: number; declared: number | null };
+
+/** 平台计数与已读不一致、但没有中断证据时，属于“可见范围已读完”，不是读取失败。 */
+export function collectionObservedOnly(data: RunProgress) {
+  if (data.run.status !== "PARTIAL" || data.run.reason !== "COVERAGE_INSUFFICIENT") {
+    return false;
+  }
+  const coverage = safeRunCoverage(data.run.coverage);
+  if (!coverage?.posts.length) return false;
+  if (
+    coverage.reasons.some((reason) => readingInterruption(reason)) ||
+    coverage.posts.some((post) => readingInterruption(post.reason))
+  ) {
+    return false;
+  }
+  return coverage.posts.every((post) => {
+    const total = post.boundedRead?.final.total;
+    return (
+      total?.state !== "EXACT" ||
+      typeof total.value !== "number" ||
+      post.saved >= total.value
+    );
+  });
+}
+
+function coverageByPost(data: RunProgress) {
+  const coverage = safeRunCoverage(data.run.coverage);
+  const result = new Map<string, PostCoverage>();
+  for (const post of coverage?.posts ?? []) {
+    if (!post.postRef) continue;
+    const total = post.boundedRead?.final.total;
+    result.set(post.postRef, {
+      saved: post.saved,
+      declared:
+        total?.state === "EXACT" && typeof total.value === "number"
+          ? total.value
+          : null,
+    });
+  }
+  return result;
+}
 
 type Row = {
   key: string;
@@ -61,6 +105,9 @@ function RowIcon({ state }: { state: RowState }) {
   if (state === "running") {
     return <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />;
   }
+  if (state === "observed") {
+    return <Info className="size-4" aria-hidden="true" />;
+  }
   if (state === "failed") {
     return <CircleAlert className="size-4" aria-hidden="true" />;
   }
@@ -72,6 +119,7 @@ function RowIcon({ state }: { state: RowState }) {
 
 function markerClass(state: RowState) {
   if (state === "complete") return "border-success/40 bg-success-bg text-success";
+  if (state === "observed") return "border-border bg-muted text-muted-foreground";
   if (state === "running") return "border-border bg-muted text-foreground";
   if (state === "partial") return "border-warning/40 bg-warning-bg text-warning";
   return "border-destructive/40 bg-destructive-soft text-destructive";
@@ -81,6 +129,7 @@ function eventRows(
   events: CollectionRunEvent[],
   status: string,
   currentPost: RunProgress["currentPost"],
+  coverage: Map<string, PostCoverage>,
 ) {
   const posts = new Map<
     string,
@@ -123,6 +172,23 @@ function eventRows(
       };
     }
     if (last.kind === "POST_PARTIAL") {
+      const postCoverage = coverage.get(last.platformId ?? "");
+      const saved = postCoverage?.saved ?? last.comments;
+      const declared = postCoverage?.declared ?? null;
+      if (last.reason === "COVERAGE_INSUFFICIENT") {
+        const short = declared !== null && saved < declared;
+        return {
+          key: last.platformId ?? String(last.sequence),
+          title: `第 ${post.index} 篇 · ${post.title}`,
+          detail:
+            `已读取 ${saved} 条` +
+            (declared !== null && declared !== saved
+              ? ` · 平台计数 ${declared}`
+              : ""),
+          at: last.createdAt,
+          state: short ? "partial" : "observed",
+        };
+      }
       const reason = reasonLabel(last.reason);
       return {
         key: last.platformId ?? String(last.sequence),
@@ -148,7 +214,7 @@ function eventRows(
       currentPost && currentPost.platformId === last.platformId
         ? [
             `已读取 ${currentPost.comments} 条`,
-            currentPost.declared === null ? null : `平台显示 ${currentPost.declared} 条`,
+            currentPost.declared === null ? null : `平台计数 ${currentPost.declared} 条`,
             `已用时 ${formatDuration(Date.now() - currentPost.startedAt)}`,
           ]
             .filter(Boolean)
@@ -164,11 +230,20 @@ function eventRows(
   });
 }
 
-function terminalRow(data: RunProgress): Row | null {
+function terminalRow(data: RunProgress, observedOnly: boolean): Row | null {
   const { run } = data;
   if (run.status === "RUNNING") return null;
   const at = run.finishedAt ?? run.createdAt;
   const reason = reasonLabel(run.reason);
+  if (observedOnly) {
+    return {
+      key: "terminal",
+      title: "本轮已读取",
+      detail: `${data.posts} 篇笔记 · ${data.comments} 条评论`,
+      at,
+      state: "observed",
+    };
+  }
   if (run.status === "COMPLETE") {
     return {
       key: "terminal",
@@ -231,8 +306,11 @@ export function LocalCollectProgress({
   const [override, setOverride] = useState<boolean | null>(null);
   const [showKeywords, setShowKeywords] = useState(false);
   const { run } = data;
+  const observedOnly = collectionObservedOnly(data);
   const settled = run.status !== "RUNNING";
-  const attention = ["FAILED", "PARTIAL", "INTERRUPTED"].includes(run.status);
+  const attention =
+    ["FAILED", "INTERRUPTED"].includes(run.status) ||
+    (run.status === "PARTIAL" && !observedOnly);
   const expanded = override ?? (!settled || attention);
   const started = data.events.filter((event) => event.kind === "POST_STARTED").length;
   const rows: Row[] = [
@@ -254,8 +332,15 @@ export function LocalCollectProgress({
       keywords: run.keywords,
     });
   }
-  rows.push(...eventRows(data.events, run.status, data.currentPost));
-  const terminal = terminalRow(data);
+  rows.push(
+    ...eventRows(
+      data.events,
+      run.status,
+      data.currentPost,
+      coverageByPost(data),
+    ),
+  );
+  const terminal = terminalRow(data, observedOnly);
   if (terminal) rows.push(terminal);
 
   const description = !settled
@@ -277,7 +362,11 @@ export function LocalCollectProgress({
   ) : run.status === "COMPLETE" ? (
     <Badge variant="success">已完成</Badge>
   ) : run.status === "PARTIAL" ? (
-    <Badge variant="warning">部分完成</Badge>
+    observedOnly ? (
+      <Badge variant="outline">已读取</Badge>
+    ) : (
+      <Badge variant="warning">部分完成</Badge>
+    )
   ) : run.status === "FAILED" ? (
     <Badge variant="destructive">失败</Badge>
   ) : run.status === "RUNNING" ? (

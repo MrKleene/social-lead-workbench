@@ -21,6 +21,12 @@ export function commentCoverage(value:unknown,reason?:string|null,saved?:number|
  const declared=report?.final.total.state==='EXACT'?report.final.total.value:null;
  return {label:warning?'读取范围未尽':visible?'已采集当前可见评论':'覆盖待确认',warning,visible,issue:issue?reasonLabels[issue]||issue:replyGap?'声明的回复尚未读尽':warning?'有评论未保留':undefined,declared,difference:declared!=null&&saved!=null?Math.abs(declared-saved):null};
 }
+/** 平台计数大于已读时仍只是“待补读”；已读覆盖平台计数且无中断证据时按“已读取”中性展示。 */
+export function observedReadOnly(coverage?:string|null,boundedRead?:unknown,saved?:number|null){
+ if(coverage!=='PARTIAL'||typeof saved!=='number')return false;
+ const view=commentCoverage(boundedRead,null,saved);
+ return !view.warning&&view.declared!=null&&saved>=view.declared;
+}
 export function collectionOutcome(run:Run){
  const c=safeRunCoverage(run.metrics?.coverage),postViews=c?.posts.map(p=>commentCoverage(p.boundedRead,p.reason,observedReadCounts(p).count))||[];
  const issue=[run.reason,...(c?.reasons||[])].find(readingInterruption);
