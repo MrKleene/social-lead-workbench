@@ -182,6 +182,8 @@ class LocalSendQueue{
    const rule=this.ruleForPolicy(plan.policyId);
    if(rule){plan=this.freezePlan(rule,rowData,row.channel,row.manual_now===1?'MANUAL_SEND':row.origin,steps);this.db.prepare('UPDATE send_queue SET plan=?,updated_at=? WHERE id=?').run(canonical(plan),now,row.id);}
   }
+  const refreshed=this.refreshAccounts(plan.accounts??[]);
+  if(refreshed.changed){plan={...plan,accounts:refreshed.accounts};this.db.prepare('UPDATE send_queue SET plan=?,updated_at=? WHERE id=?').run(canonical(plan),now,row.id);}
   const picked=this.pickAccount(row,plan,now);
   if(!picked.item){this.db.prepare("UPDATE send_queue SET state='WAITING_QUOTA',reason=?,updated_at=? WHERE id=?").run(picked.reason,now,row.id);return {started:false};}
   const account=picked.item;
@@ -359,12 +361,12 @@ class LocalSendQueue{
   }
   const pause=this.db.prepare("SELECT reason FROM safety_state WHERE id IN('sending','platform') AND reason IS NOT NULL ORDER BY created_at DESC LIMIT 1").get();
   const checking=this.db.prepare("SELECT count(*) n FROM evidence_auto_tasks WHERE state IN('WAITING','RUNNING')").get().n;
-  const current=this.db.prepare("SELECT q.state,q.channel,q.recipient_id,q.plan,q.updated_at,c.body,json_extract(c.snapshot,'$.authorNickname') recipient_nickname,p.snapshot post_snapshot,a.name account_name,json_extract(q.plan,'$.manualBatchId') batch_id FROM send_queue q JOIN run_comments c ON c.id=q.comment_id JOIN run_posts p ON p.id=c.post_id LEFT JOIN accounts a ON a.id=q.account_id WHERE q.state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING') AND json_extract(q.plan,'$.manualBatchId') IS NOT NULL ORDER BY (q.state='SENDING') DESC,q.enqueued_at,q.id LIMIT 1").get();
+  const current=this.db.prepare("SELECT q.state,q.reason,q.channel,q.recipient_id,q.plan,q.updated_at,c.body,json_extract(c.snapshot,'$.authorNickname') recipient_nickname,p.snapshot post_snapshot,a.name account_name,json_extract(q.plan,'$.manualBatchId') batch_id FROM send_queue q JOIN run_comments c ON c.id=q.comment_id JOIN run_posts p ON p.id=c.post_id LEFT JOIN accounts a ON a.id=q.account_id WHERE q.state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING') AND json_extract(q.plan,'$.manualBatchId') IS NOT NULL ORDER BY (q.state='SENDING') DESC,q.enqueued_at,q.id LIMIT 1").get();
   let progress=null;
   if(current){
    const batch=this.db.prepare("SELECT count(*) total,coalesce(sum(state='SENT'),0) done,coalesce(sum(state IN('FAILED','UNKNOWN','EXPIRED')),0) failed FROM send_queue WHERE json_extract(plan,'$.manualBatchId')=?").get(current.batch_id);
    const snapshot=JSON.parse(current.post_snapshot||'{}');
-   progress={batchId:current.batch_id,state:current.state,total:batch.total,done:batch.done,failed:batch.failed,channel:current.channel,comment:current.body,postTitle:snapshot.title??snapshot.displayTitle??null,recipientNickname:current.recipient_nickname??null,accountName:current.account_name??null};
+   progress={batchId:current.batch_id,state:current.state,reason:current.reason??null,total:batch.total,done:batch.done,failed:batch.failed,channel:current.channel,comment:current.body,postTitle:snapshot.title??snapshot.displayTitle??null,recipientNickname:current.recipient_nickname??null,accountName:current.account_name??null};
   }
   const pending=(counts.WAITING_SWITCH??0)+(counts.READY??0)+(counts.SENDING??0);
   const quota=counts.WAITING_QUOTA??0;
@@ -433,6 +435,11 @@ class LocalSendQueue{
  }
  templatePool(steps,channel){const ids=(channel==='DM'?steps.dmTemplateIds:steps.commentTemplateIds)??[];return ids.map(id=>{try{const item=this.template(id,channel);return {channel,templateId:item.id,templateVersion:item.revision,content:item.content};}catch{return null;}}).filter(Boolean);}
  accountPool(steps){return (steps.replyAccountIds??[]).map(id=>{const row=this.db.prepare('SELECT id,revision,daily_limit FROM accounts WHERE id=?').get(id);return row?{id:row.id,version:row.revision,dailyLimit:row.daily_limit}:null;}).filter(Boolean);}
+ refreshAccounts(accounts){
+  let changed=false;
+  const next=accounts.map(candidate=>{const row=this.db.prepare('SELECT revision,daily_limit FROM accounts WHERE id=?').get(candidate.id);if(!row||(row.revision===candidate.version&&row.daily_limit===candidate.dailyLimit))return candidate;changed=true;return {...candidate,version:row.revision,dailyLimit:row.daily_limit};});
+  return {accounts:next,changed};
+ }
  enqueueState(channel,steps,published,now){
   if(published!==null&&published+MAX_AGE_MS<=now)return {state:'EXPIRED',reason:'COMMENT_TOO_OLD'};
   return channelOn(steps,channel)?{state:'READY',reason:null}:{state:'WAITING_SWITCH',reason:offReason(steps)};

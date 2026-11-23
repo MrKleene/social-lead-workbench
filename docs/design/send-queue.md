@@ -16,7 +16,7 @@
 
 ## 冻结计划
 
-采集不再冻结回复规则。入队时按该评论所属 `queue_rules` 与当前自动发送配置写 `plan` JSON：规则 id 与版本、`policy_id`、阈值、渠道、来源、评论与帖子平台 id、收件人、渠道模板池、账号池和资格哈希。之后修改配置不会改动已入队行；派发时重新校验资格，失败转 `FAILED` / `ELIGIBILITY_CHANGED`，模板被删除则 `FAILED` / `TEMPLATE_CHANGED`。
+采集不再冻结回复规则。入队时按该评论所属 `queue_rules` 与当前自动发送配置写 `plan` JSON：规则 id 与版本、`policy_id`、阈值、渠道、来源、评论与帖子平台 id、收件人、渠道模板池、账号池和资格哈希。派发前按账号 id 刷新冻结账号的当前 revision 与日额度，避免改过额度或重新检测后因旧版本一直停在 `WAITING_QUOTA`；模板仍使用入队时冻结的内容。派发时重新校验资格，失败转 `FAILED` / `ELIGIBILITY_CHANGED`，模板被删除则 `FAILED` / `TEMPLATE_CHANGED`。
 
 ## 状态
 
@@ -24,7 +24,7 @@
 | --- | --- |
 | `WAITING_SWITCH` | 已入队，自动发送总开关或该渠道开关关闭 |
 | `READY` | 可被调度 |
-| `WAITING_QUOTA` | 账号池今日额度已用完，等待刷新或人工处理 |
+| `WAITING_QUOTA` | 账号池今日额度已用完，或账号当前不可用；原因区分额度与账号 |
 | `SENDING` | 已派发 SEND job，等待执行与回执 |
 | `SENT` | 执行器确认成功 |
 | `FAILED` | 明确失败，可重试或移除记录 |

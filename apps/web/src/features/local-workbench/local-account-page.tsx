@@ -665,14 +665,16 @@ export function LocalAccountPage() {
                       check.mutate(
                         { id: selected.id },
                         {
-                          onSuccess: (result) =>
+                          onSuccess: (result) => {
                             setCheckNote(
                               result.restricted
                                 ? `已记录回复限制 · ${holdLabels[result.reason ?? ""] ?? result.reason}`
                                 : result.released
                                   ? `未发现回复限制提示 · 已解除 ${result.released} 条风险记录`
                                   : "未发现回复限制提示",
-                            ),
+                            );
+                            void client.invalidateQueries({ queryKey: ["local"] });
+                          },
                         },
                       )
                     }

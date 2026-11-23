@@ -57,7 +57,7 @@ test("queue tab merges quota and sending while attention keeps failed unknown ex
   for(const [id,state,recipient,plan] of rows)insert.run(id,source.run_id,source.review_id,source.comment_id,"DM",recipient,state,plan,now,now+86400000,now,now);
   const queue=f.sendQueue.list({tab:"queue"}),attention=f.sendQueue.list({tab:"attention"}),summary=f.sendQueue.summary();
   assert.equal(queue.total,4);assert.equal(attention.total,3);assert.equal(summary.queue,4);assert.equal(summary.attention,3);assert.equal(summary.quota,1);assert.equal(summary.sending,1);
-  assert.deepEqual(summary.progress,{batchId:"batch-1",state:"SENDING",total:2,done:0,failed:0,channel:"DM",comment:"想请教学习方法和选题指导",postTitle:"合成学习讨论",recipientNickname:"合成用户",accountName:null});
+  assert.deepEqual(summary.progress,{batchId:"batch-1",state:"SENDING",reason:null,total:2,done:0,failed:0,channel:"DM",comment:"想请教学习方法和选题指导",postTitle:"合成学习讨论",recipientNickname:"合成用户",accountName:null});
   f.store.db.prepare("UPDATE send_queue SET state='SENT' WHERE id='sending'").run();
   const after=f.sendQueue.summary().progress;assert.equal(after.state,"READY");assert.equal(after.done,1);assert.equal(after.total,2);
 });
@@ -180,6 +180,16 @@ test('quota exhaustion leaves the item waiting with a remaining-quota summary',t
  assert.equal(f.sendQueue.summary().quota,1);assert.equal(f.sendQueue.summary().remaining,0);
  f.store.db.prepare('DELETE FROM account_days WHERE account_id=? AND day=?').run('account',day);
  assert.equal(f.sendQueue.schedule().started,true);
+});
+
+test('dispatch refreshes a frozen account revision and daily limit',t=>{
+ const f=reviewed(t,{autoReply:false,channels:['DM']});f.automation.afterReview(f.run.runId);
+ const id=f.store.db.prepare("SELECT id FROM send_queue WHERE channel='DM'").get().id;
+ f.sendQueue.sendNow({ids:[id],accountId:'account',templateId:'dt'});
+ f.store.db.prepare("UPDATE accounts SET daily_limit=10,revision=2 WHERE id='account'").run();
+ assert.equal(f.sendQueue.schedule().started,true);
+ const row=f.store.db.prepare('SELECT state,plan FROM send_queue WHERE id=?').get(id),plan=JSON.parse(row.plan);
+ assert.equal(row.state,'SENDING');assert.equal(plan.accounts[0].version,2);assert.equal(plan.accounts[0].dailyLimit,10);
 });
 
 test('a queued comment still needs a fresh comment capability at send reservation',t=>{

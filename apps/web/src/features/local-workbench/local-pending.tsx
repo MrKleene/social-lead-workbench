@@ -149,13 +149,21 @@ export function LocalPending() {
     if (item.state === "SENDING") return "发送中";
     if (item.state === "READY" && progress && item.batchId === progress.batchId)
       return "排队中";
+    if (item.state === "WAITING_QUOTA") {
+      if (item.reason === "ACCOUNT_POOL_UNAVAILABLE") return "发送账号不可用";
+      if (item.reason === "ACCOUNT_POOL_EMPTY") return "未配置发送账号";
+    }
     return queueStates[item.state] ?? "待发送";
   };
   const progressLabel =
     progress?.state === "SENDING"
       ? "正在发送"
       : progress?.state === "WAITING_QUOTA"
-        ? "等待额度"
+        ? progress.reason === "ACCOUNT_POOL_UNAVAILABLE"
+          ? "发送账号不可用"
+          : progress.reason === "ACCOUNT_POOL_EMPTY"
+            ? "未配置发送账号"
+            : "等待额度"
         : "等待发送";
   const progressPosition = progress
     ? Math.min(progress.done + progress.failed + 1, progress.total)
