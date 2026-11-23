@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-11T10:57:30Z",
-  "updated_at": "2026-11-23T10:23:24Z",
+  "updated_at": "2026-11-23T10:36:19Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -17279,10 +17279,10 @@
     },
     ".local/desktop-native-build/source/xiaohongshu/comment_chunks_test.go": {
       "role": "observe",
-      "sha256": "979be5067ee1c406c84ee9e3e104684e2488caad7993b8fc73d0bf98633861fc",
-      "size": 21991,
-      "normalized_sha256": "979be5067ee1c406c84ee9e3e104684e2488caad7993b8fc73d0bf98633861fc",
-      "format_sha256": "979be5067ee1c406c84ee9e3e104684e2488caad7993b8fc73d0bf98633861fc",
+      "sha256": "eea051db017fd74fb66125b23793601aff0b8bd7a9a026417fd34027b65674d8",
+      "size": 23228,
+      "normalized_sha256": "eea051db017fd74fb66125b23793601aff0b8bd7a9a026417fd34027b65674d8",
+      "format_sha256": "eea051db017fd74fb66125b23793601aff0b8bd7a9a026417fd34027b65674d8",
       "format_kind": "gofmt"
     },
     ".local/desktop-native-build/source/xiaohongshu/comment_diagnostic_test.go": {
@@ -17507,9 +17507,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "ed8a9e830875cef9f654a13ad6d3588f33de18db357185f6d419222a11834521",
-      "size": 253191,
-      "normalized_sha256": "ed8a9e830875cef9f654a13ad6d3588f33de18db357185f6d419222a11834521"
+      "sha256": "ffa2f32c15fb6f0525b2892c919de768f5e444f77a1d6b2846c50b98e2dd63c0",
+      "size": 253085,
+      "normalized_sha256": "ffa2f32c15fb6f0525b2892c919de768f5e444f77a1d6b2846c50b98e2dd63c0"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -18825,9 +18825,9 @@
     },
     "docs/design/comment-read-through.md": {
       "role": "index",
-      "sha256": "ea5c000f17a09a64cf2fda043e04320a5960cf7aec4003805c00755bc02ef876",
-      "size": 7727,
-      "normalized_sha256": "ea5c000f17a09a64cf2fda043e04320a5960cf7aec4003805c00755bc02ef876"
+      "sha256": "7987ed651359b24218c133952915ce98a72d847740d38789fda01e611bb0b882",
+      "size": 7885,
+      "normalized_sha256": "7987ed651359b24218c133952915ce98a72d847740d38789fda01e611bb0b882"
     },
     "docs/design/comment-reply-target.md": {
       "role": "index",
@@ -19707,18 +19707,18 @@
     },
     "integrations/inbox-mcp/xiaohongshu/comment_chunks.go": {
       "role": "index",
-      "sha256": "3daf01b2b8da4447e66b2d8cec23abb219a40d401ed8b860d45770fd4d52a5d7",
-      "size": 24704,
-      "normalized_sha256": "3daf01b2b8da4447e66b2d8cec23abb219a40d401ed8b860d45770fd4d52a5d7",
-      "format_sha256": "3daf01b2b8da4447e66b2d8cec23abb219a40d401ed8b860d45770fd4d52a5d7",
+      "sha256": "a726808e6346a2fead566fdf3d55daa7f5940c0874cbf5e57385f74a7015b149",
+      "size": 25194,
+      "normalized_sha256": "a726808e6346a2fead566fdf3d55daa7f5940c0874cbf5e57385f74a7015b149",
+      "format_sha256": "a726808e6346a2fead566fdf3d55daa7f5940c0874cbf5e57385f74a7015b149",
       "format_kind": "gofmt"
     },
     "integrations/inbox-mcp/xiaohongshu/comment_chunks_test.go": {
       "role": "observe",
-      "sha256": "979be5067ee1c406c84ee9e3e104684e2488caad7993b8fc73d0bf98633861fc",
-      "size": 21991,
-      "normalized_sha256": "979be5067ee1c406c84ee9e3e104684e2488caad7993b8fc73d0bf98633861fc",
-      "format_sha256": "979be5067ee1c406c84ee9e3e104684e2488caad7993b8fc73d0bf98633861fc",
+      "sha256": "eea051db017fd74fb66125b23793601aff0b8bd7a9a026417fd34027b65674d8",
+      "size": 23228,
+      "normalized_sha256": "eea051db017fd74fb66125b23793601aff0b8bd7a9a026417fd34027b65674d8",
+      "format_sha256": "eea051db017fd74fb66125b23793601aff0b8bd7a9a026417fd34027b65674d8",
       "format_kind": "gofmt"
     },
     "integrations/inbox-mcp/xiaohongshu/comment_diagnostic_test.go": {
