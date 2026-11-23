@@ -124,14 +124,19 @@ class LocalWorkspace{
   const where="(?='' OR run_id=?) AND (?='' OR instr(body,?)>0) AND (?='' OR (CASE WHEN review_id IS NULL THEN 'PENDING' ELSE review_status END)=?) AND (?='' OR decision=?) AND (?='' OR policy_id=?) AND (?='' OR context=?) AND (?='' OR review_mode=?) AND (?=0 AND ?=100 OR score BETWEEN ? AND ? OR state='SKIPPED') AND (? IS NULL OR "+published+">=?) AND (? IS NULL OR "+published+"<?) AND (?='' OR ?='known' AND "+published+" IS NOT NULL OR ?='unknown' AND "+published+" IS NULL) AND (?='' OR (?='NONE' AND queue_state IS NULL) OR (?='QUEUED' AND queue_state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING')) OR (?='SENT' AND queue_state='SENT') OR (?='EXPIRED' AND queue_state='EXPIRED') OR (?='FAILED' AND queue_state='FAILED') OR (?='UNKNOWN' AND queue_state='UNKNOWN'))";
   const args=[runId,runId,query,query,status,status,decision,decision,policyId,policyId,context,context,mode,mode,minScore,maxScore,minScore,maxScore,start,start,end,end,publication,publication,publication,queue,queue,queue,queue,queue,queue,queue];
   const visible=where+" AND state<>'SKIPPED' AND review_id IS NOT NULL";
-  const groups="SELECT user_id author_id,user_id,policy_id,count(*) count,max(score) highest,max(coalesce(reviewed_at,published_at_ms)) latest_at,max(published_at_ms) latest_published_at,sum(CASE WHEN review_status IS NULL OR review_status='PENDING' THEN 1 ELSE 0 END) pending_count,sum(CASE WHEN review_status='APPROVED' THEN 1 ELSE 0 END) approved_count,sum(CASE WHEN review_status='REJECTED' THEN 1 ELSE 0 END) rejected_count FROM ("+inner+") WHERE "+visible+" GROUP BY user_id,policy_id";
-  const rows=this.db.prepare("SELECT * FROM ("+groups+") ORDER BY "+orders[sort]+" LIMIT ? OFFSET ?").all(...args,size,(page-1)*size);
-  const commentRows=rows.length?this.db.prepare("SELECT * FROM ("+inner+") WHERE ("+rows.map(()=>'(user_id IS ? AND policy_id IS ?)').join(' OR ')+") ORDER BY published_at_ms DESC,run_id DESC,ordinal").all(...rows.flatMap(r=>[r.user_id,r.policy_id])):[];
+  const attempts="SELECT json_extract(a.scope,'$.basis.reviewId') review_id,max(CASE s.state WHEN 'CONFIRMED' THEN 3 WHEN 'UNKNOWN' THEN 2 WHEN 'RESERVED' THEN 1 WHEN 'DISPATCHED' THEN 1 ELSE 0 END) contact_state FROM send_attempts s JOIN authorizations a ON a.id=s.authorization_id WHERE json_extract(a.scope,'$.basis.reviewId') IS NOT NULL GROUP BY 1";
+  const base="SELECT i.*,coalesce(ca.contact_state,0) contact_state FROM ("+inner+") i LEFT JOIN ("+attempts+") ca ON ca.review_id=i.review_id WHERE i.review_id IS NOT NULL AND i.state<>'SKIPPED'";
+  const groups="SELECT g0.user_id author_id,g0.user_id,g0.policy_id,g0.count,g0.highest,g0.latest_at,g0.latest_published_at,g0.pending_count,g0.approved_count,g0.rejected_count,coalesce(cov.covered,0) covered FROM (SELECT user_id,policy_id,count(*) count,max(score) highest,max(coalesce(reviewed_at,published_at_ms)) latest_at,max(published_at_ms) latest_published_at,sum(CASE WHEN review_status IS NULL OR review_status='PENDING' THEN 1 ELSE 0 END) pending_count,sum(CASE WHEN review_status='APPROVED' THEN 1 ELSE 0 END) approved_count,sum(CASE WHEN review_status='REJECTED' THEN 1 ELSE 0 END) rejected_count FROM ("+base+") WHERE "+visible+" GROUP BY user_id,policy_id) g0 LEFT JOIN (SELECT user_id,policy_id,max(CASE WHEN queue_state IS NOT NULL OR contact_state>0 THEN 1 ELSE 0 END) covered FROM ("+base+") GROUP BY user_id,policy_id) cov ON cov.user_id=g0.user_id AND cov.policy_id=g0.policy_id";
+  const hideCovered=queue===''&&(status==='PENDING'||decision==='UNCERTAIN');
+  const filtered=hideCovered?groups+" WHERE covered=0":groups;
+  const rows=this.db.prepare("SELECT * FROM ("+filtered+") ORDER BY "+orders[sort]+" LIMIT ? OFFSET ?").all(...args,size,(page-1)*size);
+  const commentRows=rows.length?this.db.prepare("SELECT * FROM ("+base+") WHERE ("+rows.map(()=>'(user_id IS ? AND policy_id IS ?)').join(' OR ')+") ORDER BY published_at_ms DESC,run_id DESC,ordinal").all(...rows.flatMap(r=>[r.user_id,r.policy_id])):[];
   const byGroup=new Map();
   for(const row of commentRows){const key=String(row.user_id)+'\u0000'+String(row.policy_id);if(!byGroup.has(key))byGroup.set(key,[]);byGroup.get(key).push(row);}
   const queueOrder=['SENDING','READY','WAITING_SWITCH','WAITING_QUOTA','SENT','UNKNOWN','FAILED','EXPIRED'];
   const decisionOrder={MATCH:3,UNCERTAIN:2,NO_MATCH:1};
   const rank=row=>(row.queue_state?100000:0)+(row.review_status==='PENDING'?10000:0)+(decisionOrder[row.decision]??0)*1000+(row.context==='SUFFICIENT'?100:0)+(row.score??0)+(row.reviewed_at??0)/1e13;
+  const coverageOf=(queueState,contactState)=>queueState==='SENT'?'SENT':queueState==='UNKNOWN'?'UNKNOWN':queueState==='FAILED'?'FAILED':queueState==='EXPIRED'?'EXPIRED':queueState?'QUEUED':contactState===3?'SENT':contactState===2?'UNKNOWN':contactState===1?'QUEUED':null;
   const items=rows.map(group=>{
    const comments=(byGroup.get(String(group.user_id)+'\u0000'+String(group.policy_id))??[]).map(row=>({...row,post_title:row.post_title||'无标题笔记',post_cover_url:mediaUrl(row.post_cover_url)})).sort((a,b)=>rank(b)-rank(a));
    const representative=comments[0];
@@ -141,12 +146,16 @@ class LocalWorkspace{
    const rejectedCount=comments.filter(row=>row.review_status==='REJECTED').length;
    const reviewStatus=pendingCount>0?'PENDING':approvedCount===comments.length?'APPROVED':rejectedCount===comments.length?'REJECTED':'MIXED';
    const queueState=queueOrder.find(state=>comments.some(row=>row.queue_state===state))??null;
+   const contactState=comments.reduce((max,row)=>Math.max(max,row.contact_state??0),0);
+   const coverage=coverageOf(queueState,contactState);
+   const covered=Boolean(group.covered);
+   const coveredCount=covered?pendingCount:0;
    const queueChannels=[...new Set(comments.flatMap(row=>typeof row.queue_channels==='string'?row.queue_channels.split(','):[]).filter(Boolean))].join(',')||null;
    const highest=comments.reduce((max,row)=>row.score==null?max:Math.max(max??row.score,row.score),null);
    const latestAt=comments.reduce((max,row)=>{const value=row.reviewed_at??row.published_at_ms;return value==null?max:Math.max(max??value,value);},null);
-   return {authorId:String(group.user_id),nickname:comments.find(row=>row.nickname)?.nickname??null,authorAvatarUrl:mediaUrl(comments.find(row=>row.author_avatar_url)?.author_avatar_url??null),policyId:String(group.policy_id),policyName:comments.find(row=>row.policy_name)?.policy_name??null,count:comments.length,highest,latestAt,reviewStatus,queueState,queueChannels,pendingCount,approvedCount,rejectedCount,representative,comments};
+   return {authorId:String(group.user_id),nickname:comments.find(row=>row.nickname)?.nickname??null,authorAvatarUrl:mediaUrl(comments.find(row=>row.author_avatar_url)?.author_avatar_url??null),policyId:String(group.policy_id),policyName:comments.find(row=>row.policy_name)?.policy_name??null,count:comments.length,highest,latestAt,reviewStatus,queueState,queueChannels,covered,coverage,coveredCount,pendingCount,approvedCount,rejectedCount,representative,comments};
   }).filter(Boolean);
-  return {items,total:this.db.prepare("SELECT count(*) n FROM ("+groups+")").get(...args).n,commentTotal:this.db.prepare("SELECT count(*) n FROM ("+inner+") i JOIN ("+groups+") g ON g.user_id=i.user_id AND g.policy_id=i.policy_id").get(...args).n,page,pageSize:size};
+  return {items,total:this.db.prepare("SELECT count(*) n FROM ("+filtered+")").get(...args).n,commentTotal:this.db.prepare("SELECT count(*) n FROM ("+base+") i JOIN ("+filtered+") g ON g.user_id=i.user_id AND g.policy_id=i.policy_id").get(...args).n,page,pageSize:size};
   }
  notices({page=1}={}){this.page(page);const where="e.action LIKE '%UNKNOWN%' OR e.action LIKE '%INTERRUPTED%' OR e.action LIKE '%PAUSED%' OR e.action LIKE '%RISK%' OR e.action LIKE '%UNCONFIRMED%'";return {holds:this.overview().holds,items:this.db.prepare(`SELECT e.id,e.action,e.entity_id,e.created_at,(SELECT name FROM accounts a WHERE a.id=e.entity_id) entity_name FROM audit_events e WHERE ${where} ORDER BY e.id DESC LIMIT 30 OFFSET ?`).all((page-1)*30),total:this.db.prepare(`SELECT count(*) n FROM audit_events e WHERE ${where}`).get().n,page};}
  replies({page=1,channel='',state='',accountId='',query='',runId=''}={}){

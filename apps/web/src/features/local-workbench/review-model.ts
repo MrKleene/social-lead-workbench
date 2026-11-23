@@ -41,6 +41,24 @@ export function decisionVariant(decision: string | null) {
       : "secondary";
 }
 
+export const coverageLabels: Record<string, string> = {
+  QUEUED: "已入队",
+  SENT: "已发送",
+  UNKNOWN: "结果未知",
+  FAILED: "发送失败",
+  EXPIRED: "已过期",
+};
+
+export function coverageVariant(coverage: string | null) {
+  return coverage === "SENT" || coverage === "QUEUED"
+    ? "success"
+    : coverage === "FAILED"
+      ? "destructive"
+      : coverage === "UNKNOWN"
+        ? "warning"
+        : "secondary";
+}
+
 export function queueStatus(row: {
   review_status: "PENDING" | "APPROVED" | "REJECTED" | null;
   queue_state: string | null;

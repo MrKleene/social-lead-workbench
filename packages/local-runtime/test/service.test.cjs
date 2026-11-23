@@ -16,6 +16,24 @@ test('author group approval approves siblings but enqueues only one review',t=>{
  const result=service.decideReviewGroup({representativeId:group.representative.review_id,items:group.comments.map(row=>({id:row.review_id,version:row.version})),status:'APPROVED'});
  assert.equal(result.updated,3);assert.equal(f.store.db.prepare("SELECT count(*) n FROM review_results WHERE review_status='APPROVED'").get().n,3);assert.equal(f.store.db.prepare('SELECT count(DISTINCT review_id) n FROM send_queue').get().n,1);assert.equal(f.store.db.prepare('SELECT count(*) n FROM send_queue').get().n,2);
 });
+test('author group coverage hides siblings while one review is queued and restores after removal',t=>{
+ const {fixture,collect,evaluate,entry}=require('./flow-fixture.cjs'),f=fixture(t),run=collect(f,[entry('post-a',['需求一','需求二','需求三'])]);evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ const service=new LocalService(f.store),policy=f.store.db.prepare('SELECT id FROM review_policies LIMIT 1').get().id;
+ service.saveQueueRule({policyId:policy,threshold:0,channels:['COMMENT','DM'],enabled:true,version:0});
+ const group=service.reviewAuthorGroups({runId:run.runId}).items[0];
+ f.store.db.prepare("UPDATE review_results SET decision='UNCERTAIN' WHERE id=?").run(group.comments[1].review_id);
+ service.decideReview({id:group.comments[0].review_id,version:group.comments[0].version,status:'APPROVED'});
+ const covered=service.reviewAuthorGroups({runId:run.runId}).items[0];
+ assert.equal(covered.covered,true);assert.equal(covered.coverage,'QUEUED');assert.equal(covered.coveredCount,2);
+ assert.equal(service.reviewAuthorGroups({runId:run.runId,status:'PENDING'}).total,0);
+ assert.equal(service.reviewAuthorGroups({runId:run.runId,decision:'UNCERTAIN'}).total,0);
+ assert.equal(service.reviewAuthorGroups({runId:run.runId,queue:'QUEUED'}).total,1);
+ for(const row of f.store.db.prepare("SELECT id FROM send_queue WHERE state IN('WAITING_SWITCH','READY','WAITING_QUOTA','SENDING')").all())service.cancelSendQueueItem({id:row.id});
+ const restored=service.reviewAuthorGroups({runId:run.runId}).items[0];
+ assert.equal(restored.covered,false);assert.equal(restored.coverage,null);assert.equal(restored.coveredCount,0);
+ assert.equal(service.reviewAuthorGroups({runId:run.runId,status:'PENDING'}).total,1);
+ assert.equal(service.reviewAuthorGroups({runId:run.runId,decision:'UNCERTAIN'}).total,1);
+});
 test('unused configuration is deleted for real together with its preferences and policy',t=>{
  const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'local-service-delete-'))),db=new LocalDatabase(path.join(dir,'db.sqlite'));t.after(()=>{db.close();fs.rmSync(dir,{recursive:true,force:true});});
  const service=new LocalService(db),body={keywords:['合成关键词']};

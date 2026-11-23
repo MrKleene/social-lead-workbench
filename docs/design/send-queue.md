@@ -8,7 +8,7 @@
 - 每条评论按自己的 `policy_id` 找 `queue_rules`：规则启用、`decision = MATCH` 且分数不低于该方案阈值，才为规则勾选的每个渠道各生成一行；没有规则或规则停用的方案不自动入队。
 - 自动入队还要求结果仍是 `PENDING` 或 `APPROVED`、评论允许自动联系；评论正文、用户与 `source_hash` 必须仍与审核时一致，证据里要有该评论的逐字引用。
 - 人工通过把 `PENDING` 写成 `APPROVED + MATCH` 并按规则入队，不再卡模型分数与上下文判断；评论正文、用户与 `source_hash` 仍须一致，证据里仍须有逐字引用。`NO_MATCH` 不提供通过。旧数据里的 `REJECTED` 只读保留，不再产生新的排除动作。自动入队仍然只接受 `context = SUFFICIENT`。
-- 评论审核按 `user_id + policy_id` 聚合展示：同一作者的多条评论合成一组，人工只需判断一次。通过时只把代表评论写成 `APPROVED + MATCH` 并入队，其余 `PENDING` 兄弟写成 `APPROVED` 但不重复入队，`NO_MATCH` 兄弟收束为 `REJECTED`；标记不符合作用于该组全部 `PENDING`。代表评论优先取已入队、`PENDING`、`MATCH`、证据充分和高分项。
+- 评论审核按 `user_id + policy_id` 聚合展示：同一作者的多条评论合成一组，人工只需判断一次。通过时只把代表评论写成 `APPROVED + MATCH` 并入队，其余 `PENDING` 兄弟写成 `APPROVED` 但不重复入队，`NO_MATCH` 兄弟收束为 `REJECTED`；标记不符合作用于该组全部 `PENDING`。代表评论优先取已入队、`PENDING`、`MATCH`、证据充分和高分项。组内一旦有活动队列或发送尝试，其余 `PENDING` 评论标记为同作者已覆盖，默认不再进入“待确认/不确定”筛选；发送前移出队列则解除覆盖，已发送或平台已确认后保持覆盖。
 - 历史评论可在评论审核用「生成待发送」按各自方案的规则补入队；范围为全部历史审核，不受当前筛选影响；预览返回评论数、评论/私信行数、过期数与跳过数，应用后重复执行保持幂等。
 - 已有活动队列行，或 `send_attempts` 中已有该渠道的 `RESERVED/DISPATCHED/CONFIRMED/UNKNOWN` 时跳过，不重复入队。
 - 评论发布已超过 7 天的记录直接以 `EXPIRED` / `COMMENT_TOO_OLD` 入队，不会进入发送。

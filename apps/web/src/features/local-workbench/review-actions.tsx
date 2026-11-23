@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { LocalReview, ReviewComment } from "./local-api";
-import { stateLabels } from "./review-model";
+import { coverageLabels, stateLabels } from "./review-model";
 
 export function ReviewDecisionActions({
   row,
@@ -20,6 +20,7 @@ export function ReviewDecisionActions({
   canApprove,
   canReject,
   approveHint,
+  coverage,
 }: {
   row: LocalReview;
   state?: ReviewComment["state"];
@@ -31,6 +32,7 @@ export function ReviewDecisionActions({
   canApprove: boolean;
   canReject: boolean;
   approveHint?: string;
+  coverage?: string | null;
 }) {
   const unreviewed = state && state !== "REVIEWED";
   const rejected = row.review_status === "REJECTED";
@@ -39,6 +41,10 @@ export function ReviewDecisionActions({
       {unreviewed ? (
         <span className="text-caption text-muted-foreground">
           {stateLabels[state]}
+        </span>
+      ) : coverage ? (
+        <span className="text-caption text-muted-foreground">
+          {coverageLabels[coverage] ?? coverage}
         </span>
       ) : row.queue_state ? (
         <span className="text-caption text-muted-foreground">已入队</span>
@@ -90,7 +96,7 @@ export function ReviewDecisionActions({
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={onOpen}>查看详情</DropdownMenuItem>
           <DropdownMenuItem onSelect={onOpenOriginal}>查看原帖</DropdownMenuItem>
-          {!unreviewed && !row.queue_state && (canReject || rejected) ? (
+          {!unreviewed && !coverage && !row.queue_state && (canReject || rejected) ? (
             <DropdownMenuItem
               onSelect={() => onDecide(rejected ? "PENDING" : "REJECTED")}
             >

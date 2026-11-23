@@ -62,6 +62,8 @@ import {
 import {
   day,
   approvalState,
+  coverageLabels,
+  coverageVariant,
   decisionLabels,
   decisionVariant,
   score,
@@ -410,10 +412,11 @@ export function LocalCommentReview() {
     const approval = matched ?? approvalState(fallbackRow, ruleFor(fallbackRow));
     return {
       canApprove:
+        !group.covered &&
         !group.queueState &&
         Boolean(group.representative.review_id) &&
         Boolean(matched),
-      canReject: !group.queueState && pending.length > 0,
+      canReject: !group.covered && !group.queueState && pending.length > 0,
       approveHint: approval.approveHint,
     };
   };
@@ -770,7 +773,18 @@ export function LocalCommentReview() {
                         </TableCell>
                         <TableCell className="tabular-nums">{score(group.highest)}</TableCell>
                         <TableCell>
-                          {group.queueState ? (
+                          {group.coverage ? (
+                            <div className="flex flex-col items-start gap-1">
+                              <Badge variant={coverageVariant(group.coverage)}>
+                                {coverageLabels[group.coverage] ?? group.coverage}
+                              </Badge>
+                              {group.coveredCount > 0 ? (
+                                <span className="text-caption text-muted-foreground">
+                                  {group.coveredCount} 条已覆盖
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : group.queueState ? (
                             <Badge variant="success">已入队</Badge>
                           ) : group.reviewStatus === "APPROVED" ? (
                             <Badge variant="success">已通过</Badge>
@@ -797,6 +811,7 @@ export function LocalCommentReview() {
                             canApprove={approval.canApprove}
                             canReject={approval.canReject}
                             approveHint={approval.approveHint}
+                            coverage={group.coverage}
                             onDecide={(next) => askGroupDecision(group, next)}
                             onContact={() => setContact(review)}
                             onOpen={() => setGroupDetail(group)}
@@ -904,7 +919,9 @@ export function LocalCommentReview() {
               {groupDetail?.nickname ?? "匿名"} · {groupDetail?.count ?? 0} 条评论
             </DialogTitle>
             <DialogDescription>
-              最高分 {score(groupDetail?.highest ?? null)} · 通过后只发送一条
+              {groupDetail?.coverage
+                ? `${coverageLabels[groupDetail.coverage] ?? groupDetail.coverage} · 其余评论不再单独发送`
+                : `最高分 ${score(groupDetail?.highest ?? null)} · 通过后只发送一条`}
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
@@ -919,11 +936,16 @@ export function LocalCommentReview() {
                     <p className="min-w-0 flex-1 text-body leading-relaxed break-words">
                       {row.body}
                     </p>
-                    {row.decision ? (
-                      <Badge variant={decisionVariant(row.decision)}>
-                        {decisionLabels[row.decision] ?? row.decision}
-                      </Badge>
-                    ) : null}
+                    <div className="flex flex-wrap items-center gap-1">
+                      {groupDetail?.coverage && row.review_status === "PENDING" ? (
+                        <Badge variant="outline">已覆盖</Badge>
+                      ) : null}
+                      {row.decision ? (
+                        <Badge variant={decisionVariant(row.decision)}>
+                          {decisionLabels[row.decision] ?? row.decision}
+                        </Badge>
+                      ) : null}
+                    </div>
                   </div>
                   <p className="mt-1 text-caption text-muted-foreground">
                     {row.post_title} · {day(row.published_at)} · 匹配分 {score(row.score)}
@@ -955,6 +977,11 @@ export function LocalCommentReview() {
             })}
           </div>
           <DialogFooter>
+            {groupDetail?.covered ? (
+              <span className="text-caption text-muted-foreground">
+                同作者已覆盖，其余评论不再单独处理
+              </span>
+            ) : null}
             {groupDetail && groupApproval(groupDetail).canReject ? (
               <Button
                 variant="outline"
