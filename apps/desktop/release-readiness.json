@@ -8,9 +8,9 @@
   "modelReviewAdapter": "standing-frozen-auto-consent-whole-round-and-optional-manual-review-synthetic-tested-live-paid-2026-11-18-and-2026-11-22-23-multi-account-unverified",
   "exactReplyAndDmAdapters": "registered-original-protocols-manual-ui-journal-and-stop-guarded-synthetic-tested-dm-first-contact-live-confirmed-5of5-comment-send-live-confirmed-2of2-inbox-unverified",
   "inboxAdapter": "registered-bounded-receiver-yield-resume-same-expiry-synthetic-tested-no-live-receipts",
-  "windowsBrowserReview": "pinned-archive-and-76-files-static-checked-native-proof-os-arch-binding-pending-windows",
-  "windowsCredentialsAndLifecycle": "acl-resource-journal-job-object-and-local-key-derivation-native-windows-unverified",
-  "windowsCleanMachineInstaller": "native-x64-validation-versioned-nsis-artifact-hash-receipt-pipeline-not-executed",
+  "windowsBrowserReview": "pinned-archive-and-76-files-static-checked-windows-vm-browser-bundled-real-x64-pending",
+  "windowsCredentialsAndLifecycle": "acl-resource-journal-job-object-and-local-key-derivation-native-vm-tested-dpapi-acl-owned-process-termination-real-x64-pending",
+  "windowsCleanMachineInstaller": "native-x64-vm-built-nsis-artifact-hash-receipt-custom-dir-install-self-test-passed-real-x64-default-path-upgrade-uninstall-pending",
   "testDataReset": "cascade-delete-idle-guarded-vacuum-synthetic-tested",
   "dependencySecurityReview": "npm-audit-zero-asar-glob-and-unpack-regressions-tested-2026-11-10",
   "desktopFrameworkDecision": "verified",
@@ -19,11 +19,11 @@
   "strictReplyAndDmResultProtocols": "implemented-synthetic-tested",
   "localBusinessHistoryUi": "original-reply-table-and-detail-cross-round-review-inbox-comment-filters-macos-synthetic-tested",
   "versionedMigrations": "v1-through-v10-synthetic-tested",
-  "electronPackagingFuses": "verified-macos-arm64-preview-windows-pending",
-  "macosArm64Installer": "native-components-bundled-dmg-offline-self-test-passed-unsigned",
+  "electronPackagingFuses": "verified-macos-arm64-and-windows-x64-preview",
+  "macosArm64Installer": "native-components-bundled-dmg-offline-self-test-passed-unsigned-sha256-eb06e31c31bcd13c02a8eaf6c781f750810c5693cd2e8ab406f132650b10b7bd",
   "macosCredentialsAndLifecycle": "synthetic-local-key-derivation-owned-tree-cleanup-and-initialization-failure-recovery-tested-upgrade-pending",
-  "windowsMcpBuild": "portable-native-build-environment-tested-mac-crosscompiled-pe-x64-not-run-on-windows",
+  "windowsMcpBuild": "native-x64-vm-built-go-1-27-4-packaged-self-test-passed-real-x64-pending",
   "executionPreferences": "per-config-autoapply-versioned-legacy-defaults-restored-no-grants",
   "readOnlyDiagnosticsAndReports": "new-link-owned-session-bounded-diagnostics-cross-version-comparison-and-reporting-synthetic-tested",
-  "windowsStaticInputs": "archive-pe-x64-and-428-build-source-hashes-verified-on-mac-native-helper-not-built"
+  "windowsStaticInputs": "archive-pe-x64-and-428-build-source-hashes-verified-windows-vm-native-helper-built-and-tested"
 }

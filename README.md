@@ -4,7 +4,7 @@
 发送评论回复或私信首联 → 收进回复记录。界面紧凑、以黑白为主，全部数据留在本机，
 没有账号服务器，也不需要 Docker、PostgreSQL 或 Redis。
 
-> 当前为 0.1.0 预览版。安装包未签名、未公证，Windows 安装包尚未在真机完成安装验证；
+> 当前为 0.1.0 预览版。安装包未签名、未公证，Windows 安装包尚未在 Windows 11 x64 真机完成验证；
 > 具体缺口语见[已知限制](#已知限制)。
 
 ## 功能
@@ -26,8 +26,7 @@
 
 安装包内已固定浏览器、平台组件与原生监督器，普通使用者无需安装 Node.js、Go 或浏览器。
 
-**macOS 首次打开**：应用未使用 Apple Developer ID 签名。首次启动请在 Finder 中右键应用 →
-「打开」，或执行：
+**macOS 首次打开**：把 `Social Lead Desktop.app` 拖入「应用程序」后再启动，不要直接在只读 DMG 卷内运行。应用未使用 Apple Developer ID 签名，首次启动请在 Finder 中右键应用 →「打开」，或执行：
 
 ```sh
 xattr -dr com.apple.quarantine "/Applications/Social Lead Desktop.app"
@@ -101,7 +100,7 @@ npm run desktop:package:mac:preview                # 或 desktop:package:win:pre
 ## 已知限制
 
 - 安装包未签名、未公证：macOS 需手动放行，Windows 会出现 SmartScreen 提示；没有 Intel Mac 与 Windows ARM64 版本。
-- Windows 安装包尚未在真机完成安装、升级、卸载验证。
+- Windows 安装包已在 Windows 11 ARM64 虚拟机内构建并通过自检；尚未在 Windows 11 x64 真机、默认用户安装路径、升级、卸载与干净机器上验证。
 - 收件为一次性可见范围快照，没有平台推送订阅；私信消息不参与新消息判定。
 - 评论自动派发、批量发送、多账号并发与多轮长期稳定性尚未完整验收。
 - 平台页面改版可能导致采集或发送失效，届时需要更新随包组件。

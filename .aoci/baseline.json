@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-11T10:57:30Z",
-  "updated_at": "2026-11-23T19:05:44Z",
+  "updated_at": "2026-11-23T19:17:25Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -17527,15 +17527,15 @@
     },
     "README.md": {
       "role": "index",
-      "sha256": "28c443f6656b45a2a666eaf7647440f8b65d146a3e1158b0eb4c11a80708959e",
-      "size": 7341,
-      "normalized_sha256": "28c443f6656b45a2a666eaf7647440f8b65d146a3e1158b0eb4c11a80708959e"
+      "sha256": "acf45f9d58546453a56126139008bc2a1165bbaf8af25e38735ca9067a583c23",
+      "size": 7569,
+      "normalized_sha256": "acf45f9d58546453a56126139008bc2a1165bbaf8af25e38735ca9067a583c23"
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "e9849965c32925e32f8e5e0c9e30824b732d82d8ac747588f9c12ed40a1f3455",
-      "size": 259568,
-      "normalized_sha256": "e9849965c32925e32f8e5e0c9e30824b732d82d8ac747588f9c12ed40a1f3455"
+      "sha256": "d683a53c0ad6039747e8e43805bf0769de4b67b6b81ba9d239d37a634bc01c32",
+      "size": 260038,
+      "normalized_sha256": "d683a53c0ad6039747e8e43805bf0769de4b67b6b81ba9d239d37a634bc01c32"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -17579,9 +17579,9 @@
     },
     "apps/desktop/release-readiness.json": {
       "role": "index",
-      "sha256": "8d1e7e7d4015774628a6dcb0d2f52813ec2d6b4387b57d52c17fc083cd10009a",
-      "size": 2733,
-      "normalized_sha256": "8d1e7e7d4015774628a6dcb0d2f52813ec2d6b4387b57d52c17fc083cd10009a"
+      "sha256": "3893cbd42dc8fd9cb9dca807906490be3ba65ef2d1022c089efe98fade393be8",
+      "size": 2897,
+      "normalized_sha256": "3893cbd42dc8fd9cb9dca807906490be3ba65ef2d1022c089efe98fade393be8"
     },
     "apps/desktop/src/evidence-wire.cjs": {
       "role": "index",
@@ -17615,9 +17615,9 @@
     },
     "apps/desktop/src/main.cjs": {
       "role": "index",
-      "sha256": "898bd7f0572f3840de6292d28bca52131a902aeb2eac17d167e7ca51ad120e8a",
-      "size": 16927,
-      "normalized_sha256": "898bd7f0572f3840de6292d28bca52131a902aeb2eac17d167e7ca51ad120e8a"
+      "sha256": "018dd62d05e00405e2acb9d89430e59643715c7451c2845b6873781f5bf35dfc",
+      "size": 17407,
+      "normalized_sha256": "018dd62d05e00405e2acb9d89430e59643715c7451c2845b6873781f5bf35dfc"
     },
     "apps/desktop/src/native-resources.cjs": {
       "role": "index",
@@ -18935,9 +18935,9 @@
     },
     "docs/requirements/ACCEPTANCE.md": {
       "role": "index",
-      "sha256": "f97e9574dcc99814764d7bedfa92ad88e4227876be6be2a3089d38f0ada6e8fb",
-      "size": 5555,
-      "normalized_sha256": "f97e9574dcc99814764d7bedfa92ad88e4227876be6be2a3089d38f0ada6e8fb"
+      "sha256": "0cd90594ae07640538ab72a9f8b7d0eeb77f9dc9308d94a31131903261255155",
+      "size": 6547,
+      "normalized_sha256": "0cd90594ae07640538ab72a9f8b7d0eeb77f9dc9308d94a31131903261255155"
     },
     "docs/requirements/DESKTOP-LOCAL.md": {
       "role": "index",
@@ -18947,9 +18947,9 @@
     },
     "docs/requirements/IMPLEMENTATION-STATUS.md": {
       "role": "index",
-      "sha256": "bfff2c97b186c4e755b3bb179af1dbd8131e35fe80a75d626bd7b5f5922e0a9c",
-      "size": 3616,
-      "normalized_sha256": "bfff2c97b186c4e755b3bb179af1dbd8131e35fe80a75d626bd7b5f5922e0a9c"
+      "sha256": "e42d11a492367f7fe1da41856b85904e920948b30197af7def762b626e8fa2ed",
+      "size": 3714,
+      "normalized_sha256": "e42d11a492367f7fe1da41856b85904e920948b30197af7def762b626e8fa2ed"
     },
     "docs/requirements/MODULES.md": {
       "role": "index",
@@ -18959,9 +18959,9 @@
     },
     "docs/requirements/OVERVIEW.md": {
       "role": "index",
-      "sha256": "922409ee83c824252d700cd0df3e9600076613360028f56ce5a7ab560ced1b6f",
-      "size": 8401,
-      "normalized_sha256": "922409ee83c824252d700cd0df3e9600076613360028f56ce5a7ab560ced1b6f"
+      "sha256": "2b1dafdcdbd616b827a85f18a1aa1e240fbba9ed428cede1e4b654c0f2fbb43f",
+      "size": 8546,
+      "normalized_sha256": "2b1dafdcdbd616b827a85f18a1aa1e240fbba9ed428cede1e4b654c0f2fbb43f"
     },
     "docs/requirements/README.md": {
       "role": "index",

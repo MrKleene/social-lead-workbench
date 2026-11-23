@@ -127,6 +127,10 @@ async function main(){
  if(smoke){
   // Packaged self-test owns a newly created temp directory. It cannot select a
   // user path, read OS credentials, register paid/platform executors or resume work.
+  // Electron can resolve loadURL before the preload API is attached; wait for it and
+  // for one renderer task turn, otherwise executeJavaScript can hang on a cold start.
+  const ready=await window.webContents.executeJavaScript(`new Promise(resolve=>{const deadline=Date.now()+5000;const poll=()=>{if(window.localWorkbench)return resolve(true);if(Date.now()>deadline)return resolve(false);setTimeout(poll,20);};poll();})`);
+  if(!ready)throw Error('SELF_TEST_API_UNAVAILABLE');
   const result=await window.webContents.executeJavaScript(`(async()=>{const api=window.localWorkbench;const before=await api.status();if(!before.ok||before.data.credentialsAvailable||before.data.initialized)throw Error('SELF_TEST_ISOLATION');await api.initialize();const saved=await api.saveConfiguration({kind:'KEYWORDS',name:'Synthetic packaged self-test',body:{keywords:['synthetic-only']}});const rows=await api.configurations();if(!saved.ok||!rows.ok||rows.data.length!==${builtinConfigurations.length+1})throw Error('SELF_TEST_LOCAL_FLOW');return {initialized:true,configurations:rows.data.length,builtinConfigurations:${builtinConfigurations.length},credentialsAvailable:false,externalExecutors:false};})()`);
   console.log('DESKTOP_SELF_TEST '+JSON.stringify({...result,platform:process.platform,arch:process.arch,packaged:app.isPackaged}));app.quit();
  }
