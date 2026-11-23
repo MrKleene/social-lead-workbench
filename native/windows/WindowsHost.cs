@@ -34,7 +34,9 @@ partial class WindowsHost {
  static void CheckAcl(string p,bool directory,bool privateData){
   Canonical(p);
   FileSystemSecurity acl=directory?(FileSystemSecurity)Directory.GetAccessControl(p):File.GetAccessControl(p);
-  if(privateData&&acl.GetOwner(typeof(SecurityIdentifier)).Value!=User.Value)throw new Exception();
+  // Windows may assign BUILTIN\Administrators as the default owner for objects
+  // created by an elevated token. Trusted owners are equivalent to trusted ACEs.
+  if(privateData&&!Trusted(acl.GetOwner(typeof(SecurityIdentifier)).Value))throw new Exception();
   bool userAccess=false;
   foreach(FileSystemAccessRule rule in acl.GetAccessRules(true,true,typeof(SecurityIdentifier))){
    string sid=rule.IdentityReference.Value;

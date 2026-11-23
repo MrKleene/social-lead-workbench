@@ -48,7 +48,7 @@ partial class WindowsHost {
     }
    }finally{
     if(pi.thread!=IntPtr.Zero)CloseHandle(pi.thread);if(pi.process!=IntPtr.Zero)CloseHandle(pi.process);CloseHandle(job);
-    if(proven){ClearDesktopTree(cwd);Directory.Delete(cwd);}
+    if(proven){Directory.SetCurrentDirectory(Path.GetDirectoryName(cwd));ClearDesktopTree(cwd);Directory.Delete(cwd);}
    }
   }
   return 0;

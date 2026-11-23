@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -40,11 +42,17 @@ func OpenJournal(directory, attempt string) (*Journal, error) {
 		return nil, errors.New("JOURNAL_UNAVAILABLE")
 	}
 	real, err := filepath.EvalSymlinks(directory)
-	if err != nil || real != directory {
+	samePath := real == directory
+	if runtime.GOOS == "windows" {
+		samePath = strings.EqualFold(real, directory)
+	}
+	if err != nil || !samePath {
 		return nil, errors.New("JOURNAL_UNAVAILABLE")
 	}
 	st, err := os.Stat(directory)
-	if err != nil || !st.IsDir() || st.Mode().Perm()&0077 != 0 {
+	// Windows ACLs do not map onto POSIX permission bits. The caller supplies a
+	// per-user app-data directory; keep the POSIX ownership check on Unix only.
+	if err != nil || !st.IsDir() || (runtime.GOOS != "windows" && st.Mode().Perm()&0077 != 0) {
 		return nil, errors.New("JOURNAL_UNAVAILABLE")
 	}
 	// Exclusive creation: no overwrite, symlink following, reuse or replay.
@@ -52,14 +60,18 @@ func OpenJournal(directory, attempt string) (*Journal, error) {
 	if err != nil {
 		return nil, errors.New("JOURNAL_UNAVAILABLE")
 	}
-	d, err := os.Open(directory)
-	if err == nil {
-		err = d.Sync()
-		d.Close()
-	}
-	if err != nil {
-		f.Close()
-		return nil, errors.New("JOURNAL_UNAVAILABLE")
+	// Windows cannot flush a directory handle; the journal file itself is synced
+	// before every stage, which is the durability boundary that matters.
+	if runtime.GOOS != "windows" {
+		d, err := os.Open(directory)
+		if err == nil {
+			err = d.Sync()
+			d.Close()
+		}
+		if err != nil {
+			f.Close()
+			return nil, errors.New("JOURNAL_UNAVAILABLE")
+		}
 	}
 	return &Journal{file: f, attempt: attempt}, nil
 }

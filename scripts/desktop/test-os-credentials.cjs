@@ -3,11 +3,16 @@
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict'),{randomBytes}=require('node:crypto');
 const {CredentialStore}=require('@crm/local-runtime/credentials');
 const {createProtector}=require('../../apps/desktop/src/local-crypto.cjs');
-const directory=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'desktop-credential-test-')));
+const windowsNative=process.platform==='win32'?require('../../apps/desktop/src/windows-native.cjs').windowsNative:null;
+const windowsCall=request=>windowsNative({isPackaged:false},request);
+// Windows private directories must be created by the helper so the ACL is set;
+// a plain mkdir under the system temp root inherits untrusted access.
+const base=process.platform==='win32'?windowsCall({operation:'info'}):os.tmpdir();
+const directory=fs.realpathSync(fs.mkdtempSync(path.join(base,'desktop-credential-test-')));
 try{
- const vaultDir=path.join(directory,'vault');fs.mkdirSync(vaultDir,{mode:0o700});
- const checkPrivateFile=file=>{if(process.platform==='win32')require('../../apps/desktop/src/windows-native.cjs').windowsNative({isPackaged:false},{operation:'file',path:file});};
- if(process.platform==='win32')require('../../apps/desktop/src/windows-native.cjs').windowsNative({isPackaged:false},{operation:'directory',path:vaultDir,create:false});
+ const vaultDir=path.join(directory,'vault');
+ if(process.platform==='win32')windowsCall({operation:'directory',path:vaultDir,create:true});else fs.mkdirSync(vaultDir,{mode:0o700});
+ const checkPrivateFile=file=>{if(process.platform==='win32')windowsCall({operation:'file',path:file});};
  const vault=new CredentialStore(vaultDir,createProtector(),{checkPrivateFile});
  const synthetic='synthetic-only-'+randomBytes(24).toString('hex');vault.put('MODEL_KEY','qwen',synthetic);
  assert.equal(vault.get('MODEL_KEY','qwen'),synthetic);

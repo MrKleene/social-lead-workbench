@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-11T10:57:30Z",
-  "updated_at": "2026-11-23T17:24:13Z",
+  "updated_at": "2026-11-23T19:05:44Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -17533,9 +17533,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "3d9090cde8804dfca771f75d9c88c4e2ba44819be5c03063fee29dc8be977d43",
-      "size": 258583,
-      "normalized_sha256": "3d9090cde8804dfca771f75d9c88c4e2ba44819be5c03063fee29dc8be977d43"
+      "sha256": "e9849965c32925e32f8e5e0c9e30824b732d82d8ac747588f9c12ed40a1f3455",
+      "size": 259568,
+      "normalized_sha256": "e9849965c32925e32f8e5e0c9e30824b732d82d8ac747588f9c12ed40a1f3455"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -17615,9 +17615,9 @@
     },
     "apps/desktop/src/main.cjs": {
       "role": "index",
-      "sha256": "d9fd9880bfaf6a63eebcc1ec470cb22bfd9e0165b06a594dcd179635828be911",
-      "size": 16830,
-      "normalized_sha256": "d9fd9880bfaf6a63eebcc1ec470cb22bfd9e0165b06a594dcd179635828be911"
+      "sha256": "898bd7f0572f3840de6292d28bca52131a902aeb2eac17d167e7ca51ad120e8a",
+      "size": 16927,
+      "normalized_sha256": "898bd7f0572f3840de6292d28bca52131a902aeb2eac17d167e7ca51ad120e8a"
     },
     "apps/desktop/src/native-resources.cjs": {
       "role": "index",
@@ -17663,9 +17663,9 @@
     },
     "apps/desktop/src/windows-native.cjs": {
       "role": "index",
-      "sha256": "c8305469068fc587b814f1d8b00127c6085b4974d1a68602bd8c40a5bc26c8a9",
-      "size": 1279,
-      "normalized_sha256": "c8305469068fc587b814f1d8b00127c6085b4974d1a68602bd8c40a5bc26c8a9"
+      "sha256": "d3cd0aa23c0a1521a77f43008583e74bb9c00cb82dedad3dbdd8790fd65cc80a",
+      "size": 1272,
+      "normalized_sha256": "d3cd0aa23c0a1521a77f43008583e74bb9c00cb82dedad3dbdd8790fd65cc80a"
     },
     "apps/desktop/test/build-environment.test.cjs": {
       "role": "index",
@@ -19229,18 +19229,18 @@
     },
     "integrations/inbox-mcp/exactreply/journal.go": {
       "role": "index",
-      "sha256": "3dedd970da152c1e403c470ef1f6fee665cf0ebe563e90fe8fb8ce1f3c9db7f6",
-      "size": 6043,
-      "normalized_sha256": "3dedd970da152c1e403c470ef1f6fee665cf0ebe563e90fe8fb8ce1f3c9db7f6",
-      "format_sha256": "3dedd970da152c1e403c470ef1f6fee665cf0ebe563e90fe8fb8ce1f3c9db7f6",
+      "sha256": "29a6d0e96adc453927e72ec590783bd93c8a303d378ab9218de9b5e7b1dc01e8",
+      "size": 6552,
+      "normalized_sha256": "29a6d0e96adc453927e72ec590783bd93c8a303d378ab9218de9b5e7b1dc01e8",
+      "format_sha256": "29a6d0e96adc453927e72ec590783bd93c8a303d378ab9218de9b5e7b1dc01e8",
       "format_kind": "gofmt"
     },
     "integrations/inbox-mcp/exactreply/journal_test.go": {
       "role": "observe",
-      "sha256": "238e320c91ae77c02d00c921b62a953298aaee67522bd1c03bbc6d1aba5eca5a",
-      "size": 5125,
-      "normalized_sha256": "238e320c91ae77c02d00c921b62a953298aaee67522bd1c03bbc6d1aba5eca5a",
-      "format_sha256": "238e320c91ae77c02d00c921b62a953298aaee67522bd1c03bbc6d1aba5eca5a",
+      "sha256": "37bccfcc128e66a3f398b70a32bc1197d2f36f29ba59e2ad4501942f4f1283fb",
+      "size": 5165,
+      "normalized_sha256": "37bccfcc128e66a3f398b70a32bc1197d2f36f29ba59e2ad4501942f4f1283fb",
+      "format_sha256": "37bccfcc128e66a3f398b70a32bc1197d2f36f29ba59e2ad4501942f4f1283fb",
       "format_kind": "gofmt"
     },
     "integrations/inbox-mcp/exactreply/preflight.go": {
@@ -19285,18 +19285,18 @@
     },
     "integrations/inbox-mcp/exactreply/receipt_test.go": {
       "role": "observe",
-      "sha256": "449faaf797829d126616fc89860178260da81641fa0818f671aa06a283e34918",
-      "size": 6519,
-      "normalized_sha256": "449faaf797829d126616fc89860178260da81641fa0818f671aa06a283e34918",
-      "format_sha256": "449faaf797829d126616fc89860178260da81641fa0818f671aa06a283e34918",
+      "sha256": "27c13ce737c6cd1f3f5a6f8eac6cd4363f13fc9159d1251183e81e8cad6978f4",
+      "size": 6607,
+      "normalized_sha256": "27c13ce737c6cd1f3f5a6f8eac6cd4363f13fc9159d1251183e81e8cad6978f4",
+      "format_sha256": "27c13ce737c6cd1f3f5a6f8eac6cd4363f13fc9159d1251183e81e8cad6978f4",
       "format_kind": "gofmt"
     },
     "integrations/inbox-mcp/exactreply/reliability_test.go": {
       "role": "observe",
-      "sha256": "33bbafbcacef2ebb1cb5be6a098d269517de1d8d63ba9fa958031b44d0c353c4",
-      "size": 2799,
-      "normalized_sha256": "33bbafbcacef2ebb1cb5be6a098d269517de1d8d63ba9fa958031b44d0c353c4",
-      "format_sha256": "33bbafbcacef2ebb1cb5be6a098d269517de1d8d63ba9fa958031b44d0c353c4",
+      "sha256": "49a8b59de764d09e57f97795a5562fcd4dfd51f1ac560a717737fe58750c16c6",
+      "size": 2887,
+      "normalized_sha256": "49a8b59de764d09e57f97795a5562fcd4dfd51f1ac560a717737fe58750c16c6",
+      "format_sha256": "49a8b59de764d09e57f97795a5562fcd4dfd51f1ac560a717737fe58750c16c6",
       "format_kind": "gofmt"
     },
     "integrations/inbox-mcp/exactreply/restriction.go": {
@@ -19341,10 +19341,10 @@
     },
     "integrations/inbox-mcp/exactreply/selection_test.go": {
       "role": "observe",
-      "sha256": "cc384ba33af88b5fbca07a32d2a0d11d27102e9a324dbd3cbcd6e82257ae61bf",
-      "size": 1384,
-      "normalized_sha256": "cc384ba33af88b5fbca07a32d2a0d11d27102e9a324dbd3cbcd6e82257ae61bf",
-      "format_sha256": "cc384ba33af88b5fbca07a32d2a0d11d27102e9a324dbd3cbcd6e82257ae61bf",
+      "sha256": "0b6fd17186b3818eb9906c52520969234c31ab9e6c6417f8ee637c39646e9019",
+      "size": 1472,
+      "normalized_sha256": "0b6fd17186b3818eb9906c52520969234c31ab9e6c6417f8ee637c39646e9019",
+      "format_sha256": "0b6fd17186b3818eb9906c52520969234c31ab9e6c6417f8ee637c39646e9019",
       "format_kind": "gofmt"
     },
     "integrations/inbox-mcp/exactreply/verify.go": {
@@ -20309,15 +20309,15 @@
     },
     "native/windows/WindowsDesktop.cs": {
       "role": "index",
-      "sha256": "6b3bd2b01149ca73e2df50fe82bf95c44b912baf8694458cfd68c2523aa84a8c",
-      "size": 3600,
-      "normalized_sha256": "6b3bd2b01149ca73e2df50fe82bf95c44b912baf8694458cfd68c2523aa84a8c"
+      "sha256": "de7a1937df276751427826297a161fac4265bcc1fa5f593080c0e988efcc3ec9",
+      "size": 3658,
+      "normalized_sha256": "de7a1937df276751427826297a161fac4265bcc1fa5f593080c0e988efcc3ec9"
     },
     "native/windows/WindowsHost.cs": {
       "role": "index",
-      "sha256": "6ddcdee02c4d8e774b263b0dffb394a4727bd1ad3816e5f975585df6ac989677",
-      "size": 12685,
-      "normalized_sha256": "6ddcdee02c4d8e774b263b0dffb394a4727bd1ad3816e5f975585df6ac989677"
+      "sha256": "9ccf998881d4be0a6b2b1112aa3a2a3684a469b0e2ad8249bf9b6302f4b1df53",
+      "size": 12845,
+      "normalized_sha256": "9ccf998881d4be0a6b2b1112aa3a2a3684a469b0e2ad8249bf9b6302f4b1df53"
     },
     "package-lock.json": {
       "role": "index",
@@ -21587,9 +21587,9 @@
     },
     "scripts/desktop/test-os-credentials.cjs": {
       "role": "index",
-      "sha256": "4980a74fe21953443eb7f82ec24789858ce3968506d804c9985e346dce56f80f",
-      "size": 2046,
-      "normalized_sha256": "4980a74fe21953443eb7f82ec24789858ce3968506d804c9985e346dce56f80f"
+      "sha256": "7328e3c468e89ee1e24631c0a8f20429e8bb7084b44b544536bebde00376feb2",
+      "size": 2319,
+      "normalized_sha256": "7328e3c468e89ee1e24631c0a8f20429e8bb7084b44b544536bebde00376feb2"
     },
     "scripts/desktop/test-package.cjs": {
       "role": "index",
@@ -21605,9 +21605,9 @@
     },
     "scripts/desktop/verify-package.cjs": {
       "role": "index",
-      "sha256": "e710014cba11b4d8d920f1c9b0761996221c1fafbb7bb351e1a514b428f3b86a",
-      "size": 3158,
-      "normalized_sha256": "e710014cba11b4d8d920f1c9b0761996221c1fafbb7bb351e1a514b428f3b86a"
+      "sha256": "b8a1847802b6af3d7f8529ea66ec7c4eade7570ebe7f64acd2333035670e9ed9",
+      "size": 3564,
+      "normalized_sha256": "b8a1847802b6af3d7f8529ea66ec7c4eade7570ebe7f64acd2333035670e9ed9"
     },
     "scripts/desktop/windows-preview.ps1": {
       "role": "index",

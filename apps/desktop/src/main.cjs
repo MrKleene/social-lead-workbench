@@ -25,6 +25,7 @@ const {LocalModelExecutor}=require('@crm/local-runtime/model-executor');
 const os=require('node:os');
 protocol.registerSchemesAsPrivileged([{scheme:'workbench',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
 const root=path.resolve(__dirname,'../../..');let window,store,service,runner,accounts,evidence,ticker,smokeDirectory,closing=false,pendingSends=0,forceClose=false,operations=Promise.resolve();
+function removeSmokeDirectory(){if(!smokeDirectory)return;const target=smokeDirectory;smokeDirectory=null;try{fs.rmSync(target,{recursive:true,force:true,maxRetries:10,retryDelay:100});}catch{}}
 // Separate app identity/data from the existing production workbench.
 app.setName('SocialLeadDesktop');
 function privateDirectory(p){
@@ -131,6 +132,6 @@ async function main(){
  }
 }
 app.on('window-all-closed',()=>app.quit());
-app.on('quit',()=>{if(smokeDirectory)fs.rmSync(smokeDirectory,{recursive:true,force:true});});
-app.on('before-quit',event=>{if(!confirmPendingSends()){event.preventDefault();return;}if(closing||!store)return;event.preventDefault();closing=true;clearInterval(ticker);service?.cancelEvidence();service?.cancelPostDiagnostic();void Promise.allSettled([operations,accounts?.close()]).then(async()=>{await runner?.stop();store.close();store=null;if(smokeDirectory)fs.rmSync(smokeDirectory,{recursive:true,force:true});app.quit();});});
+app.on('quit',()=>{removeSmokeDirectory();});
+app.on('before-quit',event=>{if(!confirmPendingSends()){event.preventDefault();return;}if(closing||!store)return;event.preventDefault();closing=true;clearInterval(ticker);service?.cancelEvidence();service?.cancelPostDiagnostic();void Promise.allSettled([operations,accounts?.close()]).then(async()=>{await runner?.stop();store.close();store=null;removeSmokeDirectory();app.quit();});});
 main().catch(error=>{console.error('DESKTOP_START_FAILED',error?.stack||error);if(smokeDirectory){console.error('DESKTOP_SELF_TEST_FAILED');app.quit();return;}if(process.argv.includes('--test-fixture')){app.quit();return;}dialog.showErrorBox('工作台启动失败','本地数据目录、数据库或系统凭据保护不可用。没有连接或修改原工作台数据。');app.quit();});

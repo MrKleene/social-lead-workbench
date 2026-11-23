@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -59,7 +60,7 @@ func TestJournalIntentDurableBeforeClickAndReturn(t *testing.T) {
 		t.Fatal(attempted, err, calls, rows)
 	}
 	st, _ := os.Stat(path)
-	if st.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && st.Mode().Perm() != 0600 {
 		t.Fatal(st.Mode())
 	}
 }

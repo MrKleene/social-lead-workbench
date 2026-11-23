@@ -33,6 +33,11 @@ func TestJournalKilledWriter(t *testing.T) {
 func TestJournalSurvivesKilledProcessWithoutProvingSubmission(t *testing.T) {
 	dir := t.TempDir()
 	os.Chmod(dir, 0700)
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir = real
 	child := exec.Command(os.Args[0], "-test.run=^TestJournalKilledWriter$")
 	child.Env = append(os.Environ(), "REPLY_SYNTHETIC_KILL_DIRECTORY="+dir)
 	pipe, err := child.StdoutPipe()

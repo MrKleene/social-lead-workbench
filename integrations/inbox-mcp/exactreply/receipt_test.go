@@ -102,6 +102,11 @@ func TestReceiptJournalDurability(t *testing.T) {
 	c := command()
 	dir := t.TempDir()
 	os.Chmod(dir, 0700)
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir = real
 	j, err := OpenJournal(dir, c.AttemptID)
 	if err != nil {
 		t.Fatal(err)

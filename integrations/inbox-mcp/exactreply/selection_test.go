@@ -35,6 +35,11 @@ func TestSelectionJournalDurableProjection(t *testing.T) {
 	if err := os.Chmod(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir = real
 	id := "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
 	j, err := OpenJournal(dir, id)
 	if err != nil {

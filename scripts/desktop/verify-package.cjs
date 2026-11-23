@@ -2,11 +2,15 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const asar=require('@electron/asar'),{getCurrentFuseWire,FuseV1Options}=require('@electron/fuses');
 function verifyArchive(archive,expectedFiles){
- const entries=asar.listPackage(archive).map(s=>s.slice(1).replaceAll('\\','/')),files=entries.filter(e=>!asar.statFile(archive,e).files);
+ // asar paths use the host separator: Windows returns backslashes. Keep each
+ // entry in the form the archive's own API accepts, and compare on POSIX paths.
+ const raw=asar.listPackage(archive).map(entry=>entry.replace(/^[\\/]+/,'')),posix=s=>s.replaceAll('\\','/');
+ const byPath=new Map();for(const entry of raw){let key=entry;try{asar.statFile(archive,key);}catch{key=posix(entry);}byPath.set(posix(entry),key);}
+ const entries=raw.map(posix),stat=entry=>asar.statFile(archive,byPath.get(entry)),files=entries.filter(entry=>!stat(entry).files);
  assert.equal(entries.some(e=>/(^|\/)\.env|\.sqlite|\.sealed|cookies/i.test(e)),false,'Package contains runtime/dependency data');
- assert.equal(entries.some(e=>asar.statFile(archive,e).link),false,'Package contains a link');
+ assert.equal(entries.some(e=>stat(e).link),false,'Package contains a link');
  assert.deepEqual([...files].sort(),[...expectedFiles.keys()].sort(),'Package file set differs from allowlist');
- for(const [file,bytes] of expectedFiles){const actual=asar.extractFile(archive,file);if(file==='package.json')assert.deepEqual(JSON.parse(actual),JSON.parse(bytes),'Package metadata differs');else assert.equal(bytes.equals(actual),true,'Package is stale: '+file);}
+ for(const [file,bytes] of expectedFiles){const actual=asar.extractFile(archive,byPath.get(file));if(file==='package.json')assert.deepEqual(JSON.parse(actual),JSON.parse(bytes),'Package metadata differs');else assert.equal(bytes.equals(actual),true,'Package is stale: '+file);}
  return files.length;
 }
 async function verifyPackage(app){
