@@ -6,7 +6,7 @@
   "configurationUi": "implemented-macos-synthetic-ui-tested",
   "platformCollectionAdapter": "registered-owned-mac-runtime-and-consent-offline-synthetic-tested-live-3-rounds-16-posts-1347-comments-coverage-unverified",
   "modelReviewAdapter": "standing-frozen-auto-consent-whole-round-and-optional-manual-review-synthetic-tested-live-paid-2026-11-18-and-2026-11-22-23-multi-account-unverified",
-  "exactReplyAndDmAdapters": "registered-original-protocols-manual-ui-journal-and-stop-guarded-synthetic-tested-dm-first-contact-live-confirmed-3of3-comment-send-live-confirmed-1of1-inbox-unverified",
+  "exactReplyAndDmAdapters": "registered-original-protocols-manual-ui-journal-and-stop-guarded-synthetic-tested-dm-first-contact-live-confirmed-5of5-comment-send-live-confirmed-2of2-inbox-unverified",
   "inboxAdapter": "registered-bounded-receiver-yield-resume-same-expiry-synthetic-tested-no-live-receipts",
   "windowsBrowserReview": "pinned-archive-and-76-files-static-checked-native-proof-os-arch-binding-pending-windows",
   "windowsCredentialsAndLifecycle": "acl-resource-journal-job-object-and-local-key-derivation-native-windows-unverified",

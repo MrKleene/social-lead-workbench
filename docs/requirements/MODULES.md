@@ -115,7 +115,7 @@ InboxReceiver → InboxMessage → InboxRead        （独立支线，不参与�
 `live-journal-progress.ts`、`xhs-reply-protocol.ts`、`xhs-reply-transport.ts`、`xhs-restriction-transport.ts`）；
 `packages/local-runtime/src/contact.cjs`、`send-safety.cjs`、`send-executor.cjs`、`send-queue.cjs`、`migrations/002-queue-rules.sql`
 
-**状态**：评论发送已接入 + 合成验证；私信首联已有平台确认的实测记录；每条发送仍需逐次授权；评论发送、批量与多账号未验收
+**状态**：评论与私信发送均有平台确认的实测记录（私信首联 5/5、评论 2/2）；每条发送仍需逐次授权；自动派发、批量与多账号未验收
 
 **注意**：私信渠道可对评论作者首联发送（模板、额度、跨渠道去重）；收到入站私信后不自动回复，见模块 6
 
