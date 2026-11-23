@@ -32,6 +32,26 @@ test('author group coverage hides siblings while one review is queued and restor
  const restored=service.reviewAuthorGroups({runId:run.runId}).items[0];
  assert.equal(restored.covered,false);assert.equal(restored.coverage,null);assert.equal(restored.coveredCount,0);
  assert.equal(service.reviewAuthorGroups({runId:run.runId,status:'PENDING'}).total,1);
+ assert.equal(service.reviewAuthorGroups({runId:run.runId,decision:'UNCERTAIN'}).total,0);
+ assert.equal(restored.qualified,true);
+ assert.equal(service.reviewAuthorGroups({runId:run.runId,decision:'MATCH'}).total,1);
+});
+test('author group with one matching comment hides uncertain siblings but keeps one review entry',t=>{
+ const {fixture,collect,evaluate,entry}=require('./flow-fixture.cjs'),f=fixture(t),run=collect(f,[entry('post-a',['需求一','需求二','需求三'])]);evaluate(f,run.runId,f.collection.posts(run.runId)[0].id);
+ const service=new LocalService(f.store);
+ const group=service.reviewAuthorGroups({runId:run.runId}).items[0];
+ f.store.db.prepare("UPDATE review_results SET decision='UNCERTAIN' WHERE id=?").run(group.comments[1].review_id);
+ f.store.db.prepare("UPDATE review_results SET decision='NO_MATCH' WHERE id=?").run(group.comments[2].review_id);
+ const qualified=service.reviewAuthorGroups({runId:run.runId}).items[0];
+ assert.equal(qualified.qualified,true);assert.equal(qualified.count,3);assert.equal(qualified.comments.length,3);
+ assert.equal(service.reviewAuthorGroups({runId:run.runId,decision:'UNCERTAIN'}).total,0);
+ assert.equal(service.reviewAuthorGroups({runId:run.runId,decision:'NO_MATCH'}).total,0);
+ assert.equal(service.reviewAuthorGroups({runId:run.runId,decision:'MATCH'}).total,1);
+ assert.equal(service.reviewAuthorGroups({runId:run.runId,status:'PENDING'}).total,1);
+ const match=qualified.comments.find(row=>row.decision==='MATCH');
+ service.decideReview({id:match.review_id,version:match.version,status:'REJECTED'});
+ const reverted=service.reviewAuthorGroups({runId:run.runId}).items[0];
+ assert.equal(reverted.qualified,false);
  assert.equal(service.reviewAuthorGroups({runId:run.runId,decision:'UNCERTAIN'}).total,1);
 });
 test('unused configuration is deleted for real together with its preferences and policy',t=>{

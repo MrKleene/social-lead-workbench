@@ -746,6 +746,13 @@ export function LocalCommentReview() {
                     });
                     const approval = groupApproval(group);
                     const posts = new Set(group.comments.map((item) => item.post_id));
+                    const mergedCount =
+                      group.count -
+                      group.comments.filter(
+                        (item) =>
+                          item.decision === "MATCH" &&
+                          item.review_status !== "REJECTED",
+                      ).length;
                     return (
                       <TableRow key={`${group.authorId}:${group.policyId}`}>
                         <TableCell className="whitespace-normal">
@@ -781,6 +788,15 @@ export function LocalCommentReview() {
                               {group.coveredCount > 0 ? (
                                 <span className="text-caption text-muted-foreground">
                                   {group.coveredCount} 条已覆盖
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : group.qualified ? (
+                            <div className="flex flex-col items-start gap-1">
+                              <Badge variant="success">已符合</Badge>
+                              {mergedCount > 0 ? (
+                                <span className="text-caption text-muted-foreground">
+                                  {mergedCount} 条已归并
                                 </span>
                               ) : null}
                             </div>
@@ -921,7 +937,9 @@ export function LocalCommentReview() {
             <DialogDescription>
               {groupDetail?.coverage
                 ? `${coverageLabels[groupDetail.coverage] ?? groupDetail.coverage} · 其余评论不再单独发送`
-                : `最高分 ${score(groupDetail?.highest ?? null)} · 通过后只发送一条`}
+                : groupDetail?.qualified
+                  ? "已符合 · 其余评论不再逐条审核"
+                  : `最高分 ${score(groupDetail?.highest ?? null)} · 通过后只发送一条`}
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
@@ -939,6 +957,12 @@ export function LocalCommentReview() {
                     <div className="flex flex-wrap items-center gap-1">
                       {groupDetail?.coverage && row.review_status === "PENDING" ? (
                         <Badge variant="outline">已覆盖</Badge>
+                      ) : null}
+                      {groupDetail?.qualified &&
+                      !groupDetail.coverage &&
+                      row.review_status === "PENDING" &&
+                      row.decision !== "MATCH" ? (
+                        <Badge variant="outline">同作者已符合</Badge>
                       ) : null}
                       {row.decision ? (
                         <Badge variant={decisionVariant(row.decision)}>
@@ -980,6 +1004,10 @@ export function LocalCommentReview() {
             {groupDetail?.covered ? (
               <span className="text-caption text-muted-foreground">
                 同作者已覆盖，其余评论不再单独处理
+              </span>
+            ) : groupDetail?.qualified ? (
+              <span className="text-caption text-muted-foreground">
+                同作者已符合，其余评论不再逐条处理
               </span>
             ) : null}
             {groupDetail && groupApproval(groupDetail).canReject ? (

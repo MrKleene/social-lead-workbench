@@ -126,9 +126,12 @@ class LocalWorkspace{
   const visible=where+" AND state<>'SKIPPED' AND review_id IS NOT NULL";
   const attempts="SELECT json_extract(a.scope,'$.basis.reviewId') review_id,max(CASE s.state WHEN 'CONFIRMED' THEN 3 WHEN 'UNKNOWN' THEN 2 WHEN 'RESERVED' THEN 1 WHEN 'DISPATCHED' THEN 1 ELSE 0 END) contact_state FROM send_attempts s JOIN authorizations a ON a.id=s.authorization_id WHERE json_extract(a.scope,'$.basis.reviewId') IS NOT NULL GROUP BY 1";
   const base="SELECT i.*,coalesce(ca.contact_state,0) contact_state FROM ("+inner+") i LEFT JOIN ("+attempts+") ca ON ca.review_id=i.review_id WHERE i.review_id IS NOT NULL AND i.state<>'SKIPPED'";
-  const groups="SELECT g0.user_id author_id,g0.user_id,g0.policy_id,g0.count,g0.highest,g0.latest_at,g0.latest_published_at,g0.pending_count,g0.approved_count,g0.rejected_count,coalesce(cov.covered,0) covered FROM (SELECT user_id,policy_id,count(*) count,max(score) highest,max(coalesce(reviewed_at,published_at_ms)) latest_at,max(published_at_ms) latest_published_at,sum(CASE WHEN review_status IS NULL OR review_status='PENDING' THEN 1 ELSE 0 END) pending_count,sum(CASE WHEN review_status='APPROVED' THEN 1 ELSE 0 END) approved_count,sum(CASE WHEN review_status='REJECTED' THEN 1 ELSE 0 END) rejected_count FROM ("+base+") WHERE "+visible+" GROUP BY user_id,policy_id) g0 LEFT JOIN (SELECT user_id,policy_id,max(CASE WHEN queue_state IS NOT NULL OR contact_state>0 THEN 1 ELSE 0 END) covered FROM ("+base+") GROUP BY user_id,policy_id) cov ON cov.user_id=g0.user_id AND cov.policy_id=g0.policy_id";
+  const qualified="SELECT user_id,policy_id,max(CASE WHEN decision='MATCH' AND coalesce(review_status,'PENDING')<>'REJECTED' THEN 1 ELSE 0 END) qualified FROM ("+base+") GROUP BY user_id,policy_id";
+  const groups="SELECT g0.user_id author_id,g0.user_id,g0.policy_id,g0.count,g0.highest,g0.latest_at,g0.latest_published_at,g0.pending_count,g0.approved_count,g0.rejected_count,coalesce(cov.covered,0) covered,coalesce(qual.qualified,0) qualified FROM (SELECT user_id,policy_id,count(*) count,max(score) highest,max(coalesce(reviewed_at,published_at_ms)) latest_at,max(published_at_ms) latest_published_at,sum(CASE WHEN review_status IS NULL OR review_status='PENDING' THEN 1 ELSE 0 END) pending_count,sum(CASE WHEN review_status='APPROVED' THEN 1 ELSE 0 END) approved_count,sum(CASE WHEN review_status='REJECTED' THEN 1 ELSE 0 END) rejected_count FROM ("+base+") WHERE "+visible+" GROUP BY user_id,policy_id) g0 LEFT JOIN (SELECT user_id,policy_id,max(CASE WHEN queue_state IS NOT NULL OR contact_state>0 THEN 1 ELSE 0 END) covered FROM ("+base+") GROUP BY user_id,policy_id) cov ON cov.user_id=g0.user_id AND cov.policy_id=g0.policy_id LEFT JOIN ("+qualified+") qual ON qual.user_id=g0.user_id AND qual.policy_id=g0.policy_id";
   const hideCovered=queue===''&&(status==='PENDING'||decision==='UNCERTAIN');
-  const filtered=hideCovered?groups+" WHERE covered=0":groups;
+  const hideQualified=queue===''&&decision!==''&&decision!=='MATCH';
+  const conditions=[hideCovered?'covered=0':null,hideQualified?'qualified=0':null].filter(Boolean);
+  const filtered=conditions.length?groups+" WHERE "+conditions.join(' AND '):groups;
   const rows=this.db.prepare("SELECT * FROM ("+filtered+") ORDER BY "+orders[sort]+" LIMIT ? OFFSET ?").all(...args,size,(page-1)*size);
   const commentRows=rows.length?this.db.prepare("SELECT * FROM ("+base+") WHERE ("+rows.map(()=>'(user_id IS ? AND policy_id IS ?)').join(' OR ')+") ORDER BY published_at_ms DESC,run_id DESC,ordinal").all(...rows.flatMap(r=>[r.user_id,r.policy_id])):[];
   const byGroup=new Map();
@@ -150,10 +153,11 @@ class LocalWorkspace{
    const coverage=coverageOf(queueState,contactState);
    const covered=Boolean(group.covered);
    const coveredCount=covered?pendingCount:0;
+   const qualified=Boolean(group.qualified);
    const queueChannels=[...new Set(comments.flatMap(row=>typeof row.queue_channels==='string'?row.queue_channels.split(','):[]).filter(Boolean))].join(',')||null;
    const highest=comments.reduce((max,row)=>row.score==null?max:Math.max(max??row.score,row.score),null);
    const latestAt=comments.reduce((max,row)=>{const value=row.reviewed_at??row.published_at_ms;return value==null?max:Math.max(max??value,value);},null);
-   return {authorId:String(group.user_id),nickname:comments.find(row=>row.nickname)?.nickname??null,authorAvatarUrl:mediaUrl(comments.find(row=>row.author_avatar_url)?.author_avatar_url??null),policyId:String(group.policy_id),policyName:comments.find(row=>row.policy_name)?.policy_name??null,count:comments.length,highest,latestAt,reviewStatus,queueState,queueChannels,covered,coverage,coveredCount,pendingCount,approvedCount,rejectedCount,representative,comments};
+   return {authorId:String(group.user_id),nickname:comments.find(row=>row.nickname)?.nickname??null,authorAvatarUrl:mediaUrl(comments.find(row=>row.author_avatar_url)?.author_avatar_url??null),policyId:String(group.policy_id),policyName:comments.find(row=>row.policy_name)?.policy_name??null,count:comments.length,highest,latestAt,reviewStatus,queueState,queueChannels,covered,coverage,coveredCount,qualified,pendingCount,approvedCount,rejectedCount,representative,comments};
   }).filter(Boolean);
   return {items,total:this.db.prepare("SELECT count(*) n FROM ("+filtered+")").get(...args).n,commentTotal:this.db.prepare("SELECT count(*) n FROM ("+base+") i JOIN ("+filtered+") g ON g.user_id=i.user_id AND g.policy_id=i.policy_id").get(...args).n,page,pageSize:size};
   }
